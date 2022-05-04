@@ -1,0 +1,16 @@
+Black connector
+
+6/12 - gnd
+7 - power
+8 - KcanH
+2 - KcanL
+9 - PTcanH
+4 - PTcanL
+
+
+
+White connector
+
+18 - DSC switch (D6)
+17 - POWER switch (D5)
+16 - POWER LED (D4)
