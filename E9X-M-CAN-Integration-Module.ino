@@ -14,7 +14,7 @@
 
 // Using a slightly streamlined version of Cory's library https://github.com/coryjfowler/MCP_CAN_lib
 // Credit to Trevor for providing insight into 0x273 and 0x274 http://www.loopybunny.co.uk/CarPC/k_can.html
-// Hardware used: CANBED V1 http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) and Generic 8MHz MCP2515 CAN shield.
+// Hardware used: CANBED V1 http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) and Generic 16MHz MCP2515 CAN shield.
 
 
 
@@ -35,6 +35,7 @@
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages
 #include "src/mcp_can.h"
 #include <avr/power.h>
+#include <SPI.h>
 #pragma GCC optimize ("-Ofast")                                                                                                     // Max compiler optimisation level.
 MCP_CAN PTCAN(17), KCAN(9);                                                                                                         // CS pins. Adapt to your board
 #define PTCAN_INT_PIN 7                                                                                                             // INT pins. Adapt to your board
@@ -43,7 +44,7 @@ MCP_CAN PTCAN(17), KCAN(9);                                                     
 #define POWER_SWITCH_PIN 5
 #define DSC_SWITCH_PIN 6
 const int MCP2515_PTCAN = 1;                                                                                                        // Set 1 for 16MHZ or 2 for 8MHZ
-const int MCP2515_KCAN = 2;
+const int MCP2515_KCAN = 1;
 
 /***********************************************************************************************************************************************************************************************************************************************
   Adjustment section 2. Configure program functionality here.
@@ -87,6 +88,8 @@ int debounce_time = 200;
 void setup() 
 {
   disable_unused_peripherals();
+  SPI.setClockDivider(SPI_CLOCK_DIV2);         																						                                          // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4 
+
   #if DEBUG_MODE
     Serial.begin(115200);
     while(!Serial);                                                                                                                 // 32U4, wait until virtual port initialized
@@ -106,7 +109,7 @@ void setup()
 
   PTCAN.init_Mask(0, 0, 0x07FF0000);                                                                                                // Mask matches: 07FF (standard ID) and all bytes
   PTCAN.init_Mask(1, 0, 0x07FF0000);                                                                                                // Mask matches: 07FF (standard ID) and all bytes
-  PTCAN.init_Filt(0, 0, 0x01D60000);                                                                                                // Filter MFL status.
+  PTCAN.init_Filt(0, 0, 0x01D60000);                                                                                                // Filter MFL button status.
   PTCAN.init_Filt(1, 0, 0x00AA0000);                                                                                                // Filter RPM, throttle pos.
   PTCAN.setMode(MCP_NORMAL);
   
@@ -148,11 +151,9 @@ void loop()
       dsc_switch_debounce = millis();
       if (dsc_status == 0) {
         send_dsc_off();
-      } 
-      else if (dsc_status == 1) {
+      } else if (dsc_status == 1) {
         send_dsc_off();
-      }
-      else {
+      } else {
         send_dtc_pressed();
       }
     }
@@ -170,13 +171,11 @@ void loop()
           }
           mbutton_hold_counter = 0;
         }
-      } 
-      else {                                                                                                                        // If MFL is released or other buttons are pressed then send alive ping.
+      } else {                                                                                                                      // If MFL button is released or other buttons are pressed then send alive ping.
           send_mbutton_message(mbutton_idle);
           mbutton_hold_counter = 0;
       }
-    } 
-    else if (enable_shiftlights) {                                                                                                  // Monitor 0xAA (throttle status) and calculate shiftlight status
+    } else if (enable_shiftlights) {                                                                                                // Monitor 0xAA (throttle status) and calculate shiftlight status
       evaluate_shiftlight_display();
     }
   }
@@ -188,8 +187,7 @@ void loop()
       #if DEBUG_MODE
         Serial.println("K-CAN: Sent F-ZBE wake-up message");
       #endif
-    } 
-    else if (rxId == 0x273) {                                                                                                       // Monitor CIC challenge request and respond
+    } else if (rxId == 0x273) {                                                                                                     // Monitor CIC challenge request and respond
       zbe_response[2] = rxBuf[7];
       KCAN.sendMsgBuf(0x277, 4, zbe_response);                                                                                      // Acknowledge must be sent three times
       KCAN.sendMsgBuf(0x277, 4, zbe_response);
@@ -207,8 +205,7 @@ void loop()
           #if DEBUG_MODE
             Serial.println("K-CAN: MDrive on. Turned on POWER LED");
           #endif
-        }
-        else {
+        } else {
           mdrive_status = 0;
           digitalWrite(POWER_LED_PIN, LOW);
           #if DEBUG_MODE
@@ -217,27 +214,23 @@ void loop()
         }
         last_mdrive_state = rxBuf[4];
       }
-    }
-    else if (rxId == 0x3AB) {                                                                                                       // Monitor Shiftligths CKM status and broadcast dummy for missing POWER CKM
+    } else if (rxId == 0x3AB) {                                                                                                     // Monitor Shiftligths CKM status and broadcast dummy for missing POWER CKM
       rxBuf[0] == 0xF1 ? enable_shiftlights = false : enable_shiftlights = false;                                                   // Deactivate Shiftlight calculations if key memory says they're off
       #if DEBUG_MODE
-        rxBuf[0] == 0xF1 ? Serial.println("K-CAN: Deactivated shiftlights.") : Serial.println("K-CAN: Activated shiftlights.");
+        rxBuf[0] == 0xF1 ? Serial.println("CKM: deactivated shiftlights.") : Serial.println("CKM: activated shiftlights.");
       #endif
       KCAN.sendMsgBuf(0x3A9, 2, dme_ckm);
       Serial.println("K-CAN: Sent dummy POWER CKM.");
-    }
-    else {                                                                                                                          // Monitor 0x19E DSC status on K-CAN
+    } else {                                                                                                                        // Monitor 0x19E DSC status on K-CAN
       if (last_dsc_state != rxBuf[1]){
         if (rxBuf[1] == 0xE0 || rxBuf[1] == 0xEA){
           dsc_status = 0;
-        } 
-        else if (rxBuf[1] == 0xF0) {
+        } else if (rxBuf[1] == 0xF0) {
           dsc_status = 1;
           #if DEBUG_MODE
             Serial.println("K-CAN: Status DTC on");
           #endif
-        } 
-        else if (rxBuf[1] == 0xE4) {
+        } else if (rxBuf[1] == 0xE4) {
           dsc_status = 2;
           #if DEBUG_MODE
             Serial.println("K-CAN: Status DSC off");
@@ -258,58 +251,59 @@ void send_mbutton_message(byte message[])
   #if DEBUG_MODE
   if (send_stat != CAN_OK) {
     Serial.println("PT-CAN: Error sending mbutton message.");
-  } 
-  else {
+  } else {
     message[0] == 0xFF ? Serial.println("PT-CAN: Sent mbutton idle.") : Serial.println("PT-CAN: Sent mbutton press.");
   }
   #endif
 
-  mbutton_checksum < 0xFF ? mbutton_checksum++ : mbutton_checksum = 0xF0;                                                            // mbutton_checksum is between F0..FF
+  mbutton_checksum < 0xFF ? mbutton_checksum++ : mbutton_checksum = 0xF0;                                                           // mbutton_checksum is between F0..FF
 }
 
 
-void evaluate_shiftlight_display(){
+void evaluate_shiftlight_display()
+{
   int32_t RPM = ((int32_t)rxBuf[5] << 8) | (int32_t)rxBuf[4];
   
-  if (RPM > START_UPSHIFT_WARN_RPM && RPM < MID_UPSHIFT_WARN_RPM) {                                                                 // First segment
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Begin displaying warning at RPM: %d\n", RPM / 4);
-      Serial.print(serial_debug_string);
-    #endif                                                               
-    if (rxBuf[6] == 0x94) {                                                                                                         // Send the warning only if the throttle pedal is pressed
-      PTCAN.sendMsgBuf(0x206, 0, 2, shiftlights_start);
-      shiftlights_segments_active = true;              
+  if (RPM > START_UPSHIFT_WARN_RPM && RPM < MID_UPSHIFT_WARN_RPM) {                                                                 // First segment                                                              
+    if (rxBuf[2] != 3) {                                                                                                            // Send the warning only if the throttle pedal is pressed
+      activate_shiftlight_segments(shiftlights_start);
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Displaying first warning at RPM: %d\n", RPM / 4);
+        Serial.print(serial_debug_string);
+      #endif                     
     } else {
       deactivate_shiftlight_segments();
     }
   } 
   else if (RPM > MID_UPSHIFT_WARN_RPM && RPM < MAX_UPSHIFT_WARN_RPM) {                                                              // Buildup from second segment to reds
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Begin displaying warning at RPM: %d\n", RPM / 4);
-      Serial.print(serial_debug_string);
-    #endif
-    if (rxBuf[6] == 0x94) {
-      PTCAN.sendMsgBuf(0x206, 0, 2, shiftlights_mid_buildup);
-      shiftlights_segments_active = true;              
+    if (rxBuf[2] != 3) {
+      activate_shiftlight_segments(shiftlights_mid_buildup);
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Displaying increasing warning at RPM: %d\n", RPM / 4);
+        Serial.print(serial_debug_string);
+      #endif
     } else {
       deactivate_shiftlight_segments();
     }
-  } 
-  else if (RPM >= MAX_UPSHIFT_WARN_RPM) {                                                                                           // Flash all segments
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Begin displaying warning at RPM: %d\n", RPM / 4);
-      Serial.print(serial_debug_string);
-    #endif
-    if (rxBuf[6] == 0x94) {
-      PTCAN.sendMsgBuf(0x206, 0, 2, shiftlights_max_flash);
-      shiftlights_segments_active = true;              
+  } else if (RPM >= MAX_UPSHIFT_WARN_RPM) {                                                                                         // Flash all segments
+    if (rxBuf[2] != 3) {
+      activate_shiftlight_segments(shiftlights_max_flash);
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Flash max warning at RPM: %d\n", RPM / 4);
+        Serial.print(serial_debug_string);
+      #endif
     } else {
       deactivate_shiftlight_segments();
     }
-  } 
-  else {                                                                                                                            // RPM dropped. Disable lights
+  } else {                                                                                                                          // RPM dropped. Disable lights
     deactivate_shiftlight_segments();
   }
+}
+
+void activate_shiftlight_segments(byte data)
+{   
+    PTCAN.sendMsgBuf(0x206, 0, 2, data);                                                                                
+    shiftlights_segments_active = true;
 }
 
 void deactivate_shiftlight_segments()
@@ -317,6 +311,9 @@ void deactivate_shiftlight_segments()
   if (shiftlights_segments_active) {
     PTCAN.sendMsgBuf(0x206, 0, 2, shiftlights_off);                                                                                
     shiftlights_segments_active = false;
+    #if DEBUG_MODE
+      Serial.println("K-CAN: Deactivated shiftlights segments");
+    #endif 
   }
 }
 
@@ -350,12 +347,12 @@ void send_dtc_pressed()
 
 void disable_unused_peripherals()
 {
-  power_usart0_disable();                                                                                                          // Disable UART
+  power_usart0_disable();                                                                                                           // Disable UART
   power_usart1_disable();                                                                       
-  power_twi_disable();                                                                                                             // Disable I2C
-  power_timer1_disable();                                                                                                          // Disable unused timers. 0 still on.
+  power_twi_disable();                                                                                                              // Disable I2C
+  power_timer1_disable();                                                                                                           // Disable unused timers. 0 still on.
   power_timer2_disable();
   power_timer3_disable();
   ADCSRA = 0;
-  power_adc_disable();                                                                                                             // Disable Analog to Digital converter
+  power_adc_disable();                                                                                                              // Disable Analog to Digital converter
 }

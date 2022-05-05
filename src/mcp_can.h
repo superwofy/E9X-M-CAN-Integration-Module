@@ -25,8 +25,6 @@
 #define _MCP2515DFS_H_
 
 
-#define DEBUG_MODE 1
-
 #include <Arduino.h>
 #include <SPI.h>
 #include <inttypes.h>
