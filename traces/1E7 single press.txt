@@ -1,0 +1,4 @@
+22:30:59.440 -> FA seat:  0xFD 0xFF
+22:30:59.542 -> FA seat:  0xFC 0xFF
+22:30:59.678 -> FA seat:  0xFC 0xFF
+22:30:59.848 -> FA seat:  0xFC 0xFF
