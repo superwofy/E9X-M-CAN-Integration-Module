@@ -124,8 +124,8 @@
 #define MCP_RXF5SIDL    0x19
 #define MCP_RXF5EID8    0x1A
 #define MCP_RXF5EID0    0x1B
-#define MCP_TEC            0x1C
-#define MCP_REC            0x1D
+#define MCP_TEC         0x1C
+#define MCP_REC         0x1D
 #define MCP_RXM0SIDH    0x20
 #define MCP_RXM0SIDL    0x21
 #define MCP_RXM0EID8    0x22
@@ -137,8 +137,8 @@
 #define MCP_CNF3        0x28
 #define MCP_CNF2        0x29
 #define MCP_CNF1        0x2A
-#define MCP_CANINTE        0x2B
-#define MCP_CANINTF        0x2C
+#define MCP_CANINTE     0x2B
+#define MCP_CANINTF     0x2C
 #define MCP_EFLG        0x2D
 #define MCP_TXB0CTRL    0x30
 #define MCP_TXB1CTRL    0x40
@@ -247,25 +247,10 @@
 /*
  *  Speed 8M
  */
-#define MCP_8MHz_1000kBPS_CFG1 (0x00)  
-#define MCP_8MHz_1000kBPS_CFG2 (0xC0)  /* Enabled SAM bit     */
-#define MCP_8MHz_1000kBPS_CFG3 (0x80)  /* Sample point at 75% */
 
 #define MCP_8MHz_500kBPS_CFG1 (0x00)
 #define MCP_8MHz_500kBPS_CFG2 (0xD1)   /* Enabled SAM bit     */
 #define MCP_8MHz_500kBPS_CFG3 (0x81)   /* Sample point at 75% */
-
-#define MCP_8MHz_250kBPS_CFG1 (0x80)   /* Increased SJW       */
-#define MCP_8MHz_250kBPS_CFG2 (0xE5)   /* Enabled SAM bit     */
-#define MCP_8MHz_250kBPS_CFG3 (0x83)   /* Sample point at 75% */
-
-#define MCP_8MHz_200kBPS_CFG1 (0x80)   /* Increased SJW       */
-#define MCP_8MHz_200kBPS_CFG2 (0xF6)   /* Enabled SAM bit     */
-#define MCP_8MHz_200kBPS_CFG3 (0x84)   /* Sample point at 75% */
-
-#define MCP_8MHz_125kBPS_CFG1 (0x81)   /* Increased SJW       */
-#define MCP_8MHz_125kBPS_CFG2 (0xE5)   /* Enabled SAM bit     */
-#define MCP_8MHz_125kBPS_CFG3 (0x83)   /* Sample point at 75% */
 
 #define MCP_8MHz_100kBPS_CFG1 (0x81)   /* Increased SJW       */
 #define MCP_8MHz_100kBPS_CFG2 (0xF6)   /* Enabled SAM bit     */
@@ -274,25 +259,9 @@
 /*
  *  speed 16M
  */
-#define MCP_16MHz_1000kBPS_CFG1 (0x00)
-#define MCP_16MHz_1000kBPS_CFG2 (0xCA)
-#define MCP_16MHz_1000kBPS_CFG3 (0x81)    /* Sample point at 75% */
-
 #define MCP_16MHz_500kBPS_CFG1 (0x40)     /* Increased SJW       */
 #define MCP_16MHz_500kBPS_CFG2 (0xE5)
 #define MCP_16MHz_500kBPS_CFG3 (0x83)     /* Sample point at 75% */
-
-#define MCP_16MHz_250kBPS_CFG1 (0x41)
-#define MCP_16MHz_250kBPS_CFG2 (0xE5)
-#define MCP_16MHz_250kBPS_CFG3 (0x83)     /* Sample point at 75% */
-
-#define MCP_16MHz_200kBPS_CFG1 (0x41)     /* Increased SJW       */
-#define MCP_16MHz_200kBPS_CFG2 (0xF6)
-#define MCP_16MHz_200kBPS_CFG3 (0x84)     /* Sample point at 75% */
-
-#define MCP_16MHz_125kBPS_CFG1 (0x43)     /* Increased SJW       */
-#define MCP_16MHz_125kBPS_CFG2 (0xE5)
-#define MCP_16MHz_125kBPS_CFG3 (0x83)     /* Sample point at 75% */
 
 #define MCP_16MHz_100kBPS_CFG1 (0x44)     /* Increased SJW       */
 #define MCP_16MHz_100kBPS_CFG2 (0xE5)
@@ -313,25 +282,6 @@
 #define MCP2515_FAIL       (1)
 #define MCP_ALLTXBUSY      (2)
 
-#define CANDEBUG   1
-
-#define CANUSELOOP 0
-
-#define CANSENDTIMEOUT (200)                                            /* milliseconds                 */
-
-/*
- *   initial value of gCANAutoProcess
- */
-#define CANAUTOPROCESS (1)
-#define CANAUTOON  (1)
-#define CANAUTOOFF (0)
-
-#define CAN_STDID (0)
-#define CAN_EXTID (1)
-
-#define CANDEFAULTIDENT    (0x55CC)
-#define CANDEFAULTIDENTEXT (CAN_EXTID)
-
 #define MCP_STDEXT   0                                                  /* Standard and Extended        */
 #define MCP_STD      1                                                  /* Standard IDs ONLY            */
 #define MCP_EXT      2                                                  /* Extended IDs ONLY            */
@@ -341,11 +291,7 @@
 #define MCP_8MHZ     2
 
 #define CAN_100KBPS  9
-#define CAN_125KBPS  10
-#define CAN_200KBPS  11
-#define CAN_250KBPS  12
 #define CAN_500KBPS  13
-#define CAN_1000KBPS 14
 
 #define CAN_OK             (0)
 #define CAN_FAILINIT       (1)
@@ -356,12 +302,6 @@
 #define CAN_GETTXBFTIMEOUT (6)
 #define CAN_SENDMSGTIMEOUT (7)
 #define CAN_FAIL       (0xff)
-
-#define CAN_MAX_CHAR_IN_MESSAGE (8)
-
-#define CAN_IS_EXTENDED       0x80000000
-#define CAN_IS_REMOTE_REQUEST 0x40000000
-#define CAN_EXTENDED_ID       0x1FFFFFFF
 
 #endif
 /*********************************************************************************************************
@@ -416,8 +356,8 @@ class MCP_CAN
 /*********************************************************************************************************
  *  mcp2515 driver function 
  *********************************************************************************************************/
-   // private:
-   private:
+// private:
+private:
 
     void mcp2515_reset(void);                                           // Soft Reset MCP2515
 
@@ -456,7 +396,6 @@ class MCP_CAN
                            const INT32U id );
 
     void mcp2515_write_id( const INT8U mcp_addr,                        // Write CAN ID
-                           const INT8U ext,
                            const INT32U id );
 
     void mcp2515_read_id( const INT8U mcp_addr,                         // Read CAN ID
@@ -479,15 +418,11 @@ class MCP_CAN
 public:
     MCP_CAN(INT8U _CS);
     INT8U begin(INT8U idmodeset, INT8U speedset, INT8U clockset);       // Initilize controller prameters
-    INT8U init_Mask(INT8U num, INT8U ext, INT32U ulData);               // Initilize Mask(s)
     INT8U init_Mask(INT8U num, INT32U ulData);                          // Initilize Mask(s)
-    INT8U init_Filt(INT8U num, INT8U ext, INT32U ulData);               // Initilize Filter(s)
     INT8U init_Filt(INT8U num, INT32U ulData);                          // Initilize Filter(s)
     void setSleepWakeup(INT8U enable);                                  // Enable or disable the wake up interrupt (If disabled the MCP2515 will not be woken up by CAN bus activity)
     INT8U setMode(INT8U opMode);                                        // Set operational mode
-    INT8U sendMsgBuf(INT32U id, INT8U ext, INT8U len, INT8U *buf);      // Send message to transmit buffer
     INT8U sendMsgBuf(INT32U id, INT8U len, INT8U *buf);                 // Send message to transmit buffer
-    INT8U readMsgBuf(INT32U *id, INT8U *ext, INT8U *len, INT8U *buf);   // Read message from receive buffer
     INT8U readMsgBuf(INT32U *id, INT8U *len, INT8U *buf);               // Read message from receive buffer
     INT8U checkReceive(void);                                           // Check for received data
     INT8U checkError(void);                                             // Check for errors
@@ -497,8 +432,6 @@ public:
     INT8U enOneShotTX(void);                                            // Enable one-shot transmission
     INT8U disOneShotTX(void);                                           // Disable one-shot transmission
     INT8U abortTX(void);                                                // Abort queued transmission(s)
-    INT8U setGPO(INT8U data);                                           // Sets GPO
-    INT8U getGPI(void);                                                 // Reads GPI
 };
 
 #endif

@@ -1,4 +1,4 @@
-// (ZBE), K-CAN section
+// K-CAN section
 
 // 1. Create the two missing messages required to use an F series ZBE (KKCAN) in an E6,7,8,9X car.
 // *Should* work with:
@@ -17,7 +17,7 @@
 // Hardware used: CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) and Generic 16MHz MCP2515 CAN shield.
 
 
-// (MDrive), PT-CAN section
+// PT-CAN section
 
 // 1. Enable use of M3 centre console switch block with actions for POWER and DSC OFF switches. Control POWER LED when MDrive is on.
 // 2. Toggles sport mode in the IKM0S MSD81 DME in the absence of a DSCM90 or DSCM80 ZB by re-creating 0x1D9 message.
@@ -34,7 +34,7 @@
 #include <avr/power.h>
 
 /***********************************************************************************************************************************************************************************************************************************************
-  Adjustment section. Configure board here
+  Board adjustment section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
 MCP_CAN PTCAN(17), KCAN(9);                                                                                                         // CS pins. Adapt to your board
@@ -48,11 +48,11 @@ const int MCP2515_PTCAN = 1;                                                    
 const int MCP2515_KCAN = 1;
 
 /***********************************************************************************************************************************************************************************************************************************************
-  Adjustment section 2. Configure program functionality here.
+  Program adjustment section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #pragma GCC optimize ("-Ofast")                                                                                                     // Max compiler optimisation level.
-#define DEBUG_MODE 0                                                                                                                // Toggle serial debug messages. Disable in production.
+#define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an LED when front fogs are on. M3 clusters lack this.
 #define F_ZBE_WAKE 0                                                                                                                // Enable/disable F CIC ZBE wakeup functions
 #define DTC_WITH_M_BUTTON 1                                                                                                         // Toggle DTC mode with M MFL button
@@ -102,8 +102,9 @@ int mdrive_status = 0;                                                          
 int mdrive_last_state = 0xCF;                                                                                                       // OFF by default
 int dsc_status = 0;                                                                                                                 // 0 = on, 1 = DTC, 2 = DSC OFF
 int dsc_last_state = 0;
-unsigned long power_switch_debounce_timer, dsc_switch_debounce_timer;
-int power_debounce_time_ms = 300, dsc_debounce_time_ms = 200;
+bool holding_dsc = false;
+unsigned long power_switch_debounce_timer, dsc_switch_debounce_timer, dsc_switch_hold_timer;
+unsigned int power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
 
 #if AUTO_SEAT_HEATING
   int ambient_temperature_can = 256;
@@ -129,39 +130,39 @@ void setup()
   while (CAN_OK != PTCAN.begin(MCP_STDEXT, CAN_500KBPS, MCP2515_PTCAN) || 
          CAN_OK != KCAN.begin(MCP_STDEXT, CAN_100KBPS, MCP2515_KCAN)) {
     #if DEBUG_MODE
-      Serial.println("Error initializing MCP2515s. Re-trying.");
+      Serial.println(F("Error initializing MCP2515s. Re-trying."));
     #endif
     delay(5000);
   }
 
   #if DEBUG_MODE
-    Serial.println("MCP2515s initialized successfully.");
+    Serial.println(F("MCP2515s initialized successfully."));
   #endif 
 
-  PTCAN.init_Mask(0, 0, 0x07FFFFFF);                                                                                                // Mask matches: 07FFFFFF (standard ID) and first two bytes
-  PTCAN.init_Filt(0, 0, 0x05A940B8);                                                                                                // Filter DSC statuses
-  PTCAN.init_Filt(1, 0, 0x05A94024);
-  PTCAN.init_Mask(1, 0, 0x07FF0000);                                                                                                // Mask matches: 07FF (standard ID) and all bytes
-  PTCAN.init_Filt(2, 0, 0x019E0000);                                                                                                // Get ignition state from DSC status msg
-  PTCAN.init_Filt(3, 0, 0x03990000);                                                                                                // Filter MDrive status.
+  PTCAN.init_Mask(0, 0x07FFFFFF);                                                                                                   // Mask matches: 07FFFFFF (standard ID) and first two bytes
+  PTCAN.init_Filt(0, 0x05A940B8);                                                                                                   // Filter DSC statuses
+  PTCAN.init_Filt(1, 0x05A94024);
+  PTCAN.init_Mask(1, 0x07FF0000);                                                                                                   // Mask matches: 07FF (standard ID) and all bytes
+  PTCAN.init_Filt(2, 0x019E0000);                                                                                                   // Get ignition state from DSC status msg
+  PTCAN.init_Filt(3, 0x03990000);                                                                                                   // Filter MDrive status.
   #if FRONT_FOG_INDICATOR
-    PTCAN.init_Filt(4, 0, 0x021A0000);
+    PTCAN.init_Filt(4, 0x021A0000);
   #endif 
   
   PTCAN.setMode(MCP_NORMAL);
   
-  KCAN.init_Mask(0, 0, 0x07FF0000);                                                                                                 // Mask matches: 07FF (standard ID) and all bytes
-  KCAN.init_Mask(1, 0, 0x07FF0000);                                                                                                 // Mask matches: 07FF (standard ID) and all bytes 
-  KCAN.init_Filt(0, 0, 0x00AA0000);                                                                                                 // Filter RPM, throttle pos.
-  KCAN.init_Filt(1, 0, 0x01D60000);                                                                                                 // Filter MFL button status.
+  KCAN.init_Mask(0, 0x07FF0000);                                                                                                    // Mask matches: 07FF (standard ID) and all bytes
+  KCAN.init_Mask(1, 0x07FF0000);                                                                                                    // Mask matches: 07FF (standard ID) and all bytes 
+  KCAN.init_Filt(0, 0x00AA0000);                                                                                                    // Filter RPM, throttle pos.
+  KCAN.init_Filt(1, 0x01D60000);                                                                                                    // Filter MFL button status.
   #if AUTO_SEAT_HEATING
-    KCAN.init_Filt(2, 0, 0x02320000);                                                                                               // Driver's seat heating status
-    KCAN.init_Filt(3, 0, 0x02CA0000);                                                                                               // Ambient temperature
+    KCAN.init_Filt(2, 0x02320000);                                                                                                  // Driver's seat heating status
+    KCAN.init_Filt(3, 0x02CA0000);                                                                                                  // Ambient temperature
   #endif
   #if F_ZBE_WAKE
-    KCAN.init_Filt(4, 0, 0x02730000);                                                                                               // Filter CIC status.
+    KCAN.init_Filt(4, 0x02730000);                                                                                                  // Filter CIC status.
   #endif
-  KCAN.init_Filt(5, 0, 0x03AB0000);                                                                                                 // Filter Shiftligths car key memory.
+  KCAN.init_Filt(5, 0x03AB0000);                                                                                                    // Filter Shiftligths car key memory.
   KCAN.setMode(MCP_NORMAL);
   
   pinMode(PTCAN_INT_PIN, INPUT);                                                                                                    // Configure pins
@@ -169,7 +170,10 @@ void setup()
   pinMode(POWER_SWITCH_PIN, INPUT_PULLUP);                                                                                                 
   pinMode(DSC_SWITCH_PIN, INPUT_PULLUP);
   pinMode(POWER_LED_PIN, OUTPUT);
-
+  #if FRONT_FOG_INDICATOR
+    pinMode(FOG_LED_PIN, OUTPUT);
+  #endif
+  
   #if F_ZBE_WAKE
     power_switch_debounce_timer = dsc_switch_debounce_timer = mbutton_idle_timer = zbe_wakeup_last_sent = millis();
   #else
@@ -195,17 +199,30 @@ void loop()
       }
     }
     else if (!digitalRead(DSC_SWITCH_PIN)) {
-      if ((millis() - dsc_switch_debounce_timer) > dsc_debounce_time_ms) {
-        #if DEBUG_MODE
-          Serial.println("DSC toggle requested from console switch.");
-        #endif
-        dsc_switch_debounce_timer = millis();
-        if (!dsc_status) {
-          send_dsc_off_sequence();
+      if (!dsc_status) {
+        if (!holding_dsc) {
+          holding_dsc = true;
+          dsc_switch_hold_timer = millis();
         } else {
+          if ((millis() - dsc_switch_hold_timer) > dsc_hold_time_ms) {                                                            // DSC OFF sequence should only be sent after user holds key for a configured time
+            #if DEBUG_MODE
+              Serial.println("DSC console button held. Sending DSC OFF.");
+            #endif
+            send_dsc_off_sequence();
+            dsc_switch_debounce_timer = millis();
+          }
+        }      
+      } else {
+        if ((millis() - dsc_switch_debounce_timer) > dsc_debounce_time_ms) {                                                      // A quick tap re-enables everything
+          #if DEBUG_MODE
+            Serial.println("DSC console button tapped. Re-enabling DSC.");
+          #endif
+          dsc_switch_debounce_timer = millis();
           send_dtc_button_press();
         }
       }
+    } else {
+      holding_dsc = false;
     }
   }
 
@@ -422,9 +439,9 @@ void send_zbe_wakeup()
 void send_mbutton_message(byte message[]) 
 {
   message[2] = mbutton_checksum;
-  byte send_stat = PTCAN.sendMsgBuf(0x1D9, 3, message);
-
+  
   #if DEBUG_MODE
+  byte send_stat = PTCAN.sendMsgBuf(0x1D9, 3, message);
   if (send_stat != CAN_OK) {
     delay(50);
     Serial.println("PT-CAN: Error sending mbutton message. Re-trying.");
@@ -433,6 +450,8 @@ void send_mbutton_message(byte message[])
     //message[0] == 0xFF ? Serial.println("PT-CAN: Sent mbutton idle.") : Serial.println("PT-CAN: Sent mbutton press.");
     message[0] == 0xFF ? Serial.print(".") : Serial.println("PT-CAN: Sent mbutton press.");
   }
+  #else
+    PTCAN.sendMsgBuf(0x1D9, 3, message);
   #endif
 
   mbutton_checksum < 0xFF ? mbutton_checksum++ : mbutton_checksum = 0xF0;                                                           // mbutton_checksum is between F0..FF
@@ -448,7 +467,7 @@ void evaluate_shiftlight_display()
       if (rxBuf[2] != 3) {                                                                                                          // Send the warning only if the throttle pedal is pressed
         activate_shiftlight_segments(shiftlights_start);
         #if DEBUG_MODE
-          sprintf(serial_debug_string, "Displaying first warning at RPM: %d\n", RPM / 4);
+          sprintf(serial_debug_string, "Displaying first warning at RPM: %ld\n", RPM / 4);
           Serial.print(serial_debug_string);
         #endif                     
       } else {
@@ -458,7 +477,7 @@ void evaluate_shiftlight_display()
       if (rxBuf[2] != 3) {
         activate_shiftlight_segments(shiftlights_mid_buildup);
         #if DEBUG_MODE
-          sprintf(serial_debug_string, "Displaying increasing warning at RPM: %d\n", RPM / 4);
+          sprintf(serial_debug_string, "Displaying increasing warning at RPM: %ld\n", RPM / 4);
           Serial.print(serial_debug_string);
         #endif
       } else {
@@ -468,7 +487,7 @@ void evaluate_shiftlight_display()
       if (rxBuf[2] != 3) {
         activate_shiftlight_segments(shiftlights_max_flash);
         #if DEBUG_MODE
-          sprintf(serial_debug_string, "Flash max warning at RPM: %d\n", RPM / 4);
+          sprintf(serial_debug_string, "Flash max warning at RPM: %ld\n", RPM / 4);
           Serial.print(serial_debug_string);
         #endif
       } else {
@@ -485,9 +504,9 @@ void evaluate_shiftlight_display()
 void send_seat_heating_request()
 {
   delay(10);
-  KCAN.sendMsgBuf(0x1E7, 0, 2, seat_heating_button_press);
+  KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_press);
   delay(20);
-  KCAN.sendMsgBuf(0x1E7, 0, 2, seat_heating_button_release);
+  KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_release);
   delay(20);
   #if DEBUG_MODE
     sprintf(serial_debug_string, "K-CAN: Sent dr seat heating request at ambient %dC, treshold %dC\n", (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
@@ -498,9 +517,9 @@ void send_seat_heating_request()
 #endif
 
 
-void activate_shiftlight_segments(byte data)
+void activate_shiftlight_segments(byte* data)
 {
-    PTCAN.sendMsgBuf(0x206, 0, 2, data);                                                                     
+    PTCAN.sendMsgBuf(0x206, 2, data);                                                                     
     shiftlights_segments_active = true;
 }
 
@@ -508,7 +527,7 @@ void activate_shiftlight_segments(byte data)
 void deactivate_shiftlight_segments()
 {
   if (shiftlights_segments_active) {
-    PTCAN.sendMsgBuf(0x206, 0, 2, shiftlights_off);                                                                                
+    PTCAN.sendMsgBuf(0x206, 2, shiftlights_off);                                                                                
     shiftlights_segments_active = false;
     #if DEBUG_MODE
       Serial.println("PTCAN: Deactivated shiftlights segments");
@@ -535,7 +554,6 @@ void send_dtc_button_press()
 
 void send_dsc_off_sequence() 
 {
-  unsigned long idle_timer = millis();
   for (int i = 0; i < 25; i++) {                                                                                                    // 2.5s to send full DSC OFF sequence.
     if ((millis() - mbutton_idle_timer) > 999) {                                                                                    // keep sending mdrive idle message
       send_mbutton_message(mbutton_idle);
@@ -550,6 +568,7 @@ void send_dsc_off_sequence()
 
 
 void disable_unused_peripherals()
+// 32U4 Specific!
 {
   delay(100);
   power_usart0_disable();                                                                                                           // Disable UART

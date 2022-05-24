@@ -14,3 +14,4 @@ White connector
 18 - DSC switch (D6) - white/brown
 17 - POWER switch (D5) - white/red
 16 - POWER LED (D4) - black/white
+15 - FOG LED (D12) - blue/yellow
