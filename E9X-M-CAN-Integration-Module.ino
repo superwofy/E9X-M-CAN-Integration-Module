@@ -26,6 +26,7 @@
 // 5. Monitor DSC program status.
 // 6. Monitor Ignition status.
 // 7. Monitor and indicate front foglight status.
+// 8. Monitor and indicate RPA/FTM status in KOMBI.
 
 // Credit to Trevor for providing 0x0AA formulas http://www.loopybunny.co.uk/CarPC/can/0AA.html
 
@@ -53,6 +54,7 @@ const int MCP2515_KCAN = 1;
 
 #pragma GCC optimize ("-Ofast")                                                                                                     // Max compiler optimisation level.
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
+#define FTM_INDICATOR 1                                                                                                             // Indicate FTM status when using M3 RPA hazards switch.
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an LED when front fogs are on. M3 clusters lack this.
 #define F_ZBE_WAKE 0                                                                                                                // Enable/disable F CIC ZBE wakeup functions
 #define DTC_WITH_M_BUTTON 1                                                                                                         // Toggle DTC mode with M MFL button
@@ -77,6 +79,12 @@ int ignition_last_state = 0xEA;
   int last_light_state = 0;
 #endif
 
+#if FTM_INDICATOR
+  bool ftm_indicator_state = false;
+  byte ftm_indicator_flash[] = {0x40, 0x50, 0x01, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
+  byte ftm_indicator_off[] = {0x40, 0x50, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
+#endif
+
 #if F_ZBE_WAKE
   byte f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                              // Network management kombi, F-series
   byte zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
@@ -88,6 +96,7 @@ int mbutton_checksum = 0xF0, mbutton_hold_counter = 0;
 unsigned long mbutton_idle_timer;
 
 byte dtc_key_pressed[] = {0xFD, 0xFF}, dtc_key_released[] = {0xFC, 0xFF};
+byte dsc_off_fake_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
 
 byte shiftlights_start[2] = {0x86, 0x3E};
 byte shiftlights_mid_buildup[2] = {0xF6, 0};
@@ -146,8 +155,11 @@ void setup()
   PTCAN.init_Filt(2, 0x019E0000);                                                                                                   // Get ignition state from DSC status msg
   PTCAN.init_Filt(3, 0x03990000);                                                                                                   // Filter MDrive status.
   #if FRONT_FOG_INDICATOR
-    PTCAN.init_Filt(4, 0x021A0000);
-  #endif 
+    PTCAN.init_Filt(4, 0x021A0000);                                                                                                 // Filter light status
+  #endif
+  #if FTM_INDICATOR
+     PTCAN.init_Filt(5, 0x031D0000);                                                                                                // Filter FTM status broadcast by DSC
+  #endif
   
   PTCAN.setMode(MCP_NORMAL);
   
@@ -291,6 +303,24 @@ void loop()
           }
         }
       #endif
+
+      #if FTM_INDICATOR
+        else if (rxId == 0x31D) {
+          if (rxBuf[0] == 0x03 && !ftm_indicator_state) {
+            KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_flash);
+            ftm_indicator_state = true;
+            #if DEBUG_MODE
+              Serial.println("Activated FTM indicator.");
+            #endif
+          } else if (rxBuf[0] == 0x00 && ftm_indicator_state) {
+            KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_off);
+            ftm_indicator_state = false;
+            #if DEBUG_MODE
+              Serial.println("Deactivated FTM indicator.");
+            #endif
+          }
+        }
+      #endif
   
       else {                                                                                                                       // Monitor 0x5A9 DSC status on PT-CAN       
         // When DTC mode is toggled on or off, the disable/enable byte (1D/1C) is preceded with 0xB8 in rxBuf[1]
@@ -418,6 +448,9 @@ void reset_runtime_variables()
     front_fog_state = false;
     last_light_state = 0;
     digitalWrite(FOG_LED_PIN, LOW);
+  #endif
+  #if FTM_INDICATOR
+    ftm_indicator_state = false;
   #endif
 }
 
@@ -554,6 +587,7 @@ void send_dtc_button_press()
 
 void send_dsc_off_sequence() 
 {
+  PTCAN.sendMsgBuf(0x5A9, 8, dsc_off_fake_status);                                                                                  // Trigger DSC OFF CC in Kombi as soon as sequence starts
   for (int i = 0; i < 25; i++) {                                                                                                    // 2.5s to send full DSC OFF sequence.
     if ((millis() - mbutton_idle_timer) > 999) {                                                                                    // keep sending mdrive idle message
       send_mbutton_message(mbutton_idle);
