@@ -1,35 +1,40 @@
-// K-CAN section
+// Centre console section
 
-// 1. Create the two missing messages required to use an F series ZBE (KKCAN) in an E6,7,8,9X car.
-// *Should* work with:
-// 6582 9267955 - 4-pin MEDIA button
-// 6131 9253944 - 4-pin CD button
-// 6582 9206444 - 10-pin CD button
-// 6582 9212449 - 10-pin CD button
-// Tested with 4-pin controller P/N 9267955 Date 19.04.13
-
-// 2. Create missing 0x206 message to animate DCT KOMBI shift lights.
-// 3. Send dummy key memory setting MSS6X DME would send for POWER. Used with M_KEY_SETTINGS in CIC.
-// 4. Turn on driver's seat heating when ignition is turned on and below configured temperature treshold.
-
-// Using a slightly streamlined version of Cory's library https://github.com/coryjfowler/MCP_CAN_lib
-// Credit to Trevor for providing insight into 0x273, 0x277 and 0x2CA http://www.loopybunny.co.uk/CarPC/k_can.html
-// Hardware used: CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) and Generic 16MHz MCP2515 CAN shield.
+// Enable use of M3 centre console switch block.POWER and DSC OFF switches. Control POWER LED when MDrive is on.
+// 1. Request MDrive when POWER button is pressed.
+// 2. Illuminate POWER LED when MDrive is on.
+// 3. Request full DSC OFF after holding DSC OFF button. Turn everything back on with a short press.
 
 
 // PT-CAN section
 
-// 1. Enable use of M3 centre console switch block with actions for POWER and DSC OFF switches. Control POWER LED when MDrive is on.
-// 2. Toggles sport mode in the IKM0S MSD81 DME in the absence of a DSCM90 or DSCM80 ZB by re-creating 0x1D9 message.
-// 3. Toggle DTC mode through long press of M key.
-// 4. Monitor MDrive status as broadcast by 1M DME.
-// 5. Monitor DSC program status.
-// 6. Monitor Ignition status.
-// 7. Monitor and indicate front foglight status.
-// 8. Monitor and indicate RPA/FTM status in KOMBI.
+// 1. Toggles sport mode in the IKM0S MSD81 DME in the absence of a DSCM90 or DSCM80 ZB by re-creating 0x1D9 message.
+// 2. Toggle DTC mode through long press of M key. Short press turns DTC off again.
+// 3. Monitor MDrive status as broadcast by 1M DME.
+// 4. Monitor DSC program status.
+// 5. Monitor Ignition status.
+// 6. Monitor and indicate front foglight status.
+// 7. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
 
-// Credit to Trevor for providing 0x0AA formulas http://www.loopybunny.co.uk/CarPC/can/0AA.html
 
+// K-CAN section
+
+// 1. Create missing 0x206 message to animate DCT KOMBI shift lights.
+// 2. Monitor steering wheel switches and request MDrive when Source/M is pressed.
+// 3. Create the two missing messages required to use an F series ZBE (KKCAN) in an E6,7,8,9X car.
+//    *Should* work with:
+//    6582 9267955 - 4-pin MEDIA button
+//    6131 9253944 - 4-pin CD button
+//    6582 9206444 - 10-pin CD button
+//    6582 9212449 - 10-pin CD button
+//    Tested with 4-pin controller P/N 9267955 Date 19.04.13
+// 4. Turn on driver's seat heating when ignition is turned on and below configured temperature treshold.
+// 5. Send dummy key memory setting MSS6X DME would send for POWER. Used with M_KEY_SETTINGS in CIC.
+// Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
+
+
+// Using a slightly streamlined version of Cory's library https://github.com/coryjfowler/MCP_CAN_lib
+// Hardware used: CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) and Generic 16MHz MCP2515 CAN shield.
 
 #include "src/mcp_can.h"
 #include <avr/power.h>
@@ -160,7 +165,6 @@ void setup()
   #if FTM_INDICATOR
      PTCAN.init_Filt(5, 0x031D0000);                                                                                                // Filter FTM status broadcast by DSC
   #endif
-  
   PTCAN.setMode(MCP_NORMAL);
   
   KCAN.init_Mask(0, 0x07FF0000);                                                                                                    // Mask matches: 07FF (standard ID) and all bytes
@@ -278,6 +282,12 @@ void loop()
             #if DEBUG_MODE
               Serial.println("PT-CAN: Status MDrive off. Turned off POWER LED");
             #endif
+            if (dsc_status == 1) {                                                                                                  // Turn off DTC together with MDrive
+              send_dtc_button_press();
+              #if DEBUG_MODE
+                Serial.println("PT-CAN: Turned off DTC with MDrive off.");
+              #endif
+            }
           }
           mdrive_last_state = rxBuf[4];
         }
@@ -372,12 +382,12 @@ void loop()
     
     else if (rxId == 0x1D6) {       
       if (ignition) {
-        if (rxBuf[1] == 0x4C) {                                                                                                      // M button is pressed
+        if (rxBuf[1] == 0x4C) {                                                                                                     // M button is pressed
           send_mbutton_message(mbutton_pressed);
           #if DTC_WITH_M_BUTTON
             mbutton_hold_counter++;
             if (mbutton_hold_counter == DTC_SWITCH_TIME) {
-              if (dsc_status < 2) {                                                                                                  // Check to make sure DSC is not off
+              if (!dsc_status) {                                                                                                    // Check to make sure DSC, DTC are off
                 send_dtc_button_press();
               }
               mbutton_hold_counter = 0;
