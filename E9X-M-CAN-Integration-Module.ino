@@ -28,7 +28,6 @@
 //    6582 9206444 - 10-pin CD button
 //    6582 9212449 - 10-pin CD button
 // 4. Turn on driver's seat heating when ignition is turned on and below configured temperature treshold.
-// 5. Send dummy key memory setting MSS6X DME would send for POWER. Used with M_KEY_SETTINGS in CIC.
 // Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
 
 
@@ -106,7 +105,6 @@ byte shiftlights_start[] = {0x86, 0x3E};
 byte shiftlights_mid_buildup[] = {0xF6, 0};
 byte shiftlights_max_flash[] = {0x0A, 0};
 byte shiftlights_off[] = {0x05, 0};
-bool enable_shiftlights = true;
 bool shiftlights_segments_active = false;
 
 bool mdrive_status = false;                                                                                                         // false = off, true = on
@@ -182,8 +180,8 @@ void setup()
   #endif
   #if F_ZBE_WAKE
     KCAN.init_Filt(4, 0x02730000);                                                                                                  // Filter CIC status.
+    KCAN.init_Filt(5, 0x04E20000);                                                                                                  // Filter CIC Network management (sent when CIC is on)
   #endif
-  KCAN.init_Filt(5, 0x03AB0000);                                                                                                    // Filter Shiftligths car key memory.
   KCAN.setMode(MCP_NORMAL);
   
   #if F_ZBE_WAKE
@@ -294,9 +292,6 @@ void loop()
             #endif
           }
         }
-        #if F_ZBE_WAKE
-          send_zbe_wakeup();                                                                                                        // Time wakeup with MFL message
-        #endif
     }
      
     #if FRONT_FOG_INDICATOR
@@ -335,6 +330,12 @@ void loop()
               Serial.println("K-CAN: Deactivated FTM indicator.");
             #endif
           }
+        }
+      #endif
+
+      #if F_ZBE_WAKE
+        else if (rxId == 0x4E2){
+            send_zbe_wakeup();
         }
       #endif
   
@@ -437,18 +438,6 @@ void loop()
         #endif
       }
     #endif
-    
-    else {                                                                                                                          // Monitor Shiftligths CKM status and broadcast dummy for missing POWER CKM
-      rxBuf[0] == 0xF1 ? enable_shiftlights = false : enable_shiftlights = false;                                                   // Deactivate Shiftlight calculations if key memory says they're off
-      #if DEBUG_MODE
-        rxBuf[0] == 0xF1 ? Serial.println("CKM: deactivated shiftlights.") : Serial.println("CKM: activated shiftlights.");
-      #endif
-      byte dme_ckm[] = {0xF2, 0xFF};
-      PTCAN.sendMsgBuf(0x3A9, 2, dme_ckm);
-      #if DEBUG_MODE
-        Serial.println("PTCAN: Sent dummy DME POWER CKM.");
-      #endif
-    }
   }
 }
 
@@ -477,13 +466,11 @@ void reset_runtime_variables()
 #if F_ZBE_WAKE
 void send_zbe_wakeup()
 {
-  if ((millis() - zbe_wakeup_last_sent) > 400) {                                                                                    // Reduce number of messages. Especially with MFL buttons pressed
-    KCAN.sendMsgBuf(0x560, 8, f_wakeup);
-    zbe_wakeup_last_sent = millis();
-    #if DEBUG_MODE
-      Serial.println("K-CAN: Sent F-ZBE wake-up message");
-    #endif
-  }
+  KCAN.sendMsgBuf(0x560, 8, f_wakeup);
+  zbe_wakeup_last_sent = millis();
+  #if DEBUG_MODE
+    Serial.println("K-CAN: Sent F-ZBE wake-up message");
+  #endif
 }
 #endif
 
@@ -513,42 +500,40 @@ void send_mbutton_message(byte message[])
 
 void evaluate_shiftlight_display()
 {
-  if (enable_shiftlights) {
-    uint32_t RPM = ((uint32_t)rxBuf[5] << 8) | (uint32_t)rxBuf[4];
-    
-    if (RPM > START_UPSHIFT_WARN_RPM && RPM < MID_UPSHIFT_WARN_RPM) {                                                               // First segment                                                              
-      if (rxBuf[2] != 3) {                                                                                                          // Send the warning only if the throttle pedal is pressed
-        activate_shiftlight_segments(shiftlights_start);
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "Displaying first warning at RPM: %ld\n", RPM / 4);
-          Serial.print(serial_debug_string);
-        #endif                     
-      } else {
-        deactivate_shiftlight_segments();
-      }
-    } else if (RPM > MID_UPSHIFT_WARN_RPM && RPM < MAX_UPSHIFT_WARN_RPM) {                                                          // Buildup from second segment to reds
-      if (rxBuf[2] != 3) {
-        activate_shiftlight_segments(shiftlights_mid_buildup);
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "Displaying increasing warning at RPM: %ld\n", RPM / 4);
-          Serial.print(serial_debug_string);
-        #endif
-      } else {
-        deactivate_shiftlight_segments();
-      }
-    } else if (RPM >= MAX_UPSHIFT_WARN_RPM) {                                                                                       // Flash all segments
-      if (rxBuf[2] != 3) {
-        activate_shiftlight_segments(shiftlights_max_flash);
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "Flash max warning at RPM: %ld\n", RPM / 4);
-          Serial.print(serial_debug_string);
-        #endif
-      } else {
-        deactivate_shiftlight_segments();
-      }
-    } else {                                                                                                                        // RPM dropped. Disable lights
+  uint32_t RPM = ((uint32_t)rxBuf[5] << 8) | (uint32_t)rxBuf[4];
+  
+  if (RPM > START_UPSHIFT_WARN_RPM && RPM < MID_UPSHIFT_WARN_RPM) {                                                               // First segment                                                              
+    if (rxBuf[2] != 3) {                                                                                                          // Send the warning only if the throttle pedal is pressed
+      activate_shiftlight_segments(shiftlights_start);
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Displaying first warning at RPM: %ld\n", RPM / 4);
+        Serial.print(serial_debug_string);
+      #endif                     
+    } else {
       deactivate_shiftlight_segments();
     }
+  } else if (RPM > MID_UPSHIFT_WARN_RPM && RPM < MAX_UPSHIFT_WARN_RPM) {                                                          // Buildup from second segment to reds
+    if (rxBuf[2] != 3) {
+      activate_shiftlight_segments(shiftlights_mid_buildup);
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Displaying increasing warning at RPM: %ld\n", RPM / 4);
+        Serial.print(serial_debug_string);
+      #endif
+    } else {
+      deactivate_shiftlight_segments();
+    }
+  } else if (RPM >= MAX_UPSHIFT_WARN_RPM) {                                                                                       // Flash all segments
+    if (rxBuf[2] != 3) {
+      activate_shiftlight_segments(shiftlights_max_flash);
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Flash max warning at RPM: %ld\n", RPM / 4);
+        Serial.print(serial_debug_string);
+      #endif
+    } else {
+      deactivate_shiftlight_segments();
+    }
+  } else {                                                                                                                        // RPM dropped. Disable lights
+    deactivate_shiftlight_segments();
   }
 }
 
