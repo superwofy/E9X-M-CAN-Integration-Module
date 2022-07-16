@@ -22,7 +22,8 @@
   1301  USA
 */
 #include "mcp_can.h"
-#pragma GCC optimize ("-Ofast")
+#pragma GCC optimize ("-O3")
+#define DEBUG_MODE 0
 #define spi_readwrite SPI.transfer
 #define spi_read() spi_readwrite(0x00)
 
