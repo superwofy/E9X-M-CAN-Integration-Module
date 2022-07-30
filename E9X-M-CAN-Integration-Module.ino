@@ -9,12 +9,14 @@
 // PT-CAN section
 
 // 1. Toggles sport mode in the IKM0S MSD81 DME in the absence of a DSCM90 or DSCM80 ZB by re-creating 0x1D9 message.
-// 2. Toggle DTC mode through long press of M key. Short press turns DTC off again.
-// 3. Monitor steering wheel switches and request MDrive when Source/M is pressed.
-// 4. Monitor DSC program status.
-// 5. Monitor Ignition status.
-// 6. Monitor and indicate front foglight status.
-// 7. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
+//    Toggle DTC mode. 
+//    Toggle EDC MSport program.
+// 2. Monitor steering wheel switches and request MDrive when Source/M is pressed.
+// 3. Monitor DSC program status.
+// 4. Monitor Ignition and EDC status.
+// 5. Monitor and indicate front foglight status.
+// 6. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
+// ***Ignition status tracking will not work in non-EDC cars unless EDC_LED_SWITCH is coded in JBBF. This disables JBBF Servotronic!***
 
 
 // K-CAN section
@@ -48,6 +50,7 @@ MCP_CAN PTCAN(17), KCAN(9);                                                     
 #define POWER_SWITCH_PIN 5
 #define DSC_SWITCH_PIN 6
 #define FOG_LED_PIN 12
+#define EDC_SWITCH_PIN 11
 const int MCP2515_PTCAN = 1;                                                                                                        // Set 1 for 16MHZ or 2 for 8MHZ
 const int MCP2515_KCAN = 1;
 
@@ -57,10 +60,13 @@ const int MCP2515_KCAN = 1;
 
 #pragma GCC optimize ("-O3")                                                                                                        // Compiler optimisation level. For this file only. Edit platform.txt for all files.
 #define DEBUG_MODE 0                                                                                                                // Toggle serial debug messages. Disable in production.
+#define DISABLE_USB 0                                                                                                               // In production operation the USB interface is not needed
+
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM status when using M3 RPA hazards switch.
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an LED when front fogs are on. M3 clusters lack this.
 #define F_ZBE_WAKE 0                                                                                                                // Enable/disable F CIC ZBE wakeup functions
 #define DTC_WITH_M_BUTTON 1                                                                                                         // Toggle DTC mode with M MFL button
+#define EDC_WITH_M_BUTTON 1                                                                                                         // Toggle EDC mode with M MFL button. If SVT is installed, Servotronic curve changes too
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures
 const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80
 const uint8_t DTC_SWITCH_TIME = 7;                                                                                                  // Set duration for Enabling/Disabling DTC mode on with long press of M key. 100ms increments.
@@ -75,31 +81,14 @@ unsigned long int rxId;
 unsigned char rxBuf[8], len;
 
 bool ignition = false;
-uint8_t ignition_last_state = 0xEA;
+unsigned long ignition_message_timer = 0;
 
-#if FRONT_FOG_INDICATOR
-  bool front_fog_state = false;
-  uint8_t last_light_state = 0;
-#endif
-
-#if FTM_INDICATOR
-  bool ftm_indicator_state = false;
-  byte ftm_indicator_flash[] = {0x40, 0x50, 0x01, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
-  byte ftm_indicator_off[] = {0x40, 0x50, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
-#endif
-
-#if F_ZBE_WAKE
-  byte f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                              // Network management kombi, F-series
-  byte zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
-  long zbe_wakeup_last_sent;
-#endif
-
-byte mbutton_idle[] = {0xFF, 0x3F, 0}, mbutton_pressed[] = {0xBF, 0x7F, 0};
-uint8_t mbutton_checksum = 0xF0, mbutton_hold_counter = 0;
-unsigned long mbutton_idle_timer;
+byte mbutton_released[] = {0xFF, 0x3F, 0}, mbutton_pressed[] = {0xBF, 0x7F, 0};
+uint8_t mbutton_checksum = 0xF0;
+unsigned long mbutton_released_timer;
 
 byte dtc_key_pressed[] = {0xFD, 0xFF}, dtc_key_released[] = {0xFC, 0xFF};
-byte dsc_off_fake_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
+byte dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
 
 byte shiftlights_start[] = {0x86, 0x3E};
 byte shiftlights_mid_buildup[] = {0xF6, 0};
@@ -108,19 +97,38 @@ byte shiftlights_off[] = {0x05, 0};
 bool shiftlights_segments_active = false;
 
 bool mdrive_status = false;                                                                                                         // false = off, true = on
-uint8_t mdrive_last_state = 0xCF;                                                                                                   // OFF by default
-uint8_t dsc_status = 0;                                                                                                             // 0 = on, 1 = DTC, 2 = DSC OFF
-uint8_t dsc_last_state = 0;
-bool holding_dsc = false;
-unsigned long power_switch_debounce_timer, dsc_switch_debounce_timer, dsc_switch_hold_timer;
+bool ignore_full_mdrive = false;
+uint8_t mdrive_last_status_can = 0xCF;                                                                                              // OFF by default
+uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
+uint8_t ignore_dsc_program_status_message_count = 0;
+uint8_t dsc_program_last_status_can = 0;
+bool holding_dsc_off_console = false;
+unsigned long power_switch_debounce_timer, dsc_off_switch_debounce_timer, dsc_off_switch_hold_timer;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
 
+#if FRONT_FOG_INDICATOR
+  bool front_fog_state = false;
+  uint8_t last_light_state = 0;
+#endif
+#if FTM_INDICATOR
+  bool ftm_indicator_state = false;
+  byte ftm_indicator_flash[] = {0x40, 0x50, 0x01, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
+  byte ftm_indicator_off[] = {0x40, 0x50, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
+#endif
+#if F_ZBE_WAKE
+  byte f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                              // Network management kombi, F-series
+  byte zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
+  long zbe_wakeup_last_sent;
+#endif
+#if EDC_WITH_M_BUTTON
+  uint8_t edc_status = 1;                                                                                                           // 1 = comfort, 2 = sport, 0xA = msport
+  uint8_t edc_last_status_can = 0xF1;
+#endif
 #if AUTO_SEAT_HEATING
   uint8_t ambient_temperature_can = 255;
   bool sent_seat_heating_request = false;
-  byte seat_heating_button_press[] = {0xFD, 0xFF}, seat_heating_button_release[] = {0xFC, 0xFF};
+  byte seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
 #endif
-
 #if DEBUG_MODE
   char serial_debug_string[128];
 #endif
@@ -136,12 +144,15 @@ void setup()
   #if FRONT_FOG_INDICATOR
     pinMode(FOG_LED_PIN, OUTPUT);
   #endif
+  #if EDC_WITH_M_BUTTON
+    pinMode(EDC_SWITCH_PIN, OUTPUT);
+  #endif
   disable_unused_peripherals();
-  SPI.setClockDivider(SPI_CLOCK_DIV2);         																						                                          // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4 
+  SPI.setClockDivider(SPI_CLOCK_DIV2);                                                                                               // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4 
 
   #if DEBUG_MODE
     Serial.begin(115200);
-    while(!Serial);                                                                                                                 // 32U4, wait until virtual port initialized
+    while(!Serial);                                                                                                                  // 32U4, wait until virtual port initialized
   #endif
   
   while (CAN_OK != PTCAN.begin(MCP_STDEXT, CAN_500KBPS, MCP2515_PTCAN) || 
@@ -160,7 +171,7 @@ void setup()
   PTCAN.init_Filt(0, 0x05A940B8);                                                                                                   // Filter DSC statuses
   PTCAN.init_Filt(1, 0x05A94024);
   PTCAN.init_Mask(1, 0x07FF0000);                                                                                                   // Mask matches: 07FF (standard ID) and all bytes
-  PTCAN.init_Filt(2, 0x019E0000);                                                                                                   // Get ignition state from DSC status msg
+  PTCAN.init_Filt(2, 0x03150000);                                                                                                   // Get vehicle mode (used for EDC and ignition status)
   PTCAN.init_Filt(3, 0x01D60000);                                                                                                   // Filter MFL button status.
   #if FRONT_FOG_INDICATOR
     PTCAN.init_Filt(4, 0x021A0000);                                                                                                 // Filter light status
@@ -185,9 +196,9 @@ void setup()
   KCAN.setMode(MCP_NORMAL);
   
   #if F_ZBE_WAKE
-    power_switch_debounce_timer = dsc_switch_debounce_timer = mbutton_idle_timer = zbe_wakeup_last_sent = millis();
+    power_switch_debounce_timer = dsc_off_switch_debounce_timer = mbutton_released_timer = zbe_wakeup_last_sent = millis();
   #else
-     power_switch_debounce_timer = dsc_switch_debounce_timer = mbutton_idle_timer = millis();
+     power_switch_debounce_timer = dsc_off_switch_debounce_timer = mbutton_released_timer = millis();
   #endif
 }
 
@@ -202,40 +213,40 @@ void loop()
     if (!digitalRead(POWER_SWITCH_PIN)) {
       if ((millis() - power_switch_debounce_timer) > power_debounce_time_ms) {
         #if DEBUG_MODE
-          Serial.println("Console: POWER button pressed. Requesting MDrive.");
+          Serial.println("Console: POWER button pressed. Requesting throttle-only MDrive.");
         #endif 
         
-        send_mbutton_message(mbutton_pressed);                                                                                      // Emulate key press
+        send_mbutton_message(mbutton_pressed);                                                                                          // Emulate key press
         delay(100);
-        send_mbutton_message(mbutton_idle);
+        send_mbutton_message(mbutton_released);
         power_switch_debounce_timer = millis();
+        ignore_full_mdrive = true;                                                                                                      // POWER console key should only change throttle mapping.
       }
-    }
-    else if (!digitalRead(DSC_SWITCH_PIN)) {
-      if (dsc_status == 0) {
-        if (!holding_dsc) {
-          holding_dsc = true;
-          dsc_switch_hold_timer = millis();
+    } else if (!digitalRead(DSC_SWITCH_PIN)) {
+      if (dsc_program_status == 0) {
+        if (!holding_dsc_off_console) {
+          holding_dsc_off_console = true;
+          dsc_off_switch_hold_timer = millis();
         } else {
-          if ((millis() - dsc_switch_hold_timer) > dsc_hold_time_ms) {                                                              // DSC OFF sequence should only be sent after user holds key for a configured time
+          if ((millis() - dsc_off_switch_hold_timer) > dsc_hold_time_ms) {                                                              // DSC OFF sequence should only be sent after user holds key for a configured time
             #if DEBUG_MODE
               Serial.println("Console: DSC OFF button held. Sending DSC OFF.");
             #endif
             send_dsc_off_sequence();
-            dsc_switch_debounce_timer = millis();
+            dsc_off_switch_debounce_timer = millis();
           }
         }      
       } else {
-        if ((millis() - dsc_switch_debounce_timer) > dsc_debounce_time_ms) {                                                        // A quick tap re-enables everything
+        if ((millis() - dsc_off_switch_debounce_timer) > dsc_debounce_time_ms) {                                                        // A quick tap re-enables everything
           #if DEBUG_MODE
-            Serial.println("Console: DSC button tapped. Re-enabling DSC.");
+            Serial.println("Console: DSC button tapped. Re-enabling DSC normal program.");
           #endif
-          dsc_switch_debounce_timer = millis();
+          dsc_off_switch_debounce_timer = millis();
           send_dtc_button_press();
         }
       }
     } else {
-      holding_dsc = false;
+      holding_dsc_off_console = false;
     }
   } 
 
@@ -246,22 +257,33 @@ void loop()
   if (!digitalRead(PTCAN_INT_PIN)) {                                                                                                // If INT pin is pulled low, read PT-CAN receive buffer
     PTCAN.readMsgBuf(&rxId, &len, rxBuf);                                                                                           // Read data: rxId = CAN ID, buf = data byte(s)
     
-    if (rxId == 0x19E) {
-      if (rxBuf[1] != ignition_last_state) {
-        if (rxBuf[1] == 0xEA) {
-          ignition = false;
-          reset_runtime_variables();
+    if (rxId == 0x315) {
+      if (!ignition) {
+        ignition = true;
+        #if DEBUG_MODE
+          Serial.println("PT-CAN: Ignition ON.");
+        #endif
+      }
+      ignition_message_timer = millis();
+      #if EDC_WITH_M_BUTTON
+        if (rxBuf[1] != edc_last_status_can) {
+          edc_status = rxBuf[1] - 0xF0;
           #if DEBUG_MODE
-            Serial.println("PT-CAN: Ignition OFF. Reset values.");
+            switch(edc_status) {
+              case 1:
+                Serial.println("PT-CAN: EDC Comfort mode.");
+                break;
+              case 2:
+                Serial.println("PT-CAN: EDC Sport mode.");
+                break;
+              case 0xA:
+                Serial.println("PT-CAN: EDC MSport mode.");
+                break;
+            }
           #endif
-        } else {
-          ignition = true;
-          #if DEBUG_MODE
-            Serial.println("PT-CAN: Ignition ON.");
-          #endif
+          edc_last_status_can = rxBuf[1];
         }
-        ignition_last_state = rxBuf[1];          
-      }                                                                                       
+      #endif
     } 
 
     else if (ignition) {
@@ -269,54 +291,39 @@ void loop()
         if (ignition) {
           if (rxBuf[1] == 0x4C) {                                                                                                   // M button is pressed
             send_mbutton_message(mbutton_pressed);
-            #if DTC_WITH_M_BUTTON
-              mbutton_hold_counter++;
-              if (mbutton_hold_counter == DTC_SWITCH_TIME) {
-                if (dsc_status == 0 && mdrive_status) {                                                                             // Check to make sure DSC/DTC are off and Mdrive is on
-                  send_dtc_button_press();
-                }
-                mbutton_hold_counter = 0;
-              }
-            #endif
           } else if (rxBuf[0] == 0xC0 && rxBuf[1] == 0x0C) {                                                                        // MFL buttons released, send alive ping.
-            send_mbutton_message(mbutton_idle);                                                                                       
-            #if DTC_WITH_M_BUTTON
-              mbutton_hold_counter = 0;
-            #endif
+            send_mbutton_message(mbutton_released);                                                                                       
           } else {
-            if ((millis() - mbutton_idle_timer) > 999) {                                                                            // keep sending mdrive idle messages when other buttons are pressed/held
-              send_mbutton_message(mbutton_idle);
+            if ((millis() - mbutton_released_timer) > 999) {                                                                        // keep sending MDrive released messages when other buttons are pressed/held
+              send_mbutton_message(mbutton_released);
             }
-            #if DTC_WITH_M_BUTTON
-              mbutton_hold_counter = 0;
-            #endif
           }
-        }
-    }
-     
-    #if FRONT_FOG_INDICATOR
-      else if (rxId == 0x21A) {
-        if (rxBuf[0] != last_light_state) {
-          if ((rxBuf[0] & 32) != 0) {                                                                                               // Check the third bit of the first byte represented in binary
-            front_fog_state = true;
-            digitalWrite(FOG_LED_PIN, HIGH);
-            #if DEBUG_MODE
-              Serial.println("PT-CAN: Front fogs on. Turned on FOG LED");
-            #endif
-          } else {
-            front_fog_state = false;
-            digitalWrite(FOG_LED_PIN, LOW);
-            #if DEBUG_MODE
-              Serial.println("PT-CAN: Front fogs off. Turned off FOG LED");
-            #endif
-          }
-          last_light_state = rxBuf[0];
         }
       }
-    #endif
+     
+      #if FRONT_FOG_INDICATOR
+        else if (rxId == 0x21A) {
+          if (rxBuf[0] != last_light_state) {
+            if ((rxBuf[0] & 32) == 32) {                                                                                            // Check the third bit of the first byte represented in binary for front fog status.
+              front_fog_state = true;
+              digitalWrite(FOG_LED_PIN, HIGH);
+              #if DEBUG_MODE
+                Serial.println("PT-CAN: Front fogs on. Turned on FOG LED");
+              #endif
+            } else {
+              front_fog_state = false;
+              digitalWrite(FOG_LED_PIN, LOW);
+              #if DEBUG_MODE
+                Serial.println("PT-CAN: Front fogs off. Turned off FOG LED");
+              #endif
+            }
+            last_light_state = rxBuf[0];
+          }
+        }
+      #endif
 
       #if FTM_INDICATOR
-        else if (rxId == 0x31D) {
+        else if (rxId == 0x31D) {                                                                                                  // FTM initialization is ongoing.
           if (rxBuf[0] == 0x03 && !ftm_indicator_state) {
             KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_flash);
             ftm_indicator_state = true;
@@ -339,36 +346,40 @@ void loop()
         }
       #endif
   
-      else {                                                                                                                       // Monitor 0x5A9 DSC status on PT-CAN       
-        // When DTC mode is toggled on or off, the disable/enable byte (1D/1C) is preceded with 0xB8 in rxBuf[1]
-        // When DSC OFF mode is toggled on or off, the disable/enable byte (1D/1C) is preceded with 0x24 in rxBuf[1]
-        // Must keep track of this state because DTC is actually toggled off before DSC OFF engages in a normal 2.5s sequence.
-        if (rxBuf[1] == 0xB8) {
-          if (rxBuf[3] == 0x1D && dsc_last_state == 0) {
-            dsc_status = 1;
-            dsc_last_state = rxBuf[1];
-            #if DEBUG_MODE
-              Serial.println("PT-CAN: Status DTC on");
-            #endif
-          } else if (rxBuf[3] == 0x1C && dsc_last_state == 0xB8) {
-            dsc_status = dsc_last_state = 0;
-            #if DEBUG_MODE
-              Serial.println("PT-CAN: Status all back on (from DTC mode)");
-            #endif
+      else {                                                                                                                      // Monitor 0x5A9 DSC status on PT-CAN.                                                                                                                        
+        if (ignore_dsc_program_status_message_count == 0) {
+          // When DTC mode is toggled on or off, the disable/enable byte (1D/1C) is preceded with 0xB8 in rxBuf[1]
+          // When DSC OFF mode is toggled on or off, the disable/enable byte (1D/1C) is preceded with 0x24 in rxBuf[1]
+          // Must keep track of this state because DTC is actually toggled off before DSC OFF engages in a normal 2.5s sequence.
+          if (rxBuf[1] == 0xB8) {
+            if (rxBuf[3] == 0x1D && dsc_program_last_status_can == 0) {
+              dsc_program_status = 1;
+              dsc_program_last_status_can = rxBuf[1];
+              #if DEBUG_MODE
+                Serial.println("PT-CAN: Status DTC on");
+              #endif
+            } else if (rxBuf[3] == 0x1C && dsc_program_last_status_can == 0xB8) {
+              dsc_program_status = dsc_program_last_status_can = 0;
+              #if DEBUG_MODE
+                Serial.println("PT-CAN: Status all back on (from DTC mode)");
+              #endif
+            }
+          } else {                                                                                                                 // rxBuf[1] == 0x24
+            if (rxBuf[3] == 0x1D) {
+              dsc_program_status = 2;
+              dsc_program_last_status_can = rxBuf[1];
+              #if DEBUG_MODE
+                Serial.println("PT-CAN: Status DSC off");
+              #endif
+            } else if (rxBuf[3] == 0x1C && dsc_program_last_status_can == rxBuf[1]) {
+              dsc_program_status = dsc_program_last_status_can = 0;
+              #if DEBUG_MODE
+                Serial.println("PT-CAN: Status all back on (from DSC OFF mode)");
+              #endif
+            }
           }
-        } else {                                                                                                                   // rxBuf[1] == 0x24
-          if (rxBuf[3] == 0x1D) {
-            dsc_status = 2;
-            dsc_last_state = rxBuf[1];
-            #if DEBUG_MODE
-              Serial.println("PT-CAN: Status DSC off");
-            #endif
-          } else if (rxBuf[3] == 0x1C && dsc_last_state == rxBuf[1]) {
-            dsc_status = dsc_last_state = 0;
-            #if DEBUG_MODE
-              Serial.println("PT-CAN: Status all back on (from DSC OFF mode)");
-            #endif
-          }
+        } else {
+          ignore_dsc_program_status_message_count--;
         }
       } 
     }
@@ -387,28 +398,56 @@ void loop()
       }
     }
     
-    else if (rxId == 0x399) {                                                                                                       // Monitor MDrive status on K-CAN and control centre console POWER LED
-      if (mdrive_last_state != rxBuf[4]) {
+    else if (rxId == 0x399 && ignition) {                                                                                           // Monitor MDrive status on K-CAN and control centre console POWER LED
+      if (mdrive_last_status_can != rxBuf[4]) {
         if (rxBuf[4] == 0xDF) {
           mdrive_status = true;
           digitalWrite(POWER_LED_PIN, HIGH);
           #if DEBUG_MODE
             Serial.println("K-CAN: Status MDrive on. Turned on POWER LED");
           #endif
+          if (!ignore_full_mdrive) {
+            #if DTC_WITH_M_BUTTON
+              if (dsc_program_status == 0) {                                                                                         // Check to make sure DSC is in normal program before MDrive
+                send_dtc_button_press();
+              }
+            #endif
+            #if EDC_WITH_M_BUTTON
+              if (edc_status == 1) {                                                                                                 // Make sure EDC is in Comfort mode
+                send_edc_button_press();
+                delay(50);
+                send_edc_button_press();
+                #if DEBUG_MODE
+                  Serial.println("K-CAN: Turned on EDC MSport with MDrive off.");
+                #endif
+              }
+            #endif
+          }
         } else {
           mdrive_status = false;
           digitalWrite(POWER_LED_PIN, LOW);
           #if DEBUG_MODE
             Serial.println("K-CAN: Status MDrive off. Turned off POWER LED");
           #endif
-          if (dsc_status == 1) {                                                                                                    // Turn off DTC together with MDrive
-            send_dtc_button_press();
-            #if DEBUG_MODE
-              Serial.println("K-CAN: Turned off DTC with MDrive off.");
-            #endif
-          }
+          #if DTC_WITH_M_BUTTON
+            if (dsc_program_status == 1) {                                                                                          // Turn off DTC together with MDrive
+              send_dtc_button_press();
+              #if DEBUG_MODE
+                Serial.println("K-CAN: Turned off DTC with MDrive off.");
+              #endif
+            }
+          #endif
+          #if EDC_WITH_M_BUTTON
+            if (edc_status == 0xA) {                                                                                                // Turn off EDC MSport program together with MDrive (only if toggled with MDrive)
+              send_edc_button_press();
+              #if DEBUG_MODE
+                Serial.println("K-CAN: Turned off EDC MSport with MDrive off.");
+              #endif
+            }
+          #endif
         }
-        mdrive_last_state = rxBuf[4];
+        mdrive_last_status_can = rxBuf[4];
+        ignore_full_mdrive = false;
       }
     }
 
@@ -439,6 +478,14 @@ void loop()
       }
     #endif
   }
+
+  if (ignition && (millis() - ignition_message_timer  > 700)){                                                                      // 0x315 is sent every 500ms with ignition on 
+    ignition = false;
+    reset_runtime_variables();
+    #if DEBUG_MODE
+      Serial.println("PT-CAN: Ignition OFF. Reset values.");
+    #endif
+  }
 }
 
 /***********************************************************************************************************************************************************************************************************************************************
@@ -447,10 +494,12 @@ void loop()
 
 void reset_runtime_variables() 
 {
-  dsc_status = dsc_last_state = mbutton_hold_counter = 0;
-  mdrive_status = false;
-  mdrive_last_state = 0xCF;  
-  ignition_last_state = 0xEA;
+  dsc_program_status = dsc_program_last_status_can = ignore_dsc_program_status_message_count = 0;
+  mdrive_status = ignore_full_mdrive = false;
+  mdrive_last_status_can = 0xCF; 
+  #if EDC_WITH_M_BUTTON 
+    edc_last_status_can = 0xF1;
+  #endif
   digitalWrite(POWER_LED_PIN, LOW);
   #if FRONT_FOG_INDICATOR
     front_fog_state = false;
@@ -485,16 +534,16 @@ void send_mbutton_message(byte message[])
       Serial.print("PT-CAN: Error sending mbutton message. Re-trying. Error: ");
       Serial.println(send_stat);
     } else {
-      message[0] == 0xFF ? Serial.println("PT-CAN: Sent mbutton idle.") : Serial.println("PT-CAN: Sent mbutton press.");
+      message[0] == 0xFF ? Serial.println("PT-CAN: Sent mbutton released.") : Serial.println("PT-CAN: Sent mbutton press.");
     }
   #else
   if (send_stat != CAN_OK) {
-    delay(100);                                                                                                                     // Attempt to send again
+    delay(100);                                                                                                                   // Attempt to send again
     PTCAN.sendMsgBuf(0x1D9, 3, message);
   }
   #endif
-  mbutton_idle_timer = millis();
-  mbutton_checksum < 0xFF ? mbutton_checksum++ : mbutton_checksum = 0xF0;                                                           // mbutton_checksum is between F0..FF
+  mbutton_released_timer = millis();
+  mbutton_checksum < 0xFF ? mbutton_checksum++ : mbutton_checksum = 0xF0;                                                         // mbutton_checksum is between F0..FF
 }
 
 
@@ -542,9 +591,9 @@ void evaluate_shiftlight_display()
 void send_seat_heating_request()
 {
   delay(10);
-  KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_press);
+  KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_pressed);
   delay(20);
-  KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_release);
+  KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_released);
   delay(20);
   #if DEBUG_MODE
     sprintf(serial_debug_string, "K-CAN: Sent dr seat heating request at ambient %dC, treshold %dC\n", (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
@@ -592,10 +641,10 @@ void send_dtc_button_press()
 
 void send_dsc_off_sequence() 
 {
-  PTCAN.sendMsgBuf(0x5A9, 8, dsc_off_fake_status);                                                                                  // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts
+  PTCAN.sendMsgBuf(0x5A9, 8, dsc_off_fake_cc_status);                                                                               // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts
   for (int i = 0; i < 26; i++) {                                                                                                    // >2.5s to send full DSC OFF sequence.
-    if ((millis() - mbutton_idle_timer) > 999) {                                                                                    // keep sending mdrive idle message
-      send_mbutton_message(mbutton_idle);
+    if ((millis() - mbutton_released_timer) > 999) {                                                                                // keep sending MDrive key released message
+      send_mbutton_message(mbutton_released);
     }
     PTCAN.sendMsgBuf(0x316, 2, dtc_key_pressed);
     delay(100); 
@@ -604,7 +653,25 @@ void send_dsc_off_sequence()
   #if DEBUG_MODE
     Serial.println("PT-CAN: Sent DSC OFF sequence.");
   #endif
+  ignition_message_timer = millis();                                                                                                // keep ignition timer alive during sequence.
+  
+  // Ignore the next two state messages coming on 0x5A9 after this sequence is over.
+  // First message: Status DTC on
+  // Second message: Status all back on (from DTC mode)
+  // Final (correct) message: Status DSC off
+  ignore_dsc_program_status_message_count = 2;
+
+  dsc_program_status = 2;                                                                                                           // Assume the sequence worked.
 }
+
+#if EDC_WITH_M_BUTTON
+void send_edc_button_press()                                                                                                        // Turn the transistor on/off to simulate EDC switch press.
+{
+  digitalWrite(EDC_SWITCH_PIN, HIGH);
+  delay(50);
+  digitalWrite(EDC_SWITCH_PIN, LOW);
+}
+#endif
 
 
 void disable_unused_peripherals()
@@ -618,7 +685,7 @@ void disable_unused_peripherals()
   power_timer3_disable();
   ADCSRA = 0;
   power_adc_disable();                                                                                                              // Disable Analog to Digital converter
-  #if !DEBUG_MODE                                                                                                                   // In production operation the USB interface is not needed
+  #if !DEBUG_MODE && DISABLE_USB
     if (digitalRead(POWER_SWITCH_PIN)) {                                                                                            // Bypass USB disable by holding POWER when powering module. This pin should be LOW when holding
         power_usb_disable();
         USBCON |= (1 << FRZCLK);
