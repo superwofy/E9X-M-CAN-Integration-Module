@@ -1,0 +1,30 @@
+Flat tyre status
+
+22:48:47.750 -> FTM state:  0x00 0xFE
+22:48:52.744 -> FTM state:  0x00 0xFE
+22:48:56.107 -> RPA switch:  0xFD 0xFF
+22:48:56.141 -> FTM state:  0x03 0xFD
+22:48:56.242 -> RPA switch:  0xFD 0xFF
+22:48:56.310 -> FTM state:  0x03 0xFD
+22:48:56.344 -> FTM state:  0x03 0xFD
+22:48:56.412 -> RPA switch:  0xFD 0xFF
+22:48:56.514 -> FTM state:  0x03 0xFD
+22:48:56.548 -> FTM state:  0x03 0xFD
+22:48:56.717 -> FTM state:  0x03 0xFD
+22:48:56.853 -> FTM state:  0x03 0xFD
+22:48:57.023 -> RPA switch:  0xFC 0xFF
+22:48:57.090 -> FTM state:  0x03 0xFE
+22:48:57.191 -> RPA switch:  0xFC 0xFF
+22:48:57.225 -> FTM state:  0x03 0xFE
+22:48:57.361 -> RPA switch:  0xFC 0xFF
+22:48:57.395 -> FTM state:  0x03 0xFE
+22:48:57.735 -> FTM state:  0x03 0xFE
+22:49:02.725 -> FTM state:  0x03 0xFE
+22:49:07.751 -> FTM state:  0x03 0xFE
+22:49:08.533 -> FTM state:  0x00 0xFE
+22:49:08.703 -> FTM state:  0x00 0xFE
+22:49:08.839 -> FTM state:  0x00 0xFE
+22:49:12.746 -> FTM state:  0x00 0xFE
+22:49:17.731 -> FTM state:  0x00 0xFE
+22:49:22.722 -> FTM state:  0x00 0xFE
+22:49:27.751 -> FTM state:  0x00 0xFE

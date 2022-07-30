@@ -56,7 +56,7 @@ const int MCP2515_KCAN = 1;
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #pragma GCC optimize ("-O3")                                                                                                        // Compiler optimisation level. For this file only. Edit platform.txt for all files.
-#define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
+#define DEBUG_MODE 0                                                                                                                // Toggle serial debug messages. Disable in production.
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM status when using M3 RPA hazards switch.
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an LED when front fogs are on. M3 clusters lack this.
 #define F_ZBE_WAKE 0                                                                                                                // Enable/disable F CIC ZBE wakeup functions
@@ -66,7 +66,7 @@ const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                         
 const uint8_t DTC_SWITCH_TIME = 7;                                                                                                  // Set duration for Enabling/Disabling DTC mode on with long press of M key. 100ms increments.
 const uint32_t START_UPSHIFT_WARN_RPM = 6000*4;                                                                                     // RPM setpoints (warning = desired RPM * 4).
 const uint32_t MID_UPSHIFT_WARN_RPM = 6500*4;
-const uint32_t MAX_UPSHIFT_WARN_RPM = 6900*4;
+const uint32_t MAX_UPSHIFT_WARN_RPM = 6700*4;
 
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
@@ -205,7 +205,7 @@ void loop()
           Serial.println("Console: POWER button pressed. Requesting MDrive.");
         #endif 
         
-        send_mbutton_message(mbutton_pressed);                                                                                    // Emulate key press
+        send_mbutton_message(mbutton_pressed);                                                                                      // Emulate key press
         delay(100);
         send_mbutton_message(mbutton_idle);
         power_switch_debounce_timer = millis();
@@ -217,7 +217,7 @@ void loop()
           holding_dsc = true;
           dsc_switch_hold_timer = millis();
         } else {
-          if ((millis() - dsc_switch_hold_timer) > dsc_hold_time_ms) {                                                            // DSC OFF sequence should only be sent after user holds key for a configured time
+          if ((millis() - dsc_switch_hold_timer) > dsc_hold_time_ms) {                                                              // DSC OFF sequence should only be sent after user holds key for a configured time
             #if DEBUG_MODE
               Serial.println("Console: DSC OFF button held. Sending DSC OFF.");
             #endif
@@ -226,7 +226,7 @@ void loop()
           }
         }      
       } else {
-        if ((millis() - dsc_switch_debounce_timer) > dsc_debounce_time_ms) {                                                      // A quick tap re-enables everything
+        if ((millis() - dsc_switch_debounce_timer) > dsc_debounce_time_ms) {                                                        // A quick tap re-enables everything
           #if DEBUG_MODE
             Serial.println("Console: DSC button tapped. Re-enabling DSC.");
           #endif
@@ -237,7 +237,7 @@ void loop()
     } else {
       holding_dsc = false;
     }
-  }
+  } 
 
 /***********************************************************************************************************************************************************************************************************************************************
   PT-CAN section.
@@ -593,7 +593,7 @@ void send_dtc_button_press()
 void send_dsc_off_sequence() 
 {
   PTCAN.sendMsgBuf(0x5A9, 8, dsc_off_fake_status);                                                                                  // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts
-  for (int i = 0; i < 25; i++) {                                                                                                    // 2.5s to send full DSC OFF sequence.
+  for (int i = 0; i < 26; i++) {                                                                                                    // >2.5s to send full DSC OFF sequence.
     if ((millis() - mbutton_idle_timer) > 999) {                                                                                    // keep sending mdrive idle message
       send_mbutton_message(mbutton_idle);
     }
