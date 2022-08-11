@@ -70,9 +70,10 @@ const int MCP2515_KCAN = 1;
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures
 const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80
 const uint8_t DTC_SWITCH_TIME = 7;                                                                                                  // Set duration for Enabling/Disabling DTC mode on with long press of M key. 100ms increments.
-const uint32_t START_UPSHIFT_WARN_RPM = 6000*4;                                                                                     // RPM setpoints (warning = desired RPM * 4).
-const uint32_t MID_UPSHIFT_WARN_RPM = 6500*4;
-const uint32_t MAX_UPSHIFT_WARN_RPM = 6700*4;
+const uint32_t START_UPSHIFT_WARN_RPM = 5500*4;                                                                                     // RPM setpoints (warning = desired RPM * 4).
+const uint32_t MID_UPSHIFT_WARN_RPM = 6000*4;
+const uint32_t MAX_UPSHIFT_WARN_RPM = 6500*4;
+
 
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
@@ -92,9 +93,12 @@ byte dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
 
 byte shiftlights_start[] = {0x86, 0x3E};
 byte shiftlights_mid_buildup[] = {0xF6, 0};
+byte shiftlights_startup_buildup[] = {0x56, 0};																						                                          // faster sequential buildup. first byte 0-F (F slowest)
 byte shiftlights_max_flash[] = {0x0A, 0};
 byte shiftlights_off[] = {0x05, 0};
 bool shiftlights_segments_active = false;
+bool engine_running = false;
+uint8_t ignore_shiftlights_off_counter = 0;
 
 bool mdrive_status = false;                                                                                                         // false = off, true = on
 bool ignore_full_mdrive = false;
@@ -107,11 +111,11 @@ unsigned long power_switch_debounce_timer, dsc_off_switch_debounce_timer, dsc_of
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
 
 #if FRONT_FOG_INDICATOR
-  bool front_fog_state = false;
-  uint8_t last_light_state = 0;
+  bool front_fog_status = false;
+  uint8_t last_light_status = 0;
 #endif
 #if FTM_INDICATOR
-  bool ftm_indicator_state = false;
+  bool ftm_indicator_status = false;
   byte ftm_indicator_flash[] = {0x40, 0x50, 0x01, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
   byte ftm_indicator_off[] = {0x40, 0x50, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
 #endif
@@ -148,11 +152,11 @@ void setup()
     pinMode(EDC_SWITCH_PIN, OUTPUT);
   #endif
   disable_unused_peripherals();
-  SPI.setClockDivider(SPI_CLOCK_DIV2);                                                                                               // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4 
+  SPI.setClockDivider(SPI_CLOCK_DIV2);                                                                                              // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4 
 
   #if DEBUG_MODE
     Serial.begin(115200);
-    while(!Serial);                                                                                                                  // 32U4, wait until virtual port initialized
+    while(!Serial);                                                                                                                 // 32U4, wait until virtual port initialized
   #endif
   
   while (CAN_OK != PTCAN.begin(MCP_STDEXT, CAN_500KBPS, MCP2515_PTCAN) || 
@@ -216,11 +220,11 @@ void loop()
           Serial.println("Console: POWER button pressed. Requesting throttle-only MDrive.");
         #endif 
         
-        send_mbutton_message(mbutton_pressed);                                                                                          // Emulate key press
+        send_mbutton_message(mbutton_pressed);                                                                                      // Emulate key press
         delay(100);
         send_mbutton_message(mbutton_released);
         power_switch_debounce_timer = millis();
-        ignore_full_mdrive = true;                                                                                                      // POWER console key should only change throttle mapping.
+        ignore_full_mdrive = true;                                                                                                  // POWER console key should only change throttle mapping.
       }
     } else if (!digitalRead(DSC_SWITCH_PIN)) {
       if (dsc_program_status == 0) {
@@ -228,7 +232,7 @@ void loop()
           holding_dsc_off_console = true;
           dsc_off_switch_hold_timer = millis();
         } else {
-          if ((millis() - dsc_off_switch_hold_timer) > dsc_hold_time_ms) {                                                              // DSC OFF sequence should only be sent after user holds key for a configured time
+          if ((millis() - dsc_off_switch_hold_timer) > dsc_hold_time_ms) {                                                          // DSC OFF sequence should only be sent after user holds key for a configured time
             #if DEBUG_MODE
               Serial.println("Console: DSC OFF button held. Sending DSC OFF.");
             #endif
@@ -237,7 +241,7 @@ void loop()
           }
         }      
       } else {
-        if ((millis() - dsc_off_switch_debounce_timer) > dsc_debounce_time_ms) {                                                        // A quick tap re-enables everything
+        if ((millis() - dsc_off_switch_debounce_timer) > dsc_debounce_time_ms) {                                                    // A quick tap re-enables everything
           #if DEBUG_MODE
             Serial.println("Console: DSC button tapped. Re-enabling DSC normal program.");
           #endif
@@ -303,36 +307,36 @@ void loop()
      
       #if FRONT_FOG_INDICATOR
         else if (rxId == 0x21A) {
-          if (rxBuf[0] != last_light_state) {
+          if (rxBuf[0] != last_light_status) {
             if ((rxBuf[0] & 32) == 32) {                                                                                            // Check the third bit of the first byte represented in binary for front fog status.
-              front_fog_state = true;
+              front_fog_status = true;
               digitalWrite(FOG_LED_PIN, HIGH);
               #if DEBUG_MODE
                 Serial.println("PT-CAN: Front fogs on. Turned on FOG LED");
               #endif
             } else {
-              front_fog_state = false;
+              front_fog_status = false;
               digitalWrite(FOG_LED_PIN, LOW);
               #if DEBUG_MODE
                 Serial.println("PT-CAN: Front fogs off. Turned off FOG LED");
               #endif
             }
-            last_light_state = rxBuf[0];
+            last_light_status = rxBuf[0];
           }
         }
       #endif
 
       #if FTM_INDICATOR
-        else if (rxId == 0x31D) {                                                                                                  // FTM initialization is ongoing.
-          if (rxBuf[0] == 0x03 && !ftm_indicator_state) {
+        else if (rxId == 0x31D) {                                                                                                   // FTM initialization is ongoing.
+          if (rxBuf[0] == 0x03 && !ftm_indicator_status) {
             KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_flash);
-            ftm_indicator_state = true;
+            ftm_indicator_status = true;
             #if DEBUG_MODE
               Serial.println("K-CAN: Activated FTM indicator.");
             #endif
-          } else if (rxBuf[0] == 0x00 && ftm_indicator_state) {
+          } else if (rxBuf[0] == 0x00 && ftm_indicator_status) {
             KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_off);
-            ftm_indicator_state = false;
+            ftm_indicator_status = false;
             #if DEBUG_MODE
               Serial.println("K-CAN: Deactivated FTM indicator.");
             #endif
@@ -346,11 +350,11 @@ void loop()
         }
       #endif
   
-      else {                                                                                                                      // Monitor 0x5A9 DSC status on PT-CAN.                                                                                                                        
+      else {                                                                                                                        // Monitor 0x5A9 DSC status on PT-CAN.                                                                                                                        
         if (ignore_dsc_program_status_message_count == 0) {
           // When DTC mode is toggled on or off, the disable/enable byte (1D/1C) is preceded with 0xB8 in rxBuf[1]
           // When DSC OFF mode is toggled on or off, the disable/enable byte (1D/1C) is preceded with 0x24 in rxBuf[1]
-          // Must keep track of this state because DTC is actually toggled off before DSC OFF engages in a normal 2.5s sequence.
+          // Must keep track of this status because DTC is actually toggled off before DSC OFF engages in a normal 2.5s sequence.
           if (rxBuf[1] == 0xB8) {
             if (rxBuf[3] == 0x1D && dsc_program_last_status_can == 0) {
               dsc_program_status = 1;
@@ -364,7 +368,7 @@ void loop()
                 Serial.println("PT-CAN: Status all back on (from DTC mode)");
               #endif
             }
-          } else {                                                                                                                 // rxBuf[1] == 0x24
+          } else {                                                                                                                  // rxBuf[1] == 0x24
             if (rxBuf[3] == 0x1D) {
               dsc_program_status = 2;
               dsc_program_last_status_can = rxBuf[1];
@@ -408,12 +412,12 @@ void loop()
           #endif
           if (!ignore_full_mdrive) {
             #if DTC_WITH_M_BUTTON
-              if (dsc_program_status == 0) {                                                                                         // Check to make sure DSC is in normal program before MDrive
+              if (dsc_program_status == 0) {                                                                                        // Check to make sure DSC is in normal program before MDrive
                 send_dtc_button_press();
               }
             #endif
             #if EDC_WITH_M_BUTTON
-              if (edc_status == 1) {                                                                                                 // Make sure EDC is in Comfort mode
+              if (edc_status == 1) {                                                                                                // Make sure EDC is in Comfort mode
                 send_edc_button_press();
                 delay(50);
                 send_edc_button_press();
@@ -494,20 +498,22 @@ void loop()
 
 void reset_runtime_variables() 
 {
-  dsc_program_status = dsc_program_last_status_can = ignore_dsc_program_status_message_count = 0;
+  dsc_program_status = dsc_program_last_status_can = ignore_dsc_program_status_message_count = ignore_shiftlights_off_counter = 0;
   mdrive_status = ignore_full_mdrive = false;
+  shiftlights_segments_active = false;
+  engine_running = false;
   mdrive_last_status_can = 0xCF; 
   #if EDC_WITH_M_BUTTON 
     edc_last_status_can = 0xF1;
   #endif
   digitalWrite(POWER_LED_PIN, LOW);
   #if FRONT_FOG_INDICATOR
-    front_fog_state = false;
-    last_light_state = 0;
+    front_fog_status = false;
+    last_light_status = 0;
     digitalWrite(FOG_LED_PIN, LOW);
   #endif
   #if FTM_INDICATOR
-    ftm_indicator_state = false;
+    ftm_indicator_status = false;
   #endif
 }
 
@@ -538,50 +544,49 @@ void send_mbutton_message(byte message[])
     }
   #else
   if (send_stat != CAN_OK) {
-    delay(100);                                                                                                                   // Attempt to send again
+    delay(100);                                                                                                                     // Attempt to send again
     PTCAN.sendMsgBuf(0x1D9, 3, message);
   }
   #endif
   mbutton_released_timer = millis();
-  mbutton_checksum < 0xFF ? mbutton_checksum++ : mbutton_checksum = 0xF0;                                                         // mbutton_checksum is between F0..FF
+  mbutton_checksum < 0xFF ? mbutton_checksum++ : mbutton_checksum = 0xF0;                                                           // mbutton_checksum is between F0..FF
 }
 
 
 void evaluate_shiftlight_display()
 {
   uint32_t RPM = ((uint32_t)rxBuf[5] << 8) | (uint32_t)rxBuf[4];
-  
-  if (RPM > START_UPSHIFT_WARN_RPM && RPM < MID_UPSHIFT_WARN_RPM) {                                                               // First segment                                                              
-    if (rxBuf[2] != 3) {                                                                                                          // Send the warning only if the throttle pedal is pressed
-      activate_shiftlight_segments(shiftlights_start);
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Displaying first warning at RPM: %ld\n", RPM / 4);
-        Serial.print(serial_debug_string);
-      #endif                     
-    } else {
-      deactivate_shiftlight_segments();
-    }
-  } else if (RPM > MID_UPSHIFT_WARN_RPM && RPM < MAX_UPSHIFT_WARN_RPM) {                                                          // Buildup from second segment to reds
-    if (rxBuf[2] != 3) {
-      activate_shiftlight_segments(shiftlights_mid_buildup);
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Displaying increasing warning at RPM: %ld\n", RPM / 4);
-        Serial.print(serial_debug_string);
-      #endif
-    } else {
-      deactivate_shiftlight_segments();
-    }
-  } else if (RPM >= MAX_UPSHIFT_WARN_RPM) {                                                                                       // Flash all segments
-    if (rxBuf[2] != 3) {
-      activate_shiftlight_segments(shiftlights_max_flash);
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Flash max warning at RPM: %ld\n", RPM / 4);
-        Serial.print(serial_debug_string);
-      #endif
-    } else {
-      deactivate_shiftlight_segments();
-    }
-  } else {                                                                                                                        // RPM dropped. Disable lights
+
+  if (!engine_running && (RPM > 2000)) {                                                                                            // Show off shift light segments during engine startup (>500rpm)
+    engine_running = true;
+    activate_shiftlight_segments(shiftlights_startup_buildup);
+    #if DEBUG_MODE
+      Serial.println("Showing shift light on engine startup.");
+    #endif
+    ignore_shiftlights_off_counter = 10;                                                                                            // Skip a few off cycles to allow segments to light up
+  }
+
+  if (rxBuf[2] >= 0xFA) {                                                                                                           // Disable lights if throttle is released
+    deactivate_shiftlight_segments();
+  } else if (RPM >= START_UPSHIFT_WARN_RPM && RPM <= MID_UPSHIFT_WARN_RPM) {                                                        // First yellow segment                                                              
+    activate_shiftlight_segments(shiftlights_start);
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Displaying first warning at RPM: %ld\n", RPM / 4);
+      Serial.print(serial_debug_string);
+    #endif                     
+  } else if (RPM >= MID_UPSHIFT_WARN_RPM && RPM <= MAX_UPSHIFT_WARN_RPM) {                                                          // Buildup from second yellow segment to reds
+    activate_shiftlight_segments(shiftlights_mid_buildup);
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Displaying increasing warning at RPM: %ld\n", RPM / 4);
+      Serial.print(serial_debug_string);
+    #endif
+  } else if (RPM >= MAX_UPSHIFT_WARN_RPM) {                                                                                         // Flash all segments
+    activate_shiftlight_segments(shiftlights_max_flash);
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Flash max warning at RPM: %ld\n", RPM / 4);
+      Serial.print(serial_debug_string);
+    #endif
+  } else {                                                                                                                          // RPM dropped. Disable lights
     deactivate_shiftlight_segments();
   }
 }
@@ -614,11 +619,15 @@ void activate_shiftlight_segments(byte* data)
 void deactivate_shiftlight_segments()
 {
   if (shiftlights_segments_active) {
-    PTCAN.sendMsgBuf(0x206, 2, shiftlights_off);                                                                                
-    shiftlights_segments_active = false;
-    #if DEBUG_MODE
-      Serial.println("PTCAN: Deactivated shiftlights segments");
-    #endif 
+    if (ignore_shiftlights_off_counter == 0) {
+      PTCAN.sendMsgBuf(0x206, 2, shiftlights_off);                                                                                
+      shiftlights_segments_active = false;
+      #if DEBUG_MODE
+        Serial.println("PTCAN: Deactivated shiftlights segments");
+      #endif 
+    } else {
+      ignore_shiftlights_off_counter--;
+    }
   }
 }
 
@@ -655,7 +664,7 @@ void send_dsc_off_sequence()
   #endif
   ignition_message_timer = millis();                                                                                                // keep ignition timer alive during sequence.
   
-  // Ignore the next two state messages coming on 0x5A9 after this sequence is over.
+  // Ignore the next two status messages coming on 0x5A9 after this sequence is over.
   // First message: Status DTC on
   // Second message: Status all back on (from DTC mode)
   // Final (correct) message: Status DSC off
