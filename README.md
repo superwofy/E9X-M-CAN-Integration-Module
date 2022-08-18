@@ -19,19 +19,19 @@ Hardware used:
 
 I use it to:
 
-Control Mdrive (Throttle map)
-Control DTC with M button
-Control EDC with M button
-Display Shiftlights - including startup animation
-Control Centre console buttons and associated LEDs (POWER, DSC OFF)
-Display Front fog lights on
-Enable FXX KCAN1 CIC controllers
-Turn on heated seats below a set temperature
+* Control Mdrive (Throttle map)
+* Control DTC with M button
+* Control EDC with M button
+* Display Shiftlights - including startup animation
+* Control Centre console buttons and associated LEDs (POWER, DSC OFF)
+* Display Front fog lights on
+* Enable FXX KCAN1 CIC controllers
+* Turn on heated seats below a set temperature
 
 
 ![shiftlights](img/shiftlight.jpg "shiftlights")
 
-![fog]("img/fog%20switch/indicator%20on.jpg" "fog")
+![fog]("img/fog-switch/indicator-on.jpg" "fog")
 
 ![case](img/case.jpg "case")
 
