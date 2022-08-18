@@ -31,7 +31,7 @@ I use it to:
 
 ![shiftlights](img/shiftlight.jpg "shiftlights")
 
-![fog]("img/fog-switch/indicator-on.jpg" "fog")
+![fog]("img/fog/indicatoron.jpg" "fog")
 
 ![case](img/case.jpg "case")
 
