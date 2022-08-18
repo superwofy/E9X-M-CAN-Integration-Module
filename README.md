@@ -5,15 +5,15 @@ Included are also tools to allow full manipulation of the program section in the
 
 
 Hardware used: 
-CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) 
-Generic 16MHz MCP2515 CAN shield
-S8050 NPN transistor
-1K SMD resistor
-150ohm SMD resistor
-OSRAM LO M676-Q2S1
-KINGBRIGHT KM2520ZGC-G03
-Micro USB right-angle cable
-Old PDC module PCB and housing
+* CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) 
+* Generic 16MHz MCP2515 CAN shield
+* S8050 NPN transistor
+* 1K SMD resistor
+* 150ohm SMD resistor
+* OSRAM LO M676-Q2S1
+* KINGBRIGHT KM2520ZGC-G03
+* Micro USB right-angle cable
+* Old PDC module PCB and housing
 
 
 
@@ -31,5 +31,7 @@ Turn on heated seats below a set temperature
 
 ![shiftlights](img/shiftlight.jpg "shiftlights")
 
-![fog](img/fog switch/indicator on.jpg "fog")
+![fog]("img/fog%20switch/indicator%20on.jpg" "fog")
+
+![case](img/case.jpg "case")
 
