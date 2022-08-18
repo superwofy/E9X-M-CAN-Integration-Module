@@ -1,0 +1,10 @@
+In order to use MHD to write the modified program section back to the ECU the CRC checksum at 0x80304 must be corrected.
+
+
+1. Make the required modifications to the bin file.
+
+2. Rename to "input.bin" and place in the same folder as "csprogram-windows.exe"
+
+3. Run "csprogram-windows.exe" from CMD/PS.
+
+4. Insert corrected checksum (in Little Endian!) at 0x80304.

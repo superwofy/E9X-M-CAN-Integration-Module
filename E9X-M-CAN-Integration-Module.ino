@@ -32,6 +32,14 @@
 // Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
 
 
+// .bin modification
+
+// 0x83738/9  -> F1 07     CAN message table
+// 0x1f3ad4/5 -> F1 07     CAN filters
+// Replace 15 03 (0x315 represented in LE) to stop MSD81 from reacting to Vehicle Mode changes (triggered by JBBF through EDC button)
+// Re-calculate checksum at 0x80304 
+
+
 // Using a slightly streamlined version of Cory's library https://github.com/coryjfowler/MCP_CAN_lib
 // Hardware used: CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) and Generic 16MHz MCP2515 CAN shield.
 
