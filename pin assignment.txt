@@ -1,11 +1,12 @@
 Black connector
 
-6/12 - gnd - black/brown
+6 - gnd - brown
 7 - power - black/red
 8 - KcanH
 2 - KcanL
 9 - PTcanH
 4 - PTcanL
+12 - gnd - black/brown
 
 
 
@@ -16,3 +17,6 @@ White connector
 16 - POWER LED (D4) - black/white
 15 - FOG LED (D12) - blue/yellow
 14 - EDC switch (D11) - gray/blue
+13 - Exhaust flap solenoid (D10) - gray
+	-> Use flyback diode between +/-
+	-> Disconnect DME X60001 pin 5

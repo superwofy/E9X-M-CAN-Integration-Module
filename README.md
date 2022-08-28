@@ -8,6 +8,8 @@ Hardware used:
 * CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) 
 * Generic 16MHz MCP2515 CAN shield
 * S8050 NPN transistor
+* Toshiba K2889 MOSFET
+* 1N4007 diode
 * 1K SMD resistor
 * 150ohm SMD resistor
 * OSRAM LO M676-Q2S1
@@ -19,9 +21,10 @@ Hardware used:
 
 I use it to:
 
-* Control Mdrive (Throttle map)
-* Control DTC with M button
-* Control EDC with M button
+* Control Mdrive (Throttle map) with the M button
+* Control DTC with the M button
+* Control EDC with the M button
+* Control the exhaust flap with the M button
 * Display Shiftlights - including startup animation
 * Control Centre console buttons and associated LEDs (POWER, DSC OFF)
 * Display Front fog lights on
