@@ -91,9 +91,9 @@ const uint32_t MAX_UPSHIFT_WARN_RPM = 6500*4;
   const uint32_t EXHAUST_FLAP_QUIET_RPM = 3500*4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
 #endif
 #if LAUNCH_CONTROL_INDICATOR
-  const uint32_t LC_RPM = 2500*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4).
-  const uint32_t LC_RPM_MIN = LC_RPM - 200;
-  const uint32_t LC_RPM_MAX = LC_RPM + 200;
+  const uint32_t LC_RPM = 2500*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
+  const uint32_t LC_RPM_MIN = LC_RPM - 250;
+  const uint32_t LC_RPM_MAX = LC_RPM + 250;
 #endif
 
 
@@ -121,7 +121,6 @@ bool shiftlights_segments_active = false;
 bool engine_running = false;
 uint8_t ignore_shiftlights_off_counter = 0;
 uint32_t RPM = 0;
-uint32_t Throttle = 0;
 
 bool mdrive_status = false;                                                                                                         // false = off, true = on
 bool ignore_full_mdrive = false;
@@ -159,6 +158,7 @@ const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hol
   byte lc_cc_off[] = {0x40, 0xBE, 0x01, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
   bool lc_cc_active = false;
   bool clutch_pressed = false;
+  bool vehicle_moving = false;
 #endif
 #if AUTO_SEAT_HEATING
   uint8_t ambient_temperature_can = 255;
@@ -208,13 +208,14 @@ void setup()
   PTCAN.init_Mask(1, 0x07FF0000);                                                                                                   // Mask matches: 7FF (standard ID) and all bytes
 
   PTCAN.init_Filt(0, 0x01D60000);                                                                                                   // MFL button status.                                         Cycle time 1s, 100ms (pressed)
-  PTCAN.init_Filt(1, 0x03150000);                                                                                                   // Vehicle mode (EDC).                                        Cycle time 500ms (idle), 100-250ms (change)
-  PTCAN.init_Filt(2, 0x03990000);                                                                                                   // MDrive status.                                             Cycle time 10s (idle), 160ms (change)
+  PTCAN.init_Filt(1, 0x01B40000);                                                                                                   // Kombi status (speed, handbrake)                            Cycle time 100ms (terminal R on)
+  PTCAN.init_Filt(2, 0x03150000);                                                                                                   // Vehicle mode (EDC).                                        Cycle time 500ms (idle), 100-250ms (change)
+  PTCAN.init_Filt(3, 0x03990000);                                                                                                   // MDrive status.                                             Cycle time 10s (idle), 160ms (change)
   #if FRONT_FOG_INDICATOR
-    PTCAN.init_Filt(3, 0x021A0000);                                                                                                 // Light status                                               Cycle time 5s (idle) 
+    PTCAN.init_Filt(4, 0x021A0000);                                                                                                 // Light status                                               Cycle time 5s (idle) 
   #endif
   #if FTM_INDICATOR
-     PTCAN.init_Filt(4, 0x031D0000);                                                                                                // FTM status broadcast by DSC                                Cycle time 5s (idle)
+     PTCAN.init_Filt(5, 0x031D0000);                                                                                                // FTM status broadcast by DSC                                Cycle time 5s (idle)
   #endif
   PTCAN.setMode(MCP_NORMAL);
   
@@ -298,18 +299,35 @@ void loop()
 
     if (ignition) {
       if (rxId == 0x1D6) {       
-        if (ignition) {
-          if (rxBuf[1] == 0x4C) {                                                                                                   // M button is pressed
-            send_mbutton_message(mbutton_pressed);
-          } else if (rxBuf[0] == 0xC0 && rxBuf[1] == 0x0C) {                                                                        // MFL buttons released, send alive ping.
-            send_mbutton_message(mbutton_released);                                                                                       
-          } else {
-            if ((millis() - mbutton_released_timer) >= 1000) {                                                                      // keep sending MDrive released messages when other buttons are pressed/held
-              send_mbutton_message(mbutton_released);
-            }
+        if (rxBuf[1] == 0x4C) {                                                                                                     // M button is pressed
+          send_mbutton_message(mbutton_pressed);
+        } else if (rxBuf[0] == 0xC0 && rxBuf[1] == 0x0C) {                                                                          // MFL buttons released, send alive ping.
+          send_mbutton_message(mbutton_released);                                                                                       
+        } else {
+          if ((millis() - mbutton_released_timer) >= 1000) {                                                                        // keep sending MDrive released messages when other buttons are pressed/held
+            send_mbutton_message(mbutton_released);
           }
         }
       }
+      #if LAUNCH_CONTROL_INDICATOR
+        else if (rxId == 0x1B4) {       
+          if (rxBuf[0] == 0 && rxBuf[1] == 0xD0) {
+            if (vehicle_moving) {
+              vehicle_moving = false;
+              #if DEBUG_MODE
+                Serial.println("Vehicle stationary.");
+              #endif
+            }
+          } else {
+            if (!vehicle_moving) {
+              vehicle_moving = true;
+              #if DEBUG_MODE
+                Serial.println("Vehicle moving.");
+              #endif
+            }
+          }
+        }
+      #endif
      
       #if FRONT_FOG_INDICATOR
         else if (rxId == 0x21A) {
@@ -482,7 +500,7 @@ void loop()
       #endif
     }
 
-    else if (rxId == 0xAA) {                                                                                                        // Monitor 0xAA (throttle status).
+    else if (rxId == 0xAA) {                                                                                                        // Monitor 0xAA (rpm/throttle status).
       if (ignition) {
         RPM = ((uint32_t)rxBuf[5] << 8) | (uint32_t)rxBuf[4];
         evaluate_shiftlight_display();
@@ -552,7 +570,7 @@ void loop()
 void reset_runtime_variables() 
 {
   dsc_program_last_status_can = 0xEA;
-  dsc_program_status = ignore_shiftlights_off_counter = RPM = Throttle = 0;
+  dsc_program_status = ignore_shiftlights_off_counter = RPM = 0;
   mdrive_status = ignore_full_mdrive = false;
   shiftlights_segments_active = false;
   engine_running = false;
@@ -566,7 +584,7 @@ void reset_runtime_variables()
     exhaust_flap_open = true;
   #endif
   #if LAUNCH_CONTROL_INDICATOR
-    lc_cc_active = false;
+    lc_cc_active = clutch_pressed = vehicle_moving = false;
   #endif
   digitalWrite(POWER_LED_PIN, LOW);
   #if FRONT_FOG_INDICATOR
@@ -659,29 +677,30 @@ void evaluate_shiftlight_display()
 #if EXHAUST_FLAP_WITH_M_BUTTON
 void evaluate_exhaust_flap_position()
 {
-  Serial.println((millis() - exhaust_flap_action_timer));
-  if ((millis() - exhaust_flap_action_timer) >= 1000) {                                                                             // Avoid vacuum drain, oscillation and apply startup delay
-    if (!exhaust_flap_sport) {                                                                                                      // Exhaust is in quiet mode
-        if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint
-          if (!exhaust_flap_open) {
-            digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
-            exhaust_flap_action_timer = millis();
-            exhaust_flap_open = true;
-            #if DEBUG_MODE
-              Serial.println("Exhaust flap opened at RPM setpoint.");
-            #endif
-          }
-        } else {
-          if (exhaust_flap_open) {
-            digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);
-            exhaust_flap_action_timer = millis();
-            exhaust_flap_open = false;
-            #if DEBUG_MODE
-              Serial.println("Exhaust flap closed.");
-            #endif
-          }
+  if (!exhaust_flap_sport) {                                                                                                        // Exhaust is in quiet mode
+    if ((millis() - exhaust_flap_action_timer) >= 1000) {                                                                           // Avoid vacuum drain, oscillation and apply startup delay
+      if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                          // Open at defined rpm setpoint
+        if (!exhaust_flap_open) {
+          digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
+          exhaust_flap_action_timer = millis();
+          exhaust_flap_open = true;
+          #if DEBUG_MODE
+            Serial.println("Exhaust flap opened at RPM setpoint.");
+          #endif
         }
-    } else {                                                                                                                        // Flap always open in sport mode
+      } else {
+        if (exhaust_flap_open) {
+          digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);
+          exhaust_flap_action_timer = millis();
+          exhaust_flap_open = false;
+          #if DEBUG_MODE
+            Serial.println("Exhaust flap closed.");
+          #endif
+        }
+      }
+    }
+  } else {                                                                                                                          // Flap always open in sport mode
+    if ((millis() - exhaust_flap_action_timer) >= 200) {
       if (!exhaust_flap_open) {
         digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
         exhaust_flap_action_timer = millis();
@@ -700,27 +719,18 @@ void evaluate_exhaust_flap_position()
 void evaluate_lc_display()
 {
   if (RPM >= LC_RPM_MIN && RPM <= LC_RPM_MAX) {
-    Throttle = ((uint32_t)rxBuf[2] << 8) | (uint32_t)rxBuf[3];
-    if (Throttle >= 0x2AF0) {                                                                                                       // Almost full throttle
-      if (clutch_pressed) {
-        KCAN.sendMsgBuf(0x598, 8, lc_cc_on);
-        lc_cc_active = true;
-        #if DEBUG_MODE
-          Serial.println("Displayed LC flag.");
-        #endif
-      } else if (lc_cc_active) {
-        KCAN.sendMsgBuf(0x598, 8, lc_cc_off);
-        lc_cc_active = false;
-        #if DEBUG_MODE
-          Serial.println("Deactivated LC flag.");
-        #endif
-      }
+    if (clutch_pressed && !vehicle_moving) {
+      KCAN.sendMsgBuf(0x598, 8, lc_cc_on);
+      lc_cc_active = true;
+      #if DEBUG_MODE
+        Serial.println("Displayed LC flag.");
+      #endif
     } else if (lc_cc_active) {
       KCAN.sendMsgBuf(0x598, 8, lc_cc_off);
       lc_cc_active = false;
       #if DEBUG_MODE
-          Serial.println("Deactivated LC flag.");
-        #endif
+        Serial.println("Deactivated LC flag.");
+      #endif
     }
   } else if (lc_cc_active){
     KCAN.sendMsgBuf(0x598, 8, lc_cc_off);
