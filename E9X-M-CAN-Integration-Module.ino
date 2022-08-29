@@ -34,7 +34,7 @@
 // Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
 
 
-// .bin modification
+// MSD81 IKM0S .bin modification
 
 // 0x83738/9  -> F1 07     CAN message table
 // 0x1f3ad4/5 -> F1 07     CAN filters
@@ -78,7 +78,8 @@ const int MCP2515_KCAN = 1;
 #define DTC_WITH_M_BUTTON 1                                                                                                         // Toggle DTC mode with M MFL button.
 #define EXHAUST_FLAP_WITH_M_BUTTON 1                                                                                                // Take control of the E9X exhaust flap solenoid
 #define EDC_WITH_M_BUTTON 1                                                                                                         // Toggle EDC mode with M MFL button. If SVT is installed, Servotronic assist curve changes too.
-#define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control)
+#define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT)
+#define SYNC_SHIFTLIGHTS_WITH_REDLINE 1                                                                                             // Display shiftlights with the variable redline
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures.
 
 const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80.
@@ -94,6 +95,9 @@ const uint32_t MAX_UPSHIFT_WARN_RPM = 6500*4;
   const uint32_t LC_RPM = 2500*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
   const uint32_t LC_RPM_MIN = LC_RPM - 250;
   const uint32_t LC_RPM_MAX = LC_RPM + 250;
+#endif
+#if SYNC_SHIFTLIGHTS_WITH_REDLINE
+  const uint32_t VAR_REDLINE_OFFSET_RPM = 250;                                                                                      // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
 #endif
 
 
@@ -121,6 +125,14 @@ bool shiftlights_segments_active = false;
 bool engine_running = false;
 uint8_t ignore_shiftlights_off_counter = 0;
 uint32_t RPM = 0;
+uint32_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
+uint32_t MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
+uint32_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
+#if SYNC_SHIFTLIGHTS_WITH_REDLINE
+  bool engine_warmed_up = false;
+  uint32_t var_redline_position;
+  uint8_t last_var_rpm_can = 0;
+#endif
 
 bool mdrive_status = false;                                                                                                         // false = off, true = on
 bool ignore_full_mdrive = false;
@@ -143,7 +155,7 @@ const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hol
 #if F_ZBE_WAKE
   byte f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                              // Network management kombi, F-series
   byte zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
-  long zbe_wakeup_last_sent;
+  unsigned long zbe_wakeup_last_sent;
 #endif
 #if EDC_WITH_M_BUTTON
   uint8_t edc_status = 1;                                                                                                           // 1 = comfort, 2 = sport, 0xA = msport
@@ -208,7 +220,9 @@ void setup()
   PTCAN.init_Mask(1, 0x07FF0000);                                                                                                   // Mask matches: 7FF (standard ID) and all bytes
 
   PTCAN.init_Filt(0, 0x01D60000);                                                                                                   // MFL button status.                                         Cycle time 1s, 100ms (pressed)
-  PTCAN.init_Filt(1, 0x01B40000);                                                                                                   // Kombi status (speed, handbrake)                            Cycle time 100ms (terminal R on)
+  #if LAUNCH_CONTROL_INDICATOR
+    PTCAN.init_Filt(1, 0x01B40000);                                                                                                 // Kombi status (speed, handbrake)                            Cycle time 100ms (terminal R on)
+  #endif
   PTCAN.init_Filt(2, 0x03150000);                                                                                                   // Vehicle mode (EDC).                                        Cycle time 500ms (idle), 100-250ms (change)
   PTCAN.init_Filt(3, 0x03990000);                                                                                                   // MDrive status.                                             Cycle time 10s (idle), 160ms (change)
   #if FRONT_FOG_INDICATOR
@@ -229,10 +243,10 @@ void setup()
   #if AUTO_SEAT_HEATING
     KCAN.init_Filt(3, 0x02320000);                                                                                                  // Driver's seat heating status                               Cycle time 10s (idle), 150ms (change)
     KCAN.init_Filt(4, 0x02CA0000);                                                                                                  // Ambient temperature                                        Cycle time 1s
+  #endif 
+  #if SYNC_SHIFTLIGHTS_WITH_REDLINE
+    KCAN.init_Filt(5, 0x03320000);                                                                                                  // Variable redline position                                  Cycle time 1s
   #endif
-  #if F_ZBE_WAKE
-    KCAN.init_Filt(5, 0x02730000);                                                                                                  // CIC status.                                                Cycle time 2s (idle)
-  #endif  
   KCAN.setMode(MCP_NORMAL);
   
   #if F_ZBE_WAKE
@@ -515,23 +529,25 @@ void loop()
       }
     }
 
-    else if (rxId == 0xA8) {
-      if (ignition) {        
-        if (rxBuf[5] == 0x0D) {
-          if (!clutch_pressed) {
-            clutch_pressed = true;
+    #if LAUNCH_CONTROL_INDICATOR
+      else if (rxId == 0xA8) {
+        if (ignition) {        
+          if (rxBuf[5] == 0x0D) {
+            if (!clutch_pressed) {
+              clutch_pressed = true;
+              #if DEBUG_MODE
+                Serial.println("Clutch pressed.");
+              #endif
+            }
+          } else if (clutch_pressed) {
+            clutch_pressed = false;
             #if DEBUG_MODE
-              Serial.println("Clutch pressed.");
+              Serial.println("Clutch released.");
             #endif
           }
-        } else if (clutch_pressed) {
-          clutch_pressed = false;
-          #if DEBUG_MODE
-            Serial.println("Clutch released.");
-          #endif
         }
       }
-    }
+    #endif
 
     #if AUTO_SEAT_HEATING
       else if (rxId == 0x2CA){                                                                                                      // Monitor and update ambient temperature.
@@ -547,16 +563,34 @@ void loop()
       }
     #endif
     
-    #if F_ZBE_WAKE
-      else if (rxId == 0x273) {                                                                                                     // Monitor CIC challenge request and respond
-        zbe_response[2] = rxBuf[7];
-        KCAN.sendMsgBuf(0x277, 4, zbe_response);                                                                                    // Acknowledge must be sent three times
-        KCAN.sendMsgBuf(0x277, 4, zbe_response);
-        KCAN.sendMsgBuf(0x277, 4, zbe_response);
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "Sent ZBE response to CIC with counter: 0x%X\n", rxBuf[7]);
-          Serial.print(serial_debug_string);
-        #endif
+    #if SYNC_SHIFTLIGHTS_WITH_REDLINE
+      else if (rxId == 0x332) {                                                                                                     // Monitor variable redline broadcast from DME.
+        if (ignition) {
+          if (!engine_warmed_up) {
+            if (rxBuf[0] != last_var_rpm_can) {
+              var_redline_position = ((rxBuf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                              // This is where the variable redline actually starts on the KOMBI (x4).
+              START_UPSHIFT_WARN_RPM_ = var_redline_position;                                                                              
+              MID_UPSHIFT_WARN_RPM_ = var_redline_position + 2000;                                                                  // +500 RPM
+              MAX_UPSHIFT_WARN_RPM_ = var_redline_position + 4000;                                                                  // +1000 RPM
+              if (rxBuf[0] == 0x88) {                                                                                               // DME is sending 6800 RPM.
+                engine_warmed_up = true;
+              }
+              #if DEBUG_MODE
+                sprintf(serial_debug_string, "Set shiftlight RPMs to %lu %lu %lu. Variable redline is at %lu \n", 
+                       (START_UPSHIFT_WARN_RPM_ / 4), (MID_UPSHIFT_WARN_RPM_ / 4), (MAX_UPSHIFT_WARN_RPM_ / 4), (var_redline_position / 4));
+                Serial.print(serial_debug_string);
+              #endif
+              last_var_rpm_can = rxBuf[0];
+            }
+          } else {
+            START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;                                                                       // Return shiftlight RPMs to default setpoints.
+            MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
+            MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
+            #if DEBUG_MODE
+              Serial.println("Engine warmed up. Shiftlight setpoints reset to default.");
+            #endif
+          }
+        }
       }
     #endif
     
@@ -585,6 +619,13 @@ void reset_runtime_variables()
   #endif
   #if LAUNCH_CONTROL_INDICATOR
     lc_cc_active = clutch_pressed = vehicle_moving = false;
+  #endif
+  #if SYNC_SHIFTLIGHTS_WITH_REDLINE
+    engine_warmed_up = false;
+    last_var_rpm_can = 0;
+    START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
+    MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
+    MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
   #endif
   digitalWrite(POWER_LED_PIN, LOW);
   #if FRONT_FOG_INDICATOR
@@ -650,19 +691,19 @@ void evaluate_shiftlight_display()
     #endif
   }
 
-  if (RPM >= START_UPSHIFT_WARN_RPM && RPM <= MID_UPSHIFT_WARN_RPM) {                                                               // First yellow segment                                                              
+  if (RPM >= START_UPSHIFT_WARN_RPM_ && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                               // First yellow segment                                                              
     activate_shiftlight_segments(shiftlights_start);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Displaying first warning at RPM: %ld\n", RPM / 4);
       Serial.print(serial_debug_string);
     #endif                     
-  } else if (RPM >= MID_UPSHIFT_WARN_RPM && RPM <= MAX_UPSHIFT_WARN_RPM) {                                                          // Buildup from second yellow segment to reds
+  } else if (RPM >= MID_UPSHIFT_WARN_RPM_ && RPM <= MAX_UPSHIFT_WARN_RPM_) {                                                          // Buildup from second yellow segment to reds
     activate_shiftlight_segments(shiftlights_mid_buildup);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Displaying increasing warning at RPM: %ld\n", RPM / 4);
       Serial.print(serial_debug_string);
     #endif
-  } else if (RPM >= MAX_UPSHIFT_WARN_RPM) {                                                                                         // Flash all segments
+  } else if (RPM >= MAX_UPSHIFT_WARN_RPM_) {                                                                                         // Flash all segments
     activate_shiftlight_segments(shiftlights_max_flash);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Flash max warning at RPM: %ld\n", RPM / 4);
