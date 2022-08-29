@@ -26,6 +26,7 @@ I use it to:
 * Control EDC with the M button
 * Control the exhaust flap with the M button
 * Display Shiftlights - including startup animation
+* Display Launch Control flag
 * Control Centre console buttons and associated LEDs (POWER, DSC OFF)
 * Display Front fog lights on
 * Enable FXX KCAN1 CIC controllers

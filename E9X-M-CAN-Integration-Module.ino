@@ -204,7 +204,7 @@ void setup()
     Serial.println(F("MCP2515s initialized successfully."));
   #endif 
 
-  PTCAN.init_Mask(0, 0x07FF0000);                                                                                                   // Mask matches: 7FFFFFF (standard ID) and first two bytes  
+  PTCAN.init_Mask(0, 0x07FF0000);                                                                                                   // Mask matches: 7FF (standard ID) and all bytes 
   PTCAN.init_Mask(1, 0x07FF0000);                                                                                                   // Mask matches: 7FF (standard ID) and all bytes
 
   PTCAN.init_Filt(0, 0x01D60000);                                                                                                   // MFL button status.                                         Cycle time 1s, 100ms (pressed)
@@ -398,6 +398,9 @@ void loop()
             #if DEBUG_MODE
               Serial.println("Status MDrive on. Turned on POWER LED");
             #endif
+            #if EXHAUST_FLAP_WITH_M_BUTTON
+              exhaust_flap_sport = true;
+            #endif
             if (!ignore_full_mdrive) {
               #if DTC_WITH_M_BUTTON
                 if (dsc_program_status == 0) {                                                                                      // Check to make sure DSC is in normal program before MDrive
@@ -418,9 +421,6 @@ void loop()
                     Serial.println("Set EDC to MSport from Sport with MDrive off.");
                   #endif
                 }
-              #endif
-              #if EXHAUST_FLAP_WITH_M_BUTTON
-                exhaust_flap_sport = true;
               #endif
             }
           } else {
