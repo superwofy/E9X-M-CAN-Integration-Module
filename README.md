@@ -35,6 +35,8 @@ I use it to:
 
 ![shiftlights](img/shiftlight.jpg "shiftlights")
 
+![launchcontrol](img/launch-control/kombi.jpg "launchcontrol")
+
 ![fog](img/fog/indicatoron.jpg "fog")
 
 ![case](img/case.jpg "case")

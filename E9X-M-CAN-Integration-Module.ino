@@ -135,7 +135,7 @@ uint32_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
 #endif
 
 bool mdrive_status = false;                                                                                                         // false = off, true = on
-bool ignore_full_mdrive = false;
+bool power_mode_only = false;
 uint8_t mdrive_last_status_can = 0xCF;                                                                                              // OFF by default
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
 uint8_t dsc_program_last_status_can = 0xEA;
@@ -267,14 +267,16 @@ void loop()
     if (!digitalRead(POWER_BUTTON_PIN)) {
       if ((millis() - power_button_debounce_timer) >= power_debounce_time_ms) {
         #if DEBUG_MODE
-          Serial.println("Console: POWER button pressed. Requesting throttle-only MDrive.");
+          Serial.println(F("Console: POWER button pressed. Requesting throttle-only MDrive."));
         #endif 
         
         send_mbutton_message(mbutton_pressed);                                                                                      // Emulate steering button press
         delay(100);
         send_mbutton_message(mbutton_released);
         power_button_debounce_timer = millis();
-        ignore_full_mdrive = true;                                                                                                  // POWER console button should only change throttle mapping.
+        if (!mdrive_status) {
+          power_mode_only = true;                                                                                                     // POWER console button should only change throttle mapping.
+        }
       }
     } else if (!digitalRead(DSC_BUTTON_PIN)) {
       if (dsc_program_status == 0) {
@@ -284,7 +286,7 @@ void loop()
         } else {
           if ((millis() - dsc_off_button_hold_timer) >= dsc_hold_time_ms) {                                                         // DSC OFF sequence should only be sent after user holds button for a configured time
             #if DEBUG_MODE
-              Serial.println("Console: DSC OFF button held. Sending DSC OFF.");
+              Serial.println(F("Console: DSC OFF button held. Sending DSC OFF."));
             #endif
             send_dsc_off_sequence();
             dsc_off_button_debounce_timer = millis();
@@ -293,7 +295,7 @@ void loop()
       } else {
         if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {                                                   // A quick tap re-enables everything
           #if DEBUG_MODE
-            Serial.println("Console: DSC button tapped. Re-enabling DSC normal program.");
+            Serial.println(F("Console: DSC button tapped. Re-enabling DSC normal program."));
           #endif
           dsc_off_button_debounce_timer = millis();
           send_dtc_button_press();
@@ -314,7 +316,15 @@ void loop()
     if (ignition) {
       if (rxId == 0x1D6) {       
         if (rxBuf[1] == 0x4C) {                                                                                                     // M button is pressed
-          send_mbutton_message(mbutton_pressed);
+          if (power_mode_only && mdrive_status) {
+            power_mode_only = false;
+            mdrive_extra_functions();                                                                                               // Switch from POWER in centre console to full MDrive
+            #if DEBUG_MODE
+              Serial.println(F("State changed from POWER to full MDrive."));
+            #endif
+          } else {
+            send_mbutton_message(mbutton_pressed);
+          }
         } else if (rxBuf[0] == 0xC0 && rxBuf[1] == 0x0C) {                                                                          // MFL buttons released, send alive ping.
           send_mbutton_message(mbutton_released);                                                                                       
         } else {
@@ -329,14 +339,14 @@ void loop()
             if (vehicle_moving) {
               vehicle_moving = false;
               #if DEBUG_MODE
-                Serial.println("Vehicle stationary.");
+                Serial.println(F("Vehicle stationary."));
               #endif
             }
           } else {
             if (!vehicle_moving) {
               vehicle_moving = true;
               #if DEBUG_MODE
-                Serial.println("Vehicle moving.");
+                Serial.println(F("Vehicle moving."));
               #endif
             }
           }
@@ -350,13 +360,13 @@ void loop()
               front_fog_status = true;
               digitalWrite(FOG_LED_PIN, HIGH);
               #if DEBUG_MODE
-                Serial.println("Front fogs on. Turned on FOG LED");
+                Serial.println(F("Front fogs on. Turned on FOG LED"));
               #endif
             } else {
               front_fog_status = false;
               digitalWrite(FOG_LED_PIN, LOW);
               #if DEBUG_MODE
-                Serial.println("Front fogs off. Turned off FOG LED");
+                Serial.println(F("Front fogs off. Turned off FOG LED"));
               #endif
             }
             last_light_status = rxBuf[0];
@@ -371,13 +381,13 @@ void loop()
             #if DEBUG_MODE
               switch(edc_status) {
                 case 1:
-                  Serial.println("EDC now in Comfort mode.");
+                  Serial.println(F("EDC now in Comfort mode."));
                   break;
                 case 2:
-                  Serial.println("EDC now in Sport mode.");
+                  Serial.println(F("EDC now in Sport mode."));
                   break;
                 case 0xA:
-                  Serial.println("EDC now in MSport mode.");
+                  Serial.println(F("EDC now in MSport mode."));
                   break;
               }
             #endif
@@ -392,13 +402,13 @@ void loop()
             KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_flash);
             ftm_indicator_status = true;
             #if DEBUG_MODE
-              Serial.println("Activated FTM indicator.");
+              Serial.println(F("Activated FTM indicator."));
             #endif
           } else if (rxBuf[0] == 0 && ftm_indicator_status) {
             KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_off);
             ftm_indicator_status = false;
             #if DEBUG_MODE
-              Serial.println("Deactivated FTM indicator.");
+              Serial.println(F("Deactivated FTM indicator."));
             #endif
           }
         }
@@ -410,44 +420,23 @@ void loop()
             mdrive_status = true;
             digitalWrite(POWER_LED_PIN, HIGH);
             #if DEBUG_MODE
-              Serial.println("Status MDrive on. Turned on POWER LED");
+              Serial.println(F("Status MDrive on. Turned on POWER LED"));
             #endif
             #if EXHAUST_FLAP_WITH_M_BUTTON
               exhaust_flap_sport = true;
             #endif
-            if (!ignore_full_mdrive) {
-              #if DTC_WITH_M_BUTTON
-                if (dsc_program_status == 0) {                                                                                      // Check to make sure DSC is in normal program before MDrive
-                  send_dtc_button_press();
-                }
-              #endif
-              #if EDC_WITH_M_BUTTON
-                if (edc_status == 1) {                                                                                              // Make sure EDC is in Comfort mode
-                  send_edc_button_press();
-                  delay(50);
-                  send_edc_button_press();
-                  #if DEBUG_MODE
-                    Serial.println("Set EDC to MSport from Comfort with MDrive off.");
-                  #endif
-                } else if (edc_status == 2) {
-                  send_edc_button_press();
-                  #if DEBUG_MODE
-                    Serial.println("Set EDC to MSport from Sport with MDrive off.");
-                  #endif
-                }
-              #endif
-            }
+            mdrive_extra_functions();
           } else {
             mdrive_status = false;
             digitalWrite(POWER_LED_PIN, LOW);
             #if DEBUG_MODE
-              Serial.println("Status MDrive off. Turned off POWER LED");
+              Serial.println(F("Status MDrive off. Turned off POWER LED"));
             #endif
             #if DTC_WITH_M_BUTTON
               if (dsc_program_status == 1) {                                                                                        // Turn off DTC together with MDrive
                 send_dtc_button_press();
                 #if DEBUG_MODE
-                  Serial.println("Turned off DTC with MDrive off.");
+                  Serial.println(F("Turned off DTC with MDrive off."));
                 #endif
               }
             #endif
@@ -455,16 +444,18 @@ void loop()
               if (edc_status == 0xA) {                                                                                              // Turn off EDC MSport program together with MDrive (only if toggled with MDrive)
                 send_edc_button_press();
                 #if DEBUG_MODE
-                  Serial.println("Turned off EDC MSport with MDrive off.");
+                  Serial.println(F("Turned off EDC MSport with MDrive off."));
                 #endif
               }
             #endif
             #if EXHAUST_FLAP_WITH_M_BUTTON
               exhaust_flap_sport = false;
             #endif
+            if (power_mode_only) {
+              power_mode_only = false;
+            }
           }
           mdrive_last_status_can = rxBuf[4];
-          ignore_full_mdrive = false;
         }
       }
     }
@@ -483,28 +474,28 @@ void loop()
           ignition = false;
           reset_runtime_variables();
           #if DEBUG_MODE
-            Serial.println("Ignition OFF. Reset values.");
+            Serial.println(F("Ignition OFF. Reset values."));
           #endif
         } else if (rxBuf[1] == 0xEC) {
           ignition = true;
           #if DEBUG_MODE
-            Serial.println("Ignition ON.");
+            Serial.println(F("Ignition ON."));
           #endif
         } else if (rxBuf[1] == 0xE0) {
           ignition = true;                                                                                                          // Just in case 0xEC was missed.
           dsc_program_status = 0;
           #if DEBUG_MODE
-              Serial.println("Stability control fully activated.");
+              Serial.println(F("Stability control fully activated."));
           #endif
         } else if (rxBuf[1] == 0xF0) {
           dsc_program_status = 1;
           #if DEBUG_MODE
-              Serial.println("Stability control in DTC mode.");
+              Serial.println(F("Stability control in DTC mode."));
           #endif
         } else if (rxBuf[1] == 0xE4) {
           dsc_program_status = 2;
           #if DEBUG_MODE
-              Serial.println("Stability control fully OFF.");
+              Serial.println(F("Stability control fully OFF."));
           #endif
         }
         dsc_program_last_status_can = rxBuf[1];
@@ -536,13 +527,13 @@ void loop()
             if (!clutch_pressed) {
               clutch_pressed = true;
               #if DEBUG_MODE
-                Serial.println("Clutch pressed.");
+                Serial.println(F("Clutch pressed."));
               #endif
             }
           } else if (clutch_pressed) {
             clutch_pressed = false;
             #if DEBUG_MODE
-              Serial.println("Clutch released.");
+              Serial.println(F("Clutch released."));
             #endif
           }
         }
@@ -583,12 +574,14 @@ void loop()
               last_var_rpm_can = rxBuf[0];
             }
           } else {
-            START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;                                                                       // Return shiftlight RPMs to default setpoints.
-            MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
-            MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
-            #if DEBUG_MODE
-              Serial.println("Engine warmed up. Shiftlight setpoints reset to default.");
-            #endif
+            if (START_UPSHIFT_WARN_RPM_ != START_UPSHIFT_WARN_RPM) {
+              START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;                                                                     // Return shiftlight RPMs to default setpoints.
+              MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
+              MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
+              #if DEBUG_MODE
+                Serial.println(F("Engine warmed up. Shiftlight setpoints reset to default."));
+              #endif
+            }
           }
         }
       }
@@ -605,7 +598,7 @@ void reset_runtime_variables()
 {
   dsc_program_last_status_can = 0xEA;
   dsc_program_status = ignore_shiftlights_off_counter = RPM = 0;
-  mdrive_status = ignore_full_mdrive = false;
+  mdrive_status = power_mode_only = false;
   shiftlights_segments_active = false;
   engine_running = false;
   mdrive_last_status_can = 0xCF; 
@@ -646,7 +639,7 @@ void send_zbe_wakeup()
     KCAN.sendMsgBuf(0x560, 8, f_wakeup);
     zbe_wakeup_last_sent = millis();
     #if DEBUG_MODE
-      Serial.println("Sent F-ZBE wake-up message");
+      Serial.println(F("Sent F-ZBE wake-up message"));
     #endif
   }
 }
@@ -660,10 +653,10 @@ void send_mbutton_message(byte message[])
   byte send_stat = PTCAN.sendMsgBuf(0x1D9, 3, message);
   #if DEBUG_MODE
     if (send_stat != CAN_OK) {
-      Serial.print("Error sending mbutton message. Re-trying. Error: ");
+      Serial.print(F("Error sending mbutton message. Re-trying. Error: "));
       Serial.println(send_stat);
     } else {
-      message[0] == 0xFF ? Serial.println("Sent mbutton released.") : Serial.println("Sent mbutton press.");
+      message[0] == 0xFF ? Serial.println(F("Sent mbutton released.")) : Serial.println(F("Sent mbutton press."));
     }
   #else
   if (send_stat != CAN_OK) {
@@ -676,13 +669,40 @@ void send_mbutton_message(byte message[])
 }
 
 
+void mdrive_extra_functions()
+{
+  if (!power_mode_only) {
+    #if DTC_WITH_M_BUTTON
+      if (dsc_program_status == 0) {                                                                                                // Check to make sure DSC is in normal program before MDrive
+        send_dtc_button_press();
+      }
+    #endif
+    #if EDC_WITH_M_BUTTON
+      if (edc_status == 1) {                                                                                                        // Make sure EDC is in Comfort/Sport mode
+        send_edc_button_press();
+        delay(50);
+        send_edc_button_press();
+        #if DEBUG_MODE
+          Serial.println(F("Set EDC to MSport from Comfort with MDrive on."));
+        #endif
+      } else if (edc_status == 2) {
+        send_edc_button_press();
+        #if DEBUG_MODE
+          Serial.println(F("Set EDC to MSport from Sport with MDrive on."));
+        #endif
+      }
+    #endif
+  }
+}
+
+
 void evaluate_shiftlight_display()
 {
   if (!engine_running && (RPM > 2000)) {                                                                                            // Show off shift light segments during engine startup (>500rpm)
     engine_running = true;
     activate_shiftlight_segments(shiftlights_startup_buildup);
     #if DEBUG_MODE
-      Serial.println("Showing shift light on engine startup.");
+      Serial.println(F("Showing shift light on engine startup."));
     #endif
     ignore_shiftlights_off_counter = 10;                                                                                            // Skip a few off cycles to allow segments to light up
 
@@ -691,19 +711,19 @@ void evaluate_shiftlight_display()
     #endif
   }
 
-  if (RPM >= START_UPSHIFT_WARN_RPM_ && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                               // First yellow segment                                                              
+  if (RPM >= START_UPSHIFT_WARN_RPM_ && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                             // First yellow segment                                                              
     activate_shiftlight_segments(shiftlights_start);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Displaying first warning at RPM: %ld\n", RPM / 4);
       Serial.print(serial_debug_string);
     #endif                     
-  } else if (RPM >= MID_UPSHIFT_WARN_RPM_ && RPM <= MAX_UPSHIFT_WARN_RPM_) {                                                          // Buildup from second yellow segment to reds
+  } else if (RPM >= MID_UPSHIFT_WARN_RPM_ && RPM <= MAX_UPSHIFT_WARN_RPM_) {                                                        // Buildup from second yellow segment to reds
     activate_shiftlight_segments(shiftlights_mid_buildup);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Displaying increasing warning at RPM: %ld\n", RPM / 4);
       Serial.print(serial_debug_string);
     #endif
-  } else if (RPM >= MAX_UPSHIFT_WARN_RPM_) {                                                                                         // Flash all segments
+  } else if (RPM >= MAX_UPSHIFT_WARN_RPM_) {                                                                                        // Flash all segments
     activate_shiftlight_segments(shiftlights_max_flash);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Flash max warning at RPM: %ld\n", RPM / 4);
@@ -726,7 +746,7 @@ void evaluate_exhaust_flap_position()
           exhaust_flap_action_timer = millis();
           exhaust_flap_open = true;
           #if DEBUG_MODE
-            Serial.println("Exhaust flap opened at RPM setpoint.");
+            Serial.println(F("Exhaust flap opened at RPM setpoint."));
           #endif
         }
       } else {
@@ -735,7 +755,7 @@ void evaluate_exhaust_flap_position()
           exhaust_flap_action_timer = millis();
           exhaust_flap_open = false;
           #if DEBUG_MODE
-            Serial.println("Exhaust flap closed.");
+            Serial.println(F("Exhaust flap closed."));
           #endif
         }
       }
@@ -747,7 +767,7 @@ void evaluate_exhaust_flap_position()
         exhaust_flap_action_timer = millis();
         exhaust_flap_open = true;
         #if DEBUG_MODE
-          Serial.println("Opened exhaust flap with MDrive.");
+          Serial.println(F("Opened exhaust flap with MDrive/POWER."));
         #endif
       }
     }
@@ -764,20 +784,20 @@ void evaluate_lc_display()
       KCAN.sendMsgBuf(0x598, 8, lc_cc_on);
       lc_cc_active = true;
       #if DEBUG_MODE
-        Serial.println("Displayed LC flag.");
+        Serial.println(F("Displayed LC flag CC."));
       #endif
     } else if (lc_cc_active) {
       KCAN.sendMsgBuf(0x598, 8, lc_cc_off);
       lc_cc_active = false;
       #if DEBUG_MODE
-        Serial.println("Deactivated LC flag.");
+        Serial.println(F("Deactivated LC flag CC."));
       #endif
     }
   } else if (lc_cc_active){
     KCAN.sendMsgBuf(0x598, 8, lc_cc_off);
     lc_cc_active = false;
     #if DEBUG_MODE
-        Serial.println("Deactivated LC flag.");
+        Serial.println(F("Deactivated LC flag CC."));
     #endif
   }
 }
@@ -815,7 +835,7 @@ void deactivate_shiftlight_segments()
       PTCAN.sendMsgBuf(0x206, 2, shiftlights_off);                                                                                
       shiftlights_segments_active = false;
       #if DEBUG_MODE
-        Serial.println("Deactivated shiftlights segments");
+        Serial.println(F("Deactivated shiftlights segments"));
       #endif 
     } else {
       ignore_shiftlights_off_counter--;
@@ -835,7 +855,7 @@ void send_dtc_button_press()
   delay(5);
   PTCAN.sendMsgBuf(0x316, 2, dtc_button_released);                                                                                  // Send one DTC released to indicate end of DTC button press.
   #if DEBUG_MODE                        
-    Serial.println("Sent single DTC button press.");
+    Serial.println(F("Sent single DTC button press."));
   #endif
 } 
 
@@ -852,7 +872,7 @@ void send_dsc_off_sequence()
   }
   PTCAN.sendMsgBuf(0x316, 2, dtc_button_released);
   #if DEBUG_MODE
-    Serial.println("Sent DSC OFF sequence.");
+    Serial.println(F("Sent DSC OFF sequence."));
   #endif
 }
 
