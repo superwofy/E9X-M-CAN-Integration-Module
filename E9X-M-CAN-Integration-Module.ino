@@ -105,8 +105,8 @@ const uint32_t MAX_UPSHIFT_WARN_RPM = 6500*4;
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
 
-unsigned long int rxId;
-unsigned char rxBuf[8], len;
+unsigned long int prxId, krxId;
+unsigned char prxBuf[8], krxBuf[8], plen, klen;
 
 bool ignition = false;
 
@@ -119,7 +119,7 @@ byte dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
 
 byte shiftlights_start[] = {0x86, 0x3E};
 byte shiftlights_mid_buildup[] = {0xF6, 0};
-byte shiftlights_startup_buildup[] = {0x56, 0};																						// Faster sequential buildup. First byte 0-0xF (0xF - slowest).
+byte shiftlights_startup_buildup[] = {0x56, 0};																						                                          // Faster sequential buildup. First byte 0-0xF (0xF - slowest).
 byte shiftlights_max_flash[] = {0x0A, 0};
 byte shiftlights_off[] = {0x05, 0};
 bool shiftlights_segments_active = false;
@@ -317,13 +317,13 @@ void loop()
 ***********************************************************************************************************************************************************************************************************************************************/
   
   if (!digitalRead(PTCAN_INT_PIN)) {                                                                                                // If INT pin is pulled low, read PT-CAN receive buffer
-    PTCAN.readMsgBuf(&rxId, &len, rxBuf);                                                                                           // Read data: rxId = CAN ID, buf = data byte(s)
+    PTCAN.readMsgBuf(&prxId, &plen, prxBuf);                                                                                           // Read data: rxId = CAN ID, buf = data byte(s)
 
     if (ignition) {
-      if (rxId == 0x1D6) {       
-        if (rxBuf[1] == 0x4C) {                                                                                                     // M button is pressed
+      if (prxId == 0x1D6) {       
+        if (prxBuf[1] == 0x4C) {                                                                                                     // M button is pressed
             send_mbutton_message(mbutton_pressed);
-        } else if (rxBuf[0] == 0xC0 && rxBuf[1] == 0x0C) {                                                                          // MFL buttons released, send alive ping.
+        } else if (prxBuf[0] == 0xC0 && prxBuf[1] == 0x0C) {                                                                          // MFL buttons released, send alive ping.
           send_mbutton_message(mbutton_released);                                                                                       
         } else {
           if ((millis() - mbutton_released_timer) >= 1000) {                                                                        // keep sending MDrive released messages when other buttons are pressed/held
@@ -332,7 +332,7 @@ void loop()
         }
       }
       #if LAUNCH_CONTROL_INDICATOR
-        else if (rxId == 0x1B4) {    
+        else if (prxId == 0x1B4) {    
 
           // Time with 1B4 for faster reaction
           power_mode_only_dme_veh_mode[0] += 0x10;                                                                                  // Increase alive counter
@@ -349,7 +349,7 @@ void loop()
             PTCAN.sendMsgBuf(0x7F1, 2, power_mode_only_dme_veh_mode);
           }
 
-          if (rxBuf[0] == 0 && rxBuf[1] == 0xD0) {
+          if (prxBuf[0] == 0 && prxBuf[1] == 0xD0) {
             if (vehicle_moving) {
               vehicle_moving = false;
               #if DEBUG_MODE
@@ -368,9 +368,9 @@ void loop()
       #endif
      
       #if FRONT_FOG_INDICATOR
-        else if (rxId == 0x21A) {
-          if (rxBuf[0] != last_light_status) {
-            if ((rxBuf[0] & 32) == 32) {                                                                                            // Check the third bit of the first byte represented in binary for front fog status.
+        else if (prxId == 0x21A) {
+          if (prxBuf[0] != last_light_status) {
+            if ((prxBuf[0] & 32) == 32) {                                                                                            // Check the third bit of the first byte represented in binary for front fog status.
               front_fog_status = true;
               digitalWrite(FOG_LED_PIN, HIGH);
               #if DEBUG_MODE
@@ -383,15 +383,15 @@ void loop()
                 Serial.println(F("Front fogs off. Turned off FOG LED"));
               #endif
             }
-            last_light_status = rxBuf[0];
+            last_light_status = prxBuf[0];
           }
         }
       #endif
 
-      else if (rxId == 0x315) {      
+      else if (prxId == 0x315) {      
         #if EDC_WITH_M_BUTTON
-          if (rxBuf[1] != edc_last_status_can) {
-            edc_status = rxBuf[1] - 0xF0;
+          if (prxBuf[1] != edc_last_status_can) {
+            edc_status = prxBuf[1] - 0xF0;
             #if DEBUG_MODE
               switch(edc_status) {
                 case 1:
@@ -405,20 +405,20 @@ void loop()
                   break;
               }
             #endif
-            edc_last_status_can = rxBuf[1];
+            edc_last_status_can = prxBuf[1];
           }
         #endif
       } 
 
       #if FTM_INDICATOR
-        else if (rxId == 0x31D) {                                                                                                   // FTM initialization is ongoing.
-          if (rxBuf[0] == 0x03 && !ftm_indicator_status) {
+        else if (prxId == 0x31D) {                                                                                                   // FTM initialization is ongoing.
+          if (prxBuf[0] == 0x03 && !ftm_indicator_status) {
             KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_flash);
             ftm_indicator_status = true;
             #if DEBUG_MODE
               Serial.println(F("Activated FTM indicator."));
             #endif
-          } else if (rxBuf[0] == 0 && ftm_indicator_status) {
+          } else if (prxBuf[0] == 0 && ftm_indicator_status) {
             KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_off);
             ftm_indicator_status = false;
             #if DEBUG_MODE
@@ -428,9 +428,9 @@ void loop()
         }
       #endif
 
-      else if (rxId == 0x399) {                                                                                                     // Monitor MDrive status on PT-CAN and control centre console POWER LED
-        if (mdrive_last_status_can != rxBuf[4]) {
-          if (rxBuf[4] == 0xDF) {
+      else if (prxId == 0x399) {                                                                                                     // Monitor MDrive status on PT-CAN and control centre console POWER LED
+        if (mdrive_last_status_can != prxBuf[4]) {
+          if (prxBuf[4] == 0xDF) {
             mdrive_status = true;
             if (!power_mode_only) {
               digitalWrite(POWER_LED_PIN, HIGH);
@@ -470,7 +470,7 @@ void loop()
               exhaust_flap_sport = false;
             #endif
           }
-          mdrive_last_status_can = rxBuf[4];
+          mdrive_last_status_can = prxBuf[4];
         }
       }
     }
@@ -481,48 +481,48 @@ void loop()
 ***********************************************************************************************************************************************************************************************************************************************/
   
   if(!digitalRead(KCAN_INT_PIN)) {                                                                                                  // If INT pin is pulled low, read K-CAN receive buffer.
-    KCAN.readMsgBuf(&rxId, &len, rxBuf);
+    KCAN.readMsgBuf(&krxId, &klen, krxBuf);
 
-    if (rxId == 0x19E) {                                                                                                            // Monitor DSC K-CAN status.
-      if (dsc_program_last_status_can != rxBuf[1]) {
-        if (rxBuf[1] == 0xEA) {
+    if (krxId == 0x19E) {                                                                                                            // Monitor DSC K-CAN status.
+      if (dsc_program_last_status_can != krxBuf[1]) {
+        if (krxBuf[1] == 0xEA) {
           ignition = false;
           reset_runtime_variables();
           #if DEBUG_MODE
             Serial.println(F("Ignition OFF. Reset values."));
           #endif
-        } else if (rxBuf[1] == 0xEC) {
+        } else if (krxBuf[1] == 0xEC) {
           ignition = true;
           #if DEBUG_MODE
             Serial.println(F("Ignition ON."));
           #endif
-        } else if (rxBuf[1] == 0xE0) {
+        } else if (krxBuf[1] == 0xE0) {
           ignition = true;                                                                                                          // Just in case 0xEC was missed.
           dsc_program_status = 0;
           #if DEBUG_MODE
               Serial.println(F("Stability control fully activated."));
           #endif
-        } else if (rxBuf[1] == 0xF0) {
+        } else if (krxBuf[1] == 0xF0) {
           dsc_program_status = 1;
           #if DEBUG_MODE
               Serial.println(F("Stability control in DTC mode."));
           #endif
-        } else if (rxBuf[1] == 0xE4) {
+        } else if (krxBuf[1] == 0xE4) {
           dsc_program_status = 2;
           #if DEBUG_MODE
               Serial.println(F("Stability control fully OFF."));
           #endif
         }
-        dsc_program_last_status_can = rxBuf[1];
+        dsc_program_last_status_can = krxBuf[1];
       }
       #if F_ZBE_WAKE
         send_zbe_wakeup();
       #endif
     }
 
-    else if (rxId == 0xAA) {                                                                                                        // Monitor 0xAA (rpm/throttle status).
+    else if (krxId == 0xAA) {                                                                                                        // Monitor 0xAA (rpm/throttle status).
       if (ignition) {
-        RPM = ((uint32_t)rxBuf[5] << 8) | (uint32_t)rxBuf[4];
+        RPM = ((uint32_t)krxBuf[5] << 8) | (uint32_t)krxBuf[4];
         evaluate_shiftlight_display();
         #if EXHAUST_FLAP_WITH_M_BUTTON
           if (engine_running) {
@@ -536,9 +536,9 @@ void loop()
     }
 
     #if LAUNCH_CONTROL_INDICATOR
-      else if (rxId == 0xA8) {
+      else if (krxId == 0xA8) {
         if (ignition) {        
-          if (rxBuf[5] == 0x0D) {
+          if (krxBuf[5] == 0x0D) {
             if (!clutch_pressed) {
               clutch_pressed = true;
               #if DEBUG_MODE
@@ -556,11 +556,11 @@ void loop()
     #endif
 
     #if AUTO_SEAT_HEATING
-      else if (rxId == 0x2CA){                                                                                                      // Monitor and update ambient temperature.
-        ambient_temperature_can = rxBuf[0];
+      else if (krxId == 0x2CA){                                                                                                      // Monitor and update ambient temperature.
+        ambient_temperature_can = krxBuf[0];
       } 
-      else if (rxId == 0x232) {                                                                                                     // Driver's seat heating status message is only sent with ignition on.
-        if (!rxBuf[0]) {                                                                                                            // Check if seat heating is already on.
+      else if (krxId == 0x232) {                                                                                                     // Driver's seat heating status message is only sent with ignition on.
+        if (!krxBuf[0]) {                                                                                                            // Check if seat heating is already on.
           //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
           if (!sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
             send_seat_heating_request();
@@ -570,15 +570,15 @@ void loop()
     #endif
     
     #if SYNC_SHIFTLIGHTS_WITH_REDLINE
-      else if (rxId == 0x332) {                                                                                                     // Monitor variable redline broadcast from DME.
+      else if (krxId == 0x332) {                                                                                                     // Monitor variable redline broadcast from DME.
         if (ignition) {
           if (!engine_warmed_up) {
-            if (rxBuf[0] != last_var_rpm_can) {
-              var_redline_position = ((rxBuf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                              // This is where the variable redline actually starts on the KOMBI (x4).
+            if (krxBuf[0] != last_var_rpm_can) {
+              var_redline_position = ((krxBuf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                              // This is where the variable redline actually starts on the KOMBI (x4).
               START_UPSHIFT_WARN_RPM_ = var_redline_position;                                                                              
               MID_UPSHIFT_WARN_RPM_ = var_redline_position + 2000;                                                                  // +500 RPM
               MAX_UPSHIFT_WARN_RPM_ = var_redline_position + 4000;                                                                  // +1000 RPM
-              if (rxBuf[0] == 0x88) {                                                                                               // DME is sending 6800 RPM.
+              if (krxBuf[0] == 0x88) {                                                                                               // DME is sending 6800 RPM.
                 engine_warmed_up = true;
               }
               #if DEBUG_MODE
@@ -586,7 +586,7 @@ void loop()
                        (START_UPSHIFT_WARN_RPM_ / 4), (MID_UPSHIFT_WARN_RPM_ / 4), (MAX_UPSHIFT_WARN_RPM_ / 4), (var_redline_position / 4));
                 Serial.print(serial_debug_string);
               #endif
-              last_var_rpm_can = rxBuf[0];
+              last_var_rpm_can = krxBuf[0];
             }
           } else {
             if (START_UPSHIFT_WARN_RPM_ != START_UPSHIFT_WARN_RPM) {
