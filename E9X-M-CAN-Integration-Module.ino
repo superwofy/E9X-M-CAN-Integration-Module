@@ -158,7 +158,8 @@ const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hol
   unsigned long zbe_wakeup_last_sent;
 #endif
 #if EDC_WITH_M_BUTTON
-  uint8_t edc_status = 8;                                                                                                           // 8 = comfort, 9 = sport, 0xB = msport
+  uint8_t edc_status = 1;                                                                                                           // 1 = comfort, 2 = sport, 0xA = msport
+  uint8_t edc_last_status_can = 0xF1;
 #endif
 #if EXHAUST_FLAP_WITH_M_BUTTON
   bool exhaust_flap_sport = false, exhaust_flap_open = true;
@@ -222,9 +223,7 @@ void setup()
   #if LAUNCH_CONTROL_INDICATOR
     PTCAN.init_Filt(1, 0x01B40000);                                                                                                 // Kombi status (speed, handbrake)                            Cycle time 100ms (terminal R on)
   #endif
-  #if EDC_WITH_M_BUTTON
-    PTCAN.init_Filt(2, 0x03260000);                                                                                                 // EDC damper mode.                                           Cycle time 200ms
-  #endif
+  PTCAN.init_Filt(2, 0x03150000);                                                                                                   // Vehicle mode (EDC).                                        Cycle time 500ms (idle), 100-250ms (change)
   PTCAN.init_Filt(3, 0x03990000);                                                                                                   // MDrive status.                                             Cycle time 10s (idle), 160ms (change)
   #if FRONT_FOG_INDICATOR
     PTCAN.init_Filt(4, 0x021A0000);                                                                                                 // Light status                                               Cycle time 5s (idle) 
@@ -375,27 +374,27 @@ void loop()
         }
       #endif
 
-      #if EDC_WITH_M_BUTTON
-        else if (rxId == 0x326) {
-          uint8_t damper_mode = rxBuf[0] & 0x0F;
-          if (damper_mode != edc_status) {
-            edc_status = damper_mode;
+      else if (rxId == 0x315) {
+        #if EDC_WITH_M_BUTTON
+          if (rxBuf[1] != edc_last_status_can) {
+            edc_status = rxBuf[1] - 0xF0;
             #if DEBUG_MODE
               switch(edc_status) {
-                case 8:
+                case 1:
                   Serial.println(F("EDC now in Comfort mode."));
                   break;
-                case 9:
+                case 2:
                   Serial.println(F("EDC now in Sport mode."));
                   break;
-                case 0xB:
+                case 0xA:
                   Serial.println(F("EDC now in MSport mode."));
                   break;
               }
             #endif
+            edc_last_status_can = rxBuf[1];
           }
-        }
-      #endif
+        #endif
+      } 
 
       #if FTM_INDICATOR
         else if (rxId == 0x31D) {                                                                                                   // FTM initialization is ongoing.
@@ -442,7 +441,7 @@ void loop()
               }
             #endif
             #if EDC_WITH_M_BUTTON
-              if (edc_status == 0xB) {                                                                                              // Turn off EDC MSport program together with MDrive (only if toggled with MDrive)
+              if (edc_status == 0xA) {                                                                                              // Turn off EDC MSport program together with MDrive (only if toggled with MDrive)
                 send_edc_button_press();
                 #if DEBUG_MODE
                   Serial.println(F("Turned off EDC MSport with MDrive off."));
@@ -604,7 +603,7 @@ void reset_runtime_variables()
   engine_running = false;
   mdrive_last_status_can = 0xCF; 
   #if EDC_WITH_M_BUTTON 
-    edc_status = 0x8;
+    edc_last_status_can = 0xF1;
   #endif
   #if EXHAUST_FLAP_WITH_M_BUTTON
     exhaust_flap_sport = false;
@@ -679,14 +678,14 @@ void mdrive_extra_functions()
       }
     #endif
     #if EDC_WITH_M_BUTTON
-      if (edc_status == 8) {                                                                                                        // Make sure EDC is in Comfort/Sport mode
+      if (edc_status == 1) {                                                                                                        // Make sure EDC is in Comfort/Sport mode
         send_edc_button_press();
         delay(50);
         send_edc_button_press();
         #if DEBUG_MODE
           Serial.println(F("Set EDC to MSport from Comfort with MDrive on."));
         #endif
-      } else if (edc_status == 9) {
+      } else if (edc_status == 2) {
         send_edc_button_press();
         #if DEBUG_MODE
           Serial.println(F("Set EDC to MSport from Sport with MDrive on."));
