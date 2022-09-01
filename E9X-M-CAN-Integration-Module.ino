@@ -39,6 +39,7 @@
 // 0x83738/9  -> F1 07     CAN message table
 // 0x1f3ad4/5 -> F1 07     CAN filters
 // Replace 15 03 (0x315 represented in LE) to stop MSD81 from reacting to Vehicle Mode changes (triggered by JBBF through EDC button)
+// This also allows state_spt (throttle map) to be controlled independently from the main "MDrive" with the console switch
 // Re-calculate checksum at 0x80304 
 
 
@@ -118,7 +119,7 @@ byte dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
 
 byte shiftlights_start[] = {0x86, 0x3E};
 byte shiftlights_mid_buildup[] = {0xF6, 0};
-byte shiftlights_startup_buildup[] = {0x56, 0};																						                                          // Faster sequential buildup. First byte 0-0xF (0xF - slowest).
+byte shiftlights_startup_buildup[] = {0x56, 0};																						// Faster sequential buildup. First byte 0-0xF (0xF - slowest).
 byte shiftlights_max_flash[] = {0x0A, 0};
 byte shiftlights_off[] = {0x05, 0};
 bool shiftlights_segments_active = false;
@@ -136,6 +137,7 @@ uint32_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
 
 bool mdrive_status = false;                                                                                                         // false = off, true = on
 bool power_mode_only = false;
+byte power_mode_only_dme_veh_mode[] = {0, 0x11};
 uint8_t mdrive_last_status_can = 0xCF;                                                                                              // OFF by default
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
 uint8_t dsc_program_last_status_can = 0xEA;
@@ -266,16 +268,20 @@ void loop()
   if (ignition) {
     if (!digitalRead(POWER_BUTTON_PIN)) {
       if ((millis() - power_button_debounce_timer) >= power_debounce_time_ms) {
-        #if DEBUG_MODE
-          Serial.println(F("Console: POWER button pressed. Requesting throttle-only MDrive."));
-        #endif 
-        
-        send_mbutton_message(mbutton_pressed);                                                                                      // Emulate steering button press
-        delay(100);
-        send_mbutton_message(mbutton_released);
         power_button_debounce_timer = millis();
         if (!mdrive_status) {
-          power_mode_only = true;                                                                                                     // POWER console button should only change throttle mapping.
+          power_mode_only = !power_mode_only;                                                                                       // POWER console button should only change throttle mapping.
+          if (power_mode_only) {
+            digitalWrite(POWER_LED_PIN, HIGH);
+            #if DEBUG_MODE
+              Serial.println(F("Console: POWER mode on."));
+            #endif 
+          } else {
+            digitalWrite(POWER_LED_PIN, LOW);
+            #if DEBUG_MODE
+              Serial.println(F("Console: POWER mode off."));
+            #endif 
+          }
         }
       }
     } else if (!digitalRead(DSC_BUTTON_PIN)) {
@@ -316,15 +322,7 @@ void loop()
     if (ignition) {
       if (rxId == 0x1D6) {       
         if (rxBuf[1] == 0x4C) {                                                                                                     // M button is pressed
-          if (power_mode_only && mdrive_status) {
-            power_mode_only = false;
-            mdrive_extra_functions();                                                                                               // Switch from POWER in centre console to full MDrive
-            #if DEBUG_MODE
-              Serial.println(F("State changed from POWER to full MDrive."));
-            #endif
-          } else {
             send_mbutton_message(mbutton_pressed);
-          }
         } else if (rxBuf[0] == 0xC0 && rxBuf[1] == 0x0C) {                                                                          // MFL buttons released, send alive ping.
           send_mbutton_message(mbutton_released);                                                                                       
         } else {
@@ -334,7 +332,23 @@ void loop()
         }
       }
       #if LAUNCH_CONTROL_INDICATOR
-        else if (rxId == 0x1B4) {       
+        else if (rxId == 0x1B4) {    
+
+          // Time with 1B4 for faster reaction
+          power_mode_only_dme_veh_mode[0] += 0x10;                                                                                  // Increase alive counter
+          if (power_mode_only_dme_veh_mode[0] > 0xEF) {                                                                             // Alive(first half of byte) 0..E
+            power_mode_only_dme_veh_mode[0] = 0;
+          }
+          if (power_mode_only) {
+            power_mode_only_dme_veh_mode[1] = 0x22;                                                                                 // Sport
+            veh_mode_checksum();
+            PTCAN.sendMsgBuf(0x7F1, 2, power_mode_only_dme_veh_mode);
+          } else {
+            power_mode_only_dme_veh_mode[1] = 0x11;                                                                                 // Normal
+            veh_mode_checksum();
+            PTCAN.sendMsgBuf(0x7F1, 2, power_mode_only_dme_veh_mode);
+          }
+
           if (rxBuf[0] == 0 && rxBuf[1] == 0xD0) {
             if (vehicle_moving) {
               vehicle_moving = false;
@@ -374,7 +388,7 @@ void loop()
         }
       #endif
 
-      else if (rxId == 0x315) {
+      else if (rxId == 0x315) {      
         #if EDC_WITH_M_BUTTON
           if (rxBuf[1] != edc_last_status_can) {
             edc_status = rxBuf[1] - 0xF0;
@@ -418,9 +432,11 @@ void loop()
         if (mdrive_last_status_can != rxBuf[4]) {
           if (rxBuf[4] == 0xDF) {
             mdrive_status = true;
-            digitalWrite(POWER_LED_PIN, HIGH);
+            if (!power_mode_only) {
+              digitalWrite(POWER_LED_PIN, HIGH);
+            }
             #if DEBUG_MODE
-              Serial.println(F("Status MDrive on. Turned on POWER LED"));
+              Serial.println(F("Status MDrive on."));
             #endif
             #if EXHAUST_FLAP_WITH_M_BUTTON
               exhaust_flap_sport = true;
@@ -428,9 +444,11 @@ void loop()
             mdrive_extra_functions();
           } else {
             mdrive_status = false;
-            digitalWrite(POWER_LED_PIN, LOW);
+            if (!power_mode_only) {
+              digitalWrite(POWER_LED_PIN, LOW);
+            }
             #if DEBUG_MODE
-              Serial.println(F("Status MDrive off. Turned off POWER LED"));
+              Serial.println(F("Status MDrive off."));
             #endif
             #if DTC_WITH_M_BUTTON
               if (dsc_program_status == 1) {                                                                                        // Turn off DTC together with MDrive
@@ -451,9 +469,6 @@ void loop()
             #if EXHAUST_FLAP_WITH_M_BUTTON
               exhaust_flap_sport = false;
             #endif
-            if (power_mode_only) {
-              power_mode_only = false;
-            }
           }
           mdrive_last_status_can = rxBuf[4];
         }
@@ -645,6 +660,18 @@ void send_zbe_wakeup()
 }
 #endif
 
+void veh_mode_checksum()
+{
+  // @amg6975
+  // https://www.spoolstreet.com/threads/m-drive-and-mdm-in-non-m-cars.7155/post-107037
+  power_mode_only_dme_veh_mode[0] &= 0xF0;                                                                                          // Remove checksum from byte
+  uint16_t checksum = 0x7F1 + power_mode_only_dme_veh_mode[0] + power_mode_only_dme_veh_mode[1];                                    // Add up all bytes and the CAN ID
+  checksum = (checksum & 0x00FF) + (checksum >> 8); //add upper and lower Bytes
+  checksum &= 0x00FF; //throw away anything in upper Byte
+  checksum = (checksum & 0b0001) + (checksum >> 4); //add first and second nibble
+  checksum &= 0x000F; //throw away anything in upper nibble
+  power_mode_only_dme_veh_mode[0] += checksum + 10;  //add checksum back into Byte0.
+}
 
 void send_mbutton_message(byte message[]) 
 {
@@ -671,28 +698,26 @@ void send_mbutton_message(byte message[])
 
 void mdrive_extra_functions()
 {
-  if (!power_mode_only) {
-    #if DTC_WITH_M_BUTTON
-      if (dsc_program_status == 0) {                                                                                                // Check to make sure DSC is in normal program before MDrive
-        send_dtc_button_press();
-      }
-    #endif
-    #if EDC_WITH_M_BUTTON
-      if (edc_status == 1) {                                                                                                        // Make sure EDC is in Comfort/Sport mode
-        send_edc_button_press();
-        delay(50);
-        send_edc_button_press();
-        #if DEBUG_MODE
-          Serial.println(F("Set EDC to MSport from Comfort with MDrive on."));
-        #endif
-      } else if (edc_status == 2) {
-        send_edc_button_press();
-        #if DEBUG_MODE
-          Serial.println(F("Set EDC to MSport from Sport with MDrive on."));
-        #endif
-      }
-    #endif
-  }
+  #if DTC_WITH_M_BUTTON
+    if (dsc_program_status == 0) {                                                                                                  // Check to make sure DSC is in normal program before MDrive
+      send_dtc_button_press();
+    }
+  #endif
+  #if EDC_WITH_M_BUTTON
+    if (edc_status == 1) {                                                                                                          // Make sure EDC is in Comfort/Sport mode
+      send_edc_button_press();
+      delay(50);
+      send_edc_button_press();
+      #if DEBUG_MODE
+        Serial.println(F("Set EDC to MSport from Comfort with MDrive on."));
+      #endif
+    } else if (edc_status == 2) {
+      send_edc_button_press();
+      #if DEBUG_MODE
+        Serial.println(F("Set EDC to MSport from Sport with MDrive on."));
+      #endif
+    }
+  #endif
 }
 
 
