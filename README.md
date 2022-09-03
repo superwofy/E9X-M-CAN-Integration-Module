@@ -32,7 +32,7 @@ I use it to:
 * Display Front fog lights on.
 * Enable FXX KCAN1 CIC controllers.
 * Turn on heated seats below a set temperature.
-See program notes: [a relative link](E9X-M-CAN-Integration-Module/program-notes.ino)
+See program notes: [here](E9X-M-CAN-Integration-Module/program-notes.ino)
 
 
 ![settings](img/idrive-settings.jpg "idrive-settings")
