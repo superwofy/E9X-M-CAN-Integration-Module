@@ -1,8 +1,8 @@
 #if FRONT_FOG_INDICATOR
 void evaluate_fog_status()
 {
-  if (prxBuf[0] != last_light_status) {
-    if ((prxBuf[0] & 32) == 32) {                                                                                            // Check the third bit of the first byte represented in binary for front fog status.
+  if (ptrxBuf[0] != last_light_status) {
+    if ((ptrxBuf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
       front_fog_status = true;
       digitalWrite(FOG_LED_PIN, HIGH);
       #if DEBUG_MODE
@@ -15,7 +15,7 @@ void evaluate_fog_status()
         Serial.println(F("Front fogs off. Turned off FOG LED"));
       #endif
     }
-    last_light_status = prxBuf[0];
+    last_light_status = ptrxBuf[0];
   }
 }
 #endif
@@ -30,7 +30,8 @@ void send_seat_heating_request()
   KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_released);
   delay(20);
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent dr seat heating request at ambient %dC, treshold %dC\n", (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
+    sprintf(serial_debug_string, "Sent dr seat heating request at ambient %dC, treshold %dC.\n", 
+           (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
     Serial.print(serial_debug_string);
   #endif
   sent_seat_heating_request = true;
@@ -41,23 +42,23 @@ void send_seat_heating_request()
 #if F_ZBE_WAKE
 void send_zbe_wakeup()
 {
-  if ((millis() - zbe_wakeup_last_sent) >= 1000) {
+  if ((millis() - zbe_wakeup_last_sent) >= 1500) {
     KCAN.sendMsgBuf(0x560, 8, f_wakeup);
     zbe_wakeup_last_sent = millis();
     #if DEBUG_MODE
-      Serial.println(F("Sent F-ZBE wake-up message"));
+      Serial.println(F("Sent F-ZBE wake-up message."));
     #endif
   }
 }
 #endif
 
 
-#if EXHAUST_FLAP_WITH_M_BUTTON
+#if EXHAUST_FLAP_CONTROL
 void evaluate_exhaust_flap_position()
 {
-  if (!exhaust_flap_sport) {                                                                                                        // Exhaust is in quiet mode
-    if ((millis() - exhaust_flap_action_timer) >= 1000) {                                                                           // Avoid vacuum drain, oscillation and apply startup delay
-      if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                          // Open at defined rpm setpoint
+  if (!exhaust_flap_sport) {                                                                                                        // Exhaust is in quiet mode.
+    if ((millis() - exhaust_flap_action_timer) >= 1000) {                                                                           // Avoid vacuum drain, oscillation and apply startup delay.
+      if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                          // Open at defined rpm setpoint.
         if (!exhaust_flap_open) {
           digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
           exhaust_flap_action_timer = millis();
@@ -77,17 +78,85 @@ void evaluate_exhaust_flap_position()
         }
       }
     }
-  } else {                                                                                                                          // Flap always open in sport mode
+  } else {                                                                                                                          // Flap always open in sport mode.
     if ((millis() - exhaust_flap_action_timer) >= 200) {
       if (!exhaust_flap_open) {
         digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
         exhaust_flap_action_timer = millis();
         exhaust_flap_open = true;
         #if DEBUG_MODE
-          Serial.println(F("Opened exhaust flap with MDrive/POWER."));
+          Serial.println(F("Opened exhaust flap with MDrive."));
         #endif
       }
     }
   }
 }
 #endif
+
+
+void initialize_timers()
+{
+  #if F_ZBE_WAKE
+    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer 
+    = vehicle_awake_timer = m_button_debounce_timer = zbe_wakeup_last_sent = millis();
+  #else
+    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer 
+    = vehicle_awake_timer = m_button_debounce_timer = millis();
+  #endif
+}
+
+
+#if DEBUG_MODE
+void debug_can_message(uint16_t canid, uint8_t len, uint8_t* message)
+{   
+    sprintf(serial_debug_string, "0x%.2X: ", canid);
+    for (uint8_t i = 0; i<len; i++) {
+      sprintf(serial_debug_string, " 0x%.2X", message[i]);
+      Serial.print(serial_debug_string);
+    }
+    Serial.println();
+}
+#endif  
+
+
+void reset_runtime_variables()                                                                                                      // Ignition off. Set variables to original state and commit MDrive settings.
+{
+  dsc_program_last_status_can = 0xEA;
+  dsc_program_status = 0;
+  if (mdrive_status) {
+    toggle_mdrive_message_active();
+  }
+  power_mode = false;
+  engine_running = false;
+  RPM = 0;
+  #if EXHAUST_FLAP_CONTROL
+    exhaust_flap_sport = false;
+    digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
+    exhaust_flap_open = true;
+  #endif
+  #if LAUNCH_CONTROL_INDICATOR
+    lc_cc_active = clutch_pressed = vehicle_moving = false;
+  #endif
+  #if CONTROL_SHIFTLIGHTS
+    shiftlights_segments_active = false;
+    ignore_shiftlights_off_counter = 0;
+    engine_warmed_up = false;
+    last_var_rpm_can = 0;
+    START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
+    MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
+    MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
+  #endif
+  digitalWrite(POWER_LED_PIN, LOW);
+  #if FRONT_FOG_INDICATOR
+    front_fog_status = false;
+    last_light_status = 0;
+    digitalWrite(FOG_LED_PIN, LOW);
+  #endif
+  #if FTM_INDICATOR
+    ftm_indicator_status = false;
+  #endif
+  if (mdrive_settings_change) {
+    update_mdrive_settings_in_eeprom();
+    mdrive_settings_change = false;
+  }
+}

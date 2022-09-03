@@ -16,7 +16,6 @@ White connector
 17 - POWER switch (D5) - white/red
 16 - POWER LED (D4) - black/white
 15 - FOG LED (D12) - blue/yellow
-14 - EDC switch (D11) - gray/blue
 13 - Exhaust flap solenoid (D10) - gray
 	-> Use flyback diode between +/-
 	-> Disconnect DME X60001 pin 5

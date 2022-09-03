@@ -8,15 +8,16 @@ void configure_pins()
   #if FRONT_FOG_INDICATOR
     pinMode(FOG_LED_PIN, OUTPUT);
   #endif
-  #if EDC_WITH_M_BUTTON
-    pinMode(EDC_BUTTON_PIN, OUTPUT);
-  #endif
   pinMode(EXHAUST_FLAP_SOLENOID_PIN, OUTPUT);
 }
 
 
 void initialize_can_controllers()
 {
+  #if DEBUG_MODE
+    Serial.begin(115200);
+    while(!Serial);                                                                                                                 // 32U4, wait until virtual port initialized
+  #endif
   SPI.setClockDivider(SPI_CLOCK_DIV2);                                                                                              // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4 
   while (CAN_OK != PTCAN.begin(MCP_STDEXT, CAN_500KBPS, MCP2515_PTCAN) || 
          CAN_OK != KCAN.begin(MCP_STDEXT, CAN_100KBPS, MCP2515_KCAN)) {
@@ -26,50 +27,59 @@ void initialize_can_controllers()
     delay(5000);
   }
 
+  PTCAN.init_Mask(0, 0x07FF0000);                                                                                                   // Mask matches: 7FF (all standard 11bit IDs) and all bytes 
+  PTCAN.init_Mask(1, 0x07FF0000);                                                                                                   // Mask matches: 7FF (all standard 11bit IDs) and all bytes
+  PTCAN.init_Filt(0, 0x01D60000);                                                                                                   // MFL button status.                                         Cycle time 1s, 100ms (pressed)
+  #if FRONT_FOG_INDICATOR
+    PTCAN.init_Filt(1, 0x021A0000);                                                                                                 // Light status                                               Cycle time 5s (idle) 
+  #endif
+  #if FTM_INDICATOR
+     PTCAN.init_Filt(2, 0x031D0000);                                                                                                // FTM status broadcast by DSC                                Cycle time 5s (idle)
+  #endif
+  #if CONTROL_SHIFTLIGHTS
+    PTCAN.init_Filt(3, 0x03320000);                                                                                                 // Variable redline position                                  Cycle time 1s
+  #endif
+  PTCAN.init_Filt(4, 0x03CA0000);                                                                                                   // CIC MDrive settings 
+  PTCAN.setMode(MCP_NORMAL);
+  
+  KCAN.init_Mask(0, 0x07FF0000);                                                                                                    // Mask matches: 7FF (standard 11bit ID) and all bytes
+  KCAN.init_Mask(1, 0x07FF0000);                                                                                                    // Mask matches: 7FF (standard 11bit ID) and all bytes 
+  KCAN.init_Filt(0, 0x019E0000);                                                                                                    // DSC status and ignition                                    Cycle time 200ms (KCAN)
+  KCAN.init_Filt(1, 0x00AA0000);                                                                                                    // RPM, throttle pos.                                         Cycle time 100ms (KCAN)
+  #if LAUNCH_CONTROL_INDICATOR
+    KCAN.init_Filt(2, 0x00A80000);                                                                                                  // Clutch status                                              Cycle time 100ms (KCAN)
+    KCAN.init_Filt(3, 0x01B40000);                                                                                                  // Kombi status (speed, handbrake)                            Cycle time 100ms (terminal R on)
+  #endif
+  #if AUTO_SEAT_HEATING
+    KCAN.init_Filt(4, 0x02320000);                                                                                                  // Driver's seat heating status                               Cycle time 10s (idle), 150ms (change)
+    KCAN.init_Filt(5, 0x02CA0000);                                                                                                  // Ambient temperature                                        Cycle time 1s
+  #endif 
+
+  KCAN.setMode(MCP_NORMAL);
+
   #if DEBUG_MODE
     Serial.println(F("MCP2515s initialized successfully."));
   #endif
 }
 
 
-void configure_filters()
+void toggle_ptcan_sleep()
 {
-  PTCAN.init_Mask(0, 0x07FF0000);                                                                                                   // Mask matches: 7FF (standard ID) and all bytes 
-  PTCAN.init_Mask(1, 0x07FF0000);                                                                                                   // Mask matches: 7FF (standard ID) and all bytes
-
-  PTCAN.init_Filt(0, 0x01D60000);                                                                                                   // MFL button status.                                         Cycle time 1s, 100ms (pressed)
-  #if LAUNCH_CONTROL_INDICATOR
-    PTCAN.init_Filt(1, 0x01B40000);                                                                                                 // Kombi status (speed, handbrake)                            Cycle time 100ms (terminal R on)
-  #endif
-  PTCAN.init_Filt(2, 0x03150000);                                                                                                   // Vehicle mode (EDC).                                        Cycle time 500ms (idle), 100-250ms (change)
-  PTCAN.init_Filt(3, 0x03990000);                                                                                                   // MDrive status.                                             Cycle time 10s (idle), 160ms (change)
-  #if FRONT_FOG_INDICATOR
-    PTCAN.init_Filt(4, 0x021A0000);                                                                                                 // Light status                                               Cycle time 5s (idle) 
-  #endif
-  #if FTM_INDICATOR
-     PTCAN.init_Filt(5, 0x031D0000);                                                                                                // FTM status broadcast by DSC                                Cycle time 5s (idle)
-  #endif
-  PTCAN.setMode(MCP_NORMAL);
-  
-  KCAN.init_Mask(0, 0x07FF0000);                                                                                                    // Mask matches: 07FF (standard ID) and all bytes
-  KCAN.init_Mask(1, 0x07FF0000);                                                                                                    // Mask matches: 07FF (standard ID) and all bytes 
-  KCAN.init_Filt(0, 0x019E0000);                                                                                                    // DSC status and ignition                                    Cycle time 200ms (KCAN)
-  KCAN.init_Filt(1, 0x00AA0000);                                                                                                    // RPM, throttle pos.                                         Cycle time 100ms (KCAN)
-  #if LAUNCH_CONTROL_INDICATOR
-    KCAN.init_Filt(2, 0x00A80000);                                                                                                  // Clutch status                                              Cycle time 100ms (KCAN)
-  #endif
-  #if AUTO_SEAT_HEATING
-    KCAN.init_Filt(3, 0x02320000);                                                                                                  // Driver's seat heating status                               Cycle time 10s (idle), 150ms (change)
-    KCAN.init_Filt(4, 0x02CA0000);                                                                                                  // Ambient temperature                                        Cycle time 1s
-  #endif 
-  #if SYNC_SHIFTLIGHTS_WITH_REDLINE
-    KCAN.init_Filt(5, 0x03320000);                                                                                                  // Variable redline position                                  Cycle time 1s
-  #endif
-  KCAN.setMode(MCP_NORMAL);
+  if (!vehicle_awake) {
+    PTCAN.setMode(MCP_SLEEP);
+    #if DEBUG_MODE
+      Serial.println(F("Deactivated PT-CAN MCP2515."));
+    #endif
+  } else {
+    PTCAN.setMode(MCP_NORMAL);
+    #if DEBUG_MODE
+      Serial.println(F("Re-eactivated PT-CAN MCP2515."));
+    #endif
+  }
 }
 
 
-void disable_unused_peripherals()
+void disable_unused_mcu_peripherals()
 // 32U4 Specific!
 {
   power_usart0_disable();                                                                                                           // Disable UART

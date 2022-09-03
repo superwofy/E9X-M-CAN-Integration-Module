@@ -1,51 +1,64 @@
 void evaluate_dsc_ign_status()
 {
   if (dsc_program_last_status_can != krxBuf[1]) {
-  if (krxBuf[1] == 0xEA) {
-    ignition = false;
-    reset_runtime_variables();
-    #if DEBUG_MODE
-      Serial.println(F("Ignition OFF. Reset values."));
-    #endif
-  } else if (krxBuf[1] == 0xEC) {
-    ignition = true;
-    #if DEBUG_MODE
-      Serial.println(F("Ignition ON."));
-    #endif
-  } else if (krxBuf[1] == 0xE0) {
-    ignition = true;                                                                                                          // Just in case 0xEC was missed.
-    dsc_program_status = 0;
-    #if DEBUG_MODE
-        Serial.println(F("Stability control fully activated."));
-    #endif
-  } else if (krxBuf[1] == 0xF0) {
-    dsc_program_status = 1;
-    #if DEBUG_MODE
-        Serial.println(F("Stability control in DTC mode."));
-    #endif
-  } else if (krxBuf[1] == 0xE4) {
-    dsc_program_status = 2;
-    #if DEBUG_MODE
-        Serial.println(F("Stability control fully OFF."));
-    #endif
+    if (krxBuf[1] == 0xEA) {
+      ignition = false;
+      reset_runtime_variables();
+      #if DEBUG_MODE
+        Serial.println(F("Ignition OFF. Reset values."));
+      #endif
+    } else if (krxBuf[1] == 0xEC) {
+      ignition = true;
+      #if DEBUG_MODE
+        Serial.println(F("Ignition ON."));
+      #endif
+    } else if (krxBuf[1] == 0xE0) {
+      ignition = true;                                                                                                          // Just in case 0xEC was missed.
+      dsc_program_status = 0;
+      #if DEBUG_MODE
+          Serial.println(F("Stability control fully activated."));
+      #endif
+    } else if (krxBuf[1] == 0xF0) {
+      dsc_program_status = 1;
+      #if DEBUG_MODE
+          Serial.println(F("Stability control in DTC mode."));
+      #endif
+    } else if (krxBuf[1] == 0xE4) {
+      dsc_program_status = 2;
+      #if DEBUG_MODE
+          Serial.println(F("Stability control fully OFF."));
+      #endif
+    }
+    dsc_program_last_status_can = krxBuf[1];
   }
-  dsc_program_last_status_can = krxBuf[1];
-}
-#if F_ZBE_WAKE
-  send_zbe_wakeup();
-#endif
+
+  if (krxBuf[1] == 0xEA) {
+    if (!vehicle_awake) {
+      vehicle_awake = true;    
+      toggle_ptcan_sleep();                                                                                                    // Re-activate the controller                                                                                         
+      #if DEBUG_MODE
+        Serial.println(F("Vehicle Awake."));
+      #endif
+    }
+    vehicle_awake_timer = millis();                                                                                            // Keep track of this message.
+  }
+  
+  #if F_ZBE_WAKE
+    send_zbe_wakeup();
+  #endif
 }
 
 
+#if FTM_INDICATOR
 void evaluate_ftm_status()
 {
-  if (prxBuf[0] == 0x03 && !ftm_indicator_status) {
+  if (ptrxBuf[0] == 0x03 && !ftm_indicator_status) {
     KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_flash);
     ftm_indicator_status = true;
     #if DEBUG_MODE
       Serial.println(F("Activated FTM indicator."));
     #endif
-  } else if (prxBuf[0] == 0 && ftm_indicator_status) {
+  } else if (ptrxBuf[0] == 0 && ftm_indicator_status) {
     KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_off);
     ftm_indicator_status = false;
     #if DEBUG_MODE
@@ -53,6 +66,7 @@ void evaluate_ftm_status()
     #endif
   }
 }
+#endif
 
 
 void send_dtc_button_press() 
@@ -75,9 +89,6 @@ void send_dsc_off_sequence()
 {
   PTCAN.sendMsgBuf(0x5A9, 8, dsc_off_fake_cc_status);                                                                               // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts
   for (int i = 0; i < 26; i++) {                                                                                                    // >2.5s to send full DSC OFF sequence.
-    if ((millis() - mbutton_released_timer) >= 1000) {                                                                              // keep sending M button released message
-      send_mbutton_message(mbutton_released);
-    }
     PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);
     delay(100); 
   }
