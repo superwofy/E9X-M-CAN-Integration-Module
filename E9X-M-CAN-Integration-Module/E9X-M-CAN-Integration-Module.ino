@@ -266,6 +266,9 @@ void loop()
 
       #if SERVOTRONIC_SVT70
       else if (ptrxId == 0x58E) {
+        if (ptrxBuf[1] == 0x49 && ptrxBuf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic)
+          ptrxBuf[1] = 0x46;
+        }
         KCAN.sendMsgBuf(ptrxId, ptlen, ptrxBuf);                                                                                    // Forward the SVT status to KCAN
       }
       #endif
