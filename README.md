@@ -25,6 +25,7 @@ I use it to:
 * Control Throttle map with the M button.
 * Control DTC with the M button.
 * Control EDC with the M button.
+* Control Servotronic with the M button - through SVT70 module.
 * Control the exhaust flap with the M button.
 * Display Shiftlights - including startup animation, sync with the variable redline.
 * Display Launch Control flag.
@@ -43,7 +44,7 @@ See program notes: [here](E9X-M-CAN-Integration-Module/program-notes.ino)
 
 ![launchcontrol](img/launch-control/kombi.jpg "launchcontrol")
 
-![fog](fog/indicatoron.jpg "fog")
+![fog](Fog/indicatoron.jpg "fog")
 
 ![case](img/case.jpg "case")
 

@@ -19,8 +19,8 @@ void initialize_can_controllers()
     while(!Serial);                                                                                                                 // 32U4, wait until virtual port initialized
   #endif
   SPI.setClockDivider(SPI_CLOCK_DIV2);                                                                                              // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4 
-  while (CAN_OK != PTCAN.begin(MCP_STDEXT, CAN_500KBPS, MCP2515_PTCAN) || 
-         CAN_OK != KCAN.begin(MCP_STDEXT, CAN_100KBPS, MCP2515_KCAN)) {
+  while (CAN_OK != PTCAN.begin(MCP_STDEXT, CAN_500KBPS, 1) || 
+         CAN_OK != KCAN.begin(MCP_STDEXT, CAN_100KBPS, 1)) {                                                                        // Set 1 for 16MHZ or 2 for 8MHZ.
     #if DEBUG_MODE
       Serial.println(F("Error initializing MCP2515s. Re-trying."));
     #endif
@@ -29,30 +29,33 @@ void initialize_can_controllers()
 
   PTCAN.init_Mask(0, 0x07FF0000);                                                                                                   // Mask matches: 7FF (all standard 11bit IDs) and all bytes 
   PTCAN.init_Mask(1, 0x07FF0000);                                                                                                   // Mask matches: 7FF (all standard 11bit IDs) and all bytes
-  PTCAN.init_Filt(0, 0x01D60000);                                                                                                   // MFL button status.                                         Cycle time 1s, 100ms (pressed)
+  PTCAN.init_Filt(0, 0x01D60000);                                                                                                   // MFL button status.                                           Cycle time 1s, 100ms (pressed)
   #if FRONT_FOG_INDICATOR
-    PTCAN.init_Filt(1, 0x021A0000);                                                                                                 // Light status                                               Cycle time 5s (idle) 
+    PTCAN.init_Filt(1, 0x021A0000);                                                                                                 // Light status                                                 Cycle time 5s (idle) 
   #endif
   #if FTM_INDICATOR
-     PTCAN.init_Filt(2, 0x031D0000);                                                                                                // FTM status broadcast by DSC                                Cycle time 5s (idle)
+     PTCAN.init_Filt(2, 0x031D0000);                                                                                                // FTM status broadcast by DSC                                  Cycle time 5s (idle)
   #endif
   #if CONTROL_SHIFTLIGHTS
-    PTCAN.init_Filt(3, 0x03320000);                                                                                                 // Variable redline position                                  Cycle time 1s
+    PTCAN.init_Filt(3, 0x03320000);                                                                                                 // Variable redline position                                    Cycle time 1s
   #endif
   PTCAN.init_Filt(4, 0x03CA0000);                                                                                                   // CIC MDrive settings 
+  #if SERVOTRONIC_SVT70
+    PTCAN.init_Filt(5, 0x58E0000);                                                                                                  // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10
+  #endif
   PTCAN.setMode(MCP_NORMAL);
   
   KCAN.init_Mask(0, 0x07FF0000);                                                                                                    // Mask matches: 7FF (standard 11bit ID) and all bytes
   KCAN.init_Mask(1, 0x07FF0000);                                                                                                    // Mask matches: 7FF (standard 11bit ID) and all bytes 
-  KCAN.init_Filt(0, 0x019E0000);                                                                                                    // DSC status and ignition                                    Cycle time 200ms (KCAN)
-  KCAN.init_Filt(1, 0x00AA0000);                                                                                                    // RPM, throttle pos.                                         Cycle time 100ms (KCAN)
+  KCAN.init_Filt(0, 0x019E0000);                                                                                                    // DSC status and ignition                                      Cycle time 200ms (KCAN)
+  KCAN.init_Filt(1, 0x00AA0000);                                                                                                    // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
   #if LAUNCH_CONTROL_INDICATOR
-    KCAN.init_Filt(2, 0x00A80000);                                                                                                  // Clutch status                                              Cycle time 100ms (KCAN)
-    KCAN.init_Filt(3, 0x01B40000);                                                                                                  // Kombi status (speed, handbrake)                            Cycle time 100ms (terminal R on)
+    KCAN.init_Filt(2, 0x00A80000);                                                                                                  // Clutch status                                                Cycle time 100ms (KCAN)
+    KCAN.init_Filt(3, 0x01B40000);                                                                                                  // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R on)
   #endif
   #if AUTO_SEAT_HEATING
-    KCAN.init_Filt(4, 0x02320000);                                                                                                  // Driver's seat heating status                               Cycle time 10s (idle), 150ms (change)
-    KCAN.init_Filt(5, 0x02CA0000);                                                                                                  // Ambient temperature                                        Cycle time 1s
+    KCAN.init_Filt(4, 0x02320000);                                                                                                  // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change)
+    KCAN.init_Filt(5, 0x02CA0000);                                                                                                  // Ambient temperature                                          Cycle time 1s
   #endif 
 
   KCAN.setMode(MCP_NORMAL);

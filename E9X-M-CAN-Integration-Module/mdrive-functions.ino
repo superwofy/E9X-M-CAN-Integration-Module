@@ -108,7 +108,7 @@ void update_mdrive_message_settings(bool reset)
 {
   mdrive_settings_change = true;
   if (reset) {
-	  mdrive_dsc = 0x03;                                                                                                            // Unchanged
+    mdrive_dsc = 0x03;                                                                                                              // Unchanged
     mdrive_power = 0;                                                                                                               // Unchanged
     mdrive_edc = 0x20;                                                                                                              // Unchanged
     mdrive_svt = 0xE9;                                                                                                              // Normal
@@ -120,8 +120,8 @@ void update_mdrive_message_settings(bool reset)
   //Decode settings
   mdrive_dsc = ptrxBuf[0];                                                                                                          // 0x3 unchanged, 0x13 MDM, 0xB on.
   mdrive_power = ptrxBuf[1];                                                                                                        // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
-  mdrive_edc = ptrxBuf[2];                                                                                                          // 0x21(Comfort) 0x22(Normal) 0x2A(Sport) 0x20(Unchanged).
-  mdrive_svt = ptrxBuf[4];                                                                                                          // 0xE9 normal, 0xF1 sport, 0xEC/0xF4/0xE4 reset. E0/E1-invalid?
+  mdrive_edc = ptrxBuf[2];                                                                                                          // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
+  mdrive_svt = ptrxBuf[4];                                                                                                          // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
   
   //Build acknowledge message
   if (mdrive_dsc == 0x3) {
@@ -210,5 +210,27 @@ void send_power_mode()
     can_checksum_update(power_mode_only_dme_veh_mode, 2, DME_FAKE_VEH_MODE_CANID);
     PTCAN.sendMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
     digitalWrite(POWER_LED_PIN, LOW);
+  }
+}
+
+void send_servotronic_message()
+{
+  if (ignition) {
+    servotronic_message[0] += 0x10;                                                                                                 // Increase alive counter.
+    if (servotronic_message[0] > 0xEF) {                                                                                            // Alive(first half of byte) must be between 0..E.
+      servotronic_message[0] = 0;
+    }
+    
+    servotronic_message[0] &= 0xF0;                                                                                                 // Discard current mode
+    if (mdrive_status && mdrive_svt == 0xF1) {                                                                                      // Servotronic in sport mode.
+      servotronic_message[0] += 9;
+    } else {
+      servotronic_message[0] += 8;
+    }
+
+    PTCAN.sendMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message); 
+    #if DEBUG_MODE
+      //debug_can_message(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message);
+    #endif    
   }
 }

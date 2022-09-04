@@ -57,7 +57,7 @@ void send_zbe_wakeup()
 void evaluate_exhaust_flap_position()
 {
   if (!exhaust_flap_sport) {                                                                                                        // Exhaust is in quiet mode.
-    if ((millis() - exhaust_flap_action_timer) >= 1000) {                                                                           // Avoid vacuum drain, oscillation and apply startup delay.
+    if ((millis() - exhaust_flap_action_timer) >= 1500) {                                                                           // Avoid vacuum drain, oscillation and apply startup delay.
       if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                          // Open at defined rpm setpoint.
         if (!exhaust_flap_open) {
           digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
@@ -110,6 +110,7 @@ void initialize_timers()
 void debug_can_message(uint16_t canid, uint8_t len, uint8_t* message)
 {   
     sprintf(serial_debug_string, "0x%.2X: ", canid);
+    Serial.print(serial_debug_string);
     for (uint8_t i = 0; i<len; i++) {
       sprintf(serial_debug_string, " 0x%.2X", message[i]);
       Serial.print(serial_debug_string);

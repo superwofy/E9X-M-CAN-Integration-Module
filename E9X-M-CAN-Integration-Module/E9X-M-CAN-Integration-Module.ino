@@ -14,8 +14,6 @@ MCP_CAN PTCAN(17), KCAN(9);                                                     
 #define DSC_BUTTON_PIN 6
 #define FOG_LED_PIN 12
 #define EXHAUST_FLAP_SOLENOID_PIN 10
-const int MCP2515_PTCAN = 1;                                                                                                        // Set 1 for 16MHZ or 2 for 8MHZ.
-const int MCP2515_KCAN = 1;
 
 /***********************************************************************************************************************************************************************************************************************************************
   Program configuration section.
@@ -27,19 +25,23 @@ const int MCP2515_KCAN = 1;
 
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
+#define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures.
 #define F_ZBE_WAKE 0                                                                                                                // Enable/disable F CIC ZBE wakeup functions.
 
+#if SERVOTRONIC_SVT70
+  const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                   // New CAN-ID replacing 0x326 in SVT70 bin.
+#endif
 const uint16_t DME_FAKE_VEH_MODE_CANID = 0x7F1;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section.
 const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80.
 const uint8_t DTC_BUTTON_TIME = 7;                                                                                                  // Set duration for Enabling/Disabling DTC mode on with long press of M button. 100ms increments.
 #if CONTROL_SHIFTLIGHTS
-const uint32_t START_UPSHIFT_WARN_RPM = 5500*4;                                                                                     // RPM setpoints (warning = desired RPM * 4).
-const uint32_t MID_UPSHIFT_WARN_RPM = 6000*4;
-const uint32_t MAX_UPSHIFT_WARN_RPM = 6500*4;
+  const uint32_t START_UPSHIFT_WARN_RPM = 5500*4;                                                                                   // RPM setpoints (warning = desired RPM * 4).
+  const uint32_t MID_UPSHIFT_WARN_RPM = 6000*4;
+  const uint32_t MAX_UPSHIFT_WARN_RPM = 6500*4;
 #endif
 #if EXHAUST_FLAP_CONTROL
   const uint32_t EXHAUST_FLAP_QUIET_RPM = 3500*4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
@@ -65,9 +67,22 @@ bool mdrive_settings_change = false;
 unsigned long vehicle_awake_timer;
 uint8_t dtc_button_pressed[] = {0xFD, 0xFF}, dtc_button_released[] = {0xFC, 0xFF};
 uint8_t dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
-
 bool engine_running = false;
 uint32_t RPM = 0;
+uint8_t mdrive_dsc = 0x03, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
+bool mdrive_status = false;                                                                                                         // false = off, true = on
+bool power_mode = false;
+uint8_t power_mode_only_dme_veh_mode[] = {0, 0x11};
+uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
+uint8_t dsc_program_last_status_can = 0xEA;
+bool holding_dsc_off_console = false;
+unsigned long mdrive_message_timer, m_button_debounce_timer;
+unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
+const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
+
+#if SERVOTRONIC_SVT70
+  uint8_t servotronic_message[] = {0, 0xFF};
+#endif
 #if CONTROL_SHIFTLIGHTS
 uint8_t shiftlights_start[] = {0x86, 0x3E};
 uint8_t shiftlights_mid_buildup[] = {0xF6, 0};
@@ -82,24 +97,10 @@ uint32_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
   bool engine_warmed_up = false;
   uint32_t var_redline_position;
   uint8_t last_var_rpm_can = 0;
-#endif
-
-uint8_t mdrive_dsc = 0x03, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
-#if CONTROL_SHIFTLIGHTS
 uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // byte 5: shiftlights always on
 #else
 uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};
 #endif
-bool mdrive_status = false;                                                                                                         // false = off, true = on
-bool power_mode = false;
-uint8_t power_mode_only_dme_veh_mode[] = {0, 0x11};
-uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
-uint8_t dsc_program_last_status_can = 0xEA;
-bool holding_dsc_off_console = false;
-unsigned long mdrive_message_timer, m_button_debounce_timer;
-unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
-const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
-
 #if FRONT_FOG_INDICATOR
   bool front_fog_status = false;
   uint8_t last_light_status = 0;
@@ -225,7 +226,7 @@ void loop()
     PTCAN.readMsgBuf(&ptrxId, &ptlen, ptrxBuf);                                                                                     // Read data: rxId = CAN ID, buf = data byte(s)
     if (ignition) {
       if (ptrxId == 0x1D6) {
-        if ((millis() - m_button_debounce_timer) >= 200) {       
+        if ((millis() - m_button_debounce_timer) >= 300) {       
           if (ptrxBuf[1] == 0x4C) {                                                                                                 // M button is pressed
             toggle_mdrive_message_active();
             send_mdrive_message();
@@ -244,7 +245,7 @@ void loop()
       else if (ptrxId == 0x31D) {                                                                                                   // FTM initialization is ongoing.
         evaluate_ftm_status();
       }
-      #endif
+      #endif  
 
       #if CONTROL_SHIFTLIGHTS
         else if (ptrxId == 0x332) {                                                                                                  // Monitor variable redline broadcast from DME.
@@ -262,6 +263,12 @@ void loop()
           send_mdrive_message();                                                                                                    // Respond to iDrive.
         }
       }
+
+      #if SERVOTRONIC_SVT70
+      else if (ptrxId == 0x58E) {
+        KCAN.sendMsgBuf(ptrxId, ptlen, ptrxBuf);                                                                                    // Forward the SVT status to KCAN
+      }
+      #endif
     }
   }
 
@@ -274,6 +281,9 @@ void loop()
 
     if (krxId == 0x19E) {                                                                                                           // Monitor DSC K-CAN status.
       evaluate_dsc_ign_status();
+      #if SERVOTRONIC_SVT70
+        send_servotronic_message();
+      #endif
     }
 
     #if AUTO_SEAT_HEATING
