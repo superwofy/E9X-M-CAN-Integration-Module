@@ -130,6 +130,10 @@ void reset_runtime_variables()                                                  
   power_mode = false;
   engine_running = false;
   RPM = 0;
+  sending_dsc_off = false;
+  sending_dsc_off_counter = 0;
+  send_second_dtc_press = false;
+  send_dsc_off_from_mdm = false;
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
     digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);

@@ -50,7 +50,7 @@ void evaluate_shiftlight_display()
 
 void activate_shiftlight_segments(uint8_t* data)
 {
-    PTCAN.sendMsgBuf(0x206, 2, data);                                                                     
+    KCAN.sendMsgBuf(0x206, 2, data);                                                                     
     shiftlights_segments_active = true;
 }
 

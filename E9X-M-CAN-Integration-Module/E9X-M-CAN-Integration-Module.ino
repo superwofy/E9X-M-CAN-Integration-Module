@@ -67,6 +67,9 @@ bool mdrive_settings_change = false;
 unsigned long vehicle_awake_timer;
 uint8_t dtc_button_pressed[] = {0xFD, 0xFF}, dtc_button_released[] = {0xFC, 0xFF};
 uint8_t dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
+uint8_t mdm_fake_cc_status[] = {0x40, 0xB8, 0, 0x45, 0xFF, 0xFF, 0xFF, 0xFF};
+uint8_t mdm_fake_cc_status_off[] = {0x40, 0xB8, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
 bool engine_running = false;
 uint32_t RPM = 0;
 uint8_t mdrive_dsc = 0x03, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
@@ -79,6 +82,13 @@ bool holding_dsc_off_console = false;
 unsigned long mdrive_message_timer, m_button_debounce_timer;
 unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
+bool sending_dsc_off = false;
+uint8_t sending_dsc_off_counter = 0;
+unsigned long sending_dsc_off_timer;
+bool send_second_dtc_press = false;
+unsigned long send_second_dtc_press_timer;
+bool send_dsc_off_from_mdm = false;
+unsigned long send_dsc_off_from_mdm_timer;
 
 #if SERVOTRONIC_SVT70
   uint8_t servotronic_message[] = {0, 0xFF};
@@ -147,6 +157,9 @@ void setup()
 
 void loop()
 {
+  non_blocking_dsc_off();
+  non_blocking_second_dtc_press();                                                                                                  // Use a loop call instead of blocking execution with delay().
+  non_blocking_mdm_to_off();
 
 /***********************************************************************************************************************************************************************************************************************************************
   Centre console button section.
@@ -226,10 +239,11 @@ void loop()
     PTCAN.readMsgBuf(&ptrxId, &ptlen, ptrxBuf);                                                                                     // Read data: rxId = CAN ID, buf = data byte(s)
     if (ignition) {
       if (ptrxId == 0x1D6) {
-        if ((millis() - m_button_debounce_timer) >= 300) {       
+        if ((millis() - m_button_debounce_timer) >= 200) {       
           if (ptrxBuf[1] == 0x4C) {                                                                                                 // M button is pressed
             toggle_mdrive_message_active();
             send_mdrive_message();
+            toggle_mdrive_dsc();                                                                                                    // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
           } 
           m_button_debounce_timer = millis();
         }

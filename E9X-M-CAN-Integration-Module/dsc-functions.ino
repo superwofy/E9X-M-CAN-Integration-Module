@@ -13,7 +13,7 @@ void evaluate_dsc_ign_status()
         Serial.println(F("Ignition ON."));
       #endif
     } else if (krxBuf[1] == 0xE0) {
-      ignition = true;                                                                                                          // Just in case 0xEC was missed.
+      ignition = true;                                                                                                              // Just in case 0xEC was missed.
       dsc_program_status = 0;
       #if DEBUG_MODE
           Serial.println(F("Stability control fully activated."));
@@ -35,12 +35,12 @@ void evaluate_dsc_ign_status()
   if (krxBuf[1] == 0xEA) {
     if (!vehicle_awake) {
       vehicle_awake = true;    
-      toggle_ptcan_sleep();                                                                                                    // Re-activate the controller                                                                                         
+      toggle_ptcan_sleep();                                                                                                         // Re-activate the controller.                                                                                         
       #if DEBUG_MODE
         Serial.println(F("Vehicle Awake."));
       #endif
     }
-    vehicle_awake_timer = millis();                                                                                            // Keep track of this message.
+    vehicle_awake_timer = millis();                                                                                                 // Keep track of this message.
   }
   
   #if F_ZBE_WAKE
@@ -74,26 +74,73 @@ void send_dtc_button_press()
 // button press -> delay(100) -> button press -> delay(50) -> button release -> delay(160) -> button release -> delay(160)
 // However, that interferes with program timing. A small delay will still be accepted.
 {
-  PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);                                                                                   // Two messages are sent during a quick press of the button (DTC mode).
-  delay(5);
-  PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);
-  delay(5);
-  PTCAN.sendMsgBuf(0x316, 2, dtc_button_released);                                                                                  // Send one DTC released to indicate end of DTC button press.
-  #if DEBUG_MODE                        
-    Serial.println(F("Sent single DTC button press."));
-  #endif
+  if (!sending_dsc_off) {                                                                                                           // Ignore while DSC OFF seq is still being transmitted.
+    PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);                                                                                 // Two messages are sent during a quick press of the button (DTC mode).
+    delay(5);
+    PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);
+    delay(5);
+    PTCAN.sendMsgBuf(0x316, 2, dtc_button_released);                                                                                // Send one DTC released to indicate end of DTC button press.
+    #if DEBUG_MODE                        
+      Serial.println(F("Sent single DTC button press."));
+    #endif
+  }
 } 
 
 
 void send_dsc_off_sequence() 
 {
-  PTCAN.sendMsgBuf(0x5A9, 8, dsc_off_fake_cc_status);                                                                               // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts
-  for (int i = 0; i < 26; i++) {                                                                                                    // >2.5s to send full DSC OFF sequence.
-    PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);
-    delay(100); 
+  if (!sending_dsc_off) {
+    sending_dsc_off = true;                                                                                                         // Begin the non-blocking sequence.
+    PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);                                                                                 // Send the first press.
+    KCAN.sendMsgBuf(0x5A9, 8, dsc_off_fake_cc_status);                                                                              // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts.
   }
-  PTCAN.sendMsgBuf(0x316, 2, dtc_button_released);
-  #if DEBUG_MODE
-    Serial.println(F("Sent DSC OFF sequence."));
-  #endif
+}
+
+
+void non_blocking_dsc_off()
+{
+  if (sending_dsc_off) {
+    if (sending_dsc_off_counter == 1) {
+      KCAN.sendMsgBuf(0x5A9, 8, mdm_fake_cc_status);                                                                                // Start flashing MDM/DTC symbol
+    }
+
+    if ((millis() - sending_dsc_off_timer) >= 100) {                                                                                // Hopefully, none of the code blocks for 100ms+
+      if (sending_dsc_off_counter < 25) {
+        PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);
+        
+        sending_dsc_off_timer = millis();
+        sending_dsc_off_counter++;
+      } else {
+        KCAN.sendMsgBuf(0x5A9, 8, mdm_fake_cc_status_off);
+        PTCAN.sendMsgBuf(0x316, 2, dtc_button_released);
+        #if DEBUG_MODE
+          Serial.println(F("Sent DSC OFF sequence."));
+        #endif
+        sending_dsc_off = false;
+        sending_dsc_off_counter = 0;
+      }
+    }
+  }
+}
+
+
+void non_blocking_second_dtc_press()
+{
+  if (send_second_dtc_press) {
+    if ((millis() - send_second_dtc_press_timer) >= 300) {
+      send_second_dtc_press = false;
+      send_dtc_button_press();
+    } 
+  }
+}
+
+
+void non_blocking_mdm_to_off()
+{
+  if (send_dsc_off_from_mdm) {
+    if ((millis() - send_dsc_off_from_mdm_timer) >= 300) {
+      send_dsc_off_from_mdm = false;
+      send_dsc_off_sequence();
+    }
+  }       
 }
