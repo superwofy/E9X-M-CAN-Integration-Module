@@ -99,7 +99,7 @@ uint32_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
   uint8_t last_var_rpm_can = 0;
 uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // byte 5: shiftlights always on
 #else
-uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};
+uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // byte 5: shiftlights unchanged
 #endif
 #if FRONT_FOG_INDICATOR
   bool front_fog_status = false;
@@ -258,6 +258,7 @@ void loop()
           update_mdrive_message_settings(true);
           send_mdrive_message();
         } else if ((ptrxBuf[4] == 0xE0 || ptrxBuf[4] == 0xE1)) {                                                                    // Ignore E0/E1 (Invalid) 
+          // Do nothing.
         } else {
           update_mdrive_message_settings(false);
           send_mdrive_message();                                                                                                    // Respond to iDrive.

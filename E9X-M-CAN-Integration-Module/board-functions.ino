@@ -76,7 +76,7 @@ void toggle_ptcan_sleep()
   } else {
     PTCAN.setMode(MCP_NORMAL);
     #if DEBUG_MODE
-      Serial.println(F("Re-eactivated PT-CAN MCP2515."));
+      Serial.println(F("Re-activated PT-CAN MCP2515."));
     #endif
   }
 }

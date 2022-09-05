@@ -11,6 +11,8 @@ void read_mdrive_settings_from_eeprom()
   #endif
   if (mdrive_dsc == 0x3) {
       mdrive_message[1] = 0x1;                                                                                                      // DSC unchanged, MDrive off.
+  } else if (mdrive_dsc == 0x7) {
+     mdrive_message[1] = 0x5;                                                                                                       // DSC off, MDrive off.
   } else if (mdrive_dsc == 0xB) {
       mdrive_message[1] = 0x9;                                                                                                      // DSC on, MDrive off.
   } else if (mdrive_dsc == 0x13) {
@@ -51,8 +53,8 @@ void toggle_mdrive_message_active()
     #if EXHAUST_FLAP_CONTROL
       exhaust_flap_sport = false;
     #endif
-    if (mdrive_dsc == 0x13) {                                                                                                       // If MDrive was set to MDM restore back to DSC ON.
-      if (dsc_program_status == 1) {
+    if (mdrive_dsc == 0x13 || mdrive_dsc == 0x7) {                                                                                  // If MDrive was set to MDM restore back to DSC ON.
+      if (dsc_program_status != 0) {
         send_dtc_button_press();
       }
     }
@@ -66,7 +68,20 @@ void toggle_mdrive_message_active()
     #if EXHAUST_FLAP_CONTROL
       exhaust_flap_sport = true;
     #endif
-    if (mdrive_dsc == 0x13) {                                                                                                       // DSC MDM (DTC in non-M) requested.
+    if (mdrive_dsc == 0x7) {
+      if (dsc_program_status == 0) {
+        #if DEBUG_MODE
+          Serial.println(F("MDrive request DSC ON -> DSC OFF."));
+        #endif
+        send_dsc_off_sequence();
+      } else if (dsc_program_status == 2) {
+        //Do nothing
+      } else {                                                                                                                     // Must be in MDM/DTC.
+        send_dtc_button_press();
+        delay(300);
+        send_dsc_off_sequence();
+      }
+    } else if (mdrive_dsc == 0x13) {                                                                                               // DSC MDM (DTC in non-M) requested.
       if (dsc_program_status == 0) {
         #if DEBUG_MODE
           Serial.println(F("MDrive request DSC ON -> MDM/DTC."));
@@ -118,7 +133,7 @@ void update_mdrive_message_settings(bool reset)
   }
 
   //Decode settings
-  mdrive_dsc = ptrxBuf[0];                                                                                                          // 0x3 unchanged, 0x13 MDM, 0xB on.
+  mdrive_dsc = ptrxBuf[0];                                                                                                          // 0x3 unchanged, 0x07 off, 0x13 MDM, 0xB on.
   mdrive_power = ptrxBuf[1];                                                                                                        // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
   mdrive_edc = ptrxBuf[2];                                                                                                          // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
   mdrive_svt = ptrxBuf[4];                                                                                                          // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
@@ -129,6 +144,12 @@ void update_mdrive_message_settings(bool reset)
       mdrive_message[1] = 0x1;                                                                                                      // DSC unchanged, MDrive off.
     } else {
       mdrive_message[1] = 0x2;                                                                                                      // DSC unchanged, MDrive on.
+    }
+  } else if (mdrive_dsc == 0x7) {
+    if (!mdrive_status) {
+      mdrive_message[1] = 0x5;                                                                                                      // DSC off, MDrive off.
+    } else {
+      mdrive_message[1] = 0x6;                                                                                                      // DSC off, MDrive on.
     }
   } else if (mdrive_dsc == 0xB) {
     if (!mdrive_status) {
