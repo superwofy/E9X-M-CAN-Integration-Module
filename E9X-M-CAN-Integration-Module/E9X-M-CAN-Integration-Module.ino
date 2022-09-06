@@ -190,7 +190,9 @@ void loop()
         } else {
           if ((millis() - dsc_off_button_hold_timer) >= dsc_hold_time_ms) {                                                         // DSC OFF sequence should only be sent after user holds button for a configured time
             #if DEBUG_MODE
-              Serial.println(F("Console: DSC OFF button held. Sending DSC OFF."));
+              if (!sending_dsc_off) {
+                Serial.println(F("Console: DSC OFF button held. Sending DSC OFF."));
+              }
             #endif
             send_dsc_off_sequence();
             dsc_off_button_debounce_timer = millis();
@@ -199,7 +201,9 @@ void loop()
       } else {
         if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {                                                   // A quick tap re-enables everything
           #if DEBUG_MODE
-            Serial.println(F("Console: DSC button tapped. Re-enabling DSC normal program."));
+            if (!sending_dsc_off) {
+              Serial.println(F("Console: DSC button tapped. Re-enabling DSC normal program."));
+            }
           #endif
           dsc_off_button_debounce_timer = millis();
           send_dtc_button_press();
