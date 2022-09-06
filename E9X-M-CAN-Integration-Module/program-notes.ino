@@ -8,12 +8,13 @@
 
 // PT-CAN section
 
-// 1. Toggles sport mode in the IKM0S MSD81 DME in the absence of a DSCM90 or DSCM80 ZB by re-creating 0x1D9 message.
-//    Toggle DTC mode. 
-//    Toggle EDC MSport program.
+// 1. Fully replaces the 0x399 MDrive status allowing control of:
+// 	  EDC
+//    DSC
+//    DME throttle map
+//    Servotronic via SVT70 module
 // 2. Monitor steering wheel buttons and request MDrive when Source/M is pressed.
-// 3. Monitor MDrive status as broadcast by 1M DME.
-// 4. Monitor EDC status.
+// 3. Activate throttle map if console button is pressed or MDrive is active.
 // 5. Monitor and indicate front foglight status.
 // 6. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
 
@@ -21,16 +22,17 @@
 // K-CAN section
 
 // 1. Monitor ignition and DSC program status.
-// 2. Create missing 0x206 message to animate DCT KOMBI shift lights.
-// 3. Open/close exhaust flap.
-// 4. Display Launch control flag
-// 5. Create the two missing messages required to use an F series ZBE (KKCAN) in an E6,7,8,9X car.
+// 2. Receive, save and update MDrive settings from iDrive.
+// 3. Create missing 0x206 message to animate DCT KOMBI shift lights.
+// 4. Open/close exhaust flap.
+// 5. Display Launch control flag
+// 6. Create the two missing messages required to use an F series ZBE (KKCAN) in an E6,7,8,9X car.
 //    *Should* work with:
 //    6582 9267955 - 4-pin MEDIA button. **Tested - controller build date 19.04.13
 //    6131 9253944 - 4-pin CD button
 //    6582 9206444 - 10-pin CD button
 //    6582 9212449 - 10-pin CD button
-// 6. Turn on driver's seat heating when ignition is turned on and below configured temperature treshold.
+// 7. Turn on driver's seat heating when ignition is turned on and below configured temperature treshold.
 // Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
 
 

@@ -127,13 +127,12 @@ void reset_runtime_variables()                                                  
   if (mdrive_status) {
     toggle_mdrive_message_active();
   }
-  power_mode = false;
   engine_running = false;
   RPM = 0;
-  sending_dsc_off = false;
+  ignore_m_press = false;
+  mdrive_power_active = console_power_mode = restore_console_power_mode = false;
+  sending_dsc_off = send_second_dtc_press = send_dsc_off_from_mdm = false;
   sending_dsc_off_counter = 0;
-  send_second_dtc_press = false;
-  send_dsc_off_from_mdm = false;
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
     digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
@@ -143,9 +142,8 @@ void reset_runtime_variables()                                                  
     lc_cc_active = clutch_pressed = vehicle_moving = false;
   #endif
   #if CONTROL_SHIFTLIGHTS
-    shiftlights_segments_active = false;
+    shiftlights_segments_active = engine_warmed_up = false;
     ignore_shiftlights_off_counter = 0;
-    engine_warmed_up = false;
     last_var_rpm_can = 0;
     START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
     MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;

@@ -74,7 +74,8 @@ bool engine_running = false;
 uint32_t RPM = 0;
 uint8_t mdrive_dsc = 0x03, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
 bool mdrive_status = false;                                                                                                         // false = off, true = on
-bool power_mode = false;
+bool console_power_mode = false, restore_console_power_mode = false;
+bool mdrive_power_active = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0, 0x11};
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
 uint8_t dsc_program_last_status_can = 0xEA;
@@ -85,10 +86,9 @@ const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hol
 bool sending_dsc_off = false;
 uint8_t sending_dsc_off_counter = 0;
 unsigned long sending_dsc_off_timer;
-bool send_second_dtc_press = false;
-unsigned long send_second_dtc_press_timer;
-bool send_dsc_off_from_mdm = false;
-unsigned long send_dsc_off_from_mdm_timer;
+bool send_second_dtc_press = false, send_dsc_off_from_mdm = false;
+unsigned long send_second_dtc_press_timer, send_dsc_off_from_mdm_timer;
+bool ignore_m_press = false;
 
 #if SERVOTRONIC_SVT70
   uint8_t servotronic_message[] = {0, 0xFF};
@@ -167,18 +167,30 @@ void loop()
 
   if (ignition) {
     if (!digitalRead(POWER_BUTTON_PIN)) {
-      if ((millis() - power_button_debounce_timer) >= power_debounce_time_ms) {
+      if ((millis() - power_button_debounce_timer) >= power_debounce_time_ms) {                                                     // POWER console button should only change throttle mapping.
         power_button_debounce_timer = millis();
-        if (!mdrive_status) {
-          power_mode = !power_mode;                                                                                                 // POWER console button should only change throttle mapping.
-          if (power_mode) {
+        if (!console_power_mode) {
+          if (!mdrive_power_active) {
+            console_power_mode = true;
             #if DEBUG_MODE
               Serial.println(F("Console: POWER mode ON."));
             #endif 
           } else {
+            mdrive_power_active = false;                                                                                            // If POWER button was pressed while MDrive POWER is active, disable POWER.
             #if DEBUG_MODE
-              Serial.println(F("Console: POWER mode OFF."));
-            #endif 
+              Serial.println(F("Deactivated MDrive POWER with console button press."));
+            #endif
+          }
+        } else {
+          #if DEBUG_MODE
+            Serial.println(F("Console: POWER mode OFF."));
+          #endif
+          console_power_mode = false;
+          if (mdrive_power_active) {
+            mdrive_power_active = false;                                                                                            // If POWER button was pressed while MDrive POWER is active, disable POWER.
+            #if DEBUG_MODE
+              Serial.println(F("Deactivated MDrive POWER with console button press."));
+            #endif
           }
         }
       }
@@ -239,17 +251,21 @@ void loop()
   PT-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
   
-  if (!digitalRead(PTCAN_INT_PIN)) {                                                                                                // If INT pin is pulled low, read PT-CAN receive buffer
+  if (!digitalRead(PTCAN_INT_PIN)) {                                                                                                // If INT pin is pulled low, read PT-CAN receive buffer.
     PTCAN.readMsgBuf(&ptrxId, &ptlen, ptrxBuf);                                                                                     // Read data: rxId = CAN ID, buf = data byte(s)
     if (ignition) {
       if (ptrxId == 0x1D6) {
         if ((millis() - m_button_debounce_timer) >= 200) {       
-          if (ptrxBuf[1] == 0x4C) {                                                                                                 // M button is pressed
+          if (ptrxBuf[1] == 0x4C && !ignore_m_press) {                                                                              // M button is pressed.
+            ignore_m_press = true;                                                                                                  // Ignore further pressed messages until the button is released.
             toggle_mdrive_message_active();
             send_mdrive_message();
             toggle_mdrive_dsc();                                                                                                    // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
           } 
           m_button_debounce_timer = millis();
+        }
+        if (ptrxBuf[0] == 0xC0 && ptrxBuf[1] == 0x0C && ignore_m_press) {                                                           // Button is released.
+          ignore_m_press = false;
         }
       }
      

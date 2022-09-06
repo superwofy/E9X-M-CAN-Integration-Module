@@ -50,20 +50,35 @@ void toggle_mdrive_message_active()
       #endif
       mdrive_message[1] -= 1;                                                                                                       // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
       mdrive_message[4] -= 0x10;
-      mdrive_status = false;
-      #if EXHAUST_FLAP_CONTROL
-        exhaust_flap_sport = false;
-      #endif
+      mdrive_status = mdrive_power_active = false;
+      if (mdrive_power == 0x20 || mdrive_power == 0x30) {
+        #if EXHAUST_FLAP_CONTROL
+          if (mdrive_power == 0x30) {
+            exhaust_flap_sport = false;
+          }
+        #endif
+      } else if (mdrive_power == 0x10) {
+        console_power_mode = restore_console_power_mode;
+      }                                                                                                                             // Else, POWER unchanged
     } else {                                                                                                                        // Turn on MDrive.
       #if DEBUG_MODE
         Serial.println(F("Status MDrive on."));
       #endif
+      if (mdrive_power == 0x20 || mdrive_power == 0x30) {                                                                           // POWER in Sport or Sport+.
+        mdrive_power_active = true;
+        #if EXHAUST_FLAP_CONTROL
+          if (mdrive_power == 0x30) {                                                                                               // Exhaust flap always open in Sport+
+            exhaust_flap_sport = true;
+          }
+        #endif
+      } else if (mdrive_power == 0x10) {
+        restore_console_power_mode = console_power_mode;                                                                            // We'll need to return to its original state when MDrive is turned off.
+        console_power_mode = false;                                                                                                 // Turn off POWER from console too.
+      }                                                                                                                             // Else, POWER unchanged.
+
       mdrive_message[1] += 1;
       mdrive_message[4] += 0x10;
       mdrive_status = true;
-      #if EXHAUST_FLAP_CONTROL
-        exhaust_flap_sport = true;
-      #endif
     }
   }
 }
@@ -234,7 +249,7 @@ void send_power_mode()
     power_mode_only_dme_veh_mode[0] = 0;
   }
 
-  if (power_mode || ((mdrive_power == 0x20 || mdrive_power == 0x30) && mdrive_status)) {                                            // Activate sport throttle mapping if POWER from console on or Sport/Sport+ selected in MDrive.
+  if (console_power_mode || mdrive_power_active) {                                                                                  // Activate sport throttle mapping if POWER from console on or Sport/Sport+ selected in MDrive (active).
     power_mode_only_dme_veh_mode[1] = 0x22;                                                                                         // Sport
     can_checksum_update(power_mode_only_dme_veh_mode, 2, DME_FAKE_VEH_MODE_CANID);
     PTCAN.sendMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
@@ -246,6 +261,7 @@ void send_power_mode()
     digitalWrite(POWER_LED_PIN, LOW);
   }
 }
+
 
 void send_servotronic_message()
 {
