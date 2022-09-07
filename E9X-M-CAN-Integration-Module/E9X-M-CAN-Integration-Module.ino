@@ -44,7 +44,7 @@ const uint8_t DTC_BUTTON_TIME = 7;                                              
   const uint32_t MAX_UPSHIFT_WARN_RPM = 6500*4;
 #endif
 #if EXHAUST_FLAP_CONTROL
-  const uint32_t EXHAUST_FLAP_QUIET_RPM = 3500*4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
+  const uint32_t EXHAUST_FLAP_QUIET_RPM = 4000*4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
 #endif
 #if LAUNCH_CONTROL_INDICATOR
   const uint32_t LC_RPM = 2500*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
@@ -76,11 +76,11 @@ uint8_t mdrive_dsc = 0x03, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE
 bool mdrive_status = false;                                                                                                         // false = off, true = on
 bool console_power_mode = false, restore_console_power_mode = false;
 bool mdrive_power_active = false;
-uint8_t power_mode_only_dme_veh_mode[] = {0, 0x11};
+uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
 uint8_t dsc_program_last_status_can = 0xEA;
 bool holding_dsc_off_console = false;
-unsigned long mdrive_message_timer, m_button_debounce_timer;
+unsigned long mdrive_message_timer;
 unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
 bool sending_dsc_off = false;
@@ -121,7 +121,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t ftm_indicator_off[] = {0x40, 0x50, 0x01, 0, 0xFF, 0xFF, 0xFF, 0xFF};
 #endif
 #if F_ZBE_WAKE
-  uint8_t f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                           // Network management kombi, F-series
+  uint8_t f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                           // Network management KOMBI - F-series.
   uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
   unsigned long zbe_wakeup_last_sent;
 #endif
@@ -255,15 +255,12 @@ void loop()
     PTCAN.readMsgBuf(&ptrxId, &ptlen, ptrxBuf);                                                                                     // Read data: rxId = CAN ID, buf = data byte(s)
     if (ignition) {
       if (ptrxId == 0x1D6) {
-        if ((millis() - m_button_debounce_timer) >= 200) {       
-          if (ptrxBuf[1] == 0x4C && !ignore_m_press) {                                                                              // M button is pressed.
-            ignore_m_press = true;                                                                                                  // Ignore further pressed messages until the button is released.
-            toggle_mdrive_message_active();
-            send_mdrive_message();
-            toggle_mdrive_dsc();                                                                                                    // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
-          } 
-          m_button_debounce_timer = millis();
-        }
+        if (ptrxBuf[1] == 0x4C && !ignore_m_press) {                                                                                // M button is pressed.
+          ignore_m_press = true;                                                                                                    // Ignore further pressed messages until the button is released.
+          toggle_mdrive_message_active();
+          send_mdrive_message();
+          toggle_mdrive_dsc();                                                                                                      // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
+        } 
         if (ptrxBuf[0] == 0xC0 && ptrxBuf[1] == 0x0C && ignore_m_press) {                                                           // Button is released.
           ignore_m_press = false;
         }
@@ -291,7 +288,7 @@ void loop()
         if (ptrxBuf[4] == 0xEC || ptrxBuf[4] == 0xF4 || ptrxBuf[4] == 0xE4) {                                                       // Reset requested.
           update_mdrive_message_settings(true);
           send_mdrive_message();
-        } else if ((ptrxBuf[4] == 0xE0 || ptrxBuf[4] == 0xE1)) {                                                                    // Ignore E0/E1 (Invalid) 
+        } else if ((ptrxBuf[4] == 0xE0 || ptrxBuf[4] == 0xE1)) {                                                                    // Ignore E0/E1 (Invalid). 
           // Do nothing.
         } else {
           update_mdrive_message_settings(false);
@@ -301,10 +298,10 @@ void loop()
 
       #if SERVOTRONIC_SVT70
       else if (ptrxId == 0x58E) {
-        if (ptrxBuf[1] == 0x49 && ptrxBuf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic)
+        if (ptrxBuf[1] == 0x49 && ptrxBuf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
           ptrxBuf[1] = 0x46;
         }
-        KCAN.sendMsgBuf(ptrxId, ptlen, ptrxBuf);                                                                                    // Forward the SVT status to KCAN
+        KCAN.sendMsgBuf(ptrxId, ptlen, ptrxBuf);                                                                                    // Forward the SVT status to KCAN.
       }
       #endif
     }
@@ -319,16 +316,13 @@ void loop()
 
     if (krxId == 0x19E) {                                                                                                           // Monitor DSC K-CAN status.
       evaluate_dsc_ign_status();
+      send_power_mode();                                                                                                            // state_spt request from DME.   
       #if SERVOTRONIC_SVT70
         send_servotronic_message();
       #endif
     }
 
     #if AUTO_SEAT_HEATING
-    else if (krxId == 0x2CA){                                                                                                       // Monitor and update ambient temperature.
-      ambient_temperature_can = krxBuf[0];
-    } 
-    
     else if (krxId == 0x232) {                                                                                                      // Driver's seat heating status message is only sent with ignition on.
       if (!krxBuf[0]) {                                                                                                             // Check if seat heating is already on.
         //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
@@ -337,12 +331,14 @@ void loop()
         }
       }
     }
+
+    else if (krxId == 0x2CA){                                                                                                       // Monitor and update ambient temperature.
+      ambient_temperature_can = krxBuf[0];
+    } 
     #endif
 
     if (ignition) {
       if (krxId == 0xAA) {                                                                                                          // Monitor 0xAA (rpm/throttle status).
-        send_power_mode();                                                                                                          // state_spt request from DME.   
-
         RPM = ((uint32_t)krxBuf[5] << 8) | (uint32_t)krxBuf[4];
         #if CONTROL_SHIFTLIGHTS
           evaluate_shiftlight_display();
@@ -363,9 +359,7 @@ void loop()
       }
 
       else if (krxId == 0x1B4) {
-        if (ignition) {    
-          evaluate_vehicle_moving();
-        } 
+        evaluate_vehicle_moving();
       }
       #endif
     }

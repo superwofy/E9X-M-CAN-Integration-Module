@@ -138,7 +138,11 @@ void toggle_mdrive_dsc()
 void send_mdrive_message()
 {
   mdrive_message[0] += 10;
-  can_checksum_update(mdrive_message, 6, 0x399);                                                                                    // Recalculate checksum.
+  if (mdrive_message[0] > 0xEF) {                                                                                                   // Alive(first half of byte) must be between 0..E.
+    mdrive_message[0] = 0;
+  }
+  // Deactivated because no module actually checks this. Perhaps MDSC would?
+//  can_checksum_update(0x399, 6, mdrive_message);                                                                                    // Recalculate checksum.
   PTCAN.sendMsgBuf(0x399, 6, mdrive_message);       
   mdrive_message_timer = millis();
   #if DEBUG_MODE
@@ -220,7 +224,7 @@ void update_mdrive_message_settings(bool reset)
 
 // @amg6975
 // https://www.spoolstreet.com/threads/MDrive-and-mdm-in-non-m-cars.7155/post-107037
-void can_checksum_update(uint8_t *message, uint8_t len, uint16_t canid)
+void can_checksum_update(uint16_t canid, uint8_t len,  uint8_t *message)
 {
   message[0] &= 0xF0;                                                                                                               // Remove checksum from byte.
   // Add up all bytes and the CAN ID
@@ -230,15 +234,10 @@ void can_checksum_update(uint8_t *message, uint8_t len, uint16_t canid)
   }                                 
   checksum = (checksum & 0x00FF) + (checksum >> 8); //add upper and lower Bytes
   checksum &= 0x00FF; //throw away anything in upper Byte
-  checksum = (checksum & 0b0001) + (checksum >> 4); //add first and second nibble
+  checksum = (checksum & 0x000F) + (checksum >> 4); //add first and second nibble
   checksum &= 0x000F; //throw away anything in upper nibble
 
-  // Magic number needs to be added depending on CANID.
-  if (canid == DME_FAKE_VEH_MODE_CANID) {                                                                                                   
-    message[0] += checksum + 10;                                                                                                    // Add the checksum back to Byte0.
-  } else if (canid == 0x399) {
-    message[0] += checksum + 6;
-  }
+  message[0] += checksum;                                                                                                           // Add the checksum back to Byte0.
 }
 
 
@@ -250,16 +249,20 @@ void send_power_mode()
   }
 
   if (console_power_mode || mdrive_power_active) {                                                                                  // Activate sport throttle mapping if POWER from console on or Sport/Sport+ selected in MDrive (active).
-    power_mode_only_dme_veh_mode[1] = 0x22;                                                                                         // Sport
-    can_checksum_update(power_mode_only_dme_veh_mode, 2, DME_FAKE_VEH_MODE_CANID);
+    power_mode_only_dme_veh_mode[1] = 0xF2;                                                                                         // Sport
+    can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
     PTCAN.sendMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
     digitalWrite(POWER_LED_PIN, HIGH);
   } else {
-    power_mode_only_dme_veh_mode[1] = 0x11;                                                                                         // Normal
-    can_checksum_update(power_mode_only_dme_veh_mode, 2, DME_FAKE_VEH_MODE_CANID);
+    power_mode_only_dme_veh_mode[1] = 0xF1;                                                                                         // Normal
+    can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
     PTCAN.sendMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
     digitalWrite(POWER_LED_PIN, LOW);
   }
+  
+  #if DEBUG_MODE
+    //debug_can_message(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
+  #endif  
 }
 
 

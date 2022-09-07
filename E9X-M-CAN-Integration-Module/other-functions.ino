@@ -79,7 +79,7 @@ void evaluate_exhaust_flap_position()
       }
     }
   } else {                                                                                                                          // Flap always open in sport mode.
-    if ((millis() - exhaust_flap_action_timer) >= 200) {
+    if ((millis() - exhaust_flap_action_timer) >= 500) {
       if (!exhaust_flap_open) {
         digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
         exhaust_flap_action_timer = millis();
@@ -98,10 +98,10 @@ void initialize_timers()
 {
   #if F_ZBE_WAKE
     power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer 
-    = vehicle_awake_timer = m_button_debounce_timer = zbe_wakeup_last_sent = millis();
+    = vehicle_awake_timer = zbe_wakeup_last_sent = millis();
   #else
     power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer 
-    = vehicle_awake_timer = m_button_debounce_timer = millis();
+    = vehicle_awake_timer = millis();
   #endif
 }
 

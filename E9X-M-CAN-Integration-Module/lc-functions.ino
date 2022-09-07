@@ -14,20 +14,24 @@ void evaluate_lc_display()
       #if DEBUG_MODE
         Serial.println(F("Displayed LC flag CC."));
       #endif
-    } else if (lc_cc_active) {
-      KCAN.sendMsgBuf(0x598, 8, lc_cc_off);
-      lc_cc_active = false;
-      #if DEBUG_MODE
-        Serial.println(F("Deactivated LC flag CC."));
-      #endif
+    } else {
+      deactivate_lc_display();
     }
-  } else if (lc_cc_active){
+  } else {
+    deactivate_lc_display();
+  }
+}
+
+
+void deactivate_lc_display()
+{
+  if (lc_cc_active) {
     KCAN.sendMsgBuf(0x598, 8, lc_cc_off);
     lc_cc_active = false;
     #if DEBUG_MODE
         Serial.println(F("Deactivated LC flag CC."));
     #endif
-  }
+  }  
 }
 
 

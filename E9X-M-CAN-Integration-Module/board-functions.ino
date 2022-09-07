@@ -1,6 +1,6 @@
 void configure_pins()
 {
-  pinMode(PTCAN_INT_PIN, INPUT);                                                                                                    // Configure pins
+  pinMode(PTCAN_INT_PIN, INPUT);                                                                                                    // Configure I/O pins.
   pinMode(KCAN_INT_PIN, INPUT);
   pinMode(POWER_BUTTON_PIN, INPUT_PULLUP);                                                                                                 
   pinMode(DSC_BUTTON_PIN, INPUT_PULLUP);
@@ -16,9 +16,9 @@ void initialize_can_controllers()
 {
   #if DEBUG_MODE
     Serial.begin(115200);
-    while(!Serial);                                                                                                                 // 32U4, wait until virtual port initialized
+    while(!Serial);                                                                                                                 // 32U4, wait until virtual port initialized.
   #endif
-  SPI.setClockDivider(SPI_CLOCK_DIV2);                                                                                              // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4 
+  SPI.setClockDivider(SPI_CLOCK_DIV2);                                                                                              // Set SPI to run at 8MHz (16MHz / 2 = 8 MHz) from default 4. 
   while (CAN_OK != PTCAN.begin(MCP_STDEXT, CAN_500KBPS, 1) || 
          CAN_OK != KCAN.begin(MCP_STDEXT, CAN_100KBPS, 1)) {                                                                        // Set 1 for 16MHZ or 2 for 8MHZ.
     #if DEBUG_MODE
@@ -94,7 +94,7 @@ void disable_unused_mcu_peripherals()
   ADCSRA = 0;
   power_adc_disable();                                                                                                              // Disable Analog to Digital converter
   #if !DEBUG_MODE && DISABLE_USB
-    if (digitalRead(POWER_BUTTON_PIN)) {                                                                                            // Bypass USB disable by holding POWER when powering module. This pin should be LOW when holding
+    if (digitalRead(POWER_BUTTON_PIN)) {                                                                                            // Bypass USB disable by holding POWER when powering module (waking up the car). This pin should be LOW when holding
         power_usb_disable();
         USBCON |= (1 << FRZCLK);
         PLLCSR &= ~(1 << PLLE);
