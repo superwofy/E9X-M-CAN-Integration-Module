@@ -9,15 +9,8 @@ void read_mdrive_settings_from_eeprom()
             mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
     Serial.print(serial_debug_string);
   #endif
-  if (mdrive_dsc == 0x3) {
-      mdrive_message[1] = 0x1;                                                                                                      // DSC unchanged, MDrive off.
-  } else if (mdrive_dsc == 0x7) {
-     mdrive_message[1] = 0x5;                                                                                                       // DSC off, MDrive off.
-  } else if (mdrive_dsc == 0xB) {
-      mdrive_message[1] = 0x9;                                                                                                      // DSC on, MDrive off.
-  } else if (mdrive_dsc == 0x13) {
-      mdrive_message[1] = 0x11;                                                                                                     // DSC MDM, MDrive off.
-  }
+  mdrive_message[1] = mdrive_dsc - 2;                                                                                               // Difference between iDrive settting and MDrive CAN message (off) is always 2.
+                                                                                                                                    // 0x1 unchanged, 0x5 off, 0x11 MDM, 0x9 On
   mdrive_message[2] = mdrive_power;                                                                                                 // Copy POWER as is.
   mdrive_message[3] = mdrive_edc;                                                                                                   // Copy EDC as is.
   if (mdrive_svt == 0xE9) {
@@ -35,8 +28,7 @@ void update_mdrive_settings_in_eeprom()
   EEPROM.update(3, mdrive_edc);
   EEPROM.update(4, mdrive_svt);
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Saved MDrive settings to EEPROM.\n");
-    Serial.print(serial_debug_string);
+    Serial.println(F("Saved MDrive settings to EEPROM."));
   #endif
 }
 
@@ -156,68 +148,46 @@ void update_mdrive_message_settings(bool reset)
   mdrive_settings_change = true;
   if (reset) {
     mdrive_dsc = 0x03;                                                                                                              // Unchanged
+    mdrive_message[1] = 0x1;
     mdrive_power = 0;                                                                                                               // Unchanged
+    mdrive_message[2] = mdrive_power;
     mdrive_edc = 0x20;                                                                                                              // Unchanged
+    mdrive_message[3] = mdrive_edc;
     mdrive_svt = 0xE9;                                                                                                              // Normal
-	  #if DEBUG_MODE
-      Serial.println(F("Reset MDrive settings."));
-    #endif
+    mdrive_message[4] = 0x41;
+  } else {
+    //Decode settings
+    mdrive_dsc = ptrxBuf[0];                                                                                                        // 0x3 unchanged, 0x07 off, 0x13 MDM, 0xB on.
+    mdrive_power = ptrxBuf[1];                                                                                                      // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
+    mdrive_edc = ptrxBuf[2];                                                                                                        // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
+    mdrive_svt = ptrxBuf[4];                                                                                                        // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
+    
+    mdrive_message[1] = mdrive_dsc - 2 + mdrive_status;                                                                             // DSC message is 2 less than iDrive setting. 1 is added if MDrive is on.
+    mdrive_message[2] = mdrive_power;                                                                                               // Copy POWER as is.
+    mdrive_message[3] = mdrive_edc;                                                                                                 // Copy EDC as is.
+    if (mdrive_svt == 0xE9) {
+      if (!mdrive_status) {
+        mdrive_message[4] = 0x41;                                                                                                   // SVT normal, MDrive off.
+      } else {
+        mdrive_message[4] = 0x51;                                                                                                   // SVT normal, MDrive on.
+      }
+    } else if (mdrive_svt == 0xF1) {
+      if (!mdrive_status) {
+        mdrive_message[4] = 0x81;                                                                                                   // SVT sport, MDrive off.
+      } else {
+        mdrive_message[4] = 0x91;                                                                                                   // SVT sport, MDrive on.
+      }
+    }          
   }
-
-  //Decode settings
-  mdrive_dsc = ptrxBuf[0];                                                                                                          // 0x3 unchanged, 0x07 off, 0x13 MDM, 0xB on.
-  mdrive_power = ptrxBuf[1];                                                                                                        // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
-  mdrive_edc = ptrxBuf[2];                                                                                                          // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
-  mdrive_svt = ptrxBuf[4];                                                                                                          // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
-  
-  //Build acknowledge message
-  if (mdrive_dsc == 0x3) {
-    if (!mdrive_status) {
-      mdrive_message[1] = 0x1;                                                                                                      // DSC unchanged, MDrive off.
-    } else {
-      mdrive_message[1] = 0x2;                                                                                                      // DSC unchanged, MDrive on.
-    }
-  } else if (mdrive_dsc == 0x7) {
-    if (!mdrive_status) {
-      mdrive_message[1] = 0x5;                                                                                                      // DSC off, MDrive off.
-    } else {
-      mdrive_message[1] = 0x6;                                                                                                      // DSC off, MDrive on.
-    }
-  } else if (mdrive_dsc == 0xB) {
-    if (!mdrive_status) {
-      mdrive_message[1] = 0x9;                                                                                                      // DSC on, MDrive off.
-    } else {
-      mdrive_message[1] = 0xA;                                                                                                      // DSC on, MDrive on.
-    }
-  } else if (mdrive_dsc == 0x13) {
-    if (!mdrive_status) {
-      mdrive_message[1] = 0x11;                                                                                                     // DSC MDM, MDrive off.
-    } else {
-      mdrive_message[1] = 0x12;                                                                                                     // DSC MDM, MDrive on.
-    }
-  }
-  mdrive_message[2] = mdrive_power;                                                                                                 // Copy POWER as is.
-  mdrive_message[3] = mdrive_edc;                                                                                                   // Copy EDC as is.
-  if (mdrive_svt == 0xE9) {
-    if (!mdrive_status) {
-      mdrive_message[4] = 0x41;                                                                                                     // SVT normal, MDrive off.
-    } else {
-      mdrive_message[4] = 0x51;                                                                                                     // SVT normal, MDrive on.
-    }
-  } else if (mdrive_svt == 0xF1) {
-    if (!mdrive_status) {
-      mdrive_message[4] = 0x81;                                                                                                     // SVT sport, MDrive off.
-    } else {
-      mdrive_message[4] = 0x91;                                                                                                     // SVT sport, MDrive on.
-    }
-  }          
   
   #if DEBUG_MODE
-	if (!reset) {
-		sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.\n", 
+	if (reset) {
+    Serial.println(F("Reset MDrive settings."));
+	} else {
+    sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.\n", 
 				mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
 		Serial.print(serial_debug_string);
-	}
+  }
   #endif
 }
 

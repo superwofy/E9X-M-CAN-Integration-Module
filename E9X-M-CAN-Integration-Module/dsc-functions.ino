@@ -101,10 +101,10 @@ void non_blocking_dsc_off()
 {
   if (sending_dsc_off) {
     if (sending_dsc_off_counter == 1) {
-      KCAN.sendMsgBuf(0x5A9, 8, mdm_fake_cc_status);                                                                                // Start flashing MDM/DTC symbol
+      KCAN.sendMsgBuf(0x5A9, 8, mdm_fake_cc_status);                                                                                // Start flashing MDM/DTC symbol to indicate transition.
     }
 
-    if ((millis() - sending_dsc_off_timer) >= 100) {                                                                                // Hopefully, none of the code blocks for 100ms+
+    if ((millis() - sending_dsc_off_timer) >= 100) {                                                                                // Hopefully, none of the code blocks for 100ms+.
       if (sending_dsc_off_counter < 25) {
         PTCAN.sendMsgBuf(0x316, 2, dtc_button_pressed);
         

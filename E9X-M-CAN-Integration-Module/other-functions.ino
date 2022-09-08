@@ -30,7 +30,7 @@ void send_seat_heating_request()
   KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_released);
   delay(20);
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent dr seat heating request at ambient %dC, treshold %dC.\n", 
+    sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %dC, treshold %dC.\n", 
            (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
     Serial.print(serial_debug_string);
   #endif
@@ -42,9 +42,9 @@ void send_seat_heating_request()
 #if F_ZBE_WAKE
 void send_zbe_wakeup()
 {
-  if ((millis() - zbe_wakeup_last_sent) >= 1500) {
+  if ((millis() - zbe_wakeup_timer) >= 1500) {
     KCAN.sendMsgBuf(0x560, 8, f_wakeup);
-    zbe_wakeup_last_sent = millis();
+    zbe_wakeup_timer = millis();
     #if DEBUG_MODE
       Serial.println(F("Sent F-ZBE wake-up message."));
     #endif
@@ -98,7 +98,7 @@ void initialize_timers()
 {
   #if F_ZBE_WAKE
     power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer 
-    = vehicle_awake_timer = zbe_wakeup_last_sent = millis();
+    = vehicle_awake_timer = zbe_wakeup_timer = millis();
   #else
     power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer 
     = vehicle_awake_timer = millis();
