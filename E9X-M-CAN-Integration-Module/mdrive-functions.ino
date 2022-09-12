@@ -1,12 +1,13 @@
-void read_mdrive_settings_from_eeprom()
+void read_settings_from_eeprom()
 {
   mdrive_dsc = EEPROM.read(1);
   mdrive_power = EEPROM.read(2);
   mdrive_edc = EEPROM.read(3);
   mdrive_svt = EEPROM.read(4);
+  console_power_mode = EEPROM.read(5) ? true : false;
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Loaded MDrive settings from EEPROM: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.\n", 
-            mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
+    sprintf(serial_debug_string, "Loaded settings from EEPROM: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X Console POWER %s.\n", 
+            mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt, console_power_mode ? "ON" : "OFF");
     Serial.print(serial_debug_string);
   #endif
   mdrive_message[1] = mdrive_dsc - 2;                                                                                               // Difference between iDrive settting and MDrive CAN message (off) is always 2.
@@ -21,14 +22,15 @@ void read_mdrive_settings_from_eeprom()
 }
 
 
-void update_mdrive_settings_in_eeprom()
+void update_settings_in_eeprom()
 {
   EEPROM.update(1, mdrive_dsc);                                                                                                     // EEPROM lifetime approx. 100k writes. Always update, never write()!
   EEPROM.update(2, mdrive_power);
   EEPROM.update(3, mdrive_edc);
   EEPROM.update(4, mdrive_svt);
+  EEPROM.update(5, console_power_mode);                                                                                             
   #if DEBUG_MODE
-    Serial.println(F("Saved MDrive settings to EEPROM."));
+    Serial.println(F("Saved settings to EEPROM."));
   #endif
 }
 
@@ -145,7 +147,6 @@ void send_mdrive_message()
 
 void update_mdrive_message_settings(bool reset)
 {
-  mdrive_settings_change = true;
   if (reset) {
     mdrive_dsc = 0x03;                                                                                                              // Unchanged
     mdrive_message[1] = 0x1;
@@ -232,28 +233,26 @@ void send_power_mode()
   
   #if DEBUG_MODE
     //debug_can_message(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-  #endif  
+  #endif 
 }
 
 
 void send_servotronic_message()
 {
-  if (ignition) {
-    servotronic_message[0] += 0x10;                                                                                                 // Increase alive counter.
-    if (servotronic_message[0] > 0xEF) {                                                                                            // Alive(first half of byte) must be between 0..E.
-      servotronic_message[0] = 0;
-    }
-    
-    servotronic_message[0] &= 0xF0;                                                                                                 // Discard current mode
-    if (mdrive_status && mdrive_svt == 0xF1) {                                                                                      // Servotronic in sport mode.
-      servotronic_message[0] += 9;
-    } else {
-      servotronic_message[0] += 8;
-    }
-
-    PTCAN.sendMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message); 
-    #if DEBUG_MODE
-      //debug_can_message(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message);
-    #endif    
+  servotronic_message[0] += 0x10;                                                                                                   // Increase alive counter.
+  if (servotronic_message[0] > 0xEF) {                                                                                              // Alive(first half of byte) must be between 0..E.
+    servotronic_message[0] = 0;
   }
+  
+  servotronic_message[0] &= 0xF0;                                                                                                   // Discard current mode
+  if (mdrive_status && mdrive_svt == 0xF1) {                                                                                        // Servotronic in sport mode.
+    servotronic_message[0] += 9;
+  } else {
+    servotronic_message[0] += 8;
+  }
+
+  PTCAN.sendMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message); 
+  #if DEBUG_MODE
+    //debug_can_message(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message);
+  #endif    
 }

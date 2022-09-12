@@ -47,7 +47,7 @@ const uint8_t DTC_BUTTON_TIME = 7;                                              
   const uint32_t EXHAUST_FLAP_QUIET_RPM = 4000*4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
 #endif
 #if LAUNCH_CONTROL_INDICATOR
-  const uint32_t LC_RPM = 2500*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
+  const uint32_t LC_RPM = 3200*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
   const uint32_t LC_RPM_MIN = LC_RPM - 250;
   const uint32_t LC_RPM_MAX = LC_RPM + 250;
 #endif
@@ -63,7 +63,6 @@ unsigned char ptrxBuf[8], krxBuf[8], ptlen, klen;
 
 bool ignition = false;
 bool vehicle_awake = true;
-bool mdrive_settings_change = false;
 unsigned long vehicle_awake_timer;
 uint8_t dtc_button_pressed[] = {0xFD, 0xFF}, dtc_button_released[] = {0xFC, 0xFF};
 uint8_t dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -74,7 +73,7 @@ bool engine_running = false;
 uint32_t RPM = 0;
 uint8_t mdrive_dsc = 0x03, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
 bool mdrive_status = false;                                                                                                         // false = off, true = on
-bool console_power_mode = false, restore_console_power_mode = false;
+bool console_power_mode, restore_console_power_mode = false;
 bool mdrive_power_active = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
@@ -151,7 +150,7 @@ void setup()
   configure_pins();
   disable_unused_mcu_peripherals();
   initialize_can_controllers();
-  read_mdrive_settings_from_eeprom();
+  read_settings_from_eeprom();
   initialize_timers();
 }
 
@@ -194,7 +193,9 @@ void loop()
           }
         }
       }
-    } else if (!digitalRead(DSC_BUTTON_PIN)) {
+    } 
+    
+    if (!digitalRead(DSC_BUTTON_PIN)) {
       if (dsc_program_status == 0) {
         if (!holding_dsc_off_console) {
           holding_dsc_off_console = true;
@@ -225,21 +226,21 @@ void loop()
       holding_dsc_off_console = false;
     }
 
-    if ((millis() - mdrive_message_timer) > 9000) {                                                                                 // Time MDrive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
+    if ((millis() - mdrive_message_timer) >= 10000) {                                                                               // Time MDrive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
       #if DEBUG_MODE
         Serial.println(F("Sending Ignition MDrive alive message."));
       #endif
       send_mdrive_message();
     }
   } else {
-    if (((millis() - vehicle_awake_timer) > 10000) && vehicle_awake) {
+    if (((millis() - vehicle_awake_timer) >= 10000) && vehicle_awake) {
       vehicle_awake = false;                                                                                                        // Vehicle must now Asleep. Stop transmitting.
       #if DEBUG_MODE
         Serial.println(F("Vehicle Sleeping."));
       #endif
       toggle_ptcan_sleep();
     }
-    if (((millis() - mdrive_message_timer) > 15000) && vehicle_awake) {                                                             // Send this message while car is awake to populate the fields in iDrive.                                                                     
+    if (((millis() - mdrive_message_timer) >= 15000) && vehicle_awake) {                                                            // Send this message while car is awake to populate the fields in iDrive.                                                                     
       #if DEBUG_MODE
         Serial.println(F("Sending Vehicle Awake MDrive alive message."));
       #endif
@@ -316,10 +317,12 @@ void loop()
 
     if (krxId == 0x19E) {                                                                                                           // Monitor DSC K-CAN status.
       evaluate_dsc_ign_status();
-      send_power_mode();                                                                                                            // state_spt request from DME.   
-      #if SERVOTRONIC_SVT70
-        send_servotronic_message();
-      #endif
+      if (ignition) {
+        send_power_mode();                                                                                                          // state_spt request from DME.   
+        #if SERVOTRONIC_SVT70
+          send_servotronic_message();
+        #endif
+      }
     }
 
     #if AUTO_SEAT_HEATING
@@ -344,9 +347,7 @@ void loop()
           evaluate_shiftlight_display();
         #endif
         #if EXHAUST_FLAP_CONTROL
-          if (engine_running) {
-            evaluate_exhaust_flap_position();
-          }
+          evaluate_exhaust_flap_position();
         #endif
         #if LAUNCH_CONTROL_INDICATOR
           evaluate_lc_display();

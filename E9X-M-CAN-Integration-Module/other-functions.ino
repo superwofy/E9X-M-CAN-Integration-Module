@@ -56,37 +56,39 @@ void send_zbe_wakeup()
 #if EXHAUST_FLAP_CONTROL
 void evaluate_exhaust_flap_position()
 {
-  if (!exhaust_flap_sport) {                                                                                                        // Exhaust is in quiet mode.
-    if ((millis() - exhaust_flap_action_timer) >= 1500) {                                                                           // Avoid vacuum drain, oscillation and apply startup delay.
-      if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                          // Open at defined rpm setpoint.
+  if (engine_running) {
+    if (!exhaust_flap_sport && !lc_cc_active) {                                                                                     // Exhaust is in quiet mode. Open with LC.
+      if ((millis() - exhaust_flap_action_timer) >= 1500) {                                                                         // Avoid vacuum drain, oscillation and apply startup delay.
+        if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
+          if (!exhaust_flap_open) {
+            digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
+            exhaust_flap_action_timer = millis();
+            exhaust_flap_open = true;
+            #if DEBUG_MODE
+              Serial.println(F("Exhaust flap opened at RPM setpoint."));
+            #endif
+          }
+        } else {
+          if (exhaust_flap_open) {
+            digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);
+            exhaust_flap_action_timer = millis();
+            exhaust_flap_open = false;
+            #if DEBUG_MODE
+              Serial.println(F("Exhaust flap closed."));
+            #endif
+          }
+        }
+      }
+    } else {                                                                                                                        // Flap always open in sport mode.
+      if ((millis() - exhaust_flap_action_timer) >= 500) {
         if (!exhaust_flap_open) {
           digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
           exhaust_flap_action_timer = millis();
           exhaust_flap_open = true;
           #if DEBUG_MODE
-            Serial.println(F("Exhaust flap opened at RPM setpoint."));
+            Serial.println(F("Opened exhaust flap with MDrive."));
           #endif
         }
-      } else {
-        if (exhaust_flap_open) {
-          digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);
-          exhaust_flap_action_timer = millis();
-          exhaust_flap_open = false;
-          #if DEBUG_MODE
-            Serial.println(F("Exhaust flap closed."));
-          #endif
-        }
-      }
-    }
-  } else {                                                                                                                          // Flap always open in sport mode.
-    if ((millis() - exhaust_flap_action_timer) >= 500) {
-      if (!exhaust_flap_open) {
-        digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
-        exhaust_flap_action_timer = millis();
-        exhaust_flap_open = true;
-        #if DEBUG_MODE
-          Serial.println(F("Opened exhaust flap with MDrive."));
-        #endif
       }
     }
   }
@@ -130,7 +132,7 @@ void reset_runtime_variables()                                                  
   engine_running = false;
   RPM = 0;
   ignore_m_press = false;
-  mdrive_power_active = console_power_mode = restore_console_power_mode = false;
+  mdrive_power_active = restore_console_power_mode = false;
   sending_dsc_off = send_second_dtc_press = send_dsc_off_from_mdm = false;
   sending_dsc_off_counter = 0;
   #if EXHAUST_FLAP_CONTROL
@@ -158,8 +160,5 @@ void reset_runtime_variables()                                                  
   #if FTM_INDICATOR
     ftm_indicator_status = false;
   #endif
-  if (mdrive_settings_change) {
-    update_mdrive_settings_in_eeprom();
-    mdrive_settings_change = false;
-  }
+  update_settings_in_eeprom();
 }
