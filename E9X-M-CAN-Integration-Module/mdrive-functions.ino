@@ -11,7 +11,7 @@ void read_settings_from_eeprom()
     Serial.print(serial_debug_string);
   #endif
   mdrive_message[1] = mdrive_dsc - 2;                                                                                               // Difference between iDrive settting and MDrive CAN message (off) is always 2.
-                                                                                                                                    // 0x1 unchanged, 0x5 off, 0x11 MDM, 0x9 On
+                                                                                                                                    // 1 unchanged, 5 off, 0x11 MDM, 9 On
   mdrive_message[2] = mdrive_power;                                                                                                 // Copy POWER as is.
   mdrive_message[3] = mdrive_edc;                                                                                                   // Copy EDC as is.
   if (mdrive_svt == 0xE9) {
@@ -81,7 +81,7 @@ void toggle_mdrive_message_active()
 void toggle_mdrive_dsc()
 {
   if (mdrive_status) {
-    if (mdrive_dsc == 0x7) {
+    if (mdrive_dsc == 7) {
       if (dsc_program_status == 0) {
         #if DEBUG_MODE
           Serial.println(F("MDrive request DSC ON -> DSC OFF."));
@@ -117,7 +117,7 @@ void toggle_mdrive_dsc()
       }
     }
   } else {
-    if (mdrive_dsc == 0x13 || mdrive_dsc == 0x7) {                                                                                  // If MDrive was set to change DSC, restore back to DSC ON.
+    if (mdrive_dsc == 0x13 || mdrive_dsc == 7) {                                                                                  // If MDrive was set to change DSC, restore back to DSC ON.
       if (dsc_program_status != 0) {
         send_dtc_button_press();
         #if DEBUG_MODE
@@ -136,7 +136,7 @@ void send_mdrive_message()
     mdrive_message[0] = 0;
   }
   // Deactivated because no module actually checks this. Perhaps MDSC would?
-//  can_checksum_update(0x399, 6, mdrive_message);                                                                                    // Recalculate checksum.
+//  can_checksum_update(0x399, 6, mdrive_message);                                                                                 // Recalculate checksum.
   PTCAN.sendMsgBuf(0x399, 6, mdrive_message);       
   mdrive_message_timer = millis();
   #if DEBUG_MODE
@@ -148,8 +148,8 @@ void send_mdrive_message()
 void update_mdrive_message_settings(bool reset)
 {
   if (reset) {
-    mdrive_dsc = 0x03;                                                                                                              // Unchanged
-    mdrive_message[1] = 0x1;
+    mdrive_dsc = 3;                                                                                                                 // Unchanged
+    mdrive_message[1] = 1;
     mdrive_power = 0;                                                                                                               // Unchanged
     mdrive_message[2] = mdrive_power;
     mdrive_edc = 0x20;                                                                                                              // Unchanged
@@ -158,7 +158,7 @@ void update_mdrive_message_settings(bool reset)
     mdrive_message[4] = 0x41;
   } else {
     //Decode settings
-    mdrive_dsc = ptrxBuf[0];                                                                                                        // 0x3 unchanged, 0x07 off, 0x13 MDM, 0xB on.
+    mdrive_dsc = ptrxBuf[0];                                                                                                        // 3 unchanged, 7 off, 0x13 MDM, 0xB on.
     mdrive_power = ptrxBuf[1];                                                                                                      // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
     mdrive_edc = ptrxBuf[2];                                                                                                        // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
     mdrive_svt = ptrxBuf[4];                                                                                                        // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
@@ -167,13 +167,13 @@ void update_mdrive_message_settings(bool reset)
     mdrive_message[2] = mdrive_power;                                                                                               // Copy POWER as is.
     mdrive_message[3] = mdrive_edc;                                                                                                 // Copy EDC as is.
     if (mdrive_svt == 0xE9) {
-      if (!mdrive_status) {
+      if (mdrive_status == 0) {
         mdrive_message[4] = 0x41;                                                                                                   // SVT normal, MDrive off.
       } else {
         mdrive_message[4] = 0x51;                                                                                                   // SVT normal, MDrive on.
       }
     } else if (mdrive_svt == 0xF1) {
-      if (!mdrive_status) {
+      if (mdrive_status == 0) {
         mdrive_message[4] = 0x81;                                                                                                   // SVT sport, MDrive off.
       } else {
         mdrive_message[4] = 0x91;                                                                                                   // SVT sport, MDrive on.

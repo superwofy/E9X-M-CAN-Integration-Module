@@ -14,19 +14,19 @@ void evaluate_shiftlight_display()
     #endif
   }
 
-  if (RPM >= START_UPSHIFT_WARN_RPM_ && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                             // First yellow segment.                                                              
+  if (START_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                             // First yellow segment.                                                              
     activate_shiftlight_segments(shiftlights_start);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Displaying first warning at RPM: %ld\n", RPM / 4);
       Serial.print(serial_debug_string);
     #endif                     
-  } else if (RPM >= MID_UPSHIFT_WARN_RPM_ && RPM <= MAX_UPSHIFT_WARN_RPM_) {                                                        // Buildup from second yellow segment to reds.
+  } else if (MID_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MAX_UPSHIFT_WARN_RPM_) {                                                        // Buildup from second yellow segment to reds.
     activate_shiftlight_segments(shiftlights_mid_buildup);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Displaying increasing warning at RPM: %ld\n", RPM / 4);
       Serial.print(serial_debug_string);
     #endif
-  } else if (RPM >= MAX_UPSHIFT_WARN_RPM_) {                                                                                        // Flash all segments.
+  } else if (MAX_UPSHIFT_WARN_RPM_ <= RPM) {                                                                                        // Flash all segments.
     activate_shiftlight_segments(shiftlights_max_flash);
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Flash max warning at RPM: %ld\n", RPM / 4);

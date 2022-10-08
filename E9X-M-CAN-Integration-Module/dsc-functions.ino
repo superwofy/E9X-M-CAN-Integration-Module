@@ -52,7 +52,7 @@ void evaluate_dsc_ign_status()
 #if FTM_INDICATOR
 void evaluate_ftm_status()
 {
-  if (ptrxBuf[0] == 0x03 && !ftm_indicator_status) {
+  if (ptrxBuf[0] == 3 && !ftm_indicator_status) {
     KCAN.sendMsgBuf(0x5A0, 8, ftm_indicator_flash);
     ftm_indicator_status = true;
     #if DEBUG_MODE

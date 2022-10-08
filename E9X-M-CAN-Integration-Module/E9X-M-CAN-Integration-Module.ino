@@ -71,7 +71,7 @@ uint8_t mdm_fake_cc_status_off[] = {0x40, 0xB8, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 bool engine_running = false;
 uint32_t RPM = 0;
-uint8_t mdrive_dsc = 0x03, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
+uint8_t mdrive_dsc = 3, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
 bool mdrive_status = false;                                                                                                         // false = off, true = on
 bool console_power_mode, restore_console_power_mode = false;
 bool mdrive_power_active = false;
@@ -96,8 +96,8 @@ bool ignore_m_press = false;
 uint8_t shiftlights_start[] = {0x86, 0x3E};
 uint8_t shiftlights_mid_buildup[] = {0xF6, 0};
 uint8_t shiftlights_startup_buildup[] = {0x56, 0};                                                                                   // Faster sequential buildup. First byte 0-0xF (0xF - slowest).
-uint8_t shiftlights_max_flash[] = {0x0A, 0};
-uint8_t shiftlights_off[] = {0x05, 0};
+uint8_t shiftlights_max_flash[] = {0xA, 0};
+uint8_t shiftlights_off[] = {5, 0};
 bool shiftlights_segments_active = false;
 uint8_t ignore_shiftlights_off_counter = 0;
 uint32_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
@@ -116,8 +116,8 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
 #endif
 #if FTM_INDICATOR
   bool ftm_indicator_status = false;
-  uint8_t ftm_indicator_flash[] = {0x40, 0x50, 0x01, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
-  uint8_t ftm_indicator_off[] = {0x40, 0x50, 0x01, 0, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t ftm_indicator_flash[] = {0x40, 0x50, 1, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t ftm_indicator_off[] = {0x40, 0x50, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
 #endif
 #if F_ZBE_WAKE
   uint8_t f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                           // Network management KOMBI - F-series.
@@ -129,9 +129,10 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   unsigned long exhaust_flap_action_timer;
 #endif
 #if LAUNCH_CONTROL_INDICATOR
-  uint8_t lc_cc_on[] = {0x40, 0xBE, 0x01, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
-  uint8_t lc_cc_off[] = {0x40, 0xBE, 0x01, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t lc_cc_on[] = {0x40, 0xBE, 1, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t lc_cc_off[] = {0x40, 0xBE, 1, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
   bool lc_cc_active = false;
+  bool mdm_with_lc = false;
   bool clutch_pressed = false;
   bool vehicle_moving = false;
 #endif
@@ -262,7 +263,7 @@ void loop()
           send_mdrive_message();
           toggle_mdrive_dsc();                                                                                                      // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
         } 
-        if (ptrxBuf[0] == 0xC0 && ptrxBuf[1] == 0x0C && ignore_m_press) {                                                           // Button is released.
+        if (ptrxBuf[0] == 0xC0 && ptrxBuf[1] == 0xC && ignore_m_press) {                                                            // Button is released.
           ignore_m_press = false;
         }
       }
@@ -302,7 +303,7 @@ void loop()
         if (ptrxBuf[1] == 0x49 && ptrxBuf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
           ptrxBuf[1] = 0x46;
         }
-        KCAN.sendMsgBuf(ptrxId, ptlen, ptrxBuf);                                                                                    // Forward the SVT status to KCAN.
+        KCAN.sendMsgBuf(ptrxId, ptlen, ptrxBuf);                                                                                    // Forward the SVT error status to KCAN.
       }
       #endif
     }

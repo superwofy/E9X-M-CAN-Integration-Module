@@ -141,7 +141,7 @@ void reset_runtime_variables()                                                  
     exhaust_flap_open = true;
   #endif
   #if LAUNCH_CONTROL_INDICATOR
-    lc_cc_active = clutch_pressed = vehicle_moving = false;
+    lc_cc_active = mdm_with_lc = clutch_pressed = vehicle_moving = false;
   #endif
   #if CONTROL_SHIFTLIGHTS
     shiftlights_segments_active = engine_warmed_up = false;
