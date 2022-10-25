@@ -48,8 +48,8 @@ const uint8_t DTC_BUTTON_TIME = 7;                                              
 #endif
 #if LAUNCH_CONTROL_INDICATOR
   const uint32_t LC_RPM = 3200*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
-  const uint32_t LC_RPM_MIN = LC_RPM - 250;
-  const uint32_t LC_RPM_MAX = LC_RPM + 250;
+  const uint32_t LC_RPM_MIN = LC_RPM - (250 * 4);
+  const uint32_t LC_RPM_MAX = LC_RPM + (250 * 4);
 #endif
 #if CONTROL_SHIFTLIGHTS
   const uint32_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                     // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
