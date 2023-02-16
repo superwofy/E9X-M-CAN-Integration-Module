@@ -9,7 +9,7 @@
 // PT-CAN section
 
 // 1. Fully replaces the 0x399 MDrive status allowing control of:
-// 	  EDC
+//    EDC
 //    DSC
 //    DME throttle map
 //    Servotronic via SVT70 module
@@ -49,7 +49,3 @@
 // [MAP]
 
 // lc_var_spt_swi at 0x4CD1D set to 00. This disables the DME MDrive logic. 0x399, 0x1D9 etc.
-
-
-// Using a slightly streamlined version of Cory's library https://github.com/coryjfowler/MCP_CAN_lib
-// Hardware used: CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) and Generic 16MHz MCP2515 CAN shield.
