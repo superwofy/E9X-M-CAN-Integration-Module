@@ -2,20 +2,22 @@ Black connector
 
 6 - gnd - brown
 7 - power - black/red
-8 - KcanH
-2 - KcanL
-9 - PTcanH
-4 - PTcanL
+8 - KCAN-H
+2 - KCAN-L
+9 - PTCAN-H
+4 - PTCAN-L
+11 - DCAN-H
+10 - DCAN-L
 12 - gnd - black/brown
 
 
 
 White connector
 
-18 - DSC switch (D6) - white/brown
-17 - POWER switch (D5) - white/red
-16 - POWER LED (D4) - black/white
-15 - FOG LED (D12) - blue/yellow
-13 - Exhaust flap solenoid (D10) - gray
+18 - DSC switch (D16) - white/brown
+17 - POWER switch (D2) - white/red
+16 - POWER LED (D3) - black/white
+15 - FOG LED (D4) - blue/yellow
+13 - Exhaust flap solenoid (D17) - gray
 	-> Use flyback diode between +/-
 	-> Disconnect DME X60001 pin 5

@@ -7,11 +7,10 @@ MDrive settings now configurable from iDrive!
 
 Hardware used:
  
-* CANBED V1.2c http://docs.longan-labs.cc/1030008/ (32U4+MCP2515+MCP2551, LEDs removed) 
-* Generic 16MHz MCP2515 CAN shield
+* Skpang Triple CAN board https://copperhilltech.com/teensy-4-0-triple-can-bus-board-with-two-can-2-0b-and-one-can-fd-port/ (Teensy 4.0, MCP2562s).
 * Toshiba K2889 MOSFET
 * 1N4007 diode
-* 150ohm SMD resistor
+* 10K Ohm, 600 Ohm and 3 Ohm resistor
 * OSRAM LO M676-Q2S1
 * KINGBRIGHT KM2520ZGC-G03
 * Micro USB right-angle cable
@@ -22,18 +21,18 @@ Hardware used:
 I use it to:
 
 * Control MDrive settings from iDrive.
-* Control Throttle map with the M button.
-* Control DTC with the M button.
-* Control EDC with the M button.
-* Control Servotronic with the M button - through SVT70 module.
-* Control the exhaust flap with the M button.
-* Display Shiftlights - including startup animation, sync with the variable redline.
+	* Control DME throttle map with the M button.
+	* Control DTC/DSC OFF with the M button.
+	* Control EDC mode with the M button.
+	* Control Servotronic mode with the M button - through SVT70 module.
+	* Control the exhaust flap position with the M button.
+* Display Shiftlights - including startup animation, sync with the M3 KOMBI variable redline.
 * Display Launch Control flag.
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
-* Display Front fog lights on.
+* Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Enable FXX KCAN1 CIC controllers.
 * Turn on heated seats below a set temperature.
-See program notes: [here](E9X-M-CAN-Integration-Module/program-notes.ino)
+See program notes: [here](program-notes.txt)
 
 
 ![settings](img/idrive-settings.jpg "idrive-settings")
@@ -44,7 +43,7 @@ See program notes: [here](E9X-M-CAN-Integration-Module/program-notes.ino)
 
 ![launchcontrol](img/launch-control/kombi.jpg "launchcontrol")
 
-![fog](Fog/indicatoron.jpg "fog")
+![fog](img/Fog/indicatoron.jpg "fog")
 
 ![case](img/case.jpg "case")
 

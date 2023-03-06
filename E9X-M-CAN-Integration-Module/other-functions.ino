@@ -1,109 +1,9 @@
-#if FRONT_FOG_INDICATOR
-void evaluate_fog_status()
+void send_dme_ckm()
 {
-  if (ptrxBuf[0] != last_light_status) {
-    if ((ptrxBuf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
-      front_fog_status = true;
-      digitalWrite(FOG_LED_PIN, HIGH);
-      #if DEBUG_MODE
-        Serial.println(F("Front fogs on. Turned on FOG LED"));
-      #endif
-    } else {
-      front_fog_status = false;
-      digitalWrite(FOG_LED_PIN, LOW);
-      #if DEBUG_MODE
-        Serial.println(F("Front fogs off. Turned off FOG LED"));
-      #endif
-    }
-    last_light_status = ptrxBuf[0];
-  }
-}
-#endif
-
-
-#if AUTO_SEAT_HEATING
-void send_seat_heating_request()
-{
-  delay(10);
-  KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_pressed);
-  delay(20);
-  KCAN.sendMsgBuf(0x1E7, 2, seat_heating_button_released);
-  delay(20);
+  byte dme_ckm[] = {0xF2, 0xFF};
+  PTCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm, 0));
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %dC, treshold %dC.\n", 
-           (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
-    Serial.print(serial_debug_string);
-  #endif
-  sent_seat_heating_request = true;
-}
-#endif
-
-
-#if F_ZBE_WAKE
-void send_zbe_wakeup()
-{
-  if ((millis() - zbe_wakeup_timer) >= 1500) {
-    KCAN.sendMsgBuf(0x560, 8, f_wakeup);
-    zbe_wakeup_timer = millis();
-    #if DEBUG_MODE
-      Serial.println(F("Sent F-ZBE wake-up message."));
-    #endif
-  }
-}
-#endif
-
-
-#if EXHAUST_FLAP_CONTROL
-void evaluate_exhaust_flap_position()
-{
-  if (engine_running) {
-    if (!exhaust_flap_sport && !lc_cc_active) {                                                                                     // Exhaust is in quiet mode. Open with LC.
-      if ((millis() - exhaust_flap_action_timer) >= 1500) {                                                                         // Avoid vacuum drain, oscillation and apply startup delay.
-        if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
-          if (!exhaust_flap_open) {
-            digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
-            exhaust_flap_action_timer = millis();
-            exhaust_flap_open = true;
-            #if DEBUG_MODE
-              Serial.println(F("Exhaust flap opened at RPM setpoint."));
-            #endif
-          }
-        } else {
-          if (exhaust_flap_open) {
-            digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);
-            exhaust_flap_action_timer = millis();
-            exhaust_flap_open = false;
-            #if DEBUG_MODE
-              Serial.println(F("Exhaust flap closed."));
-            #endif
-          }
-        }
-      }
-    } else {                                                                                                                        // Flap always open in sport mode.
-      if ((millis() - exhaust_flap_action_timer) >= 500) {
-        if (!exhaust_flap_open) {
-          digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
-          exhaust_flap_action_timer = millis();
-          exhaust_flap_open = true;
-          #if DEBUG_MODE
-            Serial.println(F("Opened exhaust flap with MDrive."));
-          #endif
-        }
-      }
-    }
-  }
-}
-#endif
-
-
-void initialize_timers()
-{
-  #if F_ZBE_WAKE
-    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer 
-    = vehicle_awake_timer = zbe_wakeup_timer = millis();
-  #else
-    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer 
-    = vehicle_awake_timer = millis();
+    Serial.println("Sent dummy DME POWER CKM.");
   #endif
 }
 
@@ -118,6 +18,127 @@ void debug_can_message(uint16_t canid, uint8_t len, uint8_t* message)
       Serial.print(serial_debug_string);
     }
     Serial.println();
+}
+
+
+void print_current_state()
+{
+  SerialUSB1.write(27);       // ESC command
+  SerialUSB1.print("[2J");    // clear screen command
+  SerialUSB1.write(27);
+  SerialUSB1.print("[H");     // cursor to home command
+
+  SerialUSB1.println("=========== Operation ==========");
+  sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "active" : "standby");
+  SerialUSB1.println(serial_debug_string);
+  sprintf(serial_debug_string, " Ignition: %s", ignition ? "ON" : "OFF");
+  SerialUSB1.println(serial_debug_string);
+  sprintf(serial_debug_string, " Engine: %s", engine_running ? "ON" : "OFF");
+  SerialUSB1.println(serial_debug_string);
+  if (engine_running) {
+    sprintf(serial_debug_string, " RPM: %ld", RPM / 4);
+    SerialUSB1.println(serial_debug_string);
+  }
+  sprintf(serial_debug_string, " Voltage: %.2f V", battery_voltage);
+  SerialUSB1.println(serial_debug_string);
+  if (dsc_program_status == 0) {
+    SerialUSB1.println(" DSC: Fully ON");
+  } else if (dsc_program_status == 1) {
+    SerialUSB1.println(" DSC: DTC/MDM mode");
+  } else {
+    SerialUSB1.println(" DSC: Fully OFF");
+  }
+  #if LAUNCH_CONTROL_INDICATOR
+    sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
+    SerialUSB1.println(serial_debug_string);
+    sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
+    SerialUSB1.println(serial_debug_string);
+  #endif
+
+  SerialUSB1.println("============ MDrive ============");
+  sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
+  SerialUSB1.println(serial_debug_string);
+  SerialUSB1.print(" Settings: DSC-");
+  switch (mdrive_dsc) {
+    case 3:
+      SerialUSB1.print("Unchanged"); break;
+    case 7:
+      SerialUSB1.print("OFF"); break;
+    case 0x13:
+      SerialUSB1.print("DTC/MDM"); break;
+    case 0xB:
+      SerialUSB1.print("ON"); break;
+  }
+  SerialUSB1.print(" POWER-");
+  switch (mdrive_power) {
+    case 0:
+      SerialUSB1.print("Unchanged"); break;
+    case 0x10:
+      SerialUSB1.print("Normal"); break;
+    case 0x20:
+      SerialUSB1.print("Sport"); break;
+    case 0x30:
+      SerialUSB1.print("Sport+"); break;
+  }
+  SerialUSB1.print(" EDC-");
+  switch (mdrive_edc) {
+    case 0x20:
+      SerialUSB1.print("Unchanged"); break;
+    case 0x21:
+      SerialUSB1.print("Comfort"); break;
+    case 0x22:
+      SerialUSB1.print("Normal"); break;
+    case 0x2A:
+      SerialUSB1.print("Sport"); break;
+  }
+  SerialUSB1.print(" SVT-");
+  switch (mdrive_svt) {
+    case 0xE9:
+      SerialUSB1.print("Normal"); break;
+    case 0xF1:
+      SerialUSB1.print("Sport"); break;
+  }
+  SerialUSB1.println();
+  SerialUSB1.println("========= Convenience ==========");
+  #if AUTO_SEAT_HEATING
+    if (ambient_temperature_can != 255) {
+      sprintf(serial_debug_string, " Ambient temp: %d °C", (ambient_temperature_can - 80) / 2);
+    } else {
+      sprintf(serial_debug_string, " Ambient temp: Unknown");
+    }
+    SerialUSB1.println(serial_debug_string);
+  #endif
+  #if EXHAUST_FLAP_CONTROL
+    sprintf(serial_debug_string, " Exhaust flap: %s", exhaust_flap_open ? "Open" : "Closed");
+    SerialUSB1.println(serial_debug_string);
+  #endif
+
+  #if FRONT_FOG_INDICATOR
+    sprintf(serial_debug_string, " Front fogs: %s", front_fog_status ? "ON" : "OFF");
+    SerialUSB1.println(serial_debug_string);
+  #endif
+  #if FTM_INDICATOR
+    sprintf(serial_debug_string, " FTM indicator: %s", ftm_indicator_status ? "ON" : "OFF");
+    SerialUSB1.println(serial_debug_string);
+  #endif
+
+  SerialUSB1.println("============ Debug =============");
+  sprintf(serial_debug_string, " CPU temperature: %.2f °C", tempmonGetTemp());
+  SerialUSB1.println(serial_debug_string);
+  sprintf(serial_debug_string, " CPU speed: %ld MHz", F_CPU_ACTUAL / 1000000);
+  SerialUSB1.println(serial_debug_string);
+  unsigned long loop_calc = micros() - loop_timer;
+  if (loop_calc > max_loop_timer) {
+    max_loop_timer = loop_calc;
+  }
+  if (max_loop_timer > 1000) {
+    sprintf(serial_debug_string, " Max loop execution time: %ld mSeconds", max_loop_timer / 1000);
+  } else {
+    sprintf(serial_debug_string, " Max loop execution time: %ld μSeconds", max_loop_timer);
+  }
+  SerialUSB1.println(serial_debug_string);
+  SerialUSB1.println("================================");
+  debug_print_timer = millis();
 }
 #endif  
 
@@ -162,3 +183,17 @@ void reset_runtime_variables()                                                  
   #endif
   update_settings_in_eeprom();
 }
+
+
+CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf, uint8_t txSeq) 
+{
+  CAN_message_t tx_msg;
+  tx_msg.id = txID;
+  tx_msg.len = txLen;
+  tx_msg.seq = txSeq;
+  for (uint8_t i = 0; i < txLen; i++) {
+      tx_msg.buf[i] = txBuf[i];
+  }
+  return tx_msg;
+}
+

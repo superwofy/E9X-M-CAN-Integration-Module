@@ -1,26 +1,30 @@
-#include "src/mcp_can.h"
-#include <avr/power.h>
+#include <FlexCAN_T4.h>
 #include <EEPROM.h>
+extern "C" uint32_t set_arm_clock(uint32_t frequency);
 
 /***********************************************************************************************************************************************************************************************************************************************
   Board configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-MCP_CAN PTCAN(17), KCAN(9);                                                                                                         // CS pins. Adapt to your board.
-#define PTCAN_INT_PIN 7                                                                                                             // INT pins. Adapt to your board.
-#define KCAN_INT_PIN 8                                                                              
-#define POWER_LED_PIN 4
-#define POWER_BUTTON_PIN 5
-#define DSC_BUTTON_PIN 6
-#define FOG_LED_PIN 12
-#define EXHAUST_FLAP_SOLENOID_PIN 10
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;
+FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
+FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> DCAN;
+
+#define PTCAN_STBY_PIN 15
+#define DCAN_STBY_PIN 14
+#define EXHAUST_FLAP_SOLENOID_PIN 17
+#define DSC_BUTTON_PIN 16
+#define POWER_BUTTON_PIN 2
+#define POWER_LED_PIN 3
+#define FOG_LED_PIN 4
+
+
 
 /***********************************************************************************************************************************************************************************************************************************************
   Program configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#pragma GCC optimize ("-O3")                                                                                                        // Compiler optimisation level. For this file only. Edit platform.txt for all files.
-#define DEBUG_MODE 0                                                                                                                // Toggle serial debug messages. Disable in production.
+#define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 #define DISABLE_USB 0                                                                                                               // In production operation the USB interface is not needed.
 
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
@@ -58,8 +62,9 @@ const uint8_t DTC_BUTTON_TIME = 7;                                              
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
 
-unsigned long int ptrxId, krxId;
-unsigned char ptrxBuf[8], krxBuf[8], ptlen, klen;
+CAN_message_t pt_msg, k_msg, d_msg;
+
+uint32_t cpu_speed_ide = 600;
 
 bool ignition = false;
 bool vehicle_awake = true;
@@ -142,18 +147,28 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
 #endif
 #if DEBUG_MODE
-  char serial_debug_string[128];
+  float battery_voltage = 0;
+  extern float tempmonGetTemp(void);
+  char serial_debug_string[256];
+  unsigned long loop_timer, debug_print_timer, max_loop_timer = 0;
 #endif
 
 
 void setup() 
 {
-  configure_pins();
-  disable_unused_mcu_peripherals();
-  initialize_can_controllers();
-  read_settings_from_eeprom();
+  if ( F_CPU_ACTUAL > (720 * 1000000)) set_arm_clock(720 * 1000000);                                                                // Avoid accidental overclocks
+  cpu_speed_ide = F_CPU_ACTUAL;
+  
+  configure_IO();
+  disable_mcu_peripherals();
+  configure_can_controller();
   initialize_timers();
+  read_settings_from_eeprom();
+  #if DEBUG_MODE
+    Serial.println("Setup finished, module is ready.");
+  #endif
 }
+
 
 void loop()
 {
@@ -173,23 +188,23 @@ void loop()
           if (!mdrive_power_active) {
             console_power_mode = true;
             #if DEBUG_MODE
-              Serial.println(F("Console: POWER mode ON."));
+              Serial.println("Console: POWER mode ON.");
             #endif 
           } else {
             mdrive_power_active = false;                                                                                            // If POWER button was pressed while MDrive POWER is active, disable POWER.
             #if DEBUG_MODE
-              Serial.println(F("Deactivated MDrive POWER with console button press."));
+              Serial.println("Deactivated MDrive POWER with console button press.");
             #endif
           }
         } else {
           #if DEBUG_MODE
-            Serial.println(F("Console: POWER mode OFF."));
+            Serial.println("Console: POWER mode OFF.");
           #endif
           console_power_mode = false;
           if (mdrive_power_active) {
             mdrive_power_active = false;                                                                                            // If POWER button was pressed while MDrive POWER is active, disable POWER.
             #if DEBUG_MODE
-              Serial.println(F("Deactivated MDrive POWER with console button press."));
+              Serial.println("Deactivated MDrive POWER with console button press.");
             #endif
           }
         }
@@ -205,7 +220,7 @@ void loop()
           if ((millis() - dsc_off_button_hold_timer) >= dsc_hold_time_ms) {                                                         // DSC OFF sequence should only be sent after user holds button for a configured time
             #if DEBUG_MODE
               if (!sending_dsc_off) {
-                Serial.println(F("Console: DSC OFF button held. Sending DSC OFF."));
+                Serial.println("Console: DSC OFF button held. Sending DSC OFF.");
               }
             #endif
             send_dsc_off_sequence();
@@ -216,7 +231,7 @@ void loop()
         if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {                                                   // A quick tap re-enables everything
           #if DEBUG_MODE
             if (!sending_dsc_off) {
-              Serial.println(F("Console: DSC button tapped. Re-enabling DSC normal program."));
+              Serial.println("Console: DSC button tapped. Re-enabling DSC normal program.");
             }
           #endif
           dsc_off_button_debounce_timer = millis();
@@ -229,7 +244,7 @@ void loop()
 
     if ((millis() - mdrive_message_timer) >= 10000) {                                                                               // Time MDrive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
       #if DEBUG_MODE
-        Serial.println(F("Sending Ignition MDrive alive message."));
+        Serial.println("Sending Ignition MDrive alive message.");
       #endif
       send_mdrive_message();
     }
@@ -237,13 +252,15 @@ void loop()
     if (((millis() - vehicle_awake_timer) >= 10000) && vehicle_awake) {
       vehicle_awake = false;                                                                                                        // Vehicle must now Asleep. Stop transmitting.
       #if DEBUG_MODE
-        Serial.println(F("Vehicle Sleeping."));
+        Serial.println("Vehicle Sleeping.");
       #endif
-      toggle_ptcan_sleep();
+      toggle_transceiver_standby();
+      scale_mcu_speed();
+      sent_seat_heating_request = false;                                                                                            // Reset the seat heating request now that the car's asleep.
     }
     if (((millis() - mdrive_message_timer) >= 15000) && vehicle_awake) {                                                            // Send this message while car is awake to populate the fields in iDrive.                                                                     
       #if DEBUG_MODE
-        Serial.println(F("Sending Vehicle Awake MDrive alive message."));
+        Serial.println("Sending Vehicle Awake MDrive alive message.");
       #endif
       send_mdrive_message();
     }
@@ -253,44 +270,43 @@ void loop()
   PT-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
   
-  if (!digitalRead(PTCAN_INT_PIN)) {                                                                                                // If INT pin is pulled low, read PT-CAN receive buffer.
-    PTCAN.readMsgBuf(&ptrxId, &ptlen, ptrxBuf);                                                                                     // Read data: rxId = CAN ID, buf = data byte(s)
+  if (PTCAN.read(pt_msg)) {                                                                                                         // Read data.
     if (ignition) {
-      if (ptrxId == 0x1D6) {
-        if (ptrxBuf[1] == 0x4C && !ignore_m_press) {                                                                                // M button is pressed.
+      if (pt_msg.id == 0x1D6) {
+        if (pt_msg.buf[1] == 0x4C && !ignore_m_press) {                                                                             // M button is pressed.
           ignore_m_press = true;                                                                                                    // Ignore further pressed messages until the button is released.
           toggle_mdrive_message_active();
           send_mdrive_message();
           toggle_mdrive_dsc();                                                                                                      // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
         } 
-        if (ptrxBuf[0] == 0xC0 && ptrxBuf[1] == 0xC && ignore_m_press) {                                                            // Button is released.
+        if (pt_msg.buf[0] == 0xC0 && pt_msg.buf[1] == 0xC && ignore_m_press) {                                                      // Button is released.
           ignore_m_press = false;
         }
       }
      
       #if FRONT_FOG_INDICATOR
-      else if (ptrxId == 0x21A) {
+      else if (pt_msg.id == 0x21A) {
         evaluate_fog_status();
       }
       #endif
 
       #if FTM_INDICATOR
-      else if (ptrxId == 0x31D) {                                                                                                   // FTM initialization is ongoing.
+      else if (pt_msg.id == 0x31D) {                                                                                                // FTM initialization is ongoing.
         evaluate_ftm_status();
       }
       #endif  
 
       #if CONTROL_SHIFTLIGHTS
-        else if (ptrxId == 0x332) {                                                                                                  // Monitor variable redline broadcast from DME.
-          evaluate_shiftlight_sync();
-        }
+      else if (pt_msg.id == 0x332) {                                                                                                // Monitor variable redline broadcast from DME.
+        evaluate_shiftlight_sync();
+      }
       #endif
 
-      else if (ptrxId == 0x3CA) {                                                                                                   // Receive settings from iDrive.      
-        if (ptrxBuf[4] == 0xEC || ptrxBuf[4] == 0xF4 || ptrxBuf[4] == 0xE4) {                                                       // Reset requested.
+      else if (pt_msg.id == 0x3CA) {                                                                                                // Receive settings from iDrive.      
+        if (pt_msg.buf[4] == 0xEC || pt_msg.buf[4] == 0xF4 || pt_msg.buf[4] == 0xE4) {                                              // Reset requested.
           update_mdrive_message_settings(true);
           send_mdrive_message();
-        } else if ((ptrxBuf[4] == 0xE0 || ptrxBuf[4] == 0xE1)) {                                                                    // Ignore E0/E1 (Invalid). 
+        } else if ((pt_msg.buf[4] == 0xE0 || pt_msg.buf[4] == 0xE1)) {                                                              // Ignore E0/E1 (Invalid). 
           // Do nothing.
         } else {
           update_mdrive_message_settings(false);
@@ -299,11 +315,12 @@ void loop()
       }
 
       #if SERVOTRONIC_SVT70
-      else if (ptrxId == 0x58E) {
-        if (ptrxBuf[1] == 0x49 && ptrxBuf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
-          ptrxBuf[1] = 0x46;
-        }
-        KCAN.sendMsgBuf(ptrxId, ptlen, ptrxBuf);                                                                                    // Forward the SVT error status to KCAN.
+      if (pt_msg.id == 0x4B0) {                                                                                                     // Forward Diagnostic responses from SVT module to DCAN
+        ptcan_to_dcan();
+      }
+
+      else if (pt_msg.id == 0x58E) {
+        svt_kcan_cc_notification();
       }
       #endif
     }
@@ -313,10 +330,8 @@ void loop()
   K-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
   
-  if(!digitalRead(KCAN_INT_PIN)) {                                                                                                  // If INT pin is pulled low, read K-CAN receive buffer.
-    KCAN.readMsgBuf(&krxId, &klen, krxBuf);
-
-    if (krxId == 0x19E) {                                                                                                           // Monitor DSC K-CAN status.
+  if (KCAN.read(k_msg)) {
+    if (k_msg.id == 0x19E) {                                                                                                        // Monitor DSC K-CAN status.
       evaluate_dsc_ign_status();
       if (ignition) {
         send_power_mode();                                                                                                          // state_spt request from DME.   
@@ -327,28 +342,48 @@ void loop()
     }
 
     #if AUTO_SEAT_HEATING
-    else if (krxId == 0x232) {                                                                                                      // Driver's seat heating status message is only sent with ignition on.
-      if (!krxBuf[0]) {                                                                                                             // Check if seat heating is already on.
+    else if (k_msg.id == 0x232) {                                                                                                   // Driver's seat heating status message is only sent with ignition on.
+      if (!k_msg.buf[0]) {                                                                                                          // Check if seat heating is already on.
         //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
         if (!sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
           send_seat_heating_request();
         }
+      } else {
+        sent_seat_heating_request = true;                                                                                           // Seat heating already on. No need to request anymore.
       }
     }
 
-    else if (krxId == 0x2CA){                                                                                                       // Monitor and update ambient temperature.
-      ambient_temperature_can = krxBuf[0];
+    else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
+      ambient_temperature_can = k_msg.buf[0];
     } 
     #endif
 
+    else if (k_msg.id == 0x3AB) {
+      send_dme_ckm();
+    }
+
+    else if (k_msg.id == 0x3B4) {                                                                                                  // Monitor battery voltage from DME.
+      evaluate_battery_engine();
+    }
+
+    #if F_ZBE_WAKE
+    else if (k_msg.id == 0x4E2) {
+      send_zbe_wakeup();
+    }
+
+    else if (k_msg.id == 0x273) {
+      send_zbe_acknowledge();
+    }
+    #endif
+
     if (ignition) {
-      if (krxId == 0xAA) {                                                                                                          // Monitor 0xAA (rpm/throttle status).
-        RPM = ((uint32_t)krxBuf[5] << 8) | (uint32_t)krxBuf[4];
+      if (k_msg.id == 0xAA) {                                                                                                       // Monitor 0xAA (rpm/throttle status).
+        RPM = ((uint32_t)k_msg.buf[5] << 8) | (uint32_t)k_msg.buf[4];
         #if CONTROL_SHIFTLIGHTS
           evaluate_shiftlight_display();
         #endif
         #if EXHAUST_FLAP_CONTROL
-          evaluate_exhaust_flap_position();
+          change_exhaust_flap_position();
         #endif
         #if LAUNCH_CONTROL_INDICATOR
           evaluate_lc_display();
@@ -356,18 +391,35 @@ void loop()
       }
 
       #if LAUNCH_CONTROL_INDICATOR
-      else if (krxId == 0xA8) {
+      else if (k_msg.id == 0xA8) {
         evaluate_clutch_status();
       }
 
-      else if (krxId == 0x1B4) {
+      else if (k_msg.id == 0x1B4) {
         evaluate_vehicle_moving();
       }
       #endif
     }
   }
-}
+
+
 
 /***********************************************************************************************************************************************************************************************************************************************
-  EOF
+  D-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
+    
+  if (DCAN.read(d_msg)) {
+    if (d_msg.id == 0x4B0) {                                                                                                        // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
+      dcan_to_ptcan();
+    }
+  }
+
+
+  #if DEBUG_MODE
+    if (millis() - debug_print_timer >= 100) {
+      print_current_state();                                                                                                        // Print program status to the second Serial port.
+    }
+    loop_timer = micros();
+  #endif
+  
+}

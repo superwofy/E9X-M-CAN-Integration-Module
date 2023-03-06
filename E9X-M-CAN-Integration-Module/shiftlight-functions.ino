@@ -2,10 +2,10 @@
 void evaluate_shiftlight_display()
 {
   if (!engine_running && (RPM > 2000)) {                                                                                            // Show off shift light segments during engine startup (>500rpm).
-    engine_running = true;
+    //engine_running = true;
     activate_shiftlight_segments(shiftlights_startup_buildup);
     #if DEBUG_MODE
-      Serial.println(F("Showing shift light on engine startup."));
+      Serial.println("Showing shift light on engine startup.");
     #endif
     ignore_shiftlights_off_counter = 10;                                                                                            // Skip a few off cycles to allow segments to light up.
 
@@ -35,10 +35,10 @@ void evaluate_shiftlight_display()
   } else {                                                                                                                          // RPM dropped. Disable lights.
     if (shiftlights_segments_active) {
       if (ignore_shiftlights_off_counter == 0) {
-        PTCAN.sendMsgBuf(0x206, 2, shiftlights_off);                                                                                
+        PTCAN.write(makeMsgBuf(0x206, 2, shiftlights_off, 0));                                                                            
         shiftlights_segments_active = false;
         #if DEBUG_MODE
-          Serial.println(F("Deactivated shiftlights segments"));
+          Serial.println("Deactivated shiftlights segments");
         #endif 
       } else {
         ignore_shiftlights_off_counter--;
@@ -50,7 +50,7 @@ void evaluate_shiftlight_display()
 
 void activate_shiftlight_segments(uint8_t* data)
 {
-    KCAN.sendMsgBuf(0x206, 2, data);                                                                     
+    KCAN.write(makeMsgBuf(0x206, 2, data, 0));                                                               
     shiftlights_segments_active = true;
 }
 
@@ -58,12 +58,12 @@ void activate_shiftlight_segments(uint8_t* data)
 void evaluate_shiftlight_sync()
 {
   if (!engine_warmed_up) {
-    if (ptrxBuf[0] != last_var_rpm_can) {
-      var_redline_position = ((ptrxBuf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                                    // This is where the variable redline actually starts on the KOMBI (x4).
+    if (pt_msg.buf[0] != last_var_rpm_can) {
+      var_redline_position = ((pt_msg.buf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                                 // This is where the variable redline actually starts on the KOMBI (x4).
       START_UPSHIFT_WARN_RPM_ = var_redline_position;                                                                              
       MID_UPSHIFT_WARN_RPM_ = var_redline_position + 2000;                                                                          // +500 RPM
       MAX_UPSHIFT_WARN_RPM_ = var_redline_position + 4000;                                                                          // +1000 RPM
-      if (ptrxBuf[0] == 0x88) {                                                                                                     // DME is sending 6800 RPM.
+      if (pt_msg.buf[0] == 0x88) {                                                                                                  // DME is sending 6800 RPM.
         engine_warmed_up = true;
       }
       #if DEBUG_MODE
@@ -72,7 +72,7 @@ void evaluate_shiftlight_sync()
                 (MAX_UPSHIFT_WARN_RPM_ / 4), (var_redline_position / 4));
         Serial.print(serial_debug_string);
       #endif
-      last_var_rpm_can = ptrxBuf[0];
+      last_var_rpm_can = pt_msg.buf[0];
     }
   } else {
     if (START_UPSHIFT_WARN_RPM_ != START_UPSHIFT_WARN_RPM) {
@@ -80,7 +80,7 @@ void evaluate_shiftlight_sync()
       MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
       MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
       #if DEBUG_MODE
-        Serial.println(F("Engine warmed up. Shiftlight setpoints reset to default."));
+        Serial.println("Engine warmed up. Shiftlight setpoints reset to default.");
       #endif
     }
   }

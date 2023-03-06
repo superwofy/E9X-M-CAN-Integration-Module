@@ -5,6 +5,16 @@ void read_settings_from_eeprom()
   mdrive_edc = EEPROM.read(3);
   mdrive_svt = EEPROM.read(4);
   console_power_mode = EEPROM.read(5) ? true : false;
+
+  // Defaults for when EEPROM is not initialized
+  if ((mdrive_dsc == 0xFF) || (mdrive_power == 0xFF) || (mdrive_edc == 0xFF) || (mdrive_svt == 0xFF)) {
+    mdrive_dsc = 0x13;
+    mdrive_power = 0x30;
+    mdrive_edc = 0x2A;
+    mdrive_svt = 0xF1;
+    console_power_mode = false;
+  }
+
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Loaded settings from EEPROM: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X Console POWER %s.\n", 
             mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt, console_power_mode ? "ON" : "OFF");
@@ -24,13 +34,13 @@ void read_settings_from_eeprom()
 
 void update_settings_in_eeprom()
 {
-  EEPROM.update(1, mdrive_dsc);                                                                                                     // EEPROM lifetime approx. 100k writes. Always update, never write()!
+  EEPROM.update(1, mdrive_dsc);                                                                                                   // EEPROM lifetime approx. 100k writes. Always update, never write()!                                                                                          
   EEPROM.update(2, mdrive_power);
   EEPROM.update(3, mdrive_edc);
   EEPROM.update(4, mdrive_svt);
-  EEPROM.update(5, console_power_mode);                                                                                             
+  EEPROM.update(5, console_power_mode);                                                                                           
   #if DEBUG_MODE
-    Serial.println(F("Saved settings to EEPROM."));
+      Serial.println("Saved M settings to EEPROM.");
   #endif
 }
 
@@ -40,7 +50,7 @@ void toggle_mdrive_message_active()
   if (!sending_dsc_off) {
     if (mdrive_status) {                                                                                                            // Turn off MDrive.
       #if DEBUG_MODE
-        Serial.println(F("Status MDrive off."));
+        Serial.println("Status MDrive off.");
       #endif
       mdrive_message[1] -= 1;                                                                                                       // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
       mdrive_message[4] -= 0x10;
@@ -56,7 +66,7 @@ void toggle_mdrive_message_active()
       }                                                                                                                             // Else, POWER unchanged
     } else {                                                                                                                        // Turn on MDrive.
       #if DEBUG_MODE
-        Serial.println(F("Status MDrive on."));
+        Serial.println("Status MDrive on.");
       #endif
       if (mdrive_power == 0x20 || mdrive_power == 0x30) {                                                                           // POWER in Sport or Sport+.
         mdrive_power_active = true;
@@ -84,7 +94,7 @@ void toggle_mdrive_dsc()
     if (mdrive_dsc == 7) {
       if (dsc_program_status == 0) {
         #if DEBUG_MODE
-          Serial.println(F("MDrive request DSC ON -> DSC OFF."));
+          Serial.println("MDrive request DSC ON -> DSC OFF.");
         #endif
         send_dsc_off_sequence();
       } else if (dsc_program_status == 2) {
@@ -97,12 +107,12 @@ void toggle_mdrive_dsc()
     } else if (mdrive_dsc == 0x13) {                                                                                                // DSC MDM (DTC in non-M) requested.
       if (dsc_program_status == 0) {
         #if DEBUG_MODE
-          Serial.println(F("MDrive request DSC ON -> MDM/DTC."));
+          Serial.println("MDrive request DSC ON -> MDM/DTC.");
         #endif
         send_dtc_button_press();
       } else if (dsc_program_status == 2) {
         #if DEBUG_MODE
-          Serial.println(F("MDrive request DSC OFF -> MDM/DTC."));
+          Serial.println("MDrive request DSC OFF -> MDM/DTC.");
         #endif
         send_dtc_button_press();
         send_second_dtc_press = true;
@@ -111,7 +121,7 @@ void toggle_mdrive_dsc()
     } else if (mdrive_dsc == 0xB) {                                                                                                 // DSC ON requested.
       if (dsc_program_status != 0) {
         #if DEBUG_MODE
-          Serial.println(F("MDrive request DSC OFF -> DSC ON."));
+          Serial.println("MDrive request DSC OFF -> DSC ON.");
         #endif
         send_dtc_button_press();
       }
@@ -121,7 +131,7 @@ void toggle_mdrive_dsc()
       if (dsc_program_status != 0) {
         send_dtc_button_press();
         #if DEBUG_MODE
-          Serial.println(F("MDrive request DSC back ON."));
+          Serial.println("MDrive request DSC back ON.");
         #endif
       }
     }
@@ -137,7 +147,7 @@ void send_mdrive_message()
   }
   // Deactivated because no module actually checks this. Perhaps MDSC would?
 //  can_checksum_update(0x399, 6, mdrive_message);                                                                                 // Recalculate checksum.
-  PTCAN.sendMsgBuf(0x399, 6, mdrive_message);       
+  PTCAN.write(makeMsgBuf(0x399, 6, mdrive_message, 0));      
   mdrive_message_timer = millis();
   #if DEBUG_MODE
 //  debug_can_message(0x399, 6, mdrive_message);
@@ -158,10 +168,10 @@ void update_mdrive_message_settings(bool reset)
     mdrive_message[4] = 0x41;
   } else {
     //Decode settings
-    mdrive_dsc = ptrxBuf[0];                                                                                                        // 3 unchanged, 7 off, 0x13 MDM, 0xB on.
-    mdrive_power = ptrxBuf[1];                                                                                                      // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
-    mdrive_edc = ptrxBuf[2];                                                                                                        // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
-    mdrive_svt = ptrxBuf[4];                                                                                                        // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
+    mdrive_dsc = pt_msg.buf[0];                                                                                                     // 3 unchanged, 7 off, 0x13 MDM, 0xB on.
+    mdrive_power = pt_msg.buf[1];                                                                                                   // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
+    mdrive_edc = pt_msg.buf[2];                                                                                                     // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
+    mdrive_svt = pt_msg.buf[4];                                                                                                     // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
     
     mdrive_message[1] = mdrive_dsc - 2 + mdrive_status;                                                                             // DSC message is 2 less than iDrive setting. 1 is added if MDrive is on.
     mdrive_message[2] = mdrive_power;                                                                                               // Copy POWER as is.
@@ -183,7 +193,7 @@ void update_mdrive_message_settings(bool reset)
   
   #if DEBUG_MODE
 	if (reset) {
-    Serial.println(F("Reset MDrive settings."));
+    Serial.println("Reset MDrive settings.");
 	} else {
     sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.\n", 
 				mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
@@ -222,12 +232,12 @@ void send_power_mode()
   if (console_power_mode || mdrive_power_active) {                                                                                  // Activate sport throttle mapping if POWER from console on or Sport/Sport+ selected in MDrive (active).
     power_mode_only_dme_veh_mode[1] = 0xF2;                                                                                         // Sport
     can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-    PTCAN.sendMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
+    PTCAN.write(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode, 0));
     digitalWrite(POWER_LED_PIN, HIGH);
   } else {
     power_mode_only_dme_veh_mode[1] = 0xF1;                                                                                         // Normal
     can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-    PTCAN.sendMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
+    PTCAN.write(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode, 0));
     digitalWrite(POWER_LED_PIN, LOW);
   }
   
@@ -250,8 +260,7 @@ void send_servotronic_message()
   } else {
     servotronic_message[0] += 8;
   }
-
-  PTCAN.sendMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message); 
+  PTCAN.write(makeMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message, 0));
   #if DEBUG_MODE
     //debug_can_message(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message);
   #endif    
