@@ -1,9 +1,7 @@
 void configure_IO()
 {
   #if DEBUG_MODE
-    Serial.begin(115200);
-    SerialUSB1.begin(115200);
-    //while(!Serial.dtr());                                                                                                           // Wait until serial monitor is attached.
+    while(!Serial);                                                                                                                 // Wait until serial monitor is attached
   #endif
   
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
@@ -22,8 +20,14 @@ void scale_mcu_speed()
 {
   if (ignition) {
     set_arm_clock(cpu_speed_ide);
+    #if DEBUG_MODE
+      max_loop_timer = 0;
+    #endif
   } else {
       set_arm_clock(24 * 1000000);                                                                                                  // Set core clock to 24MHz.
+      #if DEBUG_MODE
+        max_loop_timer = 0;
+      #endif
   }
 }
 
@@ -56,53 +60,155 @@ void configure_can_controller()
   PTCAN.enableFIFO();
   DCAN.enableFIFO();
 
+  KCAN.setMaxMB(32);                                                                                                                // Increase max filters
+  KCAN.setRFFN(RFFN_32);
+
   KCAN.setFIFOFilter(REJECT_ALL);                                                                                                   // Reject unfiltered messages
   PTCAN.setFIFOFilter(REJECT_ALL);
   DCAN.setFIFOFilter(REJECT_ALL);
 
-  KCAN.setFIFOFilter(0, 0xAA, STD);                                                                                                 // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
-  KCAN.setFIFOFilter(1, 0x19E, STD);                                                                                                // DSC status and ignition                                      Cycle time 200ms (KCAN)
+  uint16_t filterId;
+  uint8_t filterCount = 0;
+  cppQueue canFilters(sizeof(filterId), 12, queue_FIFO);
+
+  // KCAN
   #if LAUNCH_CONTROL_INDICATOR
-    KCAN.setFIFOFilter(2, 0xA8, STD);                                                                                               // Clutch status                                                Cycle time 100ms (KCAN)
-    KCAN.setFIFOFilter(3, 0x1B4, STD);                                                                                              // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R on)
+    filterId = 0xA8;                                                                                                                // Clutch status                                                Cycle time 100ms (KCAN)
+    canFilters.push(&filterId);
+  #endif
+  filterId = 0xAA;                                                                                                                  // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
+  canFilters.push(&filterId);
+  filterId = 0x19E;                                                                                                                 // DSC status and ignition                                      Cycle time 200ms (KCAN)
+  canFilters.push(&filterId);
+  #if LAUNCH_CONTROL_INDICATOR
+    filterId = 0x1B4;                                                                                                               // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R on)
+    canFilters.push(&filterId);
+  #endif
+  #if FRONT_FOG_INDICATOR
+    filterId = 0x21A;
+    canFilters.push(&filterId);                                                                                                     // Light status                                                 Cycle time 5s (idle)
   #endif
   #if AUTO_SEAT_HEATING
-    KCAN.setFIFOFilter(4, 0x232, STD);                                                                                              // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change)
-    KCAN.setFIFOFilter(5, 0x2CA, STD);                                                                                              // Ambient temperature                                          Cycle time 1s
+    filterId = 0x232;                                                                                                               // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change)
+    canFilters.push(&filterId);
   #endif
-  KCAN.setFIFOFilter(6, 0x3AB, STD);                                                                                                // Filter Shiftligths car key memory.
-  KCAN.setFIFOFilter(7, 0x3B4, STD);                                                                                                // Engine ON status from DME and battery voltage, 
   #if F_ZBE_WAKE
-    KCAN.setFIFOFilter(8, 0x273, STD);                                                                                              // Filter CIC status.
-    KCAN.setFIFOFilter(9, 0x4E2, STD);                                                                                              // Filter CIC Network management (sent when CIC is on)
+    filterId = 0x273;                                                                                                               // Filter CIC status.
+    canFilters.push(&filterId);
+  #endif
+  #if AUTO_SEAT_HEATING
+    filterId = 0x2CA;                                                                                                               // Ambient temperature                                          Cycle time 1s
+    canFilters.push(&filterId);                                                                                            
+  #endif
+  filterId = 0x3AB;                                                                                                                 // Filter Shiftligths car key memory.
+  canFilters.push(&filterId);
+  filterId = 0x3B4;                                                                                                                 // Engine ON status from DME and battery voltage.
+  canFilters.push(&filterId);
+  filterId = 0x3CA;                                                                                                                 // CIC MDrive settings
+  canFilters.push(&filterId);
+  #if F_ZBE_WAKE
+    filterId = 0x4E2;                                                                                                               // Filter CIC Network management (sent when CIC is on)
+    canFilters.push(&filterId);
+  #endif
+  #if DEBUG_MODE
+      Serial.println("KCAN filters:");
   #endif
 
-  PTCAN.setFIFOFilter(0, 0x1D6, STD);                                                                                               // MFL button status.                                           Cycle time 1s, 100ms (pressed)
-  #if FRONT_FOG_INDICATOR
-    PTCAN.setFIFOFilter(1, 0x21A, STD);                                                                                             // Light status                                                 Cycle time 5s (idle) 
-  #endif
+  filterCount = canFilters.getCount();
+  for (uint8_t i = 0; i < filterCount; i++) {
+    canFilters.pop(&filterId);
+    #if DEBUG_MODE
+      bool setResult;
+      setResult = KCAN.setFIFOFilter(i, filterId, STD);
+      if (!setResult) {
+        sprintf(serial_debug_string, " %x failed", filterId);
+        Serial.print(serial_debug_string);
+      }
+    #else
+      KCAN.setFIFOFilter(i, filterId, STD);
+    #endif
+    #if DEBUG_MODE
+      Serial.print(" ");
+      Serial.println(filterId, HEX);
+    #endif
+  }
+
+  // PTCAN
+  filterId = 0x1D6;                                                                                                                 // MFL button status.                                           Cycle time 1s, 100ms (pressed)
+  canFilters.push(&filterId);
   #if FTM_INDICATOR
-     PTCAN.setFIFOFilter(2, 0x31D, STD);                                                                                            // FTM status broadcast by DSC                                  Cycle time 5s (idle)
+    filterId = 0x31D;                                                                                                               // FTM status broadcast by DSC                                  Cycle time 5s (idle)
+    canFilters.push(&filterId);
   #endif
   #if CONTROL_SHIFTLIGHTS
-    PTCAN.setFIFOFilter(3, 0x332, STD);                                                                                             // Variable redline position                                    Cycle time 1s
+    filterId = 0x332;                                                                                                               // Variable redline position from DME                           Cycle time 1s
+    canFilters.push(&filterId); 
   #endif
-  PTCAN.setFIFOFilter(4, 0x3CA, STD);                                                                                               // CIC MDrive settings 
   #if SERVOTRONIC_SVT70
-    PTCAN.setFIFOFilter(5, 0x58E, STD);                                                                                             // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10
-    PTCAN.setFIFOFilter(6, 0x4B0, STD);                                                                                             // Receive Network messages from SVT module to forward.
+    filterId = 0x4B0;                                                                                                               // Receive Network messages from SVT module to forward.
+    canFilters.push(&filterId);
+    filterId = 0x58E;
+    canFilters.push(&filterId);                                                                                                     // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
+  #endif
+  
+  #if DEBUG_MODE
+    Serial.println("PTCAN filters:");
+  #endif
+  filterCount = canFilters.getCount();
+  for (uint8_t i = 0; i < filterCount; i++) {
+    canFilters.pop(&filterId);
+    #if DEBUG_MODE
+      bool setResult;
+      setResult = PTCAN.setFIFOFilter(i, filterId, STD);
+      if (!setResult) {
+        sprintf(serial_debug_string, " %x failed", filterId);
+        Serial.print(serial_debug_string);
+      }
+    #else
+      PTCAN.setFIFOFilter(i, filterId, STD);
+    #endif
+    #if DEBUG_MODE
+      Serial.print(" ");
+      Serial.println(filterId, HEX);
+    #endif
+  }
 
-    DCAN.setFIFOFilter(0, 0x4B0, STD);                                                                                              // Receive Network messages from DCAN tool to forward.
-  #endif  
+  // DCAN
+  #if SERVOTRONIC_SVT70
+    filterId = 0x4B0;                                                                                                               // Receive Network messages from DCAN tool to forward.
+    canFilters.push(&filterId);
+  #endif
+
+  #if DEBUG_MODE
+    Serial.println("DCAN filters:");
+  #endif
+  filterCount = canFilters.getCount();
+  for (uint8_t i = 0; i < filterCount; i++) {
+    canFilters.pop(&filterId);
+    #if DEBUG_MODE
+      bool setResult;
+      setResult = DCAN.setFIFOFilter(i, filterId, STD);
+      if (!setResult) {
+        sprintf(serial_debug_string, " %x failed", filterId);
+        Serial.print(serial_debug_string);
+      }
+    #else
+      DCAN.setFIFOFilter(i, filterId, STD);
+    #endif
+    #if DEBUG_MODE
+      Serial.print(" ");
+      Serial.println(filterId, HEX);
+    #endif
+  }
 
   digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // Activate the secondary transceivers.
   digitalWrite(DCAN_STBY_PIN, LOW);
 
-  #if DEBUG_MODE
-    PTCAN.mailboxStatus();
-    KCAN.mailboxStatus();
-    DCAN.mailboxStatus();
-  #endif
+  // #if DEBUG_MODE
+  //   KCAN.mailboxStatus();
+  //   PTCAN.mailboxStatus();
+  //   DCAN.mailboxStatus();
+  // #endif
 }
 
 

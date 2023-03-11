@@ -67,67 +67,82 @@ void evaluate_ftm_status()
 #endif
 
 
-void send_dtc_button_press() 
+void check_dtc_button_queue()
+{
+  if (!dtcTx.isEmpty()) {
+    delayedCanTxMsg delayedTx;
+    dtcTx.peek(&delayedTx);
+    if (millis() >= delayedTx.transmitTime) {
+      PTCAN.write(delayedTx.txMsg);
+      dtcTx.drop();
+    }
+  }
+}
+
+
+void send_dtc_button_press(bool second) 
 // Correct timing sequence as per trace is: 
 // button press -> delay(100) -> button press -> delay(50) -> button release -> delay(160) -> button release -> delay(160)
 // However, that interferes with program timing. A small delay will still be accepted.
 {
   if (!sending_dsc_off) {                                                                                                           // Ignore while DSC OFF seq is still being transmitted.
-    PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_pressed, 1));                                                                       // Two messages are sent during a quick press of the button (DTC mode).
-    delay(5);
-    PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_pressed, 1));
-    delay(5);
-    PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_released, 1));                                                                      // Send one DTC released to indicate end of DTC button press.
-    #if DEBUG_MODE                        
-      Serial.println("Sent single DTC button press.");
-    #endif
+    unsigned long timeNow = millis();
+    if (second) {
+      delayedCanTxMsg m = {makeMsgBuf(0x316, 2, dtc_button_pressed, 1), timeNow + 300};
+      dtcTx.push(&m);
+    } else {
+      PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_pressed, 1));                                                                     // Two messages are sent during a quick press of the button (DTC mode).
+      delayedCanTxMsg m = {makeMsgBuf(0x316, 2, dtc_button_pressed, 1), timeNow + 5};
+      dtcTx.push(&m);
+      m = {makeMsgBuf(0x316, 2, dtc_button_released, 1), timeNow + 10};                                                             // Send one DTC released to indicate end of DTC button press.
+      dtcTx.push(&m);                                                                   
+      #if DEBUG_MODE                        
+        Serial.println("Sent single DTC button press.");
+      #endif
+    }
   }
-} 
+}
+
+
+void check_dsc_off_queue()
+{
+  if (!dscTx.isEmpty()) {
+    delayedCanTxMsg delayedTx;
+    dscTx.peek(&delayedTx);
+    if (millis() >= delayedTx.transmitTime) {
+      PTCAN.write(delayedTx.txMsg);
+      sending_dsc_off_counter++;
+      dscTx.drop();
+    }
+    if (sending_dsc_off_counter == 25) {
+      KCAN.write(makeMsgBuf(0x5A9, 8, mdm_fake_cc_status_off, 1));                                                                  // Stop flashing MDM/DTC symbol
+      #if DEBUG_MODE
+        Serial.println("Sent DSC OFF sequence.");
+      #endif
+      sending_dsc_off = false;
+      sending_dsc_off_counter = 0;
+    }
+  }
+}
 
 
 void send_dsc_off_sequence() 
 {
   if (!sending_dsc_off) {
     sending_dsc_off = true;                                                                                                         // Begin the non-blocking sequence.
+    unsigned long timeNow = millis();
     PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_pressed, 1));                                                                       // Send the first press.
     KCAN.write(makeMsgBuf(0x5A9, 8, dsc_off_fake_cc_status, 1));                                                                    // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts.
-  }
-}
-
-
-void non_blocking_dsc_off()
-{
-  if (sending_dsc_off) {
-    if (sending_dsc_off_counter == 1) {
-      KCAN.write(makeMsgBuf(0x5A9, 8, mdm_fake_cc_status, 1));                                                                      // Start flashing MDM/DTC symbol to indicate transition.
+    KCAN.write(makeMsgBuf(0x5A9, 8, mdm_fake_cc_status, 1));                                                                        // Start flashing MDM/DTC symbol to indicate transition.
+    
+    delayedCanTxMsg m;
+    uint8_t i;
+    for (i = 1; i < 25; i++) {
+      m = {makeMsgBuf(0x316, 2, dtc_button_pressed, 1), timeNow + (i * 100)};
+      dscTx.push(&m);
     }
-
-    if ((millis() - sending_dsc_off_timer) >= 100) {                                                                                // Hopefully, none of the code blocks for 100ms+.
-      if (sending_dsc_off_counter < 25) {
-        PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_pressed, 1));
-        sending_dsc_off_timer = millis();
-        sending_dsc_off_counter++;
-      } else {
-        KCAN.write(makeMsgBuf(0x5A9, 8, mdm_fake_cc_status_off, 1));
-        PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_released, 1));
-        #if DEBUG_MODE
-          Serial.println("Sent DSC OFF sequence.");
-        #endif
-        sending_dsc_off = false;
-        sending_dsc_off_counter = 0;
-      }
-    }
-  }
-}
-
-
-void non_blocking_second_dtc_press()
-{
-  if (send_second_dtc_press) {
-    if ((millis() - send_second_dtc_press_timer) >= 300) {
-      send_second_dtc_press = false;
-      send_dtc_button_press();
-    } 
+    m = {makeMsgBuf(0x316, 2, dtc_button_released, 1), timeNow + (i * 100)};
+    dscTx.push(&m);
   }
 }
 

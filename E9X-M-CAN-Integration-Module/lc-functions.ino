@@ -10,7 +10,7 @@ void evaluate_lc_display()
         #if DEBUG_MODE
           Serial.println("Launch Control request DSC ON -> MDM/DTC.");
         #endif
-        send_dtc_button_press();
+        send_dtc_button_press(false);
       }
       #if DEBUG_MODE
         Serial.println("Displayed LC flag CC.");
@@ -25,7 +25,7 @@ void evaluate_lc_display()
         #if DEBUG_MODE
           Serial.println("Launch Control aborted. MDM/DTC -> DSC ON.");
         #endif
-        send_dtc_button_press();
+        send_dtc_button_press(false);
         mdm_with_lc = false;
       }
     }

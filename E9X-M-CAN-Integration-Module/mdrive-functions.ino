@@ -16,9 +16,7 @@ void read_settings_from_eeprom()
   }
 
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Loaded settings from EEPROM: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X Console POWER %s.\n", 
-            mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt, console_power_mode ? "ON" : "OFF");
-    Serial.print(serial_debug_string);
+    Serial.println("Loaded MDrive settings from EEPROM.");
   #endif
   mdrive_message[1] = mdrive_dsc - 2;                                                                                               // Difference between iDrive settting and MDrive CAN message (off) is always 2.
                                                                                                                                     // 1 unchanged, 5 off, 0x11 MDM, 9 On
@@ -100,7 +98,7 @@ void toggle_mdrive_dsc()
       } else if (dsc_program_status == 2) {
         //Do nothing
       } else {                                                                                                                      // Must be in MDM/DTC.
-        send_dtc_button_press();
+        send_dtc_button_press(false);
         send_dsc_off_from_mdm = true;
         send_dsc_off_from_mdm_timer = millis();
       }
@@ -109,27 +107,26 @@ void toggle_mdrive_dsc()
         #if DEBUG_MODE
           Serial.println("MDrive request DSC ON -> MDM/DTC.");
         #endif
-        send_dtc_button_press();
+        send_dtc_button_press(false);
       } else if (dsc_program_status == 2) {
         #if DEBUG_MODE
           Serial.println("MDrive request DSC OFF -> MDM/DTC.");
         #endif
-        send_dtc_button_press();
-        send_second_dtc_press = true;
-        send_second_dtc_press_timer = millis();       
+        send_dtc_button_press(false);
+        send_dtc_button_press(true);     
       }
     } else if (mdrive_dsc == 0xB) {                                                                                                 // DSC ON requested.
       if (dsc_program_status != 0) {
         #if DEBUG_MODE
           Serial.println("MDrive request DSC OFF -> DSC ON.");
         #endif
-        send_dtc_button_press();
+        send_dtc_button_press(false);
       }
     }
   } else {
     if (mdrive_dsc == 0x13 || mdrive_dsc == 7) {                                                                                  // If MDrive was set to change DSC, restore back to DSC ON.
       if (dsc_program_status != 0) {
-        send_dtc_button_press();
+        send_dtc_button_press(false);
         #if DEBUG_MODE
           Serial.println("MDrive request DSC back ON.");
         #endif
@@ -147,7 +144,7 @@ void send_mdrive_message()
   }
   // Deactivated because no module actually checks this. Perhaps MDSC would?
 //  can_checksum_update(0x399, 6, mdrive_message);                                                                                 // Recalculate checksum.
-  PTCAN.write(makeMsgBuf(0x399, 6, mdrive_message, 0));      
+  PTCAN.write(makeMsgBuf(0x399, 6, mdrive_message, 0));                                                                            // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
   mdrive_message_timer = millis();
   #if DEBUG_MODE
 //  debug_can_message(0x399, 6, mdrive_message);
@@ -168,10 +165,10 @@ void update_mdrive_message_settings(bool reset)
     mdrive_message[4] = 0x41;
   } else {
     //Decode settings
-    mdrive_dsc = pt_msg.buf[0];                                                                                                     // 3 unchanged, 7 off, 0x13 MDM, 0xB on.
-    mdrive_power = pt_msg.buf[1];                                                                                                   // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
-    mdrive_edc = pt_msg.buf[2];                                                                                                     // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
-    mdrive_svt = pt_msg.buf[4];                                                                                                     // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
+    mdrive_dsc = k_msg.buf[0];                                                                                                      // 3 unchanged, 7 off, 0x13 MDM, 0xB on.
+    mdrive_power = k_msg.buf[1];                                                                                                    // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
+    mdrive_edc = k_msg.buf[2];                                                                                                      // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
+    mdrive_svt = k_msg.buf[4];                                                                                                      // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
     
     mdrive_message[1] = mdrive_dsc - 2 + mdrive_status;                                                                             // DSC message is 2 less than iDrive setting. 1 is added if MDrive is on.
     mdrive_message[2] = mdrive_power;                                                                                               // Copy POWER as is.
@@ -195,9 +192,9 @@ void update_mdrive_message_settings(bool reset)
 	if (reset) {
     Serial.println("Reset MDrive settings.");
 	} else {
-    sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.\n", 
+    sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
 				mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
-		Serial.print(serial_debug_string);
+		Serial.println(serial_debug_string);
   }
   #endif
 }
@@ -231,15 +228,14 @@ void send_power_mode()
 
   if (console_power_mode || mdrive_power_active) {                                                                                  // Activate sport throttle mapping if POWER from console on or Sport/Sport+ selected in MDrive (active).
     power_mode_only_dme_veh_mode[1] = 0xF2;                                                                                         // Sport
-    can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-    PTCAN.write(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode, 0));
     digitalWrite(POWER_LED_PIN, HIGH);
   } else {
     power_mode_only_dme_veh_mode[1] = 0xF1;                                                                                         // Normal
-    can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-    PTCAN.write(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode, 0));
     digitalWrite(POWER_LED_PIN, LOW);
   }
+
+  can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
+  PTCAN.write(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode, 0));
   
   #if DEBUG_MODE
     //debug_can_message(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);

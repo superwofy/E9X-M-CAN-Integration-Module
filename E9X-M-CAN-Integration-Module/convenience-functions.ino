@@ -1,8 +1,8 @@
 #if FRONT_FOG_INDICATOR
 void evaluate_fog_status()
 {
-  if (pt_msg.buf[0] != last_light_status) {
-    if ((pt_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
+  if (k_msg.buf[0] != last_light_status) {
+    if ((k_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
       front_fog_status = true;
       digitalWrite(FOG_LED_PIN, HIGH);
       #if DEBUG_MODE
@@ -15,7 +15,7 @@ void evaluate_fog_status()
         Serial.println("Front fogs off. Turned off FOG LED");
       #endif
     }
-    last_light_status = pt_msg.buf[0];
+    last_light_status = k_msg.buf[0];
   }
 }
 #endif
@@ -24,17 +24,29 @@ void evaluate_fog_status()
 #if AUTO_SEAT_HEATING
 void send_seat_heating_request()
 {
-  delay(10);
-  KCAN.write(makeMsgBuf(0x1E7, 2, seat_heating_button_pressed, 0));
-  delay(20);
-  KCAN.write(makeMsgBuf(0x1E7, 2, seat_heating_button_released, 0));
-  delay(20);
+  unsigned long timeNow = millis();
+  delayedCanTxMsg m = {makeMsgBuf(0x1E7, 2, seat_heating_button_pressed, 0), timeNow + 20};
+  seatHeatingTx.push(&m);
+  m = {makeMsgBuf(0x1E7, 2, seat_heating_button_released, 0), timeNow + 30};
+  seatHeatingTx.push(&m);
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %dC, treshold %dC.\n", 
+    sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %dC, treshold %dC.", 
            (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
-    Serial.print(serial_debug_string);
+    Serial.println(serial_debug_string);
   #endif
   sent_seat_heating_request = true;
+}
+
+void check_seatheating_queue() 
+{
+  if (!seatHeatingTx.isEmpty()) {
+    delayedCanTxMsg delayedTx;
+    seatHeatingTx.peek(&delayedTx);
+    if (millis() >= delayedTx.transmitTime) {
+      KCAN.write(delayedTx.txMsg);
+      seatHeatingTx.drop();
+    }
+  }
 }
 #endif
 
@@ -54,8 +66,8 @@ void send_zbe_acknowledge()
   zbe_response[2] = k_msg.buf[7];
   KCAN.write(makeMsgBuf(0x277, 4, zbe_response, 0));
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent ZBE response to CIC with counter: 0x%X\n", k_msg.buf[7]);
-    Serial.print(serial_debug_string);
+    sprintf(serial_debug_string, "Sent ZBE response to CIC with counter: 0x%X", k_msg.buf[7]);
+    Serial.println(serial_debug_string);
   #endif
 }
 #endif

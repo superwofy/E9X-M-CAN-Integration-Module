@@ -1,5 +1,8 @@
+// See program-notes.txt for details on how this sketch works.
+
 #include <FlexCAN_T4.h>
 #include <EEPROM.h>
+#include "src/cppQueue.h"
 extern "C" uint32_t set_arm_clock(uint32_t frequency);
 
 /***********************************************************************************************************************************************************************************************************************************************
@@ -63,6 +66,13 @@ const uint8_t DTC_BUTTON_TIME = 7;                                              
 ***********************************************************************************************************************************************************************************************************************************************/
 
 CAN_message_t pt_msg, k_msg, d_msg;
+typedef struct delayedCanTxMsg {
+	CAN_message_t	txMsg;
+	unsigned long	transmitTime;
+} delayedCanTxMsg;
+
+cppQueue dtcTx(sizeof(delayedCanTxMsg), 3, queue_FIFO); 
+cppQueue dscTx(sizeof(delayedCanTxMsg), 26, queue_FIFO);
 
 uint32_t cpu_speed_ide = 600;
 
@@ -89,10 +99,10 @@ unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_of
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
 bool sending_dsc_off = false;
 uint8_t sending_dsc_off_counter = 0;
-unsigned long sending_dsc_off_timer;
-bool send_second_dtc_press = false, send_dsc_off_from_mdm = false;
-unsigned long send_second_dtc_press_timer, send_dsc_off_from_mdm_timer;
+bool send_dsc_off_from_mdm = false;
+unsigned long send_dsc_off_from_mdm_timer;
 bool ignore_m_press = false;
+
 
 #if SERVOTRONIC_SVT70
   uint8_t servotronic_message[] = {0, 0xFF};
@@ -142,9 +152,11 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   bool vehicle_moving = false;
 #endif
 #if AUTO_SEAT_HEATING
+  bool seat_heating_status = false;
   uint8_t ambient_temperature_can = 255;
   bool sent_seat_heating_request = false;
   uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
+  cppQueue seatHeatingTx(sizeof(delayedCanTxMsg), 3, queue_FIFO); 
 #endif
 #if DEBUG_MODE
   float battery_voltage = 0;
@@ -172,9 +184,13 @@ void setup()
 
 void loop()
 {
-  non_blocking_dsc_off();
-  non_blocking_second_dtc_press();                                                                                                  // Use a loop call instead of blocking execution with delay().
-  non_blocking_mdm_to_off();
+
+  #if AUTO_SEAT_HEATING
+    check_seatheating_queue();
+  #endif
+  check_dtc_button_queue();
+  check_dsc_off_queue();
+  non_blocking_mdm_to_off();                                                                                                        // Use a loop call instead of blocking execution with delay.
 
 /***********************************************************************************************************************************************************************************************************************************************
   Centre console button section.
@@ -235,7 +251,7 @@ void loop()
             }
           #endif
           dsc_off_button_debounce_timer = millis();
-          send_dtc_button_press();
+          send_dtc_button_press(false);
         }
       }
     } else {
@@ -266,116 +282,12 @@ void loop()
     }
   }
 
-/***********************************************************************************************************************************************************************************************************************************************
-  PT-CAN section.
-***********************************************************************************************************************************************************************************************************************************************/
-  
-  if (PTCAN.read(pt_msg)) {                                                                                                         // Read data.
-    if (ignition) {
-      if (pt_msg.id == 0x1D6) {
-        if (pt_msg.buf[1] == 0x4C && !ignore_m_press) {                                                                             // M button is pressed.
-          ignore_m_press = true;                                                                                                    // Ignore further pressed messages until the button is released.
-          toggle_mdrive_message_active();
-          send_mdrive_message();
-          toggle_mdrive_dsc();                                                                                                      // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
-        } 
-        if (pt_msg.buf[0] == 0xC0 && pt_msg.buf[1] == 0xC && ignore_m_press) {                                                      // Button is released.
-          ignore_m_press = false;
-        }
-      }
-     
-      #if FRONT_FOG_INDICATOR
-      else if (pt_msg.id == 0x21A) {
-        evaluate_fog_status();
-      }
-      #endif
-
-      #if FTM_INDICATOR
-      else if (pt_msg.id == 0x31D) {                                                                                                // FTM initialization is ongoing.
-        evaluate_ftm_status();
-      }
-      #endif  
-
-      #if CONTROL_SHIFTLIGHTS
-      else if (pt_msg.id == 0x332) {                                                                                                // Monitor variable redline broadcast from DME.
-        evaluate_shiftlight_sync();
-      }
-      #endif
-
-      else if (pt_msg.id == 0x3CA) {                                                                                                // Receive settings from iDrive.      
-        if (pt_msg.buf[4] == 0xEC || pt_msg.buf[4] == 0xF4 || pt_msg.buf[4] == 0xE4) {                                              // Reset requested.
-          update_mdrive_message_settings(true);
-          send_mdrive_message();
-        } else if ((pt_msg.buf[4] == 0xE0 || pt_msg.buf[4] == 0xE1)) {                                                              // Ignore E0/E1 (Invalid). 
-          // Do nothing.
-        } else {
-          update_mdrive_message_settings(false);
-          send_mdrive_message();                                                                                                    // Respond to iDrive.
-        }
-      }
-
-      #if SERVOTRONIC_SVT70
-      if (pt_msg.id == 0x4B0) {                                                                                                     // Forward Diagnostic responses from SVT module to DCAN
-        ptcan_to_dcan();
-      }
-
-      else if (pt_msg.id == 0x58E) {
-        svt_kcan_cc_notification();
-      }
-      #endif
-    }
-  }
 
 /***********************************************************************************************************************************************************************************************************************************************
   K-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
   
   if (KCAN.read(k_msg)) {
-    if (k_msg.id == 0x19E) {                                                                                                        // Monitor DSC K-CAN status.
-      evaluate_dsc_ign_status();
-      if (ignition) {
-        send_power_mode();                                                                                                          // state_spt request from DME.   
-        #if SERVOTRONIC_SVT70
-          send_servotronic_message();
-        #endif
-      }
-    }
-
-    #if AUTO_SEAT_HEATING
-    else if (k_msg.id == 0x232) {                                                                                                   // Driver's seat heating status message is only sent with ignition on.
-      if (!k_msg.buf[0]) {                                                                                                          // Check if seat heating is already on.
-        //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
-        if (!sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
-          send_seat_heating_request();
-        }
-      } else {
-        sent_seat_heating_request = true;                                                                                           // Seat heating already on. No need to request anymore.
-      }
-    }
-
-    else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
-      ambient_temperature_can = k_msg.buf[0];
-    } 
-    #endif
-
-    else if (k_msg.id == 0x3AB) {
-      send_dme_ckm();
-    }
-
-    else if (k_msg.id == 0x3B4) {                                                                                                  // Monitor battery voltage from DME.
-      evaluate_battery_engine();
-    }
-
-    #if F_ZBE_WAKE
-    else if (k_msg.id == 0x4E2) {
-      send_zbe_wakeup();
-    }
-
-    else if (k_msg.id == 0x273) {
-      send_zbe_acknowledge();
-    }
-    #endif
-
     if (ignition) {
       if (k_msg.id == 0xAA) {                                                                                                       // Monitor 0xAA (rpm/throttle status).
         RPM = ((uint32_t)k_msg.buf[5] << 8) | (uint32_t)k_msg.buf[4];
@@ -400,17 +312,128 @@ void loop()
       }
       #endif
     }
+
+    if (k_msg.id == 0x19E) {                                                                                                        // Monitor DSC K-CAN status.
+      evaluate_dsc_ign_status();
+      if (ignition) {
+        send_power_mode();                                                                                                          // state_spt request from DME.   
+        #if SERVOTRONIC_SVT70
+          send_servotronic_message();
+        #endif
+      }
+    }
+
+    #if FRONT_FOG_INDICATOR
+    else if (k_msg.id == 0x21A) {
+      evaluate_fog_status();
+    }
+    #endif
+
+    #if AUTO_SEAT_HEATING
+    else if (k_msg.id == 0x232) {                                                                                                   // Driver's seat heating status message is only sent with ignition on.
+      if (!k_msg.buf[0]) {                                                                                                          // Check if seat heating is already on.
+        //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
+        if (!sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
+          send_seat_heating_request();
+        }
+      } else {
+        sent_seat_heating_request = true;                                                                                           // Seat heating already on. No need to request anymore.
+      }
+
+      #if DEBUG_MODE
+        seat_heating_status = !k_msg.buf[0] ? false : true;
+      #endif
+    }
+
+    else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
+      ambient_temperature_can = k_msg.buf[0];
+    } 
+    #endif
+
+    else if (k_msg.id == 0x3AB) {
+      send_dme_ckm();
+    }
+
+    else if (k_msg.id == 0x3B4) {                                                                                                   // Monitor battery voltage from DME.
+      evaluate_battery_engine();
+    }
+
+    else if (k_msg.id == 0x3CA) {                                                                                                   // Receive settings from iDrive.      
+      if (k_msg.buf[4] == 0xEC || k_msg.buf[4] == 0xF4 || k_msg.buf[4] == 0xE4) {                                                   // Reset requested.
+        update_mdrive_message_settings(true);
+        send_mdrive_message();
+      } else if ((k_msg.buf[4] == 0xE0 || k_msg.buf[4] == 0xE1)) {                                                                  // Ignore E0/E1 (Invalid). 
+        // Do nothing.
+      } else {
+        update_mdrive_message_settings(false);
+        send_mdrive_message();                                                                                                      // Respond to iDrive.
+      }
+    }
+
+    #if F_ZBE_WAKE
+    else if (k_msg.id == 0x4E2) {
+      send_zbe_wakeup();
+    }
+
+    else if (k_msg.id == 0x273) {
+      send_zbe_acknowledge();
+    }
+    #endif
   }
 
+
+/***********************************************************************************************************************************************************************************************************************************************
+  PT-CAN section.
+***********************************************************************************************************************************************************************************************************************************************/
+  
+  if (vehicle_awake) {
+    if (PTCAN.read(pt_msg)) {                                                                                                       // Read data.
+      if (ignition) {
+        if (pt_msg.id == 0x1D6) {
+          if (pt_msg.buf[1] == 0x4C && !ignore_m_press) {                                                                           // M button is pressed.
+            ignore_m_press = true;                                                                                                  // Ignore further pressed messages until the button is released.
+            toggle_mdrive_message_active();
+            send_mdrive_message();
+            toggle_mdrive_dsc();                                                                                                    // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
+          } 
+          if (pt_msg.buf[0] == 0xC0 && pt_msg.buf[1] == 0xC && ignore_m_press) {                                                    // Button is released.
+            ignore_m_press = false;
+          }
+        }
+
+        #if FTM_INDICATOR
+        else if (pt_msg.id == 0x31D) {                                                                                              // FTM initialization is ongoing.
+          evaluate_ftm_status();
+        }
+        #endif  
+
+        #if CONTROL_SHIFTLIGHTS
+        else if (pt_msg.id == 0x332) {                                                                                              // Monitor variable redline broadcast from DME.
+          evaluate_shiftlight_sync();
+        }
+        #endif
+
+        #if SERVOTRONIC_SVT70
+        if (pt_msg.id == 0x4B0) {                                                                                                   // Forward Diagnostic responses from SVT module to DCAN
+          ptcan_to_dcan();
+        }
+
+        else if (pt_msg.id == 0x58E) {
+          svt_kcan_cc_notification();
+        }
+        #endif
+      }
+    }
 
 
 /***********************************************************************************************************************************************************************************************************************************************
   D-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
     
-  if (DCAN.read(d_msg)) {
-    if (d_msg.id == 0x4B0) {                                                                                                        // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
-      dcan_to_ptcan();
+    if (DCAN.read(d_msg)) {
+      if (d_msg.id == 0x4B0) {                                                                                                      // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
+        dcan_to_ptcan();
+      }
     }
   }
 

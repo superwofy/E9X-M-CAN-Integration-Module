@@ -1,7 +1,7 @@
 void send_dme_ckm()
 {
   byte dme_ckm[] = {0xF2, 0xFF};
-  PTCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm, 0));
+  KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm, 0));                                                                                    // This is sent by the DME to populate the M Key iDrive section
   #if DEBUG_MODE
     Serial.println("Sent dummy DME POWER CKM.");
   #endif
@@ -107,6 +107,8 @@ void print_current_state()
       sprintf(serial_debug_string, " Ambient temp: Unknown");
     }
     SerialUSB1.println(serial_debug_string);
+    sprintf(serial_debug_string, " Driver's seat heating: %s", seat_heating_status ? "ON" : "OFF");
+    SerialUSB1.println(serial_debug_string);
   #endif
   #if EXHAUST_FLAP_CONTROL
     sprintf(serial_debug_string, " Exhaust flap: %s", exhaust_flap_open ? "Open" : "Closed");
@@ -154,7 +156,7 @@ void reset_runtime_variables()                                                  
   RPM = 0;
   ignore_m_press = false;
   mdrive_power_active = restore_console_power_mode = false;
-  sending_dsc_off = send_second_dtc_press = send_dsc_off_from_mdm = false;
+  sending_dsc_off = send_dsc_off_from_mdm = false;
   sending_dsc_off_counter = 0;
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
