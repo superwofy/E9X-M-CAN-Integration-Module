@@ -22,20 +22,35 @@ void evaluate_fog_status()
 
 
 #if AUTO_SEAT_HEATING
-void send_seat_heating_request()
+void send_seat_heating_request(bool driver)
 {
   unsigned long timeNow = millis();
-  delayedCanTxMsg m = {makeMsgBuf(0x1E7, 2, seat_heating_button_pressed, 0), timeNow + 20};
+  uint16_t canId;
+  if (driver) {
+    canId = 0x1E7;
+    driver_sent_seat_heating_request = true;
+  } else {
+    canId = 0x1E8;
+    passenger_sent_seat_heating_request = true;
+  }
+  delayedCanTxMsg m = {makeMsgBuf(canId, 2, seat_heating_button_pressed, 1), timeNow};
   seatHeatingTx.push(&m);
-  m = {makeMsgBuf(0x1E7, 2, seat_heating_button_released, 0), timeNow + 30};
+  m = {makeMsgBuf(canId, 2, seat_heating_button_released, 1), timeNow + 50};
+  seatHeatingTx.push(&m);
+  m = {makeMsgBuf(canId, 2, seat_heating_button_released, 1), timeNow + 100};
   seatHeatingTx.push(&m);
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %dC, treshold %dC.", 
+    if (driver) {
+      sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %dC, treshold %dC.", 
            (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
+    } else {
+      sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %dC, treshold %dC.", 
+           (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
+    }
     Serial.println(serial_debug_string);
   #endif
-  sent_seat_heating_request = true;
 }
+
 
 void check_seatheating_queue() 
 {

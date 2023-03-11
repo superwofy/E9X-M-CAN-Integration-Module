@@ -69,7 +69,7 @@ void configure_can_controller()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 12, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 14, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -89,6 +89,8 @@ void configure_can_controller()
     canFilters.push(&filterId);                                                                                                     // Light status                                                 Cycle time 5s (idle)
   #endif
   #if AUTO_SEAT_HEATING
+    filterId = 0x22A;                                                                                                               // Passenger's seat heating status
+    canFilters.push(&filterId);
     filterId = 0x232;                                                                                                               // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change)
     canFilters.push(&filterId);
   #endif
@@ -99,6 +101,8 @@ void configure_can_controller()
   #if AUTO_SEAT_HEATING
     filterId = 0x2CA;                                                                                                               // Ambient temperature                                          Cycle time 1s
     canFilters.push(&filterId);                                                                                            
+    filterId = 0x2FA;                                                                                                               // Seat occupancy and belt status                               Cycle time 5s
+    canFilters.push(&filterId);
   #endif
   filterId = 0x3AB;                                                                                                                 // Filter Shiftligths car key memory.
   canFilters.push(&filterId);
@@ -236,5 +240,22 @@ void toggle_transceiver_standby()
     #if DEBUG_MODE
       Serial.println("Re-activated PT-CAN and DCAN transceiver.");
     #endif
+  }
+}
+
+
+void check_cpu_temp()                                                                                                               // Underclock the processor if it starts to heat up
+{
+  if (tempmonGetTemp() >= 60) {
+    #if DEBUG_MODE
+      Serial.println("Processor temperature above overheat threshold. Underclocking.");
+    #endif
+    cpu_speed_ide = 24 * 1000000;
+    set_arm_clock(cpu_speed_ide);
+    cpu_overheated = true;
+  } else if (tempmonGetTemp() <= 55 && cpu_overheated) {                                                                            // Return to normal. (5°C hysteresis)
+    cpu_speed_ide = 600 * 1000000;
+    set_arm_clock(cpu_speed_ide);
+    cpu_overheated = false;
   }
 }

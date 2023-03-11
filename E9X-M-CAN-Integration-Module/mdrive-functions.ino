@@ -243,6 +243,7 @@ void send_power_mode()
 }
 
 
+#if SERVOTRONIC_SVT70
 void send_servotronic_message()
 {
   servotronic_message[0] += 0x10;                                                                                                   // Increase alive counter.
@@ -261,3 +262,4 @@ void send_servotronic_message()
     //debug_can_message(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message);
   #endif    
 }
+#endif

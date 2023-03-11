@@ -23,7 +23,7 @@
 // 2. Monitor ignition and DSC program status.
 // 3. Transmit DME and SVT70 mode requests.
 // 4. Monitor and indicate front foglight status.
-// 5. Turn on driver's seat heating when ignition is turned on and below configured temperature treshold.
+// 5. Turn on driver's and passenger's seat heating when ignition is turned on and ambient temperature is below configured treshold.
 // 6. Send dummy DME POWER CKM (car key memory) message.
 // 7. Track battery voltage (debug only) and Engine On status.
 // 8. Receive, save and update MDrive settings from iDrive.

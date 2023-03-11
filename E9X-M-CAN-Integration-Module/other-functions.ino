@@ -99,6 +99,7 @@ void print_current_state()
       SerialUSB1.print("Sport"); break;
   }
   SerialUSB1.println();
+
   SerialUSB1.println("========= Convenience ==========");
   #if AUTO_SEAT_HEATING
     if (ambient_temperature_can != 255) {
@@ -107,14 +108,19 @@ void print_current_state()
       sprintf(serial_debug_string, " Ambient temp: Unknown");
     }
     SerialUSB1.println(serial_debug_string);
-    sprintf(serial_debug_string, " Driver's seat heating: %s", seat_heating_status ? "ON" : "OFF");
+    sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
+    SerialUSB1.println(serial_debug_string);
+    sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
+    SerialUSB1.println(serial_debug_string);
+    sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
+    SerialUSB1.println(serial_debug_string);
+    sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
     SerialUSB1.println(serial_debug_string);
   #endif
   #if EXHAUST_FLAP_CONTROL
     sprintf(serial_debug_string, " Exhaust flap: %s", exhaust_flap_open ? "Open" : "Closed");
     SerialUSB1.println(serial_debug_string);
   #endif
-
   #if FRONT_FOG_INDICATOR
     sprintf(serial_debug_string, " Front fogs: %s", front_fog_status ? "ON" : "OFF");
     SerialUSB1.println(serial_debug_string);
@@ -158,6 +164,9 @@ void reset_runtime_variables()                                                  
   mdrive_power_active = restore_console_power_mode = false;
   sending_dsc_off = send_dsc_off_from_mdm = false;
   sending_dsc_off_counter = 0;
+  dtcTx.flush();                                                                                                                    // Empty these queues in case something was left over.
+  dscTx.flush();
+  seatHeatingTx.flush();
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
     digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
@@ -198,4 +207,3 @@ CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf, uint8_t t
   }
   return tx_msg;
 }
-

@@ -22,7 +22,6 @@ FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> DCAN;
 #define FOG_LED_PIN 4
 
 
-
 /***********************************************************************************************************************************************************************************************************************************************
   Program configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
@@ -74,7 +73,7 @@ typedef struct delayedCanTxMsg {
 cppQueue dtcTx(sizeof(delayedCanTxMsg), 3, queue_FIFO); 
 cppQueue dscTx(sizeof(delayedCanTxMsg), 26, queue_FIFO);
 
-uint32_t cpu_speed_ide = 600;
+uint32_t cpu_speed_ide;
 
 bool ignition = false;
 bool vehicle_awake = true;
@@ -86,7 +85,7 @@ uint8_t mdm_fake_cc_status_off[] = {0x40, 0xB8, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 bool engine_running = false;
 uint32_t RPM = 0;
-uint8_t mdrive_dsc = 3, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
+uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
 bool mdrive_status = false;                                                                                                         // false = off, true = on
 bool console_power_mode, restore_console_power_mode = false;
 bool mdrive_power_active = false;
@@ -102,6 +101,7 @@ uint8_t sending_dsc_off_counter = 0;
 bool send_dsc_off_from_mdm = false;
 unsigned long send_dsc_off_from_mdm_timer;
 bool ignore_m_press = false;
+bool cpu_overheated = false;
 
 
 #if SERVOTRONIC_SVT70
@@ -152,9 +152,10 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   bool vehicle_moving = false;
 #endif
 #if AUTO_SEAT_HEATING
-  bool seat_heating_status = false;
+  bool driver_seat_heating_status = false, passenger_seat_heating_status = false;
   uint8_t ambient_temperature_can = 255;
-  bool sent_seat_heating_request = false;
+  uint8_t passenger_seat_status = 0;                                                                                                // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
+  bool driver_sent_seat_heating_request = false, passenger_sent_seat_heating_request = false;
   uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
   cppQueue seatHeatingTx(sizeof(delayedCanTxMsg), 3, queue_FIFO); 
 #endif
@@ -168,7 +169,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
 
 void setup() 
 {
-  if ( F_CPU_ACTUAL > (720 * 1000000)) set_arm_clock(720 * 1000000);                                                                // Avoid accidental overclocks
+  if ( F_CPU_ACTUAL > (600 * 1000000)) set_arm_clock(600 * 1000000);                                                                // Avoid accidental overclocks
   cpu_speed_ide = F_CPU_ACTUAL;
   
   configure_IO();
@@ -190,7 +191,8 @@ void loop()
   #endif
   check_dtc_button_queue();
   check_dsc_off_queue();
-  non_blocking_mdm_to_off();                                                                                                        // Use a loop call instead of blocking execution with delay.
+  non_blocking_mdm_to_off();
+  check_cpu_temp();                                                                                                                 // Monitor processor temperature to extend lifetime.
 
 /***********************************************************************************************************************************************************************************************************************************************
   Centre console button section.
@@ -272,7 +274,9 @@ void loop()
       #endif
       toggle_transceiver_standby();
       scale_mcu_speed();
-      sent_seat_heating_request = false;                                                                                            // Reset the seat heating request now that the car's asleep.
+      #if AUTO_SEAT_HEATING
+        driver_sent_seat_heating_request = false;                                                                                   // Reset the seat heating request now that the car's asleep.
+      #endif
     }
     if (((millis() - mdrive_message_timer) >= 15000) && vehicle_awake) {                                                            // Send this message while car is awake to populate the fields in iDrive.                                                                     
       #if DEBUG_MODE
@@ -330,23 +334,40 @@ void loop()
     #endif
 
     #if AUTO_SEAT_HEATING
-    else if (k_msg.id == 0x232) {                                                                                                   // Driver's seat heating status message is only sent with ignition on.
+    else if (k_msg.id == 0x22A) {                                                                                                   // Passenger's seat heating status message is only sent with ignition on.
       if (!k_msg.buf[0]) {                                                                                                          // Check if seat heating is already on.
         //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
-        if (!sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
-          send_seat_heating_request();
+        if (!passenger_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD) 
+            && passenger_seat_status == 9) {                                                                                        // Passenger sitting and their seatbelt is on
+          send_seat_heating_request(false);
         }
       } else {
-        sent_seat_heating_request = true;                                                                                           // Seat heating already on. No need to request anymore.
+        passenger_sent_seat_heating_request = true;                                                                                 // Seat heating already on. No need to request anymore.
       }
-
       #if DEBUG_MODE
-        seat_heating_status = !k_msg.buf[0] ? false : true;
+        passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
+      #endif
+    }
+
+    else if (k_msg.id == 0x232) {                                                                                                   // Driver's seat heating status message is only sent with ignition on.
+      if (!k_msg.buf[0]) {                                                                                                          // Check if seat heating is already on.
+        if (!driver_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
+          send_seat_heating_request(true);
+        }
+      } else {
+        driver_sent_seat_heating_request = true;                                                                                    // Seat heating already on. No need to request anymore.
+      }
+      #if DEBUG_MODE
+        driver_seat_heating_status = !k_msg.buf[0] ? false : true;
       #endif
     }
 
     else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
       ambient_temperature_can = k_msg.buf[0];
+    }
+
+    else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
+      passenger_seat_status = k_msg.buf[1];
     } 
     #endif
 
@@ -439,7 +460,7 @@ void loop()
 
 
   #if DEBUG_MODE
-    if (millis() - debug_print_timer >= 100) {
+    if (millis() - debug_print_timer >= 300) {
       print_current_state();                                                                                                        // Print program status to the second Serial port.
     }
     loop_timer = micros();
