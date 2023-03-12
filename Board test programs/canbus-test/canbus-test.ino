@@ -12,8 +12,6 @@ CAN_message_t k_msg, pt_msg, d_msg;
 
 void setup() 
 {
-	Serial.begin(115200);
-
 	KCAN.begin();
 	PTCAN.begin();
 	DCAN.begin();
@@ -22,10 +20,14 @@ void setup()
 	DCAN.setClock(CLK_60MHz);
 	KCAN.setBaudRate(100000);
 	PTCAN.setBaudRate(500000);
-	DCAN.setBaudRate(125000);
+	DCAN.setBaudRate(500000);
 	KCAN.enableFIFO();
 	PTCAN.enableFIFO();
 	DCAN.enableFIFO();
+
+  KCAN.setFIFOFilter(ACCEPT_ALL);
+  PTCAN.setFIFOFilter(ACCEPT_ALL);
+  DCAN.setFIFOFilter(ACCEPT_ALL);
 
 	// KCAN.setFIFOFilter(REJECT_ALL);
 	// KCAN.setFIFOFilter(0, 0xAA, STD);
@@ -38,6 +40,9 @@ void setup()
 
 	digitalWrite(PTCAN_STBY_PIN, LOW);
 	digitalWrite(DCAN_STBY_PIN, LOW);
+
+  while(!Serial);
+  Serial.println("Program configured, CAN data should follow.");
 }
 
 
@@ -46,7 +51,7 @@ void loop()
 
 	if (KCAN.read(k_msg)) {
 		Serial.print(" KCAN: ");
-		Serial.print(" TS: "); Serial.print(k_msg.timestamp);
+		// Serial.print(" TS: "); Serial.print(k_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(k_msg.id, HEX);
 		Serial.print(" Buffer: ");
 		for ( uint8_t i = 0; i < k_msg.len; i++ ) {
@@ -57,7 +62,7 @@ void loop()
 
 	if (PTCAN.read(pt_msg)) {
 		Serial.print(" PTCAN: ");
-		Serial.print(" TS: "); Serial.print(pt_msg.timestamp);
+		// Serial.print(" TS: "); Serial.print(pt_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(pt_msg.id, HEX);
 		Serial.print(" Buffer: ");
 		for ( uint8_t i = 0; i < pt_msg.len; i++ ) {
@@ -68,7 +73,7 @@ void loop()
 
 	if (DCAN.read(d_msg)) {
 		Serial.print(" DCAN: ");
-		Serial.print(" TS: "); Serial.print(d_msg.timestamp);
+		// Serial.print(" TS: "); Serial.print(d_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(d_msg.id, HEX);
 		Serial.print(" Buffer: ");
 		for ( uint8_t i = 0; i < d_msg.len; i++ ) {

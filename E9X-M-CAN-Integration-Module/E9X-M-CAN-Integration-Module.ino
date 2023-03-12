@@ -30,6 +30,7 @@ FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> DCAN;
 #define DISABLE_USB 0                                                                                                               // In production operation the USB interface is not needed.
 
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
+#define REVERSE_BEEP 1
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
@@ -70,7 +71,7 @@ typedef struct delayedCanTxMsg {
 	unsigned long	transmitTime;
 } delayedCanTxMsg;
 
-cppQueue dtcTx(sizeof(delayedCanTxMsg), 3, queue_FIFO); 
+cppQueue dtcTx(sizeof(delayedCanTxMsg), 6, queue_FIFO); 
 cppQueue dscTx(sizeof(delayedCanTxMsg), 26, queue_FIFO);
 
 uint32_t cpu_speed_ide;
@@ -134,6 +135,12 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t ftm_indicator_flash[] = {0x40, 0x50, 1, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
   uint8_t ftm_indicator_off[] = {0x40, 0x50, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
 #endif
+#if REVERSE_BEEP
+  uint8_t pdc_beep[] = {0, 0, 0, 1};                                                                                                // Rear right beep.
+  uint8_t pdc_quiet[] = {0, 0, 0, 0};
+  bool pdc_beep_sent = false;
+  cppQueue pdcBeepTx(sizeof(delayedCanTxMsg), 3, queue_FIFO); 
+#endif
 #if F_ZBE_WAKE
   uint8_t f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                           // Network management KOMBI - F-series.
   uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
@@ -157,7 +164,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t passenger_seat_status = 0;                                                                                                // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
   bool driver_sent_seat_heating_request = false, passenger_sent_seat_heating_request = false;
   uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
-  cppQueue seatHeatingTx(sizeof(delayedCanTxMsg), 3, queue_FIFO); 
+  cppQueue seatHeatingTx(sizeof(delayedCanTxMsg), 8, queue_FIFO); 
 #endif
 #if DEBUG_MODE
   float battery_voltage = 0;
@@ -188,6 +195,9 @@ void loop()
 
   #if AUTO_SEAT_HEATING
     check_seatheating_queue();
+  #endif
+  #if REVERSE_BEEP
+    check_pdc_queue();
   #endif
   check_dtc_button_queue();
   check_dsc_off_queue();
@@ -315,6 +325,12 @@ void loop()
         evaluate_vehicle_moving();
       }
       #endif
+
+      #if REVERSE_BEEP
+      else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
+        evaluate_pdc_beep();
+      }
+      #endif
     }
 
     if (k_msg.id == 0x19E) {                                                                                                        // Monitor DSC K-CAN status.
@@ -435,14 +451,14 @@ void loop()
         #endif
 
         #if SERVOTRONIC_SVT70
-        if (pt_msg.id == 0x4B0) {                                                                                                   // Forward Diagnostic responses from SVT module to DCAN
-          ptcan_to_dcan();
-        }
-
         else if (pt_msg.id == 0x58E) {
           svt_kcan_cc_notification();
         }
         #endif
+
+        if (pt_msg.id == 0x60E) {                                                                                                   // Forward Diagnostic responses from SVT module to DCAN
+          ptcan_to_dcan();
+        }
       }
     }
 
@@ -452,8 +468,10 @@ void loop()
 ***********************************************************************************************************************************************************************************************************************************************/
     
     if (DCAN.read(d_msg)) {
-      if (d_msg.id == 0x4B0) {                                                                                                      // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
-        dcan_to_ptcan();
+      if (d_msg.id == 0x6F1) {                                                                                                      // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
+        if (d_msg.buf[0] == 0xE) {                                                                                                  // SVT_70 address is 0xE
+          dcan_to_ptcan();
+        }
       }
     }
   }

@@ -92,7 +92,11 @@ void send_zbe_acknowledge()
 void change_exhaust_flap_position()
 {
   if (engine_running) {
+    #if LAUNCH_CONTROL_INDICATOR
     if (!exhaust_flap_sport && !lc_cc_active) {                                                                                     // Exhaust is in quiet mode. Open with LC.
+    #else
+    if (!exhaust_flap_sport) {
+    #endif
       if ((millis() - exhaust_flap_action_timer) >= 1500) {                                                                         // Avoid vacuum drain, oscillation and apply startup delay.
         if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
           if (!exhaust_flap_open) {
@@ -131,6 +135,43 @@ void change_exhaust_flap_position()
 #endif
 
 
+#if REVERSE_BEEP
+void evaluate_pdc_beep()
+{
+  if (k_msg.buf[0] == 0xFE) {
+    if (!pdc_beep_sent) {
+      unsigned long timeNow = millis();
+      delayedCanTxMsg m = {makeMsgBuf(0x1C6, 4, pdc_beep, 1), timeNow};
+      pdcBeepTx.push(&m);
+      m = {makeMsgBuf(0x1C6, 4, pdc_quiet, 1), timeNow + 150};
+      pdcBeepTx.push(&m);
+      pdc_beep_sent = true;
+      #if DEBUG_MODE
+        Serial.println("Sending PDC beep.");
+      #endif
+    }
+  } else {
+    if (pdc_beep_sent) {
+      pdc_beep_sent = false;
+    }
+  }
+}
+
+
+void check_pdc_queue() 
+{
+  if (!pdcBeepTx.isEmpty()) {
+    delayedCanTxMsg delayedTx;
+    pdcBeepTx.peek(&delayedTx);
+    if (millis() >= delayedTx.transmitTime) {
+      KCAN.write(delayedTx.txMsg);
+      pdcBeepTx.drop();
+    }
+  }
+}
+#endif
+
+
 void evaluate_battery_engine() 
 {
   #if DEBUG_MODE
@@ -157,5 +198,5 @@ void dcan_to_ptcan()
 
 void ptcan_to_dcan()
 {
-  DCAN.write(d_msg);
+  DCAN.write(pt_msg);
 }

@@ -51,13 +51,17 @@ void print_current_state()
   #if LAUNCH_CONTROL_INDICATOR
     sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
     SerialUSB1.println(serial_debug_string);
-    sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
-    SerialUSB1.println(serial_debug_string);
+    if (ignition) {
+      sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
+      SerialUSB1.println(serial_debug_string);
+    }
   #endif
 
   SerialUSB1.println("============ MDrive ============");
-  sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
-  SerialUSB1.println(serial_debug_string);
+  if (ignition) {
+    sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
+    SerialUSB1.println(serial_debug_string);
+  }
   SerialUSB1.print(" Settings: DSC-");
   switch (mdrive_dsc) {
     case 3:
@@ -108,10 +112,18 @@ void print_current_state()
       sprintf(serial_debug_string, " Ambient temp: Unknown");
     }
     SerialUSB1.println(serial_debug_string);
-    sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
-    sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
+    #if REVERSE_BEEP
+      if (ignition) {
+        sprintf(serial_debug_string, " Reverse gear: %s", pdc_beep_sent ? "ON" : "OFF");
+        SerialUSB1.println(serial_debug_string);
+      }
+    #endif
+    if (ignition) {
+      sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
+      SerialUSB1.println(serial_debug_string);
+      sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
+      SerialUSB1.println(serial_debug_string);
+    }
     sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
     SerialUSB1.println(serial_debug_string);
     sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
@@ -126,8 +138,10 @@ void print_current_state()
     SerialUSB1.println(serial_debug_string);
   #endif
   #if FTM_INDICATOR
-    sprintf(serial_debug_string, " FTM indicator: %s", ftm_indicator_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
+    if (ignition) {
+      sprintf(serial_debug_string, " FTM indicator: %s", ftm_indicator_status ? "ON" : "OFF");
+      SerialUSB1.println(serial_debug_string);
+    }
   #endif
 
   SerialUSB1.println("============ Debug =============");
@@ -166,7 +180,13 @@ void reset_runtime_variables()                                                  
   sending_dsc_off_counter = 0;
   dtcTx.flush();                                                                                                                    // Empty these queues in case something was left over.
   dscTx.flush();
-  seatHeatingTx.flush();
+  #if AUTO_SEAT_HEATING
+    seatHeatingTx.flush();
+  #endif
+  #if REVERSE_BEEP
+    pdcBeepTx.flush();
+    pdc_beep_sent = false;
+  #endif
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
     digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);

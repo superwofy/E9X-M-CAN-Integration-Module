@@ -54,7 +54,7 @@ void configure_can_controller()
 
   KCAN.setBaudRate(100000);                                                                                                         // 100k
   PTCAN.setBaudRate(500000);                                                                                                        // 500k
-  DCAN.setBaudRate(125000);                                                                                                         // 125k
+  DCAN.setBaudRate(500000);                                                                                                         // 500k
 
   KCAN.enableFIFO();                                                                                                                // Activate FIFO mode.
   PTCAN.enableFIFO();
@@ -69,7 +69,7 @@ void configure_can_controller()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 14, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 15, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -106,6 +106,10 @@ void configure_can_controller()
   #endif
   filterId = 0x3AB;                                                                                                                 // Filter Shiftligths car key memory.
   canFilters.push(&filterId);
+  #if REVERSE_BEEP
+    filterId = 0x3B0;                                                                                                               // Reverse gear status.                                         Cycle time 1s (idle)
+    canFilters.push(&filterId);
+  #endif
   filterId = 0x3B4;                                                                                                                 // Engine ON status from DME and battery voltage.
   canFilters.push(&filterId);
   filterId = 0x3CA;                                                                                                                 // CIC MDrive settings
@@ -114,10 +118,10 @@ void configure_can_controller()
     filterId = 0x4E2;                                                                                                               // Filter CIC Network management (sent when CIC is on)
     canFilters.push(&filterId);
   #endif
+
   #if DEBUG_MODE
       Serial.println("KCAN filters:");
   #endif
-
   filterCount = canFilters.getCount();
   for (uint8_t i = 0; i < filterCount; i++) {
     canFilters.pop(&filterId);
@@ -149,10 +153,10 @@ void configure_can_controller()
     canFilters.push(&filterId); 
   #endif
   #if SERVOTRONIC_SVT70
-    filterId = 0x4B0;                                                                                                               // Receive Network messages from SVT module to forward.
+    filterId = 0x58E;                                                                                                               // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
     canFilters.push(&filterId);
-    filterId = 0x58E;
-    canFilters.push(&filterId);                                                                                                     // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
+    filterId = 0x60E;                                                                                                               // Receive diagnostic messages from SVT module to forward.
+    canFilters.push(&filterId);
   #endif
   
   #if DEBUG_MODE
@@ -179,7 +183,7 @@ void configure_can_controller()
 
   // DCAN
   #if SERVOTRONIC_SVT70
-    filterId = 0x4B0;                                                                                                               // Receive Network messages from DCAN tool to forward.
+    filterId = 0x6F1;                                                                                                               // Receive diagnostic queries from DCAN tool to forward.
     canFilters.push(&filterId);
   #endif
 

@@ -124,7 +124,7 @@ void toggle_mdrive_dsc()
       }
     }
   } else {
-    if (mdrive_dsc == 0x13 || mdrive_dsc == 7) {                                                                                  // If MDrive was set to change DSC, restore back to DSC ON.
+    if (mdrive_dsc == 0x13 || mdrive_dsc == 7) {                                                                                    // If MDrive was set to change DSC, restore back to DSC ON.
       if (dsc_program_status != 0) {
         send_dtc_button_press(false);
         #if DEBUG_MODE
