@@ -143,6 +143,12 @@ void print_current_state()
       SerialUSB1.println(serial_debug_string);
     }
   #endif
+  sprintf(serial_debug_string, " DCAN fix for SVT: %s", diagnose_svt ? "ON" : "OFF");
+  SerialUSB1.println(serial_debug_string);
+  sprintf(serial_debug_string, " Forwarded requests from DCAN (>): %lu", dcan_forwarded_count);
+  SerialUSB1.println(serial_debug_string);
+  sprintf(serial_debug_string, " Forwarded responses from PTCAN (<): %lu", ptcan_forwarded_count);
+  SerialUSB1.println(serial_debug_string);
 
   SerialUSB1.println("============ Debug =============");
   sprintf(serial_debug_string, " CPU temperature: %.2f °C", tempmonGetTemp());
@@ -186,6 +192,10 @@ void reset_runtime_variables()                                                  
   #if REVERSE_BEEP
     pdcBeepTx.flush();
     pdc_beep_sent = false;
+  #endif
+  #if SERVOTRONIC_SVT70
+    digitalWrite(DCAN_STBY_PIN, HIGH);
+    diagnose_svt = false;
   #endif
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;

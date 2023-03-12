@@ -193,10 +193,16 @@ void svt_kcan_cc_notification()
 void dcan_to_ptcan()
 {
   PTCAN.write(d_msg);
+  #if DEBUG_MODE
+    dcan_forwarded_count++;
+  #endif
 }
 
 
 void ptcan_to_dcan()
 {
   DCAN.write(pt_msg);
+  #if DEBUG_MODE
+    ptcan_forwarded_count++;
+  #endif
 }

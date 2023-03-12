@@ -185,32 +185,30 @@ void configure_can_controller()
   #if SERVOTRONIC_SVT70
     filterId = 0x6F1;                                                                                                               // Receive diagnostic queries from DCAN tool to forward.
     canFilters.push(&filterId);
+    #if DEBUG_MODE
+      Serial.println("DCAN filters:");
+    #endif
+    filterCount = canFilters.getCount();
+    for (uint8_t i = 0; i < filterCount; i++) {
+      canFilters.pop(&filterId);
+      #if DEBUG_MODE
+        bool setResult;
+        setResult = DCAN.setFIFOFilter(i, filterId, STD);
+        if (!setResult) {
+          sprintf(serial_debug_string, " %x failed", filterId);
+          Serial.print(serial_debug_string);
+        }
+      #else
+        DCAN.setFIFOFilter(i, filterId, STD);
+      #endif
+      #if DEBUG_MODE
+        Serial.print(" ");
+        Serial.println(filterId, HEX);
+      #endif
+    }
   #endif
 
-  #if DEBUG_MODE
-    Serial.println("DCAN filters:");
-  #endif
-  filterCount = canFilters.getCount();
-  for (uint8_t i = 0; i < filterCount; i++) {
-    canFilters.pop(&filterId);
-    #if DEBUG_MODE
-      bool setResult;
-      setResult = DCAN.setFIFOFilter(i, filterId, STD);
-      if (!setResult) {
-        sprintf(serial_debug_string, " %x failed", filterId);
-        Serial.print(serial_debug_string);
-      }
-    #else
-      DCAN.setFIFOFilter(i, filterId, STD);
-    #endif
-    #if DEBUG_MODE
-      Serial.print(" ");
-      Serial.println(filterId, HEX);
-    #endif
-  }
-
-  digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // Activate the secondary transceivers.
-  digitalWrite(DCAN_STBY_PIN, LOW);
+  digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // Activate the secondary transceiver.
 
   // #if DEBUG_MODE
   //   KCAN.mailboxStatus();
@@ -234,15 +232,13 @@ void toggle_transceiver_standby()
 {
   if (!vehicle_awake) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
-    digitalWrite(DCAN_STBY_PIN, HIGH);
     #if DEBUG_MODE
-      Serial.println("Deactivated PT-CAN and DCAN transceiver.");
+      Serial.println("Deactivated PT-CAN transceiver.");
     #endif
   } else {
     digitalWrite(PTCAN_STBY_PIN, LOW);
-    digitalWrite(DCAN_STBY_PIN, LOW);
     #if DEBUG_MODE
-      Serial.println("Re-activated PT-CAN and DCAN transceiver.");
+      Serial.println("Re-activated PT-CAN transceiver.");
     #endif
   }
 }

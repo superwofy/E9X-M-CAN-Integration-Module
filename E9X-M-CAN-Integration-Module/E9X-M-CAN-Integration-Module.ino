@@ -107,6 +107,11 @@ bool cpu_overheated = false;
 
 #if SERVOTRONIC_SVT70
   uint8_t servotronic_message[] = {0, 0xFF};
+  uint8_t servotronic_cc_on[] = {0x40, 0x46, 0x00, 0x29, 0xFF, 0xFF, 0xFF, 0xFF};
+  bool diagnose_svt = false;
+  #if DEBUG_MODE
+    uint32_t dcan_forwarded_count = 0, ptcan_forwarded_count = 0;
+  #endif
 #endif
 #if CONTROL_SHIFTLIGHTS
 uint8_t shiftlights_start[] = {0x86, 0x3E};
@@ -454,20 +459,25 @@ void loop()
         else if (pt_msg.id == 0x58E) {
           svt_kcan_cc_notification();
         }
-        #endif
 
-        if (pt_msg.id == 0x60E) {                                                                                                   // Forward Diagnostic responses from SVT module to DCAN
-          ptcan_to_dcan();
+        else if (pt_msg.id == 0x60E) {                                                                                              // Forward Diagnostic responses from SVT module to DCAN
+          if (diagnose_svt) {
+            ptcan_to_dcan();
+          }
         }
+        #endif
       }
     }
+  }
 
 
 /***********************************************************************************************************************************************************************************************************************************************
   D-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
     
-    if (DCAN.read(d_msg)) {
+  #if SERVOTRONIC_SVT70
+  if (DCAN.read(d_msg)) {
+    if (diagnose_svt) {
       if (d_msg.id == 0x6F1) {                                                                                                      // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
         if (d_msg.buf[0] == 0xE) {                                                                                                  // SVT_70 address is 0xE
           dcan_to_ptcan();
@@ -475,6 +485,8 @@ void loop()
       }
     }
   }
+  #endif
+  
 
 
   #if DEBUG_MODE

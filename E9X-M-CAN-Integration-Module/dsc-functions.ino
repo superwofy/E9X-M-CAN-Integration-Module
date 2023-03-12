@@ -4,13 +4,20 @@ void evaluate_dsc_ign_status()
     if (k_msg.buf[1] == 0xEA) {
       ignition = false;
       reset_runtime_variables();
-      scale_mcu_speed();                                                                                                              // Now that the ignition is off, underclock the MCU
+      scale_mcu_speed();                                                                                                            // Now that the ignition is off, underclock the MCU
       #if DEBUG_MODE
         Serial.println("Ignition OFF. Reset values.");
       #endif
     } else if (k_msg.buf[1] == 0xEC) {
       ignition = true;
       scale_mcu_speed();
+      #if SERVOTRONIC_SVT70
+        if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                       // If POWER button is being held when turning on ignition, allow SVT diagnosis.
+          digitalWrite(DCAN_STBY_PIN, LOW);
+          diagnose_svt = true;
+          KCAN.write(makeMsgBuf(0x58E, 8, servotronic_cc_on, 0));                                                                   // Indicate that diagnosing is now possible.
+        }
+      #endif
       #if DEBUG_MODE
         Serial.println("Ignition ON.");
       #endif

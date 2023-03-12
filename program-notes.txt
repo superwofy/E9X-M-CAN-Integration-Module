@@ -3,6 +3,7 @@
 // Message transmission (.write()) is optimized to reach the receiver module on the shortest route. I.e. messages that need to reach KOMBI are sent on KCAN even if the BMW implementation
 // would have sent it over PTCAN in order to minimize any gateway delay.
 // Wherever pausing is required (dtc/dsc off for example), FiFo queues are implemented to ensure reading and processing of messages is unaffected.
+// To diagnose/code/etc. the SVT module, hold POWER when turning on ignition. Transmitting to DCAN corrupts UIF reads for other modules.
 
 
 
@@ -48,14 +49,14 @@
 // 1. Monitor steering wheel buttons and request MDrive when Source/M is pressed.
 // 2. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
 // 3. Monitor and align shiftlights with the variable redline request from the DME.
-// 4. Forwards any Network messages sent by the SVT70 module on the PT-CAN to the D-CAN to enable communication with BMW tools. In the E70 this is implemented in the JBE gateway tables.
+// 4. Forwards any diagnostic messages sent by the SVT70 module on the PT-CAN to the D-CAN to enable communication with BMW tools. In the E70 this is implemented in the JBE gateway tables.
 // 5. Forward CC (check control) notifications from the SVT70 to KCAN so that KOMBI can display them.
 
 
 
 // DCAN section
 
-// 4. Forwards any messages sent by the DCAN tool to the PT-CAN to enable communication with the SVT70
+// 1. Forwards any messages sent by the DCAN tool to the PT-CAN to enable communication with the SVT70
 
 
 
