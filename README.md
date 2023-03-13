@@ -8,9 +8,9 @@ MDrive settings now configurable from iDrive!
 Hardware used:
  
 * Skpang Triple CAN board https://copperhilltech.com/teensy-4-0-triple-can-bus-board-with-two-can-2-0b-and-one-can-fd-port/ (Teensy 4.0, MCP2562s).
-* Toshiba K2889 MOSFET
-* 1N4007 diode
-* 10K Ohm, 600 Ohm and 3 Ohm resistor
+* N-channel MOSFET that can be driven with 3V3. I had some FQP50N06Ls.
+* 1N4007 diode (exhaust solenoid flyback)
+* 10K Ohm (pull-down), 600 Ohm (R-gate) and 10 Ohm (Fog LED) resistor
 * OSRAM LO M676-Q2S1
 * KINGBRIGHT KM2520ZGC-G03
 * Micro USB right-angle cable
@@ -46,4 +46,6 @@ See program notes: [here](program-notes.txt)
 ![fog](img/Fog/indicatoron.jpg "fog")
 
 ![case](img/case.jpg "case")
+
+![board](img/board/board-anotated.jpg "board")
 

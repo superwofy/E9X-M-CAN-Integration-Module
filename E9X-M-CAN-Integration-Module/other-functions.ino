@@ -1,7 +1,7 @@
 void send_dme_ckm()
 {
   byte dme_ckm[] = {0xF2, 0xFF};
-  KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm, 0));                                                                                    // This is sent by the DME to populate the M Key iDrive section
+  KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                        // This is sent by the DME to populate the M Key iDrive section
   #if DEBUG_MODE
     Serial.println("Sent dummy DME POWER CKM.");
   #endif
@@ -173,7 +173,7 @@ void print_current_state()
 
 void reset_runtime_variables()                                                                                                      // Ignition off. Set variables to original state and commit MDrive settings.
 {
-  dsc_program_last_status_can = 0xEA;
+  dsc_program_last_status_can = 0;
   dsc_program_status = 0;
   if (mdrive_status) {
     toggle_mdrive_message_active();
@@ -199,8 +199,13 @@ void reset_runtime_variables()                                                  
   #endif
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
-    digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
-    exhaust_flap_open = true;
+    #if QUIET_START                                                                                                                // Keep the flap closed until the next start.
+      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);                                                                               // Run this write in case the engine was shut down in sport mode.
+      exhaust_flap_open = false;
+    #else
+      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
+      exhaust_flap_open = true;
+    #endif
   #endif
   #if LAUNCH_CONTROL_INDICATOR
     lc_cc_active = mdm_with_lc = clutch_pressed = vehicle_moving = false;
@@ -225,13 +230,42 @@ void reset_runtime_variables()                                                  
   update_settings_in_eeprom();
 }
 
+void cache_can_message_buffers()                                                                                                    // Put all static the buffers in memory during setup().
+{
+  dtc_button_pressed_buf = makeMsgBuf(0x316, 2, dtc_button_pressed);
+  dtc_button_released_buf = makeMsgBuf(0x316, 2, dtc_button_released);
+  dsc_off_fake_cc_status_buf = makeMsgBuf(0x5A9, 8, dsc_off_fake_cc_status);
+  mdm_fake_cc_status_buf = makeMsgBuf(0x5A9, 8, mdm_fake_cc_status);
+  mdm_fake_cc_status_off_buf = makeMsgBuf(0x5A9, 8, mdm_fake_cc_status_off);
+  #if SERVOTRONIC_SVT70
+    servotronic_cc_on_buf = makeMsgBuf(0x58E, 8, servotronic_cc_on);
+  #endif
+  #if FTM_INDICATOR
+    ftm_indicator_flash_buf = makeMsgBuf(0x5A0, 8, ftm_indicator_flash);
+    ftm_indicator_off_buf = makeMsgBuf(0x5A0, 8, ftm_indicator_off);
+  #endif
+  #if REVERSE_BEEP
+    pdc_beep_buf = makeMsgBuf(0x1C6, 4, pdc_beep);
+    pdc_quiet_buf = makeMsgBuf(0x1C6, 4, pdc_quiet);
+  #endif
+  #if F_ZBE_WAKE
+    f_wakeup_buf = makeMsgBuf(0x560, 8, f_wakeup);
+  #endif
+  #if LAUNCH_CONTROL_INDICATOR
+    lc_cc_on_buf = makeMsgBuf(0x598, 8, lc_cc_on);
+    lc_cc_off_buf = makeMsgBuf(0x598, 8, lc_cc_off);
+  #endif
+  #if CONTROL_SHIFTLIGHTS
+    shiftlights_off_buf = makeMsgBuf(0x206, 2, shiftlights_off);
+  #endif
+}
 
-CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf, uint8_t txSeq) 
+
+CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf) 
 {
   CAN_message_t tx_msg;
   tx_msg.id = txID;
   tx_msg.len = txLen;
-  tx_msg.seq = txSeq;
   for (uint8_t i = 0; i < txLen; i++) {
       tx_msg.buf[i] = txBuf[i];
   }

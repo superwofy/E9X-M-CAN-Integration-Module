@@ -3,7 +3,7 @@ void evaluate_lc_display()
 {
   if (LC_RPM_MIN <= RPM && RPM <= LC_RPM_MAX) {
     if (clutch_pressed && !vehicle_moving) {
-      KCAN.write(makeMsgBuf(0x598, 8, lc_cc_on, 0));
+      KCAN.write(lc_cc_on_buf);
       lc_cc_active = true;
       if (dsc_program_status == 0) {
         mdm_with_lc = true;
@@ -37,7 +37,7 @@ void evaluate_lc_display()
 void deactivate_lc_display()
 {
   if (lc_cc_active) {
-    KCAN.write(makeMsgBuf(0x598, 8, lc_cc_off, 0));
+    KCAN.write(lc_cc_off_buf);
     lc_cc_active = false;
     #if DEBUG_MODE
         Serial.println("Deactivated LC flag CC.");

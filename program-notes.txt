@@ -4,6 +4,16 @@
 // would have sent it over PTCAN in order to minimize any gateway delay.
 // Wherever pausing is required (dtc/dsc off for example), FiFo queues are implemented to ensure reading and processing of messages is unaffected.
 // To diagnose/code/etc. the SVT module, hold POWER when turning on ignition. Transmitting to DCAN corrupts UIF reads for other modules.
+// Sometimes DSC/DTC status isn't tracked correctly because 0x19E is not being transmitted properly. I don't have a solution for this other than disconnecting the battery, cycling the ignition and DTC/DSC modes a few times.
+
+
+
+// Arduino IDE settings
+
+// Board: Teensy 4.0
+// Optimize: Fastest
+// CPU Speed: 600 MHz
+// USB Type: Dual Serial
 
 
 

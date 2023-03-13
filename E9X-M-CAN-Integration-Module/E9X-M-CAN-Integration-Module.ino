@@ -29,8 +29,10 @@ FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> DCAN;
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 #define DISABLE_USB 0                                                                                                               // In production operation the USB interface is not needed.
 
+#define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as the module is powered (30G).
+#define RHD 1
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
-#define REVERSE_BEEP 1
+#define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
@@ -83,6 +85,8 @@ uint8_t dtc_button_pressed[] = {0xFD, 0xFF}, dtc_button_released[] = {0xFC, 0xFF
 uint8_t dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
 uint8_t mdm_fake_cc_status[] = {0x40, 0xB8, 0, 0x45, 0xFF, 0xFF, 0xFF, 0xFF};
 uint8_t mdm_fake_cc_status_off[] = {0x40, 0xB8, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+CAN_message_t dtc_button_pressed_buf, dtc_button_released_buf;
+CAN_message_t dsc_off_fake_cc_status_buf, mdm_fake_cc_status_buf, mdm_fake_cc_status_off_buf;
 
 bool engine_running = false;
 uint32_t RPM = 0;
@@ -92,7 +96,7 @@ bool console_power_mode, restore_console_power_mode = false;
 bool mdrive_power_active = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
-uint8_t dsc_program_last_status_can = 0xEA;
+uint8_t dsc_program_last_status_can = 0;
 bool holding_dsc_off_console = false;
 unsigned long mdrive_message_timer;
 unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
@@ -108,6 +112,7 @@ bool cpu_overheated = false;
 #if SERVOTRONIC_SVT70
   uint8_t servotronic_message[] = {0, 0xFF};
   uint8_t servotronic_cc_on[] = {0x40, 0x46, 0x00, 0x29, 0xFF, 0xFF, 0xFF, 0xFF};
+  CAN_message_t servotronic_cc_on_buf;
   bool diagnose_svt = false;
   #if DEBUG_MODE
     uint32_t dcan_forwarded_count = 0, ptcan_forwarded_count = 0;
@@ -128,6 +133,7 @@ uint32_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
   uint32_t var_redline_position;
   uint8_t last_var_rpm_can = 0;
 uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // byte 5: shiftlights always on
+CAN_message_t shiftlights_off_buf;
 #else
 uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // byte 5: shiftlights unchanged
 #endif
@@ -139,17 +145,24 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   bool ftm_indicator_status = false;
   uint8_t ftm_indicator_flash[] = {0x40, 0x50, 1, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
   uint8_t ftm_indicator_off[] = {0x40, 0x50, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
+  CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf;
 #endif
 #if REVERSE_BEEP
-  uint8_t pdc_beep[] = {0, 0, 0, 1};                                                                                                // Rear right beep.
+  #if RHD 
+    uint8_t pdc_beep[] = {0, 0, 0, 1};                                                                                              // Front right beep.
+  #else
+    uint8_t pdc_beep[] = {0, 0, 1, 0};                                                                                              // Front left beep.
+  #endif
   uint8_t pdc_quiet[] = {0, 0, 0, 0};
   bool pdc_beep_sent = false;
-  cppQueue pdcBeepTx(sizeof(delayedCanTxMsg), 3, queue_FIFO); 
+  cppQueue pdcBeepTx(sizeof(delayedCanTxMsg), 4, queue_FIFO);
+  CAN_message_t pdc_beep_buf, pdc_quiet_buf;
 #endif
 #if F_ZBE_WAKE
   uint8_t f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                           // Network management KOMBI - F-series.
   uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
   unsigned long zbe_wakeup_last_sent;
+  CAN_message_t f_wakeup_buf;
 #endif
 #if EXHAUST_FLAP_CONTROL
   bool exhaust_flap_sport = false, exhaust_flap_open = true;
@@ -162,6 +175,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   bool mdm_with_lc = false;
   bool clutch_pressed = false;
   bool vehicle_moving = false;
+  CAN_message_t lc_cc_on_buf, lc_cc_off_buf;
 #endif
 #if AUTO_SEAT_HEATING
   bool driver_seat_heating_status = false, passenger_seat_heating_status = false;
@@ -169,7 +183,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t passenger_seat_status = 0;                                                                                                // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
   bool driver_sent_seat_heating_request = false, passenger_sent_seat_heating_request = false;
   uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
-  cppQueue seatHeatingTx(sizeof(delayedCanTxMsg), 8, queue_FIFO); 
+  cppQueue seatHeatingTx(sizeof(delayedCanTxMsg), 6, queue_FIFO); 
 #endif
 #if DEBUG_MODE
   float battery_voltage = 0;
@@ -187,6 +201,7 @@ void setup()
   configure_IO();
   disable_mcu_peripherals();
   configure_can_controller();
+  cache_can_message_buffers();
   initialize_timers();
   read_settings_from_eeprom();
   #if DEBUG_MODE
@@ -283,12 +298,11 @@ void loop()
     }
   } else {
     if (((millis() - vehicle_awake_timer) >= 10000) && vehicle_awake) {
-      vehicle_awake = false;                                                                                                        // Vehicle must now Asleep. Stop transmitting.
+      vehicle_awake = false;                                                                                                        // Vehicle must now be asleep. Stop monitoring .
       #if DEBUG_MODE
         Serial.println("Vehicle Sleeping.");
       #endif
       toggle_transceiver_standby();
-      scale_mcu_speed();
       #if AUTO_SEAT_HEATING
         driver_sent_seat_heating_request = false;                                                                                   // Reset the seat heating request now that the car's asleep.
       #endif

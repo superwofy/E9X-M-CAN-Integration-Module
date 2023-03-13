@@ -9,7 +9,7 @@ void evaluate_shiftlight_display()
     #endif
     ignore_shiftlights_off_counter = 10;                                                                                            // Skip a few off cycles to allow segments to light up.
 
-    #if EXHAUST_FLAP_WITH_M_BUTTON
+    #if EXHAUST_FLAP_CONTROL
       exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
     #endif
   }
@@ -35,7 +35,7 @@ void evaluate_shiftlight_display()
   } else {                                                                                                                          // RPM dropped. Disable lights.
     if (shiftlights_segments_active) {
       if (ignore_shiftlights_off_counter == 0) {
-        KCAN.write(makeMsgBuf(0x206, 2, shiftlights_off, 0));                                                                            
+        KCAN.write(shiftlights_off_buf);                                                                            
         shiftlights_segments_active = false;
         #if DEBUG_MODE
           Serial.println("Deactivated shiftlights segments");
@@ -50,7 +50,7 @@ void evaluate_shiftlight_display()
 
 void activate_shiftlight_segments(uint8_t* data)
 {
-    KCAN.write(makeMsgBuf(0x206, 2, data, 0));                                                               
+    KCAN.write(makeMsgBuf(0x206, 2, data));                                                               
     shiftlights_segments_active = true;
 }
 

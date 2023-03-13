@@ -144,7 +144,7 @@ void send_mdrive_message()
   }
   // Deactivated because no module actually checks this. Perhaps MDSC would?
 //  can_checksum_update(0x399, 6, mdrive_message);                                                                                 // Recalculate checksum.
-  PTCAN.write(makeMsgBuf(0x399, 6, mdrive_message, 0));                                                                            // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
+  PTCAN.write(makeMsgBuf(0x399, 6, mdrive_message));                                                                               // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
   mdrive_message_timer = millis();
   #if DEBUG_MODE
 //  debug_can_message(0x399, 6, mdrive_message);
@@ -235,7 +235,7 @@ void send_power_mode()
   }
 
   can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-  PTCAN.write(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode, 0));
+  PTCAN.write(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode));
   
   #if DEBUG_MODE
     //debug_can_message(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
@@ -257,7 +257,7 @@ void send_servotronic_message()
   } else {
     servotronic_message[0] += 8;
   }
-  PTCAN.write(makeMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message, 0));
+  PTCAN.write(makeMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
   #if DEBUG_MODE
     //debug_can_message(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message);
   #endif    

@@ -12,7 +12,19 @@ void configure_IO()
   #if FRONT_FOG_INDICATOR
     pinMode(FOG_LED_PIN, OUTPUT);
   #endif
-  pinMode(EXHAUST_FLAP_SOLENOID_PIN, OUTPUT);
+  
+  #if EXHAUST_FLAP_CONTROL
+    pinMode(EXHAUST_FLAP_SOLENOID_PIN, OUTPUT);
+    #if QUIET_START
+      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);                                                                                // Close the flap (if vacuum still available)
+      exhaust_flap_open = false;
+      #if DEBUG_MODE
+        Serial.println("Quiet start enabled. Exhaust flap closed.");
+      #endif
+    #else
+      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);                                                                                 // Keep the solenoid de-energised (flap open)
+    #endif
+  #endif
 }
 
 
@@ -118,7 +130,6 @@ void configure_can_controller()
     filterId = 0x4E2;                                                                                                               // Filter CIC Network management (sent when CIC is on)
     canFilters.push(&filterId);
   #endif
-
   #if DEBUG_MODE
       Serial.println("KCAN filters:");
   #endif
@@ -158,7 +169,6 @@ void configure_can_controller()
     filterId = 0x60E;                                                                                                               // Receive diagnostic messages from SVT module to forward.
     canFilters.push(&filterId);
   #endif
-  
   #if DEBUG_MODE
     Serial.println("PTCAN filters:");
   #endif
@@ -235,10 +245,18 @@ void toggle_transceiver_standby()
     #if DEBUG_MODE
       Serial.println("Deactivated PT-CAN transceiver.");
     #endif
+    #if QUIET_START
+      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);                                                                                // Release the solenoid to reduce power consumption
+      exhaust_flap_open = true;
+    #endif
   } else {
     digitalWrite(PTCAN_STBY_PIN, LOW);
     #if DEBUG_MODE
       Serial.println("Re-activated PT-CAN transceiver.");
+    #endif
+    #if QUIET_START
+      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);                                                                               // Reactivate the solenoid.
+      exhaust_flap_open = false;
     #endif
   }
 }

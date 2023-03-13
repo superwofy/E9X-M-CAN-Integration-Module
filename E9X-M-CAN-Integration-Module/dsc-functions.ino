@@ -15,7 +15,7 @@ void evaluate_dsc_ign_status()
         if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                       // If POWER button is being held when turning on ignition, allow SVT diagnosis.
           digitalWrite(DCAN_STBY_PIN, LOW);
           diagnose_svt = true;
-          KCAN.write(makeMsgBuf(0x58E, 8, servotronic_cc_on, 0));                                                                   // Indicate that diagnosing is now possible.
+          KCAN.write(servotronic_cc_on_buf);                                                                                        // Indicate that diagnosing is now possible.
         }
       #endif
       #if DEBUG_MODE
@@ -58,13 +58,13 @@ void evaluate_dsc_ign_status()
 void evaluate_ftm_status()
 {
   if (pt_msg.buf[0] == 3 && !ftm_indicator_status) {
-    KCAN.write(makeMsgBuf(0x5A0, 8, ftm_indicator_flash, 1));
+    KCAN.write(ftm_indicator_flash_buf);
     ftm_indicator_status = true;
     #if DEBUG_MODE
       Serial.println("Activated FTM indicator.");
     #endif
   } else if (pt_msg.buf[0] == 0 && ftm_indicator_status) {
-    KCAN.write(makeMsgBuf(0x5A0, 8, ftm_indicator_off, 1));
+    KCAN.write(ftm_indicator_off_buf);
     ftm_indicator_status = false;
     #if DEBUG_MODE
       Serial.println("Deactivated FTM indicator.");
@@ -95,18 +95,18 @@ void send_dtc_button_press(bool second)
   if (!sending_dsc_off) {                                                                                                           // Ignore while DSC OFF seq is still being transmitted.
     unsigned long timeNow = millis();
     if (second) {
-      delayedCanTxMsg m = {makeMsgBuf(0x316, 2, dtc_button_pressed, 1), timeNow + 300};
-      dtcTx.push(&m);
-    } else {
-      PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_pressed, 1));                                                                     // Two messages are sent during a quick press of the button (DTC mode).
-      delayedCanTxMsg m = {makeMsgBuf(0x316, 2, dtc_button_pressed, 1), timeNow + 5};
-      dtcTx.push(&m);
-      m = {makeMsgBuf(0x316, 2, dtc_button_released, 1), timeNow + 10};                                                             // Send one DTC released to indicate end of DTC button press.
-      dtcTx.push(&m);                                                                   
-      #if DEBUG_MODE                        
-        Serial.println("Sent single DTC button press.");
-      #endif
+      timeNow += 300;
     }
+    PTCAN.write(dtc_button_pressed_buf);                                                                                            // Two messages are sent during a quick press of the button (DTC mode).
+    delayedCanTxMsg m = {dtc_button_pressed_buf, timeNow + 100};
+    dtcTx.push(&m);
+    m = {dtc_button_released_buf, timeNow + 150};                                                                                   // Send two DTC released to indicate end of DTC button press.
+    dtcTx.push(&m);
+    m = {dtc_button_released_buf, timeNow + 310};
+    dtcTx.push(&m);                                                                   
+    #if DEBUG_MODE                        
+      Serial.println("Sent single DTC button press.");
+    #endif
   }
 }
 
@@ -122,7 +122,7 @@ void check_dsc_off_queue()
       dscTx.drop();
     }
     if (sending_dsc_off_counter == 25) {
-      KCAN.write(makeMsgBuf(0x5A9, 8, mdm_fake_cc_status_off, 1));                                                                  // Stop flashing MDM/DTC symbol
+      KCAN.write(mdm_fake_cc_status_off_buf);                                                                                       // Stop flashing MDM/DTC symbol
       #if DEBUG_MODE
         Serial.println("Sent DSC OFF sequence.");
       #endif
@@ -138,17 +138,18 @@ void send_dsc_off_sequence()
   if (!sending_dsc_off) {
     sending_dsc_off = true;                                                                                                         // Begin the non-blocking sequence.
     unsigned long timeNow = millis();
-    PTCAN.write(makeMsgBuf(0x316, 2, dtc_button_pressed, 1));                                                                       // Send the first press.
-    KCAN.write(makeMsgBuf(0x5A9, 8, dsc_off_fake_cc_status, 1));                                                                    // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts.
-    KCAN.write(makeMsgBuf(0x5A9, 8, mdm_fake_cc_status, 1));                                                                        // Start flashing MDM/DTC symbol to indicate transition.
+
+    PTCAN.write(dtc_button_pressed_buf);                                                                                                           // Send the first press.
+    KCAN.write(dsc_off_fake_cc_status_buf);                                                                                         // Trigger DSC OFF CC in Kombi, iDrive as soon as sequence starts.
+    KCAN.write(mdm_fake_cc_status_buf);                                                                                             // Start flashing MDM/DTC symbol to indicate transition.
     
     delayedCanTxMsg m;
     uint8_t i;
     for (i = 1; i < 25; i++) {
-      m = {makeMsgBuf(0x316, 2, dtc_button_pressed, 1), timeNow + (i * 100)};
+      m = {dtc_button_pressed_buf, timeNow + (i * 100)};
       dscTx.push(&m);
     }
-    m = {makeMsgBuf(0x316, 2, dtc_button_released, 1), timeNow + (i * 100)};
+    m = {dtc_button_released_buf, timeNow + (i * 100)};
     dscTx.push(&m);
   }
 }

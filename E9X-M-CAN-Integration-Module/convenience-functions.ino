@@ -33,11 +33,13 @@ void send_seat_heating_request(bool driver)
     canId = 0x1E8;
     passenger_sent_seat_heating_request = true;
   }
-  delayedCanTxMsg m = {makeMsgBuf(canId, 2, seat_heating_button_pressed, 1), timeNow};
+  KCAN.write(makeMsgBuf(canId, 2, seat_heating_button_pressed));
+  CAN_message_t released = makeMsgBuf(canId, 2, seat_heating_button_released);
+  delayedCanTxMsg m = {released, timeNow + 100};
   seatHeatingTx.push(&m);
-  m = {makeMsgBuf(canId, 2, seat_heating_button_released, 1), timeNow + 50};
+  m = {released, timeNow + 250};
   seatHeatingTx.push(&m);
-  m = {makeMsgBuf(canId, 2, seat_heating_button_released, 1), timeNow + 100};
+  m = {released, timeNow + 400};
   seatHeatingTx.push(&m);
   #if DEBUG_MODE
     if (driver) {
@@ -69,7 +71,7 @@ void check_seatheating_queue()
 #if F_ZBE_WAKE
 void send_zbe_wakeup()
 {
-  KCAN.write(makeMsgBuf(0x560, 8, f_wakeup, 0));
+  KCAN.write(f_wakeup_buf);
   #if DEBUG_MODE
     Serial.println("Sent F-ZBE wake-up message.");
   #endif
@@ -79,7 +81,7 @@ void send_zbe_wakeup()
 void send_zbe_acknowledge()
 {
   zbe_response[2] = k_msg.buf[7];
-  KCAN.write(makeMsgBuf(0x277, 4, zbe_response, 0));
+  KCAN.write(makeMsgBuf(0x277, 4, zbe_response));
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent ZBE response to CIC with counter: 0x%X", k_msg.buf[7]);
     Serial.println(serial_debug_string);
@@ -141,9 +143,9 @@ void evaluate_pdc_beep()
   if (k_msg.buf[0] == 0xFE) {
     if (!pdc_beep_sent) {
       unsigned long timeNow = millis();
-      delayedCanTxMsg m = {makeMsgBuf(0x1C6, 4, pdc_beep, 1), timeNow};
+      delayedCanTxMsg m = {pdc_beep_buf, timeNow};
       pdcBeepTx.push(&m);
-      m = {makeMsgBuf(0x1C6, 4, pdc_quiet, 1), timeNow + 150};
+      m = {pdc_quiet_buf, timeNow + 150};
       pdcBeepTx.push(&m);
       pdc_beep_sent = true;
       #if DEBUG_MODE
@@ -190,6 +192,7 @@ void svt_kcan_cc_notification()
 }
 
 
+#if SERVOTRONIC_SVT70
 void dcan_to_ptcan()
 {
   PTCAN.write(d_msg);
@@ -206,3 +209,4 @@ void ptcan_to_dcan()
     ptcan_forwarded_count++;
   #endif
 }
+#endif

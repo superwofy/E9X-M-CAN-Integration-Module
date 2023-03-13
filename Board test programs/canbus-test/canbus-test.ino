@@ -1,5 +1,4 @@
 #include <FlexCAN_T4.h>
-#include <EEPROM.h>
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
@@ -51,9 +50,12 @@ void loop()
 
 	if (KCAN.read(k_msg)) {
 		Serial.print(" KCAN: ");
-		// Serial.print(" TS: "); Serial.print(k_msg.timestamp);
+		Serial.print(" TS: "); Serial.print(k_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(k_msg.id, HEX);
 		Serial.print(" Buffer: ");
+    if (k_msg.flags.remote) {
+        Serial.print(" Remote ");
+    }
 		for ( uint8_t i = 0; i < k_msg.len; i++ ) {
 		  Serial.print(k_msg.buf[i], HEX); Serial.print(" ");
 		}
@@ -62,9 +64,12 @@ void loop()
 
 	if (PTCAN.read(pt_msg)) {
 		Serial.print(" PTCAN: ");
-		// Serial.print(" TS: "); Serial.print(pt_msg.timestamp);
+		Serial.print(" TS: "); Serial.print(pt_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(pt_msg.id, HEX);
 		Serial.print(" Buffer: ");
+    if (pt_msg.flags.remote) {
+        Serial.print(" Remote ");
+    }
 		for ( uint8_t i = 0; i < pt_msg.len; i++ ) {
 		  Serial.print(pt_msg.buf[i], HEX); Serial.print(" ");
 		}
@@ -73,9 +78,12 @@ void loop()
 
 	if (DCAN.read(d_msg)) {
 		Serial.print(" DCAN: ");
-		// Serial.print(" TS: "); Serial.print(d_msg.timestamp);
+		Serial.print(" TS: "); Serial.print(d_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(d_msg.id, HEX);
 		Serial.print(" Buffer: ");
+    if (d_msg.flags.remote) {
+        Serial.print(" Remote ");
+    }
 		for ( uint8_t i = 0; i < d_msg.len; i++ ) {
 		  Serial.print(d_msg.buf[i], HEX); Serial.print(" ");
 		}
