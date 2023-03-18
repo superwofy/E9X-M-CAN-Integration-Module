@@ -16,13 +16,12 @@ void configure_IO()
   #if EXHAUST_FLAP_CONTROL
     pinMode(EXHAUST_FLAP_SOLENOID_PIN, OUTPUT);
     #if QUIET_START
-      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);                                                                                // Close the flap (if vacuum still available)
-      exhaust_flap_open = false;
+      actuate_exhaust_solenoid(HIGH);                                                                                               // Close the flap (if vacuum still available)
       #if DEBUG_MODE
         Serial.println("Quiet start enabled. Exhaust flap closed.");
       #endif
     #else
-      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);                                                                                 // Keep the solenoid de-energised (flap open)
+      actuate_exhaust_solenoid(LOW);                                                                                                // Keep the solenoid de-energised (flap open)
     #endif
   #endif
 }
@@ -54,7 +53,7 @@ void disable_mcu_peripherals()
 }
 
 
-void configure_can_controller()
+void configure_can_controllers()
 {
   KCAN.begin();
   PTCAN.begin();
@@ -166,6 +165,10 @@ void configure_can_controller()
   #if SERVOTRONIC_SVT70
     filterId = 0x58E;                                                                                                               // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
     canFilters.push(&filterId);
+  #endif
+  filterId = 0x5A9;                                                                                                                 // CC notifications from DSC module
+  canFilters.push(&filterId);
+  #if SERVOTRONIC_SVT70
     filterId = 0x60E;                                                                                                               // Receive diagnostic messages from SVT module to forward.
     canFilters.push(&filterId);
   #endif
@@ -220,16 +223,24 @@ void configure_can_controller()
 
   digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // Activate the secondary transceiver.
 
-  // #if DEBUG_MODE
-  //   KCAN.mailboxStatus();
-  //   PTCAN.mailboxStatus();
-  //   DCAN.mailboxStatus();
-  // #endif
+  #if EXTRA_DEBUG
+    KCAN.mailboxStatus();
+    PTCAN.mailboxStatus();
+    DCAN.mailboxStatus();
+  #endif
 }
 
 
 void initialize_timers()
 {
+  WDT_timings_t config;
+  #if DEBUG_MODE
+    config.trigger = 3;
+    config.callback = wdt_callback;
+  #endif
+  config.timeout = 4;                                                                                                               // If the watchdog timer is not reset within 4s, re-start the program.
+  wdt.begin(config);
+
   power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
   #if DEBUG_MODE
     debug_print_timer = millis();
@@ -238,25 +249,33 @@ void initialize_timers()
 }
 
 
+#if DEBUG_MODE
+void wdt_callback()
+{
+  Serial.println("Watchdog timer not reset. Program will reset in 1s.");
+}
+#endif
+
+
 void toggle_transceiver_standby()
 {
   if (!vehicle_awake) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
     #if DEBUG_MODE
       Serial.println("Deactivated PT-CAN transceiver.");
+      Serial.println("Opened exhaust flap.");
     #endif
     #if QUIET_START
-      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);                                                                                // Release the solenoid to reduce power consumption
-      exhaust_flap_open = true;
+      actuate_exhaust_solenoid(LOW);                                                                                                // Release the solenoid to reduce power consumption
     #endif
   } else {
     digitalWrite(PTCAN_STBY_PIN, LOW);
     #if DEBUG_MODE
       Serial.println("Re-activated PT-CAN transceiver.");
+      Serial.println("Closed exhaust flap.");
     #endif
     #if QUIET_START
-      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);                                                                               // Reactivate the solenoid.
-      exhaust_flap_open = false;
+      actuate_exhaust_solenoid(HIGH);                                                                                               // Reactivate the solenoid.
     #endif
   }
 }

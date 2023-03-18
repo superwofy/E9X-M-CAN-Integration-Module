@@ -21,22 +21,6 @@ void evaluate_dsc_ign_status()
       #if DEBUG_MODE
         Serial.println("Ignition ON.");
       #endif
-    } else if (k_msg.buf[1] == 0xE0) {
-      ignition = true;                                                                                                              // Just in case 0xEC was missed.
-      dsc_program_status = 0;
-      #if DEBUG_MODE
-          Serial.println("Stability control fully activated.");
-      #endif
-    } else if (k_msg.buf[1] == 0xF0) {
-      dsc_program_status = 1;
-      #if DEBUG_MODE
-          Serial.println("Stability control in DTC mode.");
-      #endif
-    } else if (k_msg.buf[1] == 0xE4) {
-      dsc_program_status = 2;
-      #if DEBUG_MODE
-          Serial.println("Stability control fully OFF.");
-      #endif
     }
     dsc_program_last_status_can = k_msg.buf[1];
   }
@@ -53,9 +37,51 @@ void evaluate_dsc_ign_status()
   }
 }
 
+void evaluate_dsc_program_from_cc()
+{
+  if (pt_msg.buf[7] != 0xAB) {                                                                                                      // Ignore fakes sent by the module.
+    if (pt_msg.buf[0] == 0x40) {                                                                                                    // DSC or DTC/MDM light
+      if (pt_msg.buf[1] == 0xB8) {                                                                                                  // DTC/MDM
+        if (pt_msg.buf[3] == 0x1D) {                                                                                                // Active
+          if (dsc_program_status != 1) {
+            dsc_program_status = 1;
+            #if DEBUG_MODE
+              Serial.println("Stability control in DTC mode.");
+            #endif
+          }
+        } else {
+          if (dsc_program_status == 1) {
+            dsc_program_status = 0;
+            #if DEBUG_MODE
+              Serial.println("Stability control fully activated from DTC/MDM.");
+            #endif
+          }
+        }
+
+      } else if (pt_msg.buf[1] == 0x24) {                                                                                           // DSC OFF
+        if (pt_msg.buf[3] == 0x1D) {                                                                                                // Active
+          if (dsc_program_status != 2) {
+            dsc_program_status = 2;
+            #if DEBUG_MODE
+              Serial.println("Stability control fully OFF.");
+            #endif
+          }
+        } else {
+          if (dsc_program_status == 2) {
+            dsc_program_status = 0;
+            #if DEBUG_MODE
+              Serial.println("Stability control fully activated from DSC OFF.");
+            #endif
+          }
+        }
+      }
+    }
+  }
+}
+
 
 #if FTM_INDICATOR
-void evaluate_ftm_status()
+void evaluate_indicate_ftm_status()
 {
   if (pt_msg.buf[0] == 3 && !ftm_indicator_status) {
     KCAN.write(ftm_indicator_flash_buf);

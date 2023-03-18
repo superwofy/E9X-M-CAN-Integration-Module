@@ -12,25 +12,25 @@
 
 // Board: Teensy 4.0
 // Optimize: Fastest
-// CPU Speed: 600 MHz
+// CPU Speed: 528 MHz
 // USB Type: Dual Serial
 
 
 
-// Centre console section
+// General section
 
 // Enable use of M3 centre console button block. POWER and DSC OFF buttons. Control POWER LED when MDrive is on.
 // 1. Request MDrive when POWER button is pressed.
 // 2. Illuminate POWER LED when MDrive is on.
 // 3. Request full DSC OFF after holding DSC OFF button. Turn everything back on with a short press.
+// 4. Display Launch control flag
+// 5. Create missing 0x206 message to animate DCT KOMBI shift lights.
 
 
 
 // K-CAN section
 
 // 1. Monitor throttle, RPM and clutch status to control the shift lights and exhaust flap.
-// -> Create missing 0x206 message to animate DCT KOMBI shift lights.
-// -> Display Launch control flag
 // 2. Monitor ignition and DSC program status.
 // 3. Transmit DME and SVT70 mode requests.
 // 4. Monitor and indicate front foglight status.

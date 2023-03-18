@@ -91,48 +91,65 @@ void send_zbe_acknowledge()
 
 
 #if EXHAUST_FLAP_CONTROL
-void change_exhaust_flap_position()
+void control_exhaust_flap_user()
 {
   if (engine_running) {
     #if LAUNCH_CONTROL_INDICATOR
-    if (!exhaust_flap_sport && !lc_cc_active) {                                                                                     // Exhaust is in quiet mode. Open with LC.
+    if (exhaust_flap_sport || lc_cc_active) {                                                                                       // Exhaust is in quiet mode. Open with LC.
+    #else
+    if (exhaust_flap_sport) {                                                                                                       // Flap always open in sport mode.
+    #endif                                                                                                                      
+      if ((millis() - exhaust_flap_action_timer) >= 500) {
+        if (!exhaust_flap_open) {
+          actuate_exhaust_solenoid(LOW);
+          #if DEBUG_MODE
+            if (lc_cc_active) {
+              Serial.println("Opened exhaust flap with Launch Control.");
+            } else {
+              Serial.println("Opened exhaust flap with MDrive.");
+            }
+          #endif
+        }
+      }
+    }
+  }
+}
+
+
+void control_exhaust_flap_rpm()
+{
+  if (engine_running) {
+    #if LAUNCH_CONTROL_INDICATOR
+    if (!exhaust_flap_sport && !lc_cc_active) {                                                                                     // Only execute these checks if the flap is not user-controlled
     #else
     if (!exhaust_flap_sport) {
     #endif
-      if ((millis() - exhaust_flap_action_timer) >= 1500) {                                                                         // Avoid vacuum drain, oscillation and apply startup delay.
+      if ((millis() - exhaust_flap_action_timer) >= exhaust_flap_action_interval) {                                                 // Avoid vacuum drain, oscillation and apply startup delay.
         if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
           if (!exhaust_flap_open) {
-            digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
-            exhaust_flap_action_timer = millis();
-            exhaust_flap_open = true;
+            actuate_exhaust_solenoid(LOW);
             #if DEBUG_MODE
               Serial.println("Exhaust flap opened at RPM setpoint.");
             #endif
           }
         } else {
           if (exhaust_flap_open) {
-            digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);
-            exhaust_flap_action_timer = millis();
-            exhaust_flap_open = false;
+            actuate_exhaust_solenoid(HIGH);
             #if DEBUG_MODE
               Serial.println("Exhaust flap closed.");
             #endif
           }
         }
       }
-    } else {                                                                                                                        // Flap always open in sport mode.
-      if ((millis() - exhaust_flap_action_timer) >= 500) {
-        if (!exhaust_flap_open) {
-          digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
-          exhaust_flap_action_timer = millis();
-          exhaust_flap_open = true;
-          #if DEBUG_MODE
-            Serial.println("Opened exhaust flap with MDrive.");
-          #endif
-        }
-      }
     }
   }
+}
+
+void actuate_exhaust_solenoid(bool activate)
+{
+  digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, activate);
+  exhaust_flap_action_timer = millis();
+  exhaust_flap_open = !activate;                                                                                                    // Flap position is the inverse of solenoid state. When active, the flap is closed.
 }
 #endif
 
@@ -179,11 +196,18 @@ void evaluate_battery_engine()
   #if DEBUG_MODE
     battery_voltage = (((k_msg.buf[1] - 240 ) * 256.0) + k_msg.buf[0]) / 68.0;
   #endif
-  engine_running = !k_msg.buf[2] ? true : false;
+
+  // 0x89: terminal R / off, 0x80 Terminal 15, 9 engine turning off.
+  if (k_msg.buf[2] == 9 || k_msg.buf[2] == 0x89 || k_msg.buf[2] == 0x80) {                                                          // Use the charge status byte to determine if the engine is running.
+    engine_running = false;
+  } else {
+    engine_running = true;
+  }
 }
 
 
-void svt_kcan_cc_notification()
+#if SERVOTRONIC_SVT70
+void send_svt_kcan_cc_notification()
 {
   if (pt_msg.buf[1] == 0x49 && pt_msg.buf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
     pt_msg.buf[1] = 0x46;
@@ -192,7 +216,6 @@ void svt_kcan_cc_notification()
 }
 
 
-#if SERVOTRONIC_SVT70
 void dcan_to_ptcan()
 {
   PTCAN.write(d_msg);
@@ -210,3 +233,78 @@ void ptcan_to_dcan()
   #endif
 }
 #endif
+
+
+void send_dme_ckm()
+{
+  byte dme_ckm[] = {0xF2, 0xFF};
+  KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                        // This is sent by the DME to populate the M Key iDrive section
+  #if DEBUG_MODE
+    Serial.println("Sent dummy DME POWER CKM.");
+  #endif
+}
+
+
+void check_console_buttons()
+{
+  if (!digitalRead(POWER_BUTTON_PIN)) {
+    if ((millis() - power_button_debounce_timer) >= power_debounce_time_ms) {                                                       // POWER console button should only change throttle mapping.
+      power_button_debounce_timer = millis();
+      if (!console_power_mode) {
+        if (!mdrive_power_active) {
+          console_power_mode = true;
+          #if DEBUG_MODE
+            Serial.println("Console: POWER mode ON.");
+          #endif 
+        } else {
+          mdrive_power_active = false;                                                                                              // If POWER button was pressed while MDrive POWER is active, disable POWER.
+          #if DEBUG_MODE
+            Serial.println("Deactivated MDrive POWER with console button press.");
+          #endif
+        }
+      } else {
+        #if DEBUG_MODE
+          Serial.println("Console: POWER mode OFF.");
+        #endif
+        console_power_mode = false;
+        if (mdrive_power_active) {
+          mdrive_power_active = false;                                                                                              // If POWER button was pressed while MDrive POWER is active, disable POWER.
+          #if DEBUG_MODE
+            Serial.println("Deactivated MDrive POWER with console button press.");
+          #endif
+        }
+      }
+    }
+  } 
+  
+  if (!digitalRead(DSC_BUTTON_PIN)) {
+    if (dsc_program_status == 0) {
+      if (!holding_dsc_off_console) {
+        holding_dsc_off_console = true;
+        dsc_off_button_hold_timer = millis();
+      } else {
+        if ((millis() - dsc_off_button_hold_timer) >= dsc_hold_time_ms) {                                                           // DSC OFF sequence should only be sent after user holds button for a configured time
+          #if DEBUG_MODE
+            if (!sending_dsc_off) {
+              Serial.println("Console: DSC OFF button held. Sending DSC OFF.");
+            }
+          #endif
+          send_dsc_off_sequence();
+          dsc_off_button_debounce_timer = millis();
+        }
+      }      
+    } else {
+      if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {                                                     // A quick tap re-enables everything
+        #if DEBUG_MODE
+          if (!sending_dsc_off) {
+            Serial.println("Console: DSC button tapped. Re-enabling DSC normal program.");
+          }
+        #endif
+        dsc_off_button_debounce_timer = millis();
+        send_dtc_button_press(false);
+      }
+    }
+  } else {
+    holding_dsc_off_console = false;
+  }
+}

@@ -1,13 +1,3 @@
-void send_dme_ckm()
-{
-  byte dme_ckm[] = {0xF2, 0xFF};
-  KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                        // This is sent by the DME to populate the M Key iDrive section
-  #if DEBUG_MODE
-    Serial.println("Sent dummy DME POWER CKM.");
-  #endif
-}
-
-
 #if DEBUG_MODE
 void debug_can_message(uint16_t canid, uint8_t len, uint8_t* message)
 {   
@@ -39,8 +29,10 @@ void print_current_state()
     sprintf(serial_debug_string, " RPM: %ld", RPM / 4);
     SerialUSB1.println(serial_debug_string);
   }
-  sprintf(serial_debug_string, " Voltage: %.2f V", battery_voltage);
-  SerialUSB1.println(serial_debug_string);
+  if (vehicle_awake) {
+    sprintf(serial_debug_string, " Voltage: %.2f V", battery_voltage);
+    SerialUSB1.println(serial_debug_string);
+  }
   if (dsc_program_status == 0) {
     SerialUSB1.println(" DSC: Fully ON");
   } else if (dsc_program_status == 1) {
@@ -200,18 +192,16 @@ void reset_runtime_variables()                                                  
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
     #if QUIET_START                                                                                                                // Keep the flap closed until the next start.
-      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, HIGH);                                                                               // Run this write in case the engine was shut down in sport mode.
-      exhaust_flap_open = false;
+      actuate_exhaust_solenoid(HIGH);                                                                                              // Run this write in case the engine was shut down in sport mode.
     #else
-      digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, LOW);
-      exhaust_flap_open = true;
+      actuate_exhaust_solenoid(LOW);
     #endif
   #endif
   #if LAUNCH_CONTROL_INDICATOR
     lc_cc_active = mdm_with_lc = clutch_pressed = vehicle_moving = false;
   #endif
   #if CONTROL_SHIFTLIGHTS
-    shiftlights_segments_active = engine_warmed_up = false;
+    shiftlights_segments_active = engine_coolant_warmed_up = false;
     ignore_shiftlights_off_counter = 0;
     last_var_rpm_can = 0;
     START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
@@ -229,6 +219,7 @@ void reset_runtime_variables()                                                  
   #endif
   update_settings_in_eeprom();
 }
+
 
 void cache_can_message_buffers()                                                                                                    // Put all static the buffers in memory during setup().
 {
@@ -256,6 +247,10 @@ void cache_can_message_buffers()                                                
     lc_cc_off_buf = makeMsgBuf(0x598, 8, lc_cc_off);
   #endif
   #if CONTROL_SHIFTLIGHTS
+    shiftlights_start_buf = makeMsgBuf(0x206, 2, shiftlights_start);
+    shiftlights_mid_buildup_buf = makeMsgBuf(0x206, 2, shiftlights_mid_buildup);
+    shiftlights_startup_buildup_buf = makeMsgBuf(0x206, 2, shiftlights_startup_buildup);
+    shiftlights_max_flash_buf = makeMsgBuf(0x206, 2, shiftlights_max_flash);
     shiftlights_off_buf = makeMsgBuf(0x206, 2, shiftlights_off);
   #endif
 }
