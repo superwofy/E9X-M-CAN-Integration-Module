@@ -1,9 +1,8 @@
 void configure_IO()
 {
   #if DEBUG_MODE
-    while(!Serial);                                                                                                                 // Wait until serial monitor is attached
+    delay(1000);
   #endif
-  
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
   pinMode(DCAN_STBY_PIN, OUTPUT); 
   pinMode(POWER_BUTTON_PIN, INPUT_PULLUP);                                                                                                 
@@ -89,7 +88,7 @@ void configure_can_controllers()
   #endif
   filterId = 0xAA;                                                                                                                  // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
   canFilters.push(&filterId);
-  filterId = 0x19E;                                                                                                                 // DSC status and ignition                                      Cycle time 200ms (KCAN)
+  filterId = 0x130;                                                                                                                 // Key/ignition status                                          Cycle time 100ms
   canFilters.push(&filterId);
   #if LAUNCH_CONTROL_INDICATOR
     filterId = 0x1B4;                                                                                                               // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R on)
@@ -233,14 +232,6 @@ void configure_can_controllers()
 
 void initialize_timers()
 {
-  WDT_timings_t config;
-  #if DEBUG_MODE
-    config.trigger = 3;
-    config.callback = wdt_callback;
-  #endif
-  config.timeout = 4;                                                                                                               // If the watchdog timer is not reset within 4s, re-start the program.
-  wdt.begin(config);
-
   power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
   #if DEBUG_MODE
     debug_print_timer = millis();
@@ -249,10 +240,22 @@ void initialize_timers()
 }
 
 
+void initialize_watchdog()
+{
+  WDT_timings_t config;
+  #if DEBUG_MODE
+    config.trigger = 5;
+    config.callback = wdt_callback;
+  #endif
+  config.timeout = 10;                                                                                                               // If the watchdog timer is not reset within 10s, re-start the program.
+  wdt.begin(config);
+}
+
+
 #if DEBUG_MODE
 void wdt_callback()
 {
-  Serial.println("Watchdog timer not reset. Program will reset in 1s.");
+  Serial.println("Watchdog timer not reset. Program will reset in 5s.");
 }
 #endif
 
@@ -283,16 +286,19 @@ void toggle_transceiver_standby()
 
 void check_cpu_temp()                                                                                                               // Underclock the processor if it starts to heat up
 {
-  if (tempmonGetTemp() >= 60) {
-    #if DEBUG_MODE
-      Serial.println("Processor temperature above overheat threshold. Underclocking.");
-    #endif
+  if (tempmonGetTemp() >= 62 && !cpu_overheated) {
     cpu_speed_ide = 24 * 1000000;
     set_arm_clock(cpu_speed_ide);
     cpu_overheated = true;
-  } else if (tempmonGetTemp() <= 55 && cpu_overheated) {                                                                            // Return to normal. (5°C hysteresis)
-    cpu_speed_ide = 600 * 1000000;
+    #if DEBUG_MODE
+      Serial.println("Processor temperature above overheat threshold. Underclocking.");
+    #endif
+  } else if (tempmonGetTemp() <= 60 && cpu_overheated) {                                                                            // Return to normal. (2°C hysteresis)
+    cpu_speed_ide = 450 * 1000000;
     set_arm_clock(cpu_speed_ide);
     cpu_overheated = false;
+    #if DEBUG_MODE
+      Serial.println("Restored clock speed.");
+    #endif
   }
 }

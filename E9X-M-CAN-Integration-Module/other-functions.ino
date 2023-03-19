@@ -165,7 +165,6 @@ void print_current_state()
 
 void reset_runtime_variables()                                                                                                      // Ignition off. Set variables to original state and commit MDrive settings.
 {
-  dsc_program_last_status_can = 0;
   dsc_program_status = 0;
   if (mdrive_status) {
     toggle_mdrive_message_active();
@@ -218,6 +217,7 @@ void reset_runtime_variables()                                                  
     ftm_indicator_status = false;
   #endif
   update_settings_in_eeprom();
+  mdrive_settings_updated = false;
 }
 
 

@@ -32,14 +32,16 @@ void read_settings_from_eeprom()
 
 void update_settings_in_eeprom()
 {
-  EEPROM.update(1, mdrive_dsc);                                                                                                   // EEPROM lifetime approx. 100k writes. Always update, never write()!                                                                                          
-  EEPROM.update(2, mdrive_power);
-  EEPROM.update(3, mdrive_edc);
-  EEPROM.update(4, mdrive_svt);
-  EEPROM.update(5, console_power_mode);                                                                                           
-  #if DEBUG_MODE
-      Serial.println("Saved M settings to EEPROM.");
-  #endif
+  if (mdrive_settings_updated) {
+    EEPROM.update(1, mdrive_dsc);                                                                                                   // EEPROM lifetime approx. 100k writes. Always update, never write()!                                                                                          
+    EEPROM.update(2, mdrive_power);
+    EEPROM.update(3, mdrive_edc);
+    EEPROM.update(4, mdrive_svt);
+    EEPROM.update(5, console_power_mode);                                                                                           
+    #if DEBUG_MODE
+        Serial.println("Saved M settings to EEPROM.");
+    #endif
+  }
 }
 
 
@@ -214,6 +216,7 @@ void update_mdrive_message_settings()
         mdrive_message[4] = 0x91;                                                                                                   // SVT sport, MDrive on.
       }
     }
+    mdrive_settings_updated = true;
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
           mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);

@@ -3,17 +3,21 @@ void evaluate_fog_status()
 {
   if (k_msg.buf[0] != last_light_status) {
     if ((k_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
-      front_fog_status = true;
-      digitalWrite(FOG_LED_PIN, HIGH);
-      #if DEBUG_MODE
-        Serial.println("Front fogs on. Turned on FOG LED");
-      #endif
+      if (!front_fog_status) {
+        front_fog_status = true;
+        digitalWrite(FOG_LED_PIN, HIGH);
+        #if DEBUG_MODE
+          Serial.println("Front fogs on. Turned on FOG LED");
+        #endif
+      }
     } else {
-      front_fog_status = false;
-      digitalWrite(FOG_LED_PIN, LOW);
-      #if DEBUG_MODE
-        Serial.println("Front fogs off. Turned off FOG LED");
-      #endif
+      if (front_fog_status) {
+        front_fog_status = false;
+        digitalWrite(FOG_LED_PIN, LOW);
+        #if DEBUG_MODE
+          Serial.println("Front fogs off. Turned off FOG LED");
+        #endif
+      }
     }
     last_light_status = k_msg.buf[0];
   }
@@ -51,6 +55,46 @@ void send_seat_heating_request(bool driver)
     }
     Serial.println(serial_debug_string);
   #endif
+}
+
+
+void evaluate_ignition_status()
+{
+  if (k_msg.buf[0] == 0x45) {
+    if (!ignition) {
+      ignition = true;
+      scale_mcu_speed();
+      #if SERVOTRONIC_SVT70
+        if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                       // If POWER button is being held when turning on ignition, allow SVT diagnosis.
+          digitalWrite(DCAN_STBY_PIN, LOW);
+          diagnose_svt = true;
+          KCAN.write(servotronic_cc_on_buf);                                                                                        // Indicate that diagnosing is now possible.
+        }
+      #endif
+      #if DEBUG_MODE
+        Serial.println("Ignition ON.");
+      #endif
+    }
+  } else {
+    if (ignition) {
+      ignition = false;
+      reset_runtime_variables();
+      scale_mcu_speed();                                                                                                            // Now that the ignition is off, underclock the MCU
+      #if DEBUG_MODE
+        Serial.println("Ignition OFF. Reset values.");
+      #endif
+    }
+  }
+
+  if (!vehicle_awake) {
+    vehicle_awake = true;    
+    toggle_transceiver_standby();                                                                                                   // Re-activate the transceivers.                                                                                         
+    #if DEBUG_MODE
+      Serial.println("Vehicle Awake.");
+    #endif
+  }
+
+  vehicle_awake_timer = millis();  
 }
 
 

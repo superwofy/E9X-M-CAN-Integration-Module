@@ -98,11 +98,11 @@ bool engine_running = false;
 uint32_t RPM = 0;
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
 bool mdrive_status = false;                                                                                                         // false = off, true = on
+bool mdrive_settings_updated = false;
 bool console_power_mode, restore_console_power_mode = false;
 bool mdrive_power_active = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
-uint8_t dsc_program_last_status_can = 0;
 bool holding_dsc_off_console = false;
 unsigned long mdrive_message_timer;
 unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
@@ -206,9 +206,9 @@ void setup()
   #if DEBUG_MODE
     unsigned long setup_timer = millis();
   #endif
-  if ( F_CPU_ACTUAL > (528 * 1000000)) set_arm_clock(528 * 1000000);                                                                // Prevent accidental overclocks
+  initialize_watchdog();
+  if ( F_CPU_ACTUAL > (450 * 1000000)) set_arm_clock(450 * 1000000);                                                                // Prevent accidental overclocks
   cpu_speed_ide = F_CPU_ACTUAL;
-  
   configure_IO();
   disable_mcu_peripherals();
   configure_can_controllers();
@@ -300,8 +300,8 @@ void loop()
       #endif
     }
 
-    if (k_msg.id == 0x19E) {                                                                                                        // Monitor DSC K-CAN status (ignition on signal + program status).
-      evaluate_dsc_ign_status();
+    if (k_msg.id == 0x130) {                                                                                                        // Monitor ignition status
+      evaluate_ignition_status();
       if (ignition) {
         send_power_mode();                                                                                                          // state_spt request from DME.   
         #if SERVOTRONIC_SVT70

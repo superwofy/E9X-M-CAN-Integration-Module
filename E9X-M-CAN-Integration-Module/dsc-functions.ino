@@ -1,47 +1,8 @@
-void evaluate_dsc_ign_status()
-{
-  if (dsc_program_last_status_can != k_msg.buf[1]) {
-    if (k_msg.buf[1] == 0xEA) {
-      ignition = false;
-      reset_runtime_variables();
-      scale_mcu_speed();                                                                                                            // Now that the ignition is off, underclock the MCU
-      #if DEBUG_MODE
-        Serial.println("Ignition OFF. Reset values.");
-      #endif
-    } else if (k_msg.buf[1] == 0xEC) {
-      ignition = true;
-      scale_mcu_speed();
-      #if SERVOTRONIC_SVT70
-        if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                       // If POWER button is being held when turning on ignition, allow SVT diagnosis.
-          digitalWrite(DCAN_STBY_PIN, LOW);
-          diagnose_svt = true;
-          KCAN.write(servotronic_cc_on_buf);                                                                                        // Indicate that diagnosing is now possible.
-        }
-      #endif
-      #if DEBUG_MODE
-        Serial.println("Ignition ON.");
-      #endif
-    }
-    dsc_program_last_status_can = k_msg.buf[1];
-  }
-
-  if (k_msg.buf[1] == 0xEA) {
-    if (!vehicle_awake) {
-      vehicle_awake = true;    
-      toggle_transceiver_standby();                                                                                                 // Re-activate the transceivers.                                                                                         
-      #if DEBUG_MODE
-        Serial.println("Vehicle Awake.");
-      #endif
-    }
-    vehicle_awake_timer = millis();                                                                                                 // Keep track of this message.
-  }
-}
-
 void evaluate_dsc_program_from_cc()
 {
   if (pt_msg.buf[7] != 0xAB) {                                                                                                      // Ignore fakes sent by the module.
     if (pt_msg.buf[0] == 0x40) {                                                                                                    // DSC or DTC/MDM light
-      if (pt_msg.buf[1] == 0xB8) {                                                                                                  // DTC/MDM
+      if (pt_msg.buf[1] == 0xB8 && !sending_dsc_off) {                                                                              // DTC/MDM, ignore while sending DSC OFF.
         if (pt_msg.buf[3] == 0x1D) {                                                                                                // Active
           if (dsc_program_status != 1) {
             dsc_program_status = 1;
