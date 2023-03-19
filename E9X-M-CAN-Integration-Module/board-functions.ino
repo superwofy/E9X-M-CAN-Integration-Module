@@ -1,7 +1,7 @@
 void configure_IO()
 {
   #if DEBUG_MODE
-    delay(1000);
+    while (!Serial && millis() < 5000);
   #endif
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
   pinMode(DCAN_STBY_PIN, OUTPUT); 
@@ -34,7 +34,7 @@ void scale_mcu_speed()
       max_loop_timer = 0;
     #endif
   } else {
-      set_arm_clock(24 * 1000000);                                                                                                  // Set core clock to 24MHz.
+      set_arm_clock(MAX_UNDERCLOCK);                                                                                                // Reduce core clock.
       #if DEBUG_MODE
         max_loop_timer = 0;
       #endif
@@ -244,10 +244,14 @@ void initialize_watchdog()
 {
   WDT_timings_t config;
   #if DEBUG_MODE
-    config.trigger = 5;
+    config.trigger = 25;
     config.callback = wdt_callback;
   #endif
-  config.timeout = 10;                                                                                                               // If the watchdog timer is not reset within 10s, re-start the program.
+  #if DEBUG_MODE
+    config.timeout = 30;
+  #else
+    config.timeout = 10;                                                                                                            // If the watchdog timer is not reset within 10s, re-start the program.
+  #endif
   wdt.begin(config);
 }
 
@@ -284,21 +288,38 @@ void toggle_transceiver_standby()
 }
 
 
-void check_cpu_temp()                                                                                                               // Underclock the processor if it starts to heat up
+void check_cpu_temp()                                                                                                               // Underclock the processor if it starts to heat up.
 {
-  if (tempmonGetTemp() >= 62 && !cpu_overheated) {
-    cpu_speed_ide = 24 * 1000000;
-    set_arm_clock(cpu_speed_ide);
-    cpu_overheated = true;
-    #if DEBUG_MODE
-      Serial.println("Processor temperature above overheat threshold. Underclocking.");
-    #endif
-  } else if (tempmonGetTemp() <= 60 && cpu_overheated) {                                                                            // Return to normal. (2°C hysteresis)
-    cpu_speed_ide = 450 * 1000000;
-    set_arm_clock(cpu_speed_ide);
-    cpu_overheated = false;
-    #if DEBUG_MODE
-      Serial.println("Restored clock speed.");
-    #endif
+  if (ignition) {                                                                                                                   // If ignition is off, the processor will already be underclocked.
+    float cpu_temp = tempmonGetTemp();
+
+    if (abs(cpu_temp - last_cpu_temp) > HYSTERESIS) {
+      if (cpu_temp >= TOP_THRESHOLD) {
+        if (clock_mode != 2) {
+          set_arm_clock(MAX_UNDERCLOCK);
+          #if DEBUG_MODE
+            Serial.println("Processor temperature above top overheat threshold. Underclocking.");
+          #endif
+          clock_mode = 2;
+        }
+      } else if (cpu_temp >= MEDIUM_THRESHOLD) {
+        if (clock_mode != 1) {
+          set_arm_clock(MEDIUM_UNDERCLOCK);
+          #if DEBUG_MODE
+            Serial.println("Processor temperature above medium overheat threshold. Underclocking.");
+          #endif
+          clock_mode = 1;
+        }
+      } else {
+        if (clock_mode != 0) {
+          set_arm_clock(cpu_speed_ide);
+          clock_mode = 0;
+          #if DEBUG_MODE
+            Serial.println("Restored clock speed.");
+          #endif
+        }
+      }
+    }
+    last_cpu_temp = cpu_temp;
   }
 }

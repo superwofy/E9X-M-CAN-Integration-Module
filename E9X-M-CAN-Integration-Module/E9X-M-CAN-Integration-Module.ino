@@ -27,7 +27,7 @@ WDT_T4<WDT1> wdt;
   Program configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#define DEBUG_MODE 0                                                                                                                // Toggle serial debug messages. Disable in production.
+#define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 #if DEBUG_MODE
   #define EXTRA_DEBUG 0
 #endif
@@ -45,14 +45,13 @@ WDT_T4<WDT1> wdt;
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures.
-#define F_ZBE_WAKE 0                                                                                                                // Enable/disable F CIC ZBE wakeup functions.
+#define F_ZBE_WAKE 0                                                                                                                // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an existing EXX ZBE.
 
 #if SERVOTRONIC_SVT70
   const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                   // New CAN-ID replacing 0x326 in SVT70 bin.
 #endif
 const uint16_t DME_FAKE_VEH_MODE_CANID = 0x7F1;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section.
 const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80.
-const uint8_t DTC_BUTTON_TIME = 7;                                                                                                  // Set duration for Enabling/Disabling DTC mode on with long press of M button. 100ms increments.
 #if CONTROL_SHIFTLIGHTS
   const uint32_t START_UPSHIFT_WARN_RPM = 5500*4;                                                                                   // RPM setpoints (warning = desired RPM * 4).
   const uint32_t MID_UPSHIFT_WARN_RPM = 6000*4;
@@ -69,6 +68,12 @@ const uint8_t DTC_BUTTON_TIME = 7;                                              
 #if CONTROL_SHIFTLIGHTS
   const uint32_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                     // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
 #endif
+
+const float TOP_THRESHOLD = 65.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
+const float MEDIUM_THRESHOLD = 60.0;
+const float HYSTERESIS = 2.0;
+const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
+const unsigned long MAX_UNDERCLOCK = 24 * 1000000;
 
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
@@ -112,7 +117,8 @@ uint8_t sending_dsc_off_counter = 0;
 bool send_dsc_off_from_mdm = false;
 unsigned long send_dsc_off_from_mdm_timer;
 bool ignore_m_press = false;
-bool cpu_overheated = false;
+uint8_t clock_mode = 0;
+float last_cpu_temp = 0;
 
 
 #if SERVOTRONIC_SVT70
@@ -207,7 +213,7 @@ void setup()
     unsigned long setup_timer = millis();
   #endif
   initialize_watchdog();
-  if ( F_CPU_ACTUAL > (450 * 1000000)) set_arm_clock(450 * 1000000);                                                                // Prevent accidental overclocks
+  if ( F_CPU_ACTUAL > (600 * 1000000)) set_arm_clock(600 * 1000000);                                                                // Prevent accidental overclocks. Remove if needed.
   cpu_speed_ide = F_CPU_ACTUAL;
   configure_IO();
   disable_mcu_peripherals();

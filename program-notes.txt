@@ -12,7 +12,7 @@
 
 // Board: Teensy 4.0
 // Optimize: Fastest
-// CPU Speed: 450 MHz
+// CPU Speed: 528 MHz
 // USB Type: Dual Serial
 
 
