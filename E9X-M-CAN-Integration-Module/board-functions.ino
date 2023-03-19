@@ -23,6 +23,9 @@ void configure_IO()
       actuate_exhaust_solenoid(LOW);                                                                                                // Keep the solenoid de-energised (flap open)
     #endif
   #endif
+  #if RTC
+    setSyncProvider(getTeensyTime);
+  #endif
 }
 
 
@@ -79,7 +82,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 15, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 17, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -111,7 +114,17 @@ void configure_can_controllers()
   #if AUTO_SEAT_HEATING
     filterId = 0x2CA;                                                                                                               // Ambient temperature                                          Cycle time 1s
     canFilters.push(&filterId);                                                                                            
+  #endif
+  #if RTC
+    filterId = 0x2F8;                                                                                                               // Time from KOMBI                                              Cycle time 15s (idle). Sent when changed.
+    canFilters.push(&filterId);
+  #endif
+  #if AUTO_SEAT_HEATING
     filterId = 0x2FA;                                                                                                               // Seat occupancy and belt status                               Cycle time 5s
+    canFilters.push(&filterId);
+  #endif
+  #if RTC
+    filterId = 0x39E;                                                                                                               // Time and date set by the user in CIC.
     canFilters.push(&filterId);
   #endif
   filterId = 0x3AB;                                                                                                                 // Filter Shiftligths car key memory.
@@ -323,3 +336,48 @@ void check_cpu_temp()                                                           
     last_cpu_temp = cpu_temp;
   }
 }
+
+
+#if RTC
+void update_rtc()
+{
+  if (k_msg.buf[3] == 0xFE) {                                                                                                       // Only time is updated
+    uint8_t idrive_hour = k_msg.buf[0];
+    uint8_t idrive_minutes = k_msg.buf[1];
+    //int seconds = k_msg.buf[2];                                                                                                   // Seconds are always 0
+    time_t t = now();
+    uint8_t rtc_day = day(t);
+    uint8_t rtc_month = month(t);
+    uint16_t rtc_year = year(t);
+    
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Received time from iDrive: %d:%d", idrive_hour, idrive_minutes);
+      Serial.println(serial_debug_string);
+    #endif
+    setTime(idrive_hour, idrive_minutes, 0, rtc_day, rtc_month, rtc_year);
+    t = now();
+    Teensy3Clock.set(t); 
+  } else if (k_msg.buf[0] == 0xFE) {                                                                                                // Only date is updated
+    uint8_t idrive_day = k_msg.buf[3];
+    uint8_t idrive_month = k_msg.buf[4] >> 4;
+    uint16_t idrive_year = k_msg.buf[6] << 8 | k_msg.buf[5];
+    time_t t = now();
+    uint8_t rtc_hours = hour(t);
+    uint8_t rtc_minutes = minute(t);
+    uint8_t rtc_seconds = second(t);
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Received date from iDrive: %d/%d/%d", idrive_day, idrive_month, idrive_year);
+      Serial.println(serial_debug_string);
+    #endif
+    setTime(rtc_hours, rtc_minutes, rtc_seconds, idrive_day, idrive_month, idrive_year); 
+    t = now();
+    Teensy3Clock.set(t); 
+  }
+}
+
+
+time_t getTeensyTime()
+{
+  return Teensy3Clock.get();
+}
+#endif

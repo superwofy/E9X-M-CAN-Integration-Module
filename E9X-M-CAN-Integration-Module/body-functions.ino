@@ -77,12 +77,15 @@ void evaluate_ignition_status()
     }
   } else {
     if (ignition) {
-      ignition = false;
-      reset_runtime_variables();
-      scale_mcu_speed();                                                                                                            // Now that the ignition is off, underclock the MCU
-      #if DEBUG_MODE
-        Serial.println("Ignition OFF. Reset values.");
-      #endif
+      if (k_msg.buf[0] != 5) {                                                                                                      // 5 is sent in CA cars when the key is not detected, ignore.
+        ignition = false;
+        reset_runtime_variables();
+        scale_mcu_speed();                                                                                                          // Now that the ignition is off, underclock the MCU
+        #if DEBUG_MODE
+          sprintf(serial_debug_string, "(%X) Ignition OFF. Reset values.", k_msg.buf[0]);
+          Serial.println(serial_debug_string);
+        #endif
+      }
     }
   }
 
@@ -352,3 +355,23 @@ void check_console_buttons()
     holding_dsc_off_console = false;
   }
 }
+
+
+#if RTC
+void update_idrive_time_from_rtc()
+{
+  #if DEBUG_MODE
+    Serial.println("Vehicle date/time not set. Setting from RTC.");
+  #endif
+  time_t t = now();
+  uint8_t rtc_hours = hour(t);
+  uint8_t rtc_minutes = minute(t);
+  uint8_t rtc_seconds = second(t);
+  uint8_t rtc_day = day(t);
+  uint8_t rtc_month = month(t);
+  uint16_t rtc_year = year(t);
+  uint8_t date_time_can[] = {rtc_hours, rtc_minutes, rtc_seconds, 
+                            rtc_day, uint8_t((rtc_month << 4) | 0xF), uint8_t(rtc_year & 0xFF), uint8_t(rtc_year >> 8), 0xF2};
+  KCAN.write(makeMsgBuf(0x39E, 8, date_time_can));
+}
+#endif

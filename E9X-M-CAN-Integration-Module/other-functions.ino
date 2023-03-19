@@ -33,12 +33,14 @@ void print_current_state()
     sprintf(serial_debug_string, " Voltage: %.2f V", battery_voltage);
     SerialUSB1.println(serial_debug_string);
   }
-  if (dsc_program_status == 0) {
-    SerialUSB1.println(" DSC: Fully ON");
-  } else if (dsc_program_status == 1) {
-    SerialUSB1.println(" DSC: DTC/MDM mode");
-  } else {
-    SerialUSB1.println(" DSC: Fully OFF");
+  if (ignition) {
+    if (dsc_program_status == 0) {
+      SerialUSB1.println(" DSC: Fully ON");
+    } else if (dsc_program_status == 1) {
+      SerialUSB1.println(" DSC: DTC/MDM mode");
+    } else {
+      SerialUSB1.println(" DSC: Fully OFF");
+    }
   }
   #if LAUNCH_CONTROL_INDICATOR
     sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
@@ -96,7 +98,18 @@ void print_current_state()
   }
   SerialUSB1.println();
 
-  SerialUSB1.println("========= Convenience ==========");
+  SerialUSB1.println("========= Body ==========");
+  #if RTC
+    time_t t = now();
+    uint8_t rtc_hours = hour(t);
+    uint8_t rtc_minutes = minute(t);
+    uint8_t rtc_seconds = second(t);
+    uint8_t rtc_day = day(t);
+    uint8_t rtc_month = month(t);
+    uint16_t rtc_year = year(t);
+    sprintf(serial_debug_string, " RTC: %d:%d:%d %d/%d/%d", rtc_hours, rtc_minutes, rtc_seconds, rtc_day, rtc_month, rtc_year);
+    SerialUSB1.println(serial_debug_string);
+  #endif
   #if AUTO_SEAT_HEATING
     if (ambient_temperature_can != 255) {
       sprintf(serial_debug_string, " Ambient temp: %d °C", (ambient_temperature_can - 80) / 2);

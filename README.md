@@ -33,6 +33,7 @@ I use it to:
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Enable FXX KCAN1 CIC controllers.
 * Turn on heated seats below a set temperature.
+* Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding, etc.).
 See program notes: [here](program-notes.txt)
 
 

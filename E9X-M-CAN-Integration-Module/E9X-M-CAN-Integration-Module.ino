@@ -29,9 +29,10 @@ WDT_T4<WDT1> wdt;
 
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 #if DEBUG_MODE
-  #define EXTRA_DEBUG 0
-#endif
+#define EXTRA_DEBUG 0
+#else
 #define DISABLE_USB 0                                                                                                               // In production operation the USB interface is not needed.
+#endif
 
 #define RHD 1
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
@@ -40,11 +41,15 @@ WDT_T4<WDT1> wdt;
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
 #if EXHAUST_FLAP_CONTROL
-  #define QUIET_START 1                                                                                                             // Close the exhaust valve as soon as the module is powered (30G).
+#define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as the module is powered (30G).
 #endif
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures.
+#define RTC 1                                                                                                                       // Set the time/date if power is lost. Requires external battery.
+#if RTC
+  #include <TimeLib.h>
+#endif
 #define F_ZBE_WAKE 0                                                                                                                // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an existing EXX ZBE.
 
 #if SERVOTRONIC_SVT70
@@ -358,6 +363,18 @@ void loop()
     else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
       passenger_seat_status = k_msg.buf[1];
     } 
+    #endif
+
+    #if RTC
+    else if (k_msg.id == 0x2F8) {
+      if (k_msg.buf[0] == 0xFD && k_msg.buf[7] == 0xFC) {                                                                           // Date/time not set
+        update_idrive_time_from_rtc();
+      }
+    }
+
+    else if (k_msg.id == 0x39E) {                                                                                                   // Received new date/time from CIC.
+      update_rtc();
+    }
     #endif
 
     else if (k_msg.id == 0x3AB) {
