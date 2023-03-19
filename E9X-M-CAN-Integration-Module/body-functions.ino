@@ -238,19 +238,33 @@ void check_pdc_queue()
 #endif
 
 
-void evaluate_battery_engine() 
+void evaluate_engine_rpm()
 {
-  #if DEBUG_MODE
-    battery_voltage = (((k_msg.buf[1] - 240 ) * 256.0) + k_msg.buf[0]) / 68.0;
-  #endif
-
-  // 0x89: terminal R / off, 0x80 Terminal 15, 9 engine turning off.
-  if (k_msg.buf[2] == 9 || k_msg.buf[2] == 0x89 || k_msg.buf[2] == 0x80) {                                                          // Use the charge status byte to determine if the engine is running.
-    engine_running = false;
-  } else {
+  RPM = ((uint32_t)k_msg.buf[5] << 8) | (uint32_t)k_msg.buf[4];
+  if (!engine_running && (RPM > 2000)) {
     engine_running = true;
+    startup_animation();                                                                                                            // Show off shift light segments during engine startup (>500rpm).
+    #if EXHAUST_FLAP_CONTROL
+      exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
+    #endif
+    #if DEBUG_MODE
+      Serial.println("Engine started.");
+    #endif
+  } else if (engine_running && (RPM > 200)) {                                                                                       // Less than 50 RPM. Engine stalled or was stopped.
+    engine_running = false;
+    #if DEBUG_MODE
+      Serial.println("Engine stopped.");
+    #endif
   }
 }
+
+
+#if DEBUG_MODE
+void evaluate_battery_voltage() 
+{
+  battery_voltage = (((k_msg.buf[1] - 240 ) * 256.0) + k_msg.buf[0]) / 68.0;
+}
+#endif
 
 
 #if SERVOTRONIC_SVT70

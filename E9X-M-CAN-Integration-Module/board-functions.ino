@@ -133,8 +133,10 @@ void configure_can_controllers()
     filterId = 0x3B0;                                                                                                               // Reverse gear status.                                         Cycle time 1s (idle)
     canFilters.push(&filterId);
   #endif
-  filterId = 0x3B4;                                                                                                                 // Engine ON status from DME and battery voltage.
-  canFilters.push(&filterId);
+  #if DEBUG_MODE
+    filterId = 0x3B4;                                                                                                               // Battery voltage from DME.
+    canFilters.push(&filterId);
+  #endif
   filterId = 0x3CA;                                                                                                                 // CIC MDrive settings
   canFilters.push(&filterId);
   #if F_ZBE_WAKE
@@ -142,7 +144,7 @@ void configure_can_controllers()
     canFilters.push(&filterId);
   #endif
   #if DEBUG_MODE
-      Serial.println("KCAN filters:");
+    Serial.println("KCAN filters:");
   #endif
   filterCount = canFilters.getCount();
   for (uint8_t i = 0; i < filterCount; i++) {

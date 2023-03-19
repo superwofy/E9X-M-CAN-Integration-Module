@@ -280,7 +280,7 @@ void loop()
   if (KCAN.read(k_msg)) {
     if (ignition) {
       if (k_msg.id == 0xAA) {                                                                                                       // Monitor 0xAA (rpm/throttle status).
-        RPM = ((uint32_t)k_msg.buf[5] << 8) | (uint32_t)k_msg.buf[4];
+        evaluate_engine_rpm();
 
         // Shiftlights and LC depend on RPM. Since this message is cycled every 100ms, it makes sense to run the calculations now.
         #if CONTROL_SHIFTLIGHTS
@@ -381,9 +381,11 @@ void loop()
       send_dme_ckm();
     }
 
+    #if DEBUG_MODE
     else if (k_msg.id == 0x3B4) {                                                                                                   // Monitor battery voltage from DME.
-      evaluate_battery_engine();
+      evaluate_battery_voltage();
     }
+    #endif
 
     else if (k_msg.id == 0x3CA) {                                                                                                   // Receive settings from iDrive.      
       update_mdrive_message_settings();

@@ -1,19 +1,16 @@
 #if CONTROL_SHIFTLIGHTS
+void startup_animation()
+{
+  activate_shiftlight_segments(shiftlights_startup_buildup_buf);
+  #if DEBUG_MODE
+    Serial.println("Showing shift light on engine startup.");
+  #endif
+  ignore_shiftlights_off_counter = 10;                                                                                            // Skip a few off cycles to allow segments to light up.
+}
+
+
 void evaluate_shiftlight_display()
 {
-  if (!engine_running && (RPM > 2000)) {                                                                                            // Show off shift light segments during engine startup (>500rpm).
-    engine_running = true;                                                                                                          // Run this just in case we missed 3B4.
-    activate_shiftlight_segments(shiftlights_startup_buildup_buf);
-    #if DEBUG_MODE
-      Serial.println("Showing shift light on engine startup.");
-    #endif
-    ignore_shiftlights_off_counter = 10;                                                                                            // Skip a few off cycles to allow segments to light up.
-
-    #if EXHAUST_FLAP_CONTROL
-      exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
-    #endif
-  }
-
   if (START_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                             // First yellow segment.                                                              
     activate_shiftlight_segments(shiftlights_start_buf);
     #if DEBUG_MODE
@@ -61,8 +58,8 @@ void evaluate_update_shiftlight_sync()
     if (pt_msg.buf[0] != last_var_rpm_can) {
       var_redline_position = ((pt_msg.buf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                                 // This is where the variable redline actually starts on the KOMBI (x4).
       START_UPSHIFT_WARN_RPM_ = var_redline_position;                                                                              
-      MID_UPSHIFT_WARN_RPM_ = var_redline_position + 2000;                                                                          // +500 RPM
-      MAX_UPSHIFT_WARN_RPM_ = var_redline_position + 4000;                                                                          // +1000 RPM
+      MID_UPSHIFT_WARN_RPM_ = var_redline_position + 1600;                                                                          // +400 RPM
+      MAX_UPSHIFT_WARN_RPM_ = var_redline_position + 2500;                                                                          // +600 RPM
       if (pt_msg.buf[0] == 0x88) {                                                                                                  // DME is sending 6800 RPM.
         engine_coolant_warmed_up = true;
       }
