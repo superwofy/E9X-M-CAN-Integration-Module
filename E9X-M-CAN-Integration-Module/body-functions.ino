@@ -47,11 +47,11 @@ void send_seat_heating_request(bool driver)
   seatHeatingTx.push(&m);
   #if DEBUG_MODE
     if (driver) {
-      sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %dC, treshold %dC.", 
-           (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
+      sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
+           (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
     } else {
-      sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %dC, treshold %dC.", 
-           (ambient_temperature_can - 80) / 2, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2);
+      sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %.1fC, treshold %.1fC.", 
+           (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
     }
     Serial.println(serial_debug_string);
   #endif
@@ -238,7 +238,7 @@ void evaluate_engine_rpm()
     #if DEBUG_MODE
       Serial.println("Engine started.");
     #endif
-  } else if (engine_running && (RPM > 200)) {                                                                                       // Less than 50 RPM. Engine stalled or was stopped.
+  } else if (engine_running && (RPM < 200)) {                                                                                       // Less than 50 RPM. Engine stalled or was stopped.
     engine_running = false;
     #if DEBUG_MODE
       Serial.println("Engine stopped.");

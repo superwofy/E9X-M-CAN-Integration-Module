@@ -353,7 +353,8 @@ void update_rtc()
     uint16_t rtc_year = year(t);
     
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "Received time from iDrive: %d:%d", idrive_hour, idrive_minutes);
+      sprintf(serial_debug_string, "Received time from iDrive: %s%d:%s%d", 
+              idrive_hour > 9 ? "" : "0", idrive_hour, idrive_minutes > 9 ? "" : "0", idrive_minutes);
       Serial.println(serial_debug_string);
     #endif
     setTime(idrive_hour, idrive_minutes, 0, rtc_day, rtc_month, rtc_year);
@@ -368,7 +369,8 @@ void update_rtc()
     uint8_t rtc_minutes = minute(t);
     uint8_t rtc_seconds = second(t);
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "Received date from iDrive: %d/%d/%d", idrive_day, idrive_month, idrive_year);
+      sprintf(serial_debug_string, "Received date from iDrive: %s%d/%s%d/%d", 
+              idrive_day > 9 ? "" : "0", idrive_day, idrive_month > 9 ? "" : "0", idrive_month, idrive_year);
       Serial.println(serial_debug_string);
     #endif
     setTime(rtc_hours, rtc_minutes, rtc_seconds, idrive_day, idrive_month, idrive_year); 

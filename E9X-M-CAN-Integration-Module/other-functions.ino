@@ -107,12 +107,15 @@ void print_current_state()
     uint8_t rtc_day = day(t);
     uint8_t rtc_month = month(t);
     uint16_t rtc_year = year(t);
-    sprintf(serial_debug_string, " RTC: %d:%d:%d %d/%d/%d", rtc_hours, rtc_minutes, rtc_seconds, rtc_day, rtc_month, rtc_year);
+    sprintf(serial_debug_string, " RTC: %s%d:%s%d:%s%d %s%d/%s%d/%d", 
+            rtc_hours > 9 ? "" : "0", rtc_hours, rtc_minutes > 9 ? "" : "0", rtc_minutes, 
+            rtc_seconds > 9 ? "" : "0", rtc_seconds, 
+            rtc_day > 9 ? "" : "0", rtc_day, rtc_month > 9 ? "" : "0", rtc_month, rtc_year);
     SerialUSB1.println(serial_debug_string);
   #endif
   #if AUTO_SEAT_HEATING
     if (ambient_temperature_can != 255) {
-      sprintf(serial_debug_string, " Ambient temp: %d °C", (ambient_temperature_can - 80) / 2);
+      sprintf(serial_debug_string, " Ambient temp: %.1f °C", (ambient_temperature_can - 80) / 2.0);
     } else {
       sprintf(serial_debug_string, " Ambient temp: Unknown");
     }
