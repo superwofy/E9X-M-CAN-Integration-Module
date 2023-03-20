@@ -141,20 +141,12 @@ void send_zbe_acknowledge()
 void control_exhaust_flap_user()
 {
   if (engine_running) {
-    #if LAUNCH_CONTROL_INDICATOR
-    if (exhaust_flap_sport || lc_cc_active) {                                                                                       // Exhaust is in quiet mode. Open with LC.
-    #else
     if (exhaust_flap_sport) {                                                                                                       // Flap always open in sport mode.
-    #endif                                                                                                                      
       if ((millis() - exhaust_flap_action_timer) >= 500) {
         if (!exhaust_flap_open) {
           actuate_exhaust_solenoid(LOW);
           #if DEBUG_MODE
-            if (lc_cc_active) {
-              Serial.println("Opened exhaust flap with Launch Control.");
-            } else {
-              Serial.println("Opened exhaust flap with MDrive.");
-            }
+            Serial.println("Opened exhaust flap with MDrive.");
           #endif
         }
       }
@@ -166,11 +158,7 @@ void control_exhaust_flap_user()
 void control_exhaust_flap_rpm()
 {
   if (engine_running) {
-    #if LAUNCH_CONTROL_INDICATOR
-    if (!exhaust_flap_sport && !lc_cc_active) {                                                                                     // Only execute these checks if the flap is not user-controlled
-    #else
     if (!exhaust_flap_sport) {
-    #endif
       if ((millis() - exhaust_flap_action_timer) >= exhaust_flap_action_interval) {                                                 // Avoid vacuum drain, oscillation and apply startup delay.
         if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
           if (!exhaust_flap_open) {

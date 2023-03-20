@@ -15,6 +15,8 @@ Hardware used:
 * OSRAM LO M676-Q2S1 FOG button illumination LED.
 * KINGBRIGHT KM2520ZGC-G03 FOG indicator LED.
 * Micro USB right-angle cable.
+* CR2450 620mAh battery. With a ~0.025 mA draw, the RTC should last around 3 years unpowered (terminal 30G OFF).
+	-> https://www.nxp.com/docs/en/nxp/data-sheets/IMXRT1060CEC.pdf P.28 (SNVSS) + P.32 (RTC-OSC).
 * Old PDC module PCB and housing. It has nice autmotive connectors.
 
 
