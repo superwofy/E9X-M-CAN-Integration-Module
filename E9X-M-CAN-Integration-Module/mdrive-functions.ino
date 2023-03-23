@@ -15,6 +15,10 @@ void read_settings_from_eeprom()
     console_power_mode = false;
   }
 
+  if (mdrive_dsc == 0x13) {                                                                                                         // This debounce timer is only needed to allow DTC/MDM to complete.
+    mfl_debounce_time_ms = 400;
+  }
+
   #if DEBUG_MODE
     Serial.println("Loaded MDrive settings from EEPROM.");
   #endif
@@ -140,10 +144,13 @@ void evaluate_m_mfl_button_press()
 {
   if (pt_msg.buf[1] == 0x4C) {                                                                                                      // M button is pressed.
     if (!ignore_m_press) {
-      ignore_m_press = true;                                                                                                        // Ignore further pressed messages until the button is released.
-      toggle_mdrive_message_active();
-      send_mdrive_message();
-      toggle_mdrive_dsc_mode();                                                                                                     // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
+      if ((millis() - mfl_debounce_timer) >= mfl_debounce_time_ms) {
+        ignore_m_press = true;                                                                                                      // Ignore further pressed messages until the button is released.
+        toggle_mdrive_message_active();
+        send_mdrive_message();
+        toggle_mdrive_dsc_mode();                                                                                                   // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
+        mfl_debounce_timer = millis();
+      }
     }
   } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
     ignore_m_press = false;
@@ -222,6 +229,11 @@ void update_mdrive_message_settings()
           mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
       Serial.println(serial_debug_string);
     #endif
+  }
+  if (mdrive_dsc == 0x13) {                                                                                                         // This debounce timer is only needed to allow DTC/MDM to complete.
+    mfl_debounce_time_ms = 400;
+  } else {
+    mfl_debounce_time_ms = 0;
   }
   send_mdrive_message();
 }

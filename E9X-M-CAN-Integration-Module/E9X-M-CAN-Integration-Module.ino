@@ -115,7 +115,8 @@ uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                          
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
 bool holding_dsc_off_console = false;
 unsigned long mdrive_message_timer;
-unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
+unsigned long mfl_debounce_timer, power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
+uint16_t mfl_debounce_time_ms = 0;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
 bool sending_dsc_off = false;
 uint8_t sending_dsc_off_counter = 0;
@@ -373,7 +374,7 @@ void loop()
     }
 
     else if (k_msg.id == 0x39E) {                                                                                                   // Received new date/time from CIC.
-      update_rtc();
+      update_rtc_from_idrive();
     }
     #endif
 
@@ -452,14 +453,19 @@ void loop()
   D-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
     
-  #if SERVOTRONIC_SVT70
+  #if SERVOTRONIC_SVT70 || RTC
   if (DCAN.read(d_msg)) {
-    if (diagnose_svt) {
-      if (d_msg.id == 0x6F1) {                                                                                                      // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
-        if (d_msg.buf[0] == 0xE) {                                                                                                  // SVT_70 address is 0xE
+    if (d_msg.id == 0x6F1) {
+      if (d_msg.buf[0] == 0xE) {                                                                                                    // SVT_70 address is 0xE
+        if (diagnose_svt) {                                                                                                         // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
           dcan_to_ptcan();
         }
+      } 
+      #if RTC
+      else if (d_msg.buf[0] == 0x60) {                                                                                              // KOMBI is at address 0x60. ISTA sets time by sending it to KOMBI.
+        update_rtc_from_dcan();
       }
+      #endif
     }
   }
   #endif

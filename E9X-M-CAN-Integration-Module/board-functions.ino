@@ -209,7 +209,7 @@ void configure_can_controllers()
   }
 
   // DCAN
-  #if SERVOTRONIC_SVT70
+  #if SERVOTRONIC_SVT70 || RTC
     filterId = 0x6F1;                                                                                                               // Receive diagnostic queries from DCAN tool to forward.
     canFilters.push(&filterId);
     #if DEBUG_MODE
@@ -247,7 +247,7 @@ void configure_can_controllers()
 
 void initialize_timers()
 {
-  power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
+  mfl_debounce_timer = power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
   #if DEBUG_MODE
     debug_print_timer = millis();
     loop_timer = micros();
@@ -341,12 +341,12 @@ void check_cpu_temp()                                                           
 
 
 #if RTC
-void update_rtc()
+void update_rtc_from_idrive()
 {
   if (k_msg.buf[3] == 0xFE) {                                                                                                       // Only time is updated
     uint8_t idrive_hour = k_msg.buf[0];
     uint8_t idrive_minutes = k_msg.buf[1];
-    //int seconds = k_msg.buf[2];                                                                                                   // Seconds are always 0
+    //uint8_t idrive_seconds = k_msg.buf[2];                                                                                        // Seconds are always 0
     time_t t = now();
     uint8_t rtc_day = day(t);
     uint8_t rtc_month = month(t);
@@ -374,6 +374,45 @@ void update_rtc()
       Serial.println(serial_debug_string);
     #endif
     setTime(rtc_hours, rtc_minutes, rtc_seconds, idrive_day, idrive_month, idrive_year); 
+    t = now();
+    Teensy3Clock.set(t); 
+  }
+}
+
+
+void update_rtc_from_dcan()
+{
+  if (d_msg.buf[1] == 0x10) {                                                                                                       // Only time is updated
+    uint8_t dcan_hour = d_msg.buf[5];
+    uint8_t dcan_minutes = d_msg.buf[6];
+    uint8_t dcan_seconds = d_msg.buf[7]; 
+    time_t t = now();
+    uint8_t rtc_day = day(t);
+    uint8_t rtc_month = month(t);
+    uint16_t rtc_year = year(t);
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Received time from DCAN: %s%d:%s%d:%s%d", 
+              dcan_hour > 9 ? "" : "0", dcan_hour, dcan_minutes > 9 ? "" : "0", dcan_minutes,
+              dcan_seconds > 9 ? "" : "0", dcan_seconds);
+      Serial.println(serial_debug_string);
+    #endif
+    setTime(dcan_hour, dcan_minutes, dcan_seconds, rtc_day, rtc_month, rtc_year);
+    t = now();
+    Teensy3Clock.set(t); 
+  } else if (d_msg.buf[1] == 0x21) {                                                                                                // Only date is updated
+    uint8_t dcan_day = d_msg.buf[2];
+    uint8_t dcan_month = d_msg.buf[3];
+    uint16_t dcan_year = d_msg.buf[4] << 8 | d_msg.buf[5];
+    time_t t = now();
+    uint8_t rtc_hours = hour(t);
+    uint8_t rtc_minutes = minute(t);
+    uint8_t rtc_seconds = second(t);
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Received date from DCAN: %s%d/%s%d/%d", 
+              dcan_day > 9 ? "" : "0", dcan_day, dcan_month > 9 ? "" : "0", dcan_month, dcan_year);
+      Serial.println(serial_debug_string);
+    #endif
+    setTime(rtc_hours, rtc_minutes, rtc_seconds, dcan_day, dcan_month, dcan_year); 
     t = now();
     Teensy3Clock.set(t); 
   }

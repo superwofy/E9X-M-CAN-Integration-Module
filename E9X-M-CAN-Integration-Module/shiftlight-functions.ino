@@ -5,7 +5,7 @@ void startup_animation()
   #if DEBUG_MODE
     Serial.println("Showing shift light on engine startup.");
   #endif
-  ignore_shiftlights_off_counter = 9;                                                                                               // Skip a few off cycles to allow segments to light up.
+  ignore_shiftlights_off_counter = 8;                                                                                               // Skip a few off cycles to allow segments to light up.
 }
 
 
