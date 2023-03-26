@@ -4,7 +4,9 @@ void configure_IO()
     while (!Serial && millis() < 5000);
   #endif
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
-  pinMode(DCAN_STBY_PIN, OUTPUT); 
+  digitalWrite(PTCAN_STBY_PIN, HIGH);
+  pinMode(DCAN_STBY_PIN, OUTPUT);
+  digitalWrite(DCAN_STBY_PIN, HIGH); 
   pinMode(POWER_BUTTON_PIN, INPUT_PULLUP);                                                                                                 
   pinMode(DSC_BUTTON_PIN, INPUT_PULLUP);
   pinMode(POWER_LED_PIN, OUTPUT);
@@ -82,7 +84,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 17, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 18, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -127,6 +129,8 @@ void configure_can_controllers()
     filterId = 0x39E;                                                                                                               // Time and date set by the user in CIC.
     canFilters.push(&filterId);
   #endif
+  filterId = 0x3A8;                                                                                                                 // Filter M Key POWER setting from iDrive.
+  canFilters.push(&filterId);
   filterId = 0x3AB;                                                                                                                 // Filter Shiftligths car key memory.
   canFilters.push(&filterId);
   #if REVERSE_BEEP
@@ -233,9 +237,11 @@ void configure_can_controllers()
         Serial.println(filterId, HEX);
       #endif
     }
+  digitalWrite(DCAN_STBY_PIN, LOW);                                                                                                 // DCAN configured, activate transceiver.
   #endif
 
-  digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // Activate the secondary transceiver.
+  digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // PTCAN configured, activate transceiver.
+
 
   #if EXTRA_DEBUG
     KCAN.mailboxStatus();
@@ -287,6 +293,12 @@ void toggle_transceiver_standby()
       Serial.println("Deactivated PT-CAN transceiver.");
       Serial.println("Opened exhaust flap.");
     #endif
+    #if SERVOTRONIC_SVT70 || RTC
+      digitalWrite(DCAN_STBY_PIN, LOW);
+      #if DEBUG_MODE
+        Serial.println("Deactivated D-CAN transceiver.");
+      #endif
+    #endif
     #if QUIET_START
       actuate_exhaust_solenoid(LOW);                                                                                                // Release the solenoid to reduce power consumption
     #endif
@@ -295,6 +307,12 @@ void toggle_transceiver_standby()
     #if DEBUG_MODE
       Serial.println("Re-activated PT-CAN transceiver.");
       Serial.println("Closed exhaust flap.");
+    #endif
+    #if SERVOTRONIC_SVT70 || RTC
+      digitalWrite(DCAN_STBY_PIN, HIGH);
+      #if DEBUG_MODE
+        Serial.println("Re-eactivated D-CAN transceiver.");
+      #endif
     #endif
     #if QUIET_START
       actuate_exhaust_solenoid(HIGH);                                                                                               // Reactivate the solenoid.
@@ -424,3 +442,32 @@ time_t getTeensyTime()
   return Teensy3Clock.get();
 }
 #endif
+
+
+void check_ptcan_status() 
+{
+  if ((millis() - deactivate_ptcan_timer) >= 30000 && deactivate_ptcan_temporariliy) {                                              // Re-activate after 30s of no LDM DCAN requests.
+    temp_reactivate_ptcan();
+  }
+}
+
+
+void temp_deactivate_ptcan() 
+{
+  digitalWrite(PTCAN_STBY_PIN, HIGH);
+  #if DEBUG_MODE
+    Serial.println("Deactivated PT-CAN transceiver while LDM is being diagnosed/flashed.");
+  #endif
+  deactivate_ptcan_temporariliy = true;
+  deactivate_ptcan_timer = millis();
+}
+
+
+void temp_reactivate_ptcan()
+{
+  digitalWrite(PTCAN_STBY_PIN, LOW);
+  #if DEBUG_MODE
+    Serial.println("Re-activated PT-CAN transceiver after LDM diagnosis.");
+  #endif
+  deactivate_ptcan_temporariliy = false;
+}

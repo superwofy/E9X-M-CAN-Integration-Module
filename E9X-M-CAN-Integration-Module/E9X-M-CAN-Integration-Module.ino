@@ -94,8 +94,7 @@ cppQueue dscTx(sizeof(delayedCanTxMsg), 26, queue_FIFO);
 
 uint32_t cpu_speed_ide;
 
-bool ignition = false;
-bool vehicle_awake = true;
+bool ignition = false, vehicle_awake = true;
 unsigned long vehicle_awake_timer;
 uint8_t dtc_button_pressed[] = {0xFD, 0xFF}, dtc_button_released[] = {0xFC, 0xFF};
 CAN_message_t dtc_button_pressed_buf, dtc_button_released_buf;
@@ -106,11 +105,10 @@ CAN_message_t dsc_off_fake_cc_status_buf, mdm_fake_cc_status_buf, mdm_fake_cc_st
 
 bool engine_running = false;
 uint32_t RPM = 0;
+uint8_t dme_ckm[] = {0, 0xFF};
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
-bool mdrive_status = false;                                                                                                         // false = off, true = on
-bool mdrive_settings_updated = false;
+bool mdrive_status = false, mdrive_settings_updated = false, mdrive_power_active = false;
 bool console_power_mode, restore_console_power_mode = false;
-bool mdrive_power_active = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
 bool holding_dsc_off_console = false;
@@ -118,14 +116,14 @@ unsigned long mdrive_message_timer;
 unsigned long mfl_debounce_timer, power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
 uint16_t mfl_debounce_time_ms = 0;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
-bool sending_dsc_off = false;
 uint8_t sending_dsc_off_counter = 0;
-bool send_dsc_off_from_mdm = false;
+bool send_dsc_off_from_mdm = false, sending_dsc_off = false;
 unsigned long send_dsc_off_from_mdm_timer;
 bool ignore_m_press = false;
 uint8_t clock_mode = 0;
 float last_cpu_temp = 0;
-
+bool deactivate_ptcan_temporariliy = false;
+unsigned long deactivate_ptcan_timer;
 
 #if SERVOTRONIC_SVT70
   uint8_t servotronic_message[] = {0, 0xFF};
@@ -185,17 +183,13 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
 #endif
 #if EXHAUST_FLAP_CONTROL
   bool exhaust_flap_sport = false, exhaust_flap_open = true;
-  unsigned long exhaust_flap_action_timer;
-  unsigned long exhaust_flap_action_interval = 1500;
+  unsigned long exhaust_flap_action_timer, exhaust_flap_action_interval = 1500;
 #endif
 #if LAUNCH_CONTROL_INDICATOR
   uint8_t lc_cc_on[] = {0x40, 0xBE, 1, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
   uint8_t lc_cc_off[] = {0x40, 0xBE, 1, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
   CAN_message_t lc_cc_on_buf, lc_cc_off_buf;
-  bool lc_cc_active = false;
-  bool mdm_with_lc = false;
-  bool clutch_pressed = false;
-  bool vehicle_moving = false;
+  bool lc_cc_active = false, mdm_with_lc = false, clutch_pressed = false, vehicle_moving = false;
 #endif
 #if AUTO_SEAT_HEATING
   bool driver_seat_heating_status = false, passenger_seat_heating_status = false;
@@ -246,6 +240,7 @@ void loop()
   #if EXHAUST_FLAP_CONTROL
     control_exhaust_flap_user();
   #endif
+  check_ptcan_status();
 
   if (ignition) {
     check_console_buttons();
@@ -258,7 +253,7 @@ void loop()
     #endif
   } else {
     if (vehicle_awake) {
-      if ((millis() - vehicle_awake_timer) >= 10000) {
+      if ((millis() - vehicle_awake_timer) >= 5000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring .
         #if DEBUG_MODE
           Serial.println("Vehicle Sleeping.");
@@ -305,11 +300,25 @@ void loop()
       }
       #endif
 
+      #if FRONT_FOG_INDICATOR
+      else if (k_msg.id == 0x21A) {                                                                                                 // Light status sent by the FRM.
+        evaluate_fog_status();
+      }
+      #endif
+
+      else if (k_msg.id == 0x3A8) {                                                                                                 // Received M Key settings from iDrive.
+        save_dme_power_ckm();
+      }
+
       #if REVERSE_BEEP
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
         evaluate_pdc_beep();
       }
       #endif
+
+      else if (k_msg.id == 0x3CA) {                                                                                                 // Receive settings from iDrive.      
+        update_mdrive_message_settings();
+      }
     }
 
     if (k_msg.id == 0x130) {                                                                                                        // Monitor ignition status
@@ -321,12 +330,6 @@ void loop()
         #endif
       }
     }
-
-    #if FRONT_FOG_INDICATOR
-    else if (k_msg.id == 0x21A) {
-      evaluate_fog_status();
-    }
-    #endif
 
     #if AUTO_SEAT_HEATING
     else if (k_msg.id == 0x22A) {                                                                                                   // Passenger's seat heating status message is only sent with ignition on.
@@ -378,8 +381,8 @@ void loop()
     }
     #endif
 
-    else if (k_msg.id == 0x3AB) {
-      send_dme_ckm();
+    else if (k_msg.id == 0x3AB) {                                                                                                   // Time POWER CKM message with Shiftlight CKM.
+      send_dme_power_ckm();
     }
 
     #if DEBUG_MODE
@@ -388,17 +391,13 @@ void loop()
     }
     #endif
 
-    else if (k_msg.id == 0x3CA) {                                                                                                   // Receive settings from iDrive.      
-      update_mdrive_message_settings();
-    }
-
     #if F_ZBE_WAKE
-    else if (k_msg.id == 0x4E2) {
-      send_zbe_wakeup();
-    }
-
     else if (k_msg.id == 0x273) {                                                                                                   // This message wakes up the F CIC controller.
       send_zbe_acknowledge();
+    }
+
+    else if (k_msg.id == 0x4E2) {
+      send_zbe_wakeup();
     }
     #endif
   }
@@ -466,6 +465,18 @@ void loop()
         update_rtc_from_dcan();
       }
       #endif
+      else if (d_msg.buf[0] == 0x1C) {                                                                                              // Fix for LDM program issues.
+        if (!deactivate_ptcan_temporariliy) {
+          temp_deactivate_ptcan();
+        } else {
+          deactivate_ptcan_timer = millis();
+        }
+      }
+      else {
+        if (deactivate_ptcan_temporariliy && d_msg.buf[0] != 0xEF) {
+          temp_reactivate_ptcan();
+        }
+      }      
     }
   }
   #endif

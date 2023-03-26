@@ -151,3 +151,10 @@ void non_blocking_mdm_to_off()
     }
   }       
 }
+
+
+void check_dtc_mdm_status() {
+  if (!mdrive_status && dsc_program_status == 1) {                                                                                  // If for some reason DTC/MDM stayed on after MDrive off, disable it.
+    send_dtc_button_press(false);
+  }
+}

@@ -66,7 +66,6 @@ void evaluate_ignition_status()
       scale_mcu_speed();
       #if SERVOTRONIC_SVT70
         if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                       // If POWER button is being held when turning on ignition, allow SVT diagnosis.
-          digitalWrite(DCAN_STBY_PIN, LOW);
           diagnose_svt = true;
           KCAN.write(servotronic_cc_on_buf);                                                                                        // Indicate that diagnosing is now possible.
         }
@@ -267,10 +266,12 @@ void send_svt_kcan_cc_notification()
 
 void dcan_to_ptcan()
 {
-  PTCAN.write(d_msg);
-  #if DEBUG_MODE
-    dcan_forwarded_count++;
-  #endif
+  if (!deactivate_ptcan_temporariliy) {
+    PTCAN.write(d_msg);
+    #if DEBUG_MODE
+      dcan_forwarded_count++;
+    #endif
+  }
 }
 
 
@@ -282,16 +283,6 @@ void ptcan_to_dcan()
   #endif
 }
 #endif
-
-
-void send_dme_ckm()
-{
-  byte dme_ckm[] = {0xF2, 0xFF};
-  KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                        // This is sent by the DME to populate the M Key iDrive section
-  #if DEBUG_MODE
-    Serial.println("Sent dummy DME POWER CKM.");
-  #endif
-}
 
 
 void check_console_buttons()

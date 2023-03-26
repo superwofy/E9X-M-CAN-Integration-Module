@@ -32,11 +32,7 @@ void evaluate_shiftlight_display()
   } else {                                                                                                                          // RPM dropped. Disable lights.
     if (shiftlights_segments_active) {
       if (ignore_shiftlights_off_counter == 0) {
-        KCAN.write(shiftlights_off_buf);                                                                            
-        shiftlights_segments_active = false;
-        #if DEBUG_MODE
-          Serial.println("Deactivated shiftlights segments");
-        #endif 
+        deactivate_shiftlights();
       } else {
         ignore_shiftlights_off_counter--;
       }
@@ -45,10 +41,20 @@ void evaluate_shiftlight_display()
 }
 
 
+void deactivate_shiftlights()
+{
+  KCAN.write(shiftlights_off_buf);                                                                            
+  shiftlights_segments_active = false;
+  #if DEBUG_MODE
+    Serial.println("Deactivated shiftlights segments");
+  #endif 
+}
+
+
 void activate_shiftlight_segments(CAN_message_t message)
 {
-    KCAN.write(message);                                                               
-    shiftlights_segments_active = true;
+  KCAN.write(message);                                                               
+  shiftlights_segments_active = true;
 }
 
 

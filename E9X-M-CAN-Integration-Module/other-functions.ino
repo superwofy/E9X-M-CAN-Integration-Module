@@ -25,13 +25,13 @@ void print_current_state()
   SerialUSB1.println(serial_debug_string);
   sprintf(serial_debug_string, " Engine: %s", engine_running ? "ON" : "OFF");
   SerialUSB1.println(serial_debug_string);
-  if (engine_running) {
-    sprintf(serial_debug_string, " RPM: %ld", RPM / 4);
-    SerialUSB1.println(serial_debug_string);
-  }
+  sprintf(serial_debug_string, " RPM: %ld", RPM / 4);
+  SerialUSB1.println(serial_debug_string);
   if (vehicle_awake) {
     sprintf(serial_debug_string, " Voltage: %.2f V", battery_voltage);
     SerialUSB1.println(serial_debug_string);
+  } else {
+    SerialUSB1.println(" Voltage: Unknown");
   }
   if (ignition) {
     if (dsc_program_status == 0) {
@@ -41,20 +41,22 @@ void print_current_state()
     } else {
       SerialUSB1.println(" DSC: Fully OFF");
     }
+  } else {
+    SerialUSB1.println(" DSC: Asleep");
   }
   #if LAUNCH_CONTROL_INDICATOR
     sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
     SerialUSB1.println(serial_debug_string);
-    if (ignition) {
-      sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
-      SerialUSB1.println(serial_debug_string);
-    }
+    sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
+    SerialUSB1.println(serial_debug_string);
   #endif
 
   SerialUSB1.println("============ MDrive ============");
   if (ignition) {
     sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
     SerialUSB1.println(serial_debug_string);
+  } else {
+    SerialUSB1.println(" Inactive");
   }
   SerialUSB1.print(" Settings: DSC-");
   switch (mdrive_dsc) {
@@ -97,6 +99,8 @@ void print_current_state()
       SerialUSB1.print("Sport"); break;
   }
   SerialUSB1.println();
+  sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[0] == 0xF1 ? "Normal" : "Sport");
+  SerialUSB1.println(serial_debug_string);
 
   SerialUSB1.println("========= Body ==========");
   #if RTC
@@ -121,17 +125,13 @@ void print_current_state()
     }
     SerialUSB1.println(serial_debug_string);
     #if REVERSE_BEEP
-      if (ignition) {
-        sprintf(serial_debug_string, " Reverse gear: %s", pdc_beep_sent ? "ON" : "OFF");
-        SerialUSB1.println(serial_debug_string);
-      }
+      sprintf(serial_debug_string, " Reverse gear: %s", pdc_beep_sent ? "ON" : "OFF");
+      SerialUSB1.println(serial_debug_string);
     #endif
-    if (ignition) {
-      sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
-      SerialUSB1.println(serial_debug_string);
-      sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
-      SerialUSB1.println(serial_debug_string);
-    }
+    sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
+    SerialUSB1.println(serial_debug_string);
+    sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
+    SerialUSB1.println(serial_debug_string);
     sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
     SerialUSB1.println(serial_debug_string);
     sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
@@ -149,6 +149,8 @@ void print_current_state()
     if (ignition) {
       sprintf(serial_debug_string, " FTM indicator: %s", ftm_indicator_status ? "ON" : "OFF");
       SerialUSB1.println(serial_debug_string);
+    } else {
+      SerialUSB1.println(" FTM indicator: Inactive");
     }
   #endif
   sprintf(serial_debug_string, " DCAN fix for SVT: %s", diagnose_svt ? "ON" : "OFF");
@@ -189,6 +191,7 @@ void reset_runtime_variables()                                                  
   RPM = 0;
   ignore_m_press = false;
   mdrive_power_active = restore_console_power_mode = false;
+  console_power_mode = dme_ckm[0] == 0xF1 ? false : true;                                                                           // When cycling ignition, restore this to its CKM value.
   sending_dsc_off = send_dsc_off_from_mdm = false;
   sending_dsc_off_counter = 0;
   dtcTx.flush();                                                                                                                    // Empty these queues in case something was left over.
@@ -201,13 +204,12 @@ void reset_runtime_variables()                                                  
     pdc_beep_sent = false;
   #endif
   #if SERVOTRONIC_SVT70
-    digitalWrite(DCAN_STBY_PIN, HIGH);
     diagnose_svt = false;
   #endif
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
-    #if QUIET_START                                                                                                                // Keep the flap closed until the next start.
-      actuate_exhaust_solenoid(HIGH);                                                                                              // Run this write in case the engine was shut down in sport mode.
+    #if QUIET_START                                                                                                                 // Keep the flap closed until the next start.
+      actuate_exhaust_solenoid(HIGH);                                                                                               // Run this write in case the engine was shut down in sport mode.
     #else
       actuate_exhaust_solenoid(LOW);
     #endif
@@ -234,6 +236,9 @@ void reset_runtime_variables()                                                  
   #endif
   update_settings_in_eeprom();
   mdrive_settings_updated = false;
+  if (deactivate_ptcan_temporariliy) {
+    temp_reactivate_ptcan();
+  }
 }
 
 

@@ -29,6 +29,7 @@ I use it to:
 	* Control EDC mode with the M button.
 	* Control Servotronic mode with the M button - through SVT70 module.
 	* Control the exhaust flap position with the M button.
+	* Control M Key settings persistently.
 * Display Shiftlights - including startup animation, sync with the M3 KOMBI variable redline.
 * Display Launch Control flag.
 * Control Centre console buttons and associated LED (POWER, DSC OFF).

@@ -36,7 +36,7 @@
 // 4. Monitor and indicate front foglight status.
 // 5. Track time and date settings from iDrive and save in RTC.
 // 6. Turn on driver's and passenger's seat heating when ignition is turned on and ambient temperature is below configured treshold.
-// 7. Send dummy DME POWER CKM (car key memory) message.
+// 7. Send DME POWER CKM (car key memory) message.
 // 8. Track battery voltage (debug only) and Engine On status.
 // 9. Receive, save and update MDrive settings from iDrive.
 // 10. Fully replaces the 0x399 MDrive status allowing control of:

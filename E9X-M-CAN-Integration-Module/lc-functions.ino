@@ -15,6 +15,9 @@ void evaluate_lc_display()
       #if DEBUG_MODE
         Serial.println("Displayed LC flag CC.");
       #endif
+      #if CONTROL_SHIFTLIGHTS
+        activate_shiftlight_segments(shiftlights_max_flash_buf);
+      #endif
     } else {
       deactivate_lc_display();
       mdm_with_lc = false;                                                                                                          //Vehicle probably launched. MDM/DTC stays on
@@ -42,6 +45,9 @@ void deactivate_lc_display()
     #if DEBUG_MODE
         Serial.println("Deactivated LC flag CC.");
     #endif
+    #if CONTROL_SHIFTLIGHTS
+      deactivate_shiftlights();
+    #endif
   }  
 }
 
@@ -55,13 +61,11 @@ void evaluate_vehicle_moving()
         Serial.println("Vehicle stationary.");
       #endif
     }
-  } else {
-    if (!vehicle_moving) {
-      vehicle_moving = true;
-      #if DEBUG_MODE
-        Serial.println("Vehicle moving.");
-      #endif
-    }
+  } else if (!vehicle_moving) {
+    vehicle_moving = true;
+    #if DEBUG_MODE
+      Serial.println("Vehicle moving.");
+    #endif
   }
 }
 

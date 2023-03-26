@@ -4,18 +4,20 @@ void read_settings_from_eeprom()
   mdrive_power = EEPROM.read(2);
   mdrive_edc = EEPROM.read(3);
   mdrive_svt = EEPROM.read(4);
-  console_power_mode = EEPROM.read(5) ? true : false;
+  dme_ckm[0] = EEPROM.read(5);
 
   // Defaults for when EEPROM is not initialized
-  if ((mdrive_dsc == 0xFF) || (mdrive_power == 0xFF) || (mdrive_edc == 0xFF) || (mdrive_svt == 0xFF)) {
+  if (mdrive_dsc == 0xFF || mdrive_power == 0xFF || mdrive_edc == 0xFF || mdrive_svt == 0xFF || dme_ckm[0] == 0xFF) {
     mdrive_dsc = 0x13;
     mdrive_power = 0x30;
     mdrive_edc = 0x2A;
     mdrive_svt = 0xF1;
-    console_power_mode = false;
+    dme_ckm[0] = 0xF1;
   }
 
-  if (mdrive_dsc == 0x13) {                                                                                                         // This debounce timer is only needed to allow DTC/MDM to complete.
+  console_power_mode = dme_ckm[0] == 0xF1 ? false : true;
+
+  if (mdrive_dsc == 0x13) {                                                                                                         // This debounce timer is only needed to allow DTC/MDM to complete between MFL presses.
     mfl_debounce_time_ms = 400;
   }
 
@@ -41,7 +43,7 @@ void update_settings_in_eeprom()
     EEPROM.update(2, mdrive_power);
     EEPROM.update(3, mdrive_edc);
     EEPROM.update(4, mdrive_svt);
-    EEPROM.update(5, console_power_mode);                                                                                           
+    EEPROM.update(5, dme_ckm[0]);                                                                                           
     #if DEBUG_MODE
         Serial.println("Saved M settings to EEPROM.");
     #endif
@@ -154,6 +156,7 @@ void evaluate_m_mfl_button_press()
     }
   } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
     ignore_m_press = false;
+    check_dtc_mdm_status();
   }
 }
 
@@ -177,10 +180,16 @@ void send_mdrive_message()
 void send_mdrive_alive_message(uint16_t interval)
 {
   if ((millis() - mdrive_message_timer) >= interval) {                                                                              // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
-    #if DEBUG_MODE
-      Serial.println("Sending Ignition/Awake MDrive alive message.");
-    #endif
-    send_mdrive_message();
+    if (!deactivate_ptcan_temporariliy) {
+      #if DEBUG_MODE
+        if (ignition) {
+          Serial.println("Sending Ignition ON MDrive alive message.");
+        } else {
+          Serial.println("Sending Vehicle Awake MDrive alive message.");
+        }
+      #endif
+      send_mdrive_message();
+    }
   }
 }
 
@@ -239,7 +248,7 @@ void update_mdrive_message_settings()
 }
 
 
-// @amg6975
+// Written by amg6975
 // https://www.spoolstreet.com/threads/MDrive-and-mdm-in-non-m-cars.7155/post-107037
 void can_checksum_update(uint16_t canid, uint8_t len,  uint8_t *message)
 {
@@ -279,6 +288,27 @@ void send_power_mode()
   #if EXTRA_DEBUG
     debug_can_message(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
   #endif 
+}
+
+
+void send_dme_power_ckm()
+{
+  KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                        // This is sent by the DME to populate the M Key iDrive section
+  #if DEBUG_MODE
+    Serial.println("Sent DME POWER CKM.");
+  #endif
+}
+
+
+void save_dme_power_ckm()
+{
+  dme_ckm[0] = k_msg.buf[0];
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "Received new POWER CKM setting: %s", dme_ckm[0] == 0xF1 ? "Normal" : "Sport");
+    Serial.println(serial_debug_string);
+  #endif
+  mdrive_settings_updated = true;
+  send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
 
 
