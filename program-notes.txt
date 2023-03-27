@@ -36,15 +36,16 @@
 // 4. Monitor and indicate front foglight status.
 // 5. Track time and date settings from iDrive and save in RTC.
 // 6. Turn on driver's and passenger's seat heating when ignition is turned on and ambient temperature is below configured treshold.
-// 7. Send DME POWER CKM (car key memory) message.
-// 8. Track battery voltage (debug only) and Engine On status.
-// 9. Receive, save and update MDrive settings from iDrive.
-// 10. Fully replaces the 0x399 MDrive status allowing control of:
+// 7. Update the car clock from Teensy's RTC if power is lost.
+// 8. Send DME POWER CKM (car key memory) message.
+// 9. Track battery voltage (debug only) and Engine On status.
+// 10. Receive, save and update MDrive settings from iDrive.
+// 11. Fully replaces the 0x399 MDrive status allowing control of:
 //    EDC
 //    DSC
 //    DME throttle map
 //    Servotronic via SVT70 module
-// 11. Create the two missing messages required to use an F series ZBE (KCAN1, not KCAN2) in an E6,7,8,9X car.
+// 12. Create the two missing messages required to use an F series ZBE (KCAN1, not KCAN2) in an E6,7,8,9X car.
 //    *Should* work with:
 //    6582 9267955 - 4-pin MEDIA button. **Tested - controller build date 19.04.13
 //    6131 9253944 - 4-pin CD button
@@ -68,7 +69,6 @@
 // DCAN section
 
 // 1. Forwards any messages sent by the DCAN tool to the PT-CAN to enable communication with the SVT70
-
 
 
 // MSD81 IKM0S binary modification

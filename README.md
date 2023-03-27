@@ -43,6 +43,8 @@ See program notes: [here](program-notes.txt)
 
 ![settings](img/idrive-settings.jpg "idrive-settings")
 
+![key-settings](img/m-key-settings.jpg "key-settings")
+
 ![kombi-m](img/kombi-m.jpg "kombi-m")
 
 ![shiftlights](img/shiftlight.jpg "shiftlights")
