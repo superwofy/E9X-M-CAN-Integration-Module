@@ -91,19 +91,13 @@ typedef struct delayedCanTxMsg {
 	unsigned long	transmitTime;
 } delayedCanTxMsg;
 
-cppQueue dtcTx(sizeof(delayedCanTxMsg), 6, queue_FIFO); 
-cppQueue dscTx(sizeof(delayedCanTxMsg), 26, queue_FIFO);
-
 uint32_t cpu_speed_ide;
 
 bool ignition = false, vehicle_awake = true;
 unsigned long vehicle_awake_timer;
-uint8_t dtc_button_pressed[] = {0xFD, 0xFF}, dtc_button_released[] = {0xFC, 0xFF};
-CAN_message_t dtc_button_pressed_buf, dtc_button_released_buf;
-uint8_t dsc_off_fake_cc_status[] = {0x40, 0x24, 0, 0x1D, 0xFF, 0xFF, 0xFF, 0xAB};
-uint8_t mdm_fake_cc_status[] = {0x40, 0xB8, 0, 0x45, 0xFF, 0xFF, 0xFF, 0xAB};
-uint8_t mdm_fake_cc_status_off[] = {0x40, 0xB8, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xAB};
-CAN_message_t dsc_off_fake_cc_status_buf, mdm_fake_cc_status_buf, mdm_fake_cc_status_off_buf;
+uint8_t dsc_on[] = {0xCF, 0xE3}, dsc_mdm_dtc[] = {0xCF, 0xF3}, dsc_off[] = {0xCF, 0xE7};
+CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
+cppQueue dscTx(sizeof(delayedCanTxMsg), 3, queue_FIFO);
 
 bool engine_running = false;
 uint32_t RPM = 0;
@@ -118,11 +112,7 @@ uint8_t dsc_program_status = 0;                                                 
 bool holding_dsc_off_console = false;
 unsigned long mdrive_message_timer;
 unsigned long mfl_debounce_timer, power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
-uint16_t mfl_debounce_time_ms = 0;
-const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 200, dsc_hold_time_ms = 400;
-uint8_t sending_dsc_off_counter = 0;
-bool send_dsc_off_from_mdm = false, sending_dsc_off = false;
-unsigned long send_dsc_off_from_mdm_timer;
+const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 bool ignore_m_press = false;
 uint8_t clock_mode = 0;
 float last_cpu_temp = 0;
@@ -209,7 +199,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
   uint8_t volume_restore_offset = 0, volume_changed_to;
   CAN_message_t vol_request_buf;
-  cppQueue audioVolumeTx(sizeof(delayedCanTxMsg), 2, queue_FIFO);
+  cppQueue audioVolumeTx(sizeof(delayedCanTxMsg), 3, queue_FIFO);
 #endif
 #if DEBUG_MODE
   float battery_voltage = 0;
@@ -246,9 +236,6 @@ void loop()
   General section.
 ***********************************************************************************************************************************************************************************************************************************************/
   check_cpu_temp();                                                                                                                 // Monitor processor temperature to extend lifetime.
-  check_dtc_button_queue();
-  check_dsc_off_queue();
-  non_blocking_mdm_to_off();
   #if EXHAUST_FLAP_CONTROL
     control_exhaust_flap_user();
   #endif
@@ -257,6 +244,7 @@ void loop()
     check_audio_queue();
   #endif
   if (ignition) {
+    check_dsc_off_queue();
     check_console_buttons();
     send_mdrive_alive_message(10000);
     #if AUTO_SEAT_HEATING

@@ -25,10 +25,6 @@ void read_settings_from_eeprom()
 
   console_power_mode = dme_ckm[0] == 0xF1 ? false : true;
 
-  if (mdrive_dsc == 0x13) {                                                                                                         // This debounce timer is only needed to allow DTC/MDM to complete between MFL presses.
-    mfl_debounce_time_ms = 400;
-  }
-
   #if DEBUG_MODE
     Serial.println("Loaded MDrive settings from EEPROM.");
   #endif
@@ -63,41 +59,39 @@ void update_settings_in_eeprom()
 
 void toggle_mdrive_message_active()
 {
-  if (!sending_dsc_off) {
-    if (mdrive_status) {                                                                                                            // Turn off MDrive.
-      #if DEBUG_MODE
-        Serial.println("Status MDrive off.");
+  if (mdrive_status) {                                                                                                              // Turn off MDrive.
+    #if DEBUG_MODE
+      Serial.println("Status MDrive off.");
+    #endif
+    mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
+    mdrive_message[4] -= 0x10;
+    mdrive_status = mdrive_power_active = false;
+    if (mdrive_power == 0x30) {
+      #if EXHAUST_FLAP_CONTROL
+        exhaust_flap_sport = false;
       #endif
-      mdrive_message[1] -= 1;                                                                                                       // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
-      mdrive_message[4] -= 0x10;
-      mdrive_status = mdrive_power_active = false;
-      if (mdrive_power == 0x30) {
-        #if EXHAUST_FLAP_CONTROL
-          exhaust_flap_sport = false;
-        #endif
-      } else if (mdrive_power == 0x10) {
-        console_power_mode = restore_console_power_mode;
-      }                                                                                                                             // Else, POWER unchanged
-    } else {                                                                                                                        // Turn on MDrive.
-      #if DEBUG_MODE
-        Serial.println("Status MDrive on.");
+    } else if (mdrive_power == 0x10) {
+      console_power_mode = restore_console_power_mode;
+    }                                                                                                                               // Else, POWER unchanged
+  } else {                                                                                                                          // Turn on MDrive.
+    #if DEBUG_MODE
+      Serial.println("Status MDrive on.");
+    #endif
+    if (mdrive_power == 0x20) {                                                                                                     // POWER in Sport.
+      mdrive_power_active = true;
+    } else if (mdrive_power == 0x30) {                                                                                              // POWER Sport+.
+      #if EXHAUST_FLAP_CONTROL
+        exhaust_flap_sport = true;                                                                                                  // Exhaust flap always open in Sport+
       #endif
-      if (mdrive_power == 0x20) {                                                                                                   // POWER in Sport.
-        mdrive_power_active = true;
-      } else if (mdrive_power == 0x30) {                                                                                            // POWER Sport+.
-        #if EXHAUST_FLAP_CONTROL
-          exhaust_flap_sport = true;                                                                                                // Exhaust flap always open in Sport+
-        #endif
-        mdrive_power_active = true;
-      } else if (mdrive_power == 0x10) {
-        restore_console_power_mode = console_power_mode;                                                                            // We'll need to return to its original state when MDrive is turned off.
-        console_power_mode = false;                                                                                                 // Turn off POWER from console too.
-      }                                                                                                                             // Else, POWER unchanged.
+      mdrive_power_active = true;
+    } else if (mdrive_power == 0x10) {
+      restore_console_power_mode = console_power_mode;                                                                              // We'll need to return to its original state when MDrive is turned off.
+      console_power_mode = false;                                                                                                   // Turn off POWER from console too.
+    }                                                                                                                               // Else, POWER unchanged.
 
-      mdrive_message[1] += 1;
-      mdrive_message[4] += 0x10;
-      mdrive_status = true;
-    }
+    mdrive_message[1] += 1;
+    mdrive_message[4] += 0x10;
+    mdrive_status = true;
   }
 }
 
@@ -105,47 +99,17 @@ void toggle_mdrive_message_active()
 void toggle_mdrive_dsc_mode()
 {
   if (mdrive_status) {
-    if (mdrive_dsc == 7) {
-      if (dsc_program_status == 0) {
-        #if DEBUG_MODE
-          Serial.println("MDrive request DSC ON -> DSC OFF.");
-        #endif
-        send_dsc_off_sequence();
-      } else if (dsc_program_status == 2) {
-        //Do nothing
-      } else {                                                                                                                      // Must be in MDM/DTC.
-        send_dtc_button_press(false);
-        send_dsc_off_from_mdm = true;
-        send_dsc_off_from_mdm_timer = millis();
-      }
+    if (mdrive_dsc == 7) {                                                                                                          // DSC OFF requested.
+      send_dsc_mode(2);
     } else if (mdrive_dsc == 0x13) {                                                                                                // DSC MDM (DTC in non-M) requested.
-      if (dsc_program_status == 0) {
-        #if DEBUG_MODE
-          Serial.println("MDrive request DSC ON -> MDM/DTC.");
-        #endif
-        send_dtc_button_press(false);
-      } else if (dsc_program_status == 2) {
-        #if DEBUG_MODE
-          Serial.println("MDrive request DSC OFF -> MDM/DTC.");
-        #endif
-        send_dtc_button_press(false);
-        send_dtc_button_press(true);     
-      }
+      send_dsc_mode(1);
     } else if (mdrive_dsc == 0xB) {                                                                                                 // DSC ON requested.
-      if (dsc_program_status != 0) {
-        #if DEBUG_MODE
-          Serial.println("MDrive request DSC OFF -> DSC ON.");
-        #endif
-        send_dtc_button_press(false);
-      }
+      send_dsc_mode(0);
     }
   } else {
     if (mdrive_dsc == 0x13 || mdrive_dsc == 7) {                                                                                    // If MDrive was set to change DSC, restore back to DSC ON.
       if (dsc_program_status != 0) {
-        send_dtc_button_press(false);
-        #if DEBUG_MODE
-          Serial.println("MDrive request DSC back ON.");
-        #endif
+        send_dsc_mode(0);
       }
     }
   }
@@ -156,17 +120,14 @@ void evaluate_m_mfl_button_press()
 {
   if (pt_msg.buf[1] == 0x4C) {                                                                                                      // M button is pressed.
     if (!ignore_m_press) {
-      if ((millis() - mfl_debounce_timer) >= mfl_debounce_time_ms) {
-        ignore_m_press = true;                                                                                                      // Ignore further pressed messages until the button is released.
-        toggle_mdrive_message_active();
-        send_mdrive_message();
-        toggle_mdrive_dsc_mode();                                                                                                   // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
-        mfl_debounce_timer = millis();
-      }
+      ignore_m_press = true;                                                                                                      // Ignore further pressed messages until the button is released.
+      toggle_mdrive_message_active();
+      send_mdrive_message();
+      toggle_mdrive_dsc_mode();                                                                                                   // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
+      mfl_debounce_timer = millis();
     }
   } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
     ignore_m_press = false;
-    check_dtc_mdm_status();
   }
 }
 
@@ -248,11 +209,6 @@ void update_mdrive_message_settings()
           mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
       Serial.println(serial_debug_string);
     #endif
-  }
-  if (mdrive_dsc == 0x13) {                                                                                                         // This debounce timer is only needed to allow DTC/MDM to complete.
-    mfl_debounce_time_ms = 400;
-  } else {
-    mfl_debounce_time_ms = 0;
   }
   send_mdrive_message();
 }

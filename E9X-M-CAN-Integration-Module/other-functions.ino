@@ -201,9 +201,6 @@ void reset_runtime_variables()                                                  
   ignore_m_press = false;
   mdrive_power_active = restore_console_power_mode = false;
   console_power_mode = dme_ckm[0] == 0xF1 ? false : true;                                                                           // When cycling ignition, restore this to its CKM value.
-  sending_dsc_off = send_dsc_off_from_mdm = false;
-  sending_dsc_off_counter = 0;
-  dtcTx.flush();                                                                                                                    // Empty these queues in case something was left over.
   dscTx.flush();
   #if AUTO_SEAT_HEATING
     seatHeatingTx.flush();
@@ -253,11 +250,9 @@ void reset_runtime_variables()                                                  
 
 void cache_can_message_buffers()                                                                                                    // Put all static the buffers in memory during setup().
 {
-  dtc_button_pressed_buf = makeMsgBuf(0x316, 2, dtc_button_pressed);
-  dtc_button_released_buf = makeMsgBuf(0x316, 2, dtc_button_released);
-  dsc_off_fake_cc_status_buf = makeMsgBuf(0x5A9, 8, dsc_off_fake_cc_status);
-  mdm_fake_cc_status_buf = makeMsgBuf(0x5A9, 8, mdm_fake_cc_status);
-  mdm_fake_cc_status_off_buf = makeMsgBuf(0x5A9, 8, mdm_fake_cc_status_off);
+  dsc_on_buf = makeMsgBuf(0x398, 2, dsc_on);
+  dsc_mdm_dtc_buf = makeMsgBuf(0x398, 2, dsc_mdm_dtc);
+  dsc_off_buf = makeMsgBuf(0x398, 2, dsc_off);
   #if SERVOTRONIC_SVT70
     servotronic_cc_on_buf = makeMsgBuf(0x58E, 8, servotronic_cc_on);
   #endif

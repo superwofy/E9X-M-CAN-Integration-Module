@@ -179,6 +179,7 @@ void control_exhaust_flap_rpm()
   }
 }
 
+
 void actuate_exhaust_solenoid(bool activate)
 {
   digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, activate);
@@ -318,30 +319,28 @@ void check_console_buttons()
   } 
   
   if (!digitalRead(DSC_BUTTON_PIN)) {
-    if (dsc_program_status == 0) {
+    if (dsc_program_status != 2) {
       if (!holding_dsc_off_console) {
         holding_dsc_off_console = true;
         dsc_off_button_hold_timer = millis();
       } else {
         if ((millis() - dsc_off_button_hold_timer) >= dsc_hold_time_ms) {                                                           // DSC OFF sequence should only be sent after user holds button for a configured time
-          #if DEBUG_MODE
-            if (!sending_dsc_off) {
+          if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {
+            #if DEBUG_MODE
               Serial.println("Console: DSC OFF button held. Sending DSC OFF.");
-            }
-          #endif
-          send_dsc_off_sequence();
-          dsc_off_button_debounce_timer = millis();
+            #endif
+            send_dsc_mode(2);
+            dsc_off_button_debounce_timer = millis();
+          }
         }
       }      
     } else {
       if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {                                                     // A quick tap re-enables everything
         #if DEBUG_MODE
-          if (!sending_dsc_off) {
-            Serial.println("Console: DSC button tapped. Re-enabling DSC normal program.");
-          }
+          Serial.println("Console: DSC button tapped. Sending DSC ON.");
         #endif
         dsc_off_button_debounce_timer = millis();
-        send_dtc_button_press(false);
+        send_dsc_mode(0);
       }
     }
   } else {
@@ -472,7 +471,9 @@ void evaluate_audio_volume()
               if (ignition && !engine_running) {
                 m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1000};                                                         // Need this delay when Ignition is on and the warning gong is on.
                 audioVolumeTx.push(&m);
-                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 2000};                                                         // Send two in case we get lucky and the gong shuts up early...
+                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1500};                                                         // Send more in case we get lucky and the gong shuts up early...
+                audioVolumeTx.push(&m);
+                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 2500};
                 audioVolumeTx.push(&m);
               } else {
                 m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 200};
@@ -501,7 +502,7 @@ void check_audio_queue()
       if (vehicle_awake){
         DCAN.write(delayedTx.txMsg);
         #if DEBUG_MODE
-          Serial.println("Sent volume message on DCAN.");
+          Serial.println("Sent volume change message on DCAN.");
         #endif
       }
       audioVolumeTx.drop();

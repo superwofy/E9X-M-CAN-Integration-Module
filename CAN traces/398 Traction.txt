@@ -1,0 +1,3 @@
+16:39:16.118 ->  KCAN:  TS: 5795 ID:  398 Buffer: CF E3 		// Fully on
+16:39:17.751 ->  KCAN:  TS: 35738 ID: 398 Buffer: CF F3 		// DTC/MDM
+16:39:19.066 ->  KCAN:  TS: 37709 ID: 398 Buffer: CF E7			// Fully off
