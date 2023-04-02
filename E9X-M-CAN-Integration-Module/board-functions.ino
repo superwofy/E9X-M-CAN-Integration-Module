@@ -84,7 +84,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 18, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 20, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -93,6 +93,12 @@ void configure_can_controllers()
   #endif
   filterId = 0xAA;                                                                                                                  // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
   canFilters.push(&filterId);
+  #if DOOR_VOLUME
+    filterId = 0xE2;                                                                                                                // Left door status
+    canFilters.push(&filterId);
+    filterId = 0xEA;                                                                                                                // Right door status
+    canFilters.push(&filterId);
+  #endif
   filterId = 0x130;                                                                                                                 // Key/ignition status                                          Cycle time 100ms
   canFilters.push(&filterId);
   #if LAUNCH_CONTROL_INDICATOR
@@ -213,32 +219,34 @@ void configure_can_controllers()
   }
 
   // DCAN
-  #if SERVOTRONIC_SVT70 || RTC
-    filterId = 0x6F1;                                                                                                               // Receive diagnostic queries from DCAN tool to forward.
+  filterId = 0x6F1;                                                                                                                 // Receive diagnostic queries from DCAN tool to forward.
+  canFilters.push(&filterId);
+  #if DOOR_VOLUME
+    filterId = 0x663;                                                                                                               // iDrive diagnostic responses.
     canFilters.push(&filterId);
-    #if DEBUG_MODE
-      Serial.println("DCAN filters:");
-    #endif
-    filterCount = canFilters.getCount();
-    for (uint8_t i = 0; i < filterCount; i++) {
-      canFilters.pop(&filterId);
-      #if DEBUG_MODE
-        bool setResult;
-        setResult = DCAN.setFIFOFilter(i, filterId, STD);
-        if (!setResult) {
-          sprintf(serial_debug_string, " %x failed", filterId);
-          Serial.print(serial_debug_string);
-        }
-      #else
-        DCAN.setFIFOFilter(i, filterId, STD);
-      #endif
-      #if DEBUG_MODE
-        Serial.print(" ");
-        Serial.println(filterId, HEX);
-      #endif
-    }
-  digitalWrite(DCAN_STBY_PIN, LOW);                                                                                                 // DCAN configured, activate transceiver.
   #endif
+  #if DEBUG_MODE
+    Serial.println("DCAN filters:");
+  #endif
+  filterCount = canFilters.getCount();
+  for (uint8_t i = 0; i < filterCount; i++) {
+    canFilters.pop(&filterId);
+    #if DEBUG_MODE
+      bool setResult;
+      setResult = DCAN.setFIFOFilter(i, filterId, STD);
+      if (!setResult) {
+        sprintf(serial_debug_string, " %x failed", filterId);
+        Serial.print(serial_debug_string);
+      }
+    #else
+      DCAN.setFIFOFilter(i, filterId, STD);
+    #endif
+    #if DEBUG_MODE
+      Serial.print(" ");
+      Serial.println(filterId, HEX);
+    #endif
+  }
+  digitalWrite(DCAN_STBY_PIN, LOW);                                                                                                 // DCAN configured, activate transceiver.
 
   digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // PTCAN configured, activate transceiver.
 

@@ -38,6 +38,8 @@ I use it to:
 * Turn on heated seats below a set temperature.
 * Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding, etc.).
 	-> After uploading to Teensy, set the time manually/with ISTA to initialize the RTC to the same time.
+* Close the exhaust flap before engine start to reduce start noise.
+* Reduce audio volume when opening doors.
 See program notes: [here](program-notes.txt)
 
 

@@ -13,11 +13,6 @@ void debug_can_message(uint16_t canid, uint8_t len, uint8_t* message)
 
 void print_current_state()
 {
-  SerialUSB1.write(27);       // ESC command
-  SerialUSB1.print("[2J");    // clear screen command
-  SerialUSB1.write(27);
-  SerialUSB1.print("[H");     // cursor to home command
-
   SerialUSB1.println("=========== Operation ==========");
   sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "active" : "standby");
   SerialUSB1.println(serial_debug_string);
@@ -135,6 +130,20 @@ void print_current_state()
     sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
     SerialUSB1.println(serial_debug_string);
     sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
+    SerialUSB1.println(serial_debug_string);
+  #endif
+  #if DOOR_VOLUME
+    #if RHD
+      sprintf(serial_debug_string, " Passenger's door: %s", left_door_open ? "Open" : "Closed");
+    #else
+      sprintf(serial_debug_string, " Driver's's door: %s", left_door_open ? "Open" : "Closed");
+    #endif
+    SerialUSB1.println(serial_debug_string);
+    #if RHD
+      sprintf(serial_debug_string, " Driver's door: %s", right_door_open ? "Open" : "Closed");
+    #else
+      sprintf(serial_debug_string, " Passenger's door: %s", right_door_open ? "Open" : "Closed");
+    #endif
     SerialUSB1.println(serial_debug_string);
   #endif
   #if EXHAUST_FLAP_CONTROL
@@ -273,6 +282,9 @@ void cache_can_message_buffers()                                                
     shiftlights_startup_buildup_buf = makeMsgBuf(0x206, 2, shiftlights_startup_buildup);
     shiftlights_max_flash_buf = makeMsgBuf(0x206, 2, shiftlights_max_flash);
     shiftlights_off_buf = makeMsgBuf(0x206, 2, shiftlights_off);
+  #endif
+  #if DOOR_VOLUME
+    vol_request_buf = makeMsgBuf(0x6F1, 8, vol_request);
   #endif
 }
 

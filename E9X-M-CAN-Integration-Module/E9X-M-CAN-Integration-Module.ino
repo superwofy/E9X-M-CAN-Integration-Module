@@ -34,7 +34,8 @@ WDT_T4<WDT1> wdt;
 #define DISABLE_USB 0                                                                                                               // In production operation the USB interface is not needed.
 #endif
 
-#define RHD 1
+#define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open.
+#define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
@@ -199,6 +200,13 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
   cppQueue seatHeatingTx(sizeof(delayedCanTxMsg), 6, queue_FIFO); 
 #endif
+#if DOOR_VOLUME
+  bool left_door_open = false, right_door_open = false;
+  bool volume_reduced = false, volume_requested = false;
+  uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
+  uint8_t volume_restore_offset = 0, volume_reduced_to;
+  CAN_message_t vol_request_buf;
+#endif
 #if DEBUG_MODE
   float battery_voltage = 0;
   extern float tempmonGetTemp(void);
@@ -263,6 +271,9 @@ void loop()
         #if AUTO_SEAT_HEATING
           driver_sent_seat_heating_request = false;                                                                                 // Reset the seat heating request now that the car's asleep.
         #endif
+        #if DOOR_VOLUME
+          volume_reduced = false;                                                                                                   // In case the car falls asleep with the door open.
+        #endif
       }
       send_mdrive_alive_message(15000);                                                                                             // Send this message while car is awake (but with ignition off) to populate the fields in iDrive.
     }
@@ -321,7 +332,12 @@ void loop()
       }
     }
 
-    if (k_msg.id == 0x130) {                                                                                                        // Monitor ignition status
+    if (k_msg.id == 0xE2 || k_msg.id == 0xEA) {
+      evaluate_door_status();
+      //evaluate_increase_reduce_volume();
+    }
+
+    else if (k_msg.id == 0x130) {                                                                                                   // Monitor ignition status
       evaluate_ignition_status();
       if (ignition) {
         send_power_mode();                                                                                                          // state_spt request from DME.   
@@ -452,39 +468,44 @@ void loop()
   D-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
     
-  #if SERVOTRONIC_SVT70 || RTC
   if (DCAN.read(d_msg)) {
     if (d_msg.id == 0x6F1) {
-      if (d_msg.buf[0] == 0xE) {                                                                                                    // SVT_70 address is 0xE
-        if (diagnose_svt) {                                                                                                         // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
-          dcan_to_ptcan();
-        }
-      } 
-      #if RTC
-      else if (d_msg.buf[0] == 0x60) {                                                                                              // KOMBI is at address 0x60. ISTA sets time by sending it to KOMBI.
-        update_rtc_from_dcan();
-      }
-      #endif
-      else if (d_msg.buf[0] == 0x1C) {                                                                                              // Fix for LDM program issues.
+      if (d_msg.buf[0] == 0x1C) {                                                                                                   // Fix for LDM program issues.
         if (!deactivate_ptcan_temporariliy) {
           temp_deactivate_ptcan();
         } else {
           deactivate_ptcan_timer = millis();
         }
       }
+      #if SERVOTRONIC_SVT70
+      else if (d_msg.buf[0] == 0xE) {                                                                                               // SVT_70 address is 0xE
+        if (diagnose_svt) {                                                                                                         // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
+          dcan_to_ptcan();
+        }
+      } 
+      #endif
+      #if RTC
+      else if (d_msg.buf[0] == 0x60) {                                                                                              // KOMBI is at address 0x60. ISTA sets time by sending it to KOMBI.
+        update_rtc_from_dcan();
+      }
+      #endif
       else {
         if (deactivate_ptcan_temporariliy && d_msg.buf[0] != 0xEF) {
           temp_reactivate_ptcan();
         }
       }      
+    } 
+    #if DOOR_VOLUME
+    else if (d_msg.id == 0x663) {
+      evaluate_audio_volume();
     }
+    #endif
   }
-  #endif
   
 /**********************************************************************************************************************************************************************************************************************************************/
 
   #if DEBUG_MODE
-    if (millis() - debug_print_timer >= 300) {
+    if (millis() - debug_print_timer >= 500) {
       print_current_state();                                                                                                        // Print program status to the second Serial port.
     }
     loop_timer = micros();

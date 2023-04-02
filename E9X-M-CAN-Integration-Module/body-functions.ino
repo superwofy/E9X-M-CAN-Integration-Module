@@ -368,3 +368,111 @@ void update_idrive_time_from_rtc()
   KCAN.write(makeMsgBuf(0x39E, 8, date_time_can));
 }
 #endif
+
+
+#if DOOR_VOLUME
+void evaluate_door_status()
+{
+  if (k_msg.id == 0xE2) {
+    if (k_msg.buf[3] == 0xFD) {
+      if (!left_door_open) {
+        left_door_open = true;
+        #if DEBUG_MODE
+          #if RHD
+            Serial.println("Passenger's door open.");
+          #else
+            Serial.println("Driver's door open.");
+          #endif
+        #endif
+        send_volume_request();
+      }
+    } else if (k_msg.buf[3] == 0xFC) {
+      if (left_door_open) {
+        left_door_open = false;
+        #if DEBUG_MODE
+          #if RHD
+            Serial.println("Passenger's door closed.");
+          #else
+            Serial.println("Driver's door closed.");
+          #endif
+        #endif
+        send_volume_request();
+      }
+    }
+  } else if (k_msg.id == 0xEA) {
+    if (k_msg.buf[3] == 0xFD) {
+      if (!right_door_open) {
+        right_door_open = true;
+        #if DEBUG_MODE
+          #if RHD
+            Serial.println("Driver's's door opened.");
+          #else
+            Serial.println("Passenger's door opened.");
+          #endif
+        #endif
+        send_volume_request();
+      }
+    } else if (k_msg.buf[3] == 0xFC) {
+      if (right_door_open) {
+        right_door_open = false;
+        #if DEBUG_MODE
+          #if RHD
+            Serial.println("Driver's's door closed.");
+          #else
+            Serial.println("Passenger's door closed.");
+          #endif
+        #endif
+        send_volume_request();
+      }
+    }
+  }
+}
+
+
+void send_volume_request()
+{
+  if (!volume_requested) {
+    volume_requested = true;
+    DCAN.write(vol_request_buf);
+  }
+}
+
+
+void evaluate_audio_volume()
+{
+  if (volume_requested) {                                                                                                           // Make sure that the module is the one that requested this result.
+    if (d_msg.buf[3] == 0x24) {                                                                                                     // status_volumeaudio response.
+      uint8_t audio_volume = d_msg.buf[4];
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Received audio volume: 0x%X", audio_volume);
+        Serial.println(serial_debug_string);
+      #endif
+      uint8_t volume_change[] = {0x63, 0x4, 0x31, 0x23, audio_volume, 0, 0, 0};
+      volume_requested = false;
+      if (!volume_reduced) {
+        if (left_door_open || right_door_open) {
+          volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
+          volume_change[4] = ceil(audio_volume / 2);                                                                                // Reduce volume to 50%.
+          volume_reduced_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
+          DCAN.write(makeMsgBuf(0x6F1, 8, volume_change));
+          volume_reduced = true;
+          #if DEBUG_MODE
+            Serial.println("Reduced audio volume with door open.");
+          #endif
+        }
+      } else {
+        if (!left_door_open && !right_door_open) {
+          if (audio_volume == volume_reduced_to) {
+            volume_change[4] = audio_volume * 2 + volume_restore_offset;
+            DCAN.write(makeMsgBuf(0x6F1, 8, volume_change));
+            #if DEBUG_MODE
+              Serial.println("Restored audio volume when door closed.");
+            #endif
+          }
+          volume_reduced = false;
+        }
+      }
+    }
+  }
+}
+#endif

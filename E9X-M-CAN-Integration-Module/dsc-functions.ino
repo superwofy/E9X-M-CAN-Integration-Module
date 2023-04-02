@@ -145,7 +145,7 @@ void send_dsc_off_sequence()
 void non_blocking_mdm_to_off()
 {
   if (send_dsc_off_from_mdm) {
-    if ((millis() - send_dsc_off_from_mdm_timer) >= 300) {
+    if ((millis() - send_dsc_off_from_mdm_timer) >= 200) {
       send_dsc_off_from_mdm = false;
       send_dsc_off_sequence();
     }
