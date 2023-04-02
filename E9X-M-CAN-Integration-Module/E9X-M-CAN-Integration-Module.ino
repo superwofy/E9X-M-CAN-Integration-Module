@@ -34,6 +34,7 @@ WDT_T4<WDT1> wdt;
 #define DISABLE_USB 0                                                                                                               // In production operation the USB interface is not needed.
 #endif
 
+#define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
@@ -106,7 +107,9 @@ CAN_message_t dsc_off_fake_cc_status_buf, mdm_fake_cc_status_buf, mdm_fake_cc_st
 
 bool engine_running = false;
 uint32_t RPM = 0;
-uint8_t dme_ckm[] = {0, 0xFF};
+#if CKM
+  uint8_t dme_ckm[] = {0, 0xFF};
+#endif
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
 bool mdrive_status = false, mdrive_settings_updated = false, mdrive_power_active = false;
 bool console_power_mode, restore_console_power_mode = false;
@@ -320,9 +323,11 @@ void loop()
       }
       #endif
 
+      #if CKM
       else if (k_msg.id == 0x3A8) {                                                                                                 // Received M Key settings from iDrive.
         save_dme_power_ckm();
       }
+      #endif
 
       #if REVERSE_BEEP
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
@@ -400,9 +405,11 @@ void loop()
     }
     #endif
 
+    #if CKM
     else if (k_msg.id == 0x3AB) {                                                                                                   // Time POWER CKM message with Shiftlight CKM.
       send_dme_power_ckm();
     }
+    #endif
 
     #if DEBUG_MODE
     else if (k_msg.id == 0x3B4) {                                                                                                   // Monitor battery voltage from DME.

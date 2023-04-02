@@ -4,15 +4,23 @@ void read_settings_from_eeprom()
   mdrive_power = EEPROM.read(2);
   mdrive_edc = EEPROM.read(3);
   mdrive_svt = EEPROM.read(4);
-  dme_ckm[0] = EEPROM.read(5);
+  #if CKM
+    dme_ckm[0] = EEPROM.read(5);
+  #endif
 
   // Defaults for when EEPROM is not initialized
+  #if CKM
   if (mdrive_dsc == 0xFF || mdrive_power == 0xFF || mdrive_edc == 0xFF || mdrive_svt == 0xFF || dme_ckm[0] == 0xFF) {
+  #else
+  if (mdrive_dsc == 0xFF || mdrive_power == 0xFF || mdrive_edc == 0xFF || mdrive_svt == 0xFF) {
+  #endif
     mdrive_dsc = 0x13;
     mdrive_power = 0x30;
     mdrive_edc = 0x2A;
     mdrive_svt = 0xF1;
-    dme_ckm[0] = 0xF1;
+    #if CKM
+      dme_ckm[0] = 0xF1;
+    #endif
   }
 
   console_power_mode = dme_ckm[0] == 0xF1 ? false : true;
@@ -43,7 +51,9 @@ void update_settings_in_eeprom()
     EEPROM.update(2, mdrive_power);
     EEPROM.update(3, mdrive_edc);
     EEPROM.update(4, mdrive_svt);
-    EEPROM.update(5, dme_ckm[0]);                                                                                           
+    #if CKM
+      EEPROM.update(5, dme_ckm[0]);
+    #endif                                                                                          
     #if DEBUG_MODE
         Serial.println("Saved M settings to EEPROM.");
     #endif
@@ -291,6 +301,7 @@ void send_power_mode()
 }
 
 
+#if CKM
 void send_dme_power_ckm()
 {
   KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                        // This is sent by the DME to populate the M Key iDrive section
@@ -310,6 +321,7 @@ void save_dme_power_ckm()
   mdrive_settings_updated = true;
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
+#endif
 
 
 #if SERVOTRONIC_SVT70

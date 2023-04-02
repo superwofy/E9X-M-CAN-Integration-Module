@@ -462,27 +462,29 @@ void evaluate_audio_volume()
         }
       } else {
         if (!left_door_open && !right_door_open) {
-          if (audio_volume == volume_changed_to) {
-            volume_change[4] = audio_volume * 2 + volume_restore_offset;
-            if (volume_change[4] > 0x33) {
-              volume_change[4] = 0x33;                                                                                              // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
+          if (volume_reduced) {
+            if (audio_volume == volume_changed_to) {
+              volume_change[4] = audio_volume * 2 + volume_restore_offset;
+              if (volume_change[4] > 0x33) {
+                volume_change[4] = 0x33;                                                                                            // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
+              }
+              delayedCanTxMsg m;
+              if (ignition && !engine_running) {
+                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1000};                                                         // Need this delay when Ignition is on and the warning gong is on.
+                audioVolumeTx.push(&m);
+                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 2000};                                                         // Send two in case we get lucky and the gong shuts up early...
+                audioVolumeTx.push(&m);
+              } else {
+                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 200};
+                audioVolumeTx.push(&m);
+              }
+              #if DEBUG_MODE
+                sprintf(serial_debug_string, "Will restore audio volume with door closed. to: 0x%X", volume_change[4]);
+                Serial.println(serial_debug_string);
+              #endif
             }
-            delayedCanTxMsg m;
-            if (ignition && !engine_running) {
-              m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1000};                                                           // Need this delay when Ignition is on and the warning gong is on.
-              audioVolumeTx.push(&m);
-              m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 2000};                                                           // Send two in case we get lucky and the gong shuts up early...
-              audioVolumeTx.push(&m);
-            } else {
-              m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 200};
-              audioVolumeTx.push(&m);
-            }
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Will restore audio volume with door closed. to: 0x%X", volume_change[4]);
-              Serial.println(serial_debug_string);
-            #endif
+            volume_reduced = false;
           }
-          volume_reduced = false;
         }
       }
     }

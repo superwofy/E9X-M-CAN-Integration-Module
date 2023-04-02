@@ -135,10 +135,12 @@ void configure_can_controllers()
     filterId = 0x39E;                                                                                                               // Time and date set by the user in CIC.
     canFilters.push(&filterId);
   #endif
-  filterId = 0x3A8;                                                                                                                 // Filter M Key POWER setting from iDrive.
-  canFilters.push(&filterId);
-  filterId = 0x3AB;                                                                                                                 // Filter Shiftligths car key memory.
-  canFilters.push(&filterId);
+  #if CKM
+    filterId = 0x3A8;                                                                                                               // Filter M Key POWER setting from iDrive.
+    canFilters.push(&filterId);
+    filterId = 0x3AB;                                                                                                               // Filter Shiftligths car key memory.
+    canFilters.push(&filterId);
+  #endif
   #if REVERSE_BEEP
     filterId = 0x3B0;                                                                                                               // Reverse gear status.                                         Cycle time 1s (idle)
     canFilters.push(&filterId);
