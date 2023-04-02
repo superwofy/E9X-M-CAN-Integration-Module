@@ -26,7 +26,7 @@ void configure_IO()
     #endif
   #endif
   #if RTC
-    setSyncProvider(getTeensyTime);
+    setSyncProvider(get_teensy_time);
   #endif
 }
 
@@ -447,7 +447,7 @@ void update_rtc_from_dcan()
 }
 
 
-time_t getTeensyTime()
+time_t get_teensy_time()
 {
   return Teensy3Clock.get();
 }

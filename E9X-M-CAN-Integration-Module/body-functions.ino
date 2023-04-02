@@ -1,63 +1,3 @@
-#if FRONT_FOG_INDICATOR
-void evaluate_fog_status()
-{
-  if (k_msg.buf[0] != last_light_status) {
-    if ((k_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
-      if (!front_fog_status) {
-        front_fog_status = true;
-        digitalWrite(FOG_LED_PIN, HIGH);
-        #if DEBUG_MODE
-          Serial.println("Front fogs on. Turned on FOG LED");
-        #endif
-      }
-    } else {
-      if (front_fog_status) {
-        front_fog_status = false;
-        digitalWrite(FOG_LED_PIN, LOW);
-        #if DEBUG_MODE
-          Serial.println("Front fogs off. Turned off FOG LED");
-        #endif
-      }
-    }
-    last_light_status = k_msg.buf[0];
-  }
-}
-#endif
-
-
-#if AUTO_SEAT_HEATING
-void send_seat_heating_request(bool driver)
-{
-  unsigned long timeNow = millis();
-  uint16_t canId;
-  if (driver) {
-    canId = 0x1E7;
-    driver_sent_seat_heating_request = true;
-  } else {
-    canId = 0x1E8;
-    passenger_sent_seat_heating_request = true;
-  }
-  KCAN.write(makeMsgBuf(canId, 2, seat_heating_button_pressed));
-  CAN_message_t released = makeMsgBuf(canId, 2, seat_heating_button_released);
-  delayedCanTxMsg m = {released, timeNow + 100};
-  seatHeatingTx.push(&m);
-  m = {released, timeNow + 250};
-  seatHeatingTx.push(&m);
-  m = {released, timeNow + 400};
-  seatHeatingTx.push(&m);
-  #if DEBUG_MODE
-    if (driver) {
-      sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
-           (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
-    } else {
-      sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %.1fC, treshold %.1fC.", 
-           (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
-    }
-    Serial.println(serial_debug_string);
-  #endif
-}
-
-
 void evaluate_ignition_status()
 {
   if (k_msg.buf[0] == 0x45) {
@@ -100,14 +40,74 @@ void evaluate_ignition_status()
 }
 
 
+#if FRONT_FOG_INDICATOR
+void evaluate_fog_status()
+{
+  if (k_msg.buf[0] != last_light_status) {
+    if ((k_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
+      if (!front_fog_status) {
+        front_fog_status = true;
+        digitalWrite(FOG_LED_PIN, HIGH);
+        #if DEBUG_MODE
+          Serial.println("Front fogs on. Turned on FOG LED");
+        #endif
+      }
+    } else {
+      if (front_fog_status) {
+        front_fog_status = false;
+        digitalWrite(FOG_LED_PIN, LOW);
+        #if DEBUG_MODE
+          Serial.println("Front fogs off. Turned off FOG LED");
+        #endif
+      }
+    }
+    last_light_status = k_msg.buf[0];
+  }
+}
+#endif
+
+
+#if AUTO_SEAT_HEATING
+void send_seat_heating_request(bool driver)
+{
+  unsigned long timeNow = millis();
+  uint16_t canId;
+  if (driver) {
+    canId = 0x1E7;
+    driver_sent_seat_heating_request = true;
+  } else {
+    canId = 0x1E8;
+    passenger_sent_seat_heating_request = true;
+  }
+  KCAN.write(makeMsgBuf(canId, 2, seat_heating_button_pressed));
+  CAN_message_t released = makeMsgBuf(canId, 2, seat_heating_button_released);
+  delayed_can_tx_msg m = {released, timeNow + 100};
+  seat_heating_tx.push(&m);
+  m = {released, timeNow + 250};
+  seat_heating_tx.push(&m);
+  m = {released, timeNow + 400};
+  seat_heating_tx.push(&m);
+  #if DEBUG_MODE
+    if (driver) {
+      sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
+           (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
+    } else {
+      sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %.1fC, treshold %.1fC.", 
+           (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
+    }
+    Serial.println(serial_debug_string);
+  #endif
+}
+
+
 void check_seatheating_queue() 
 {
-  if (!seatHeatingTx.isEmpty()) {
-    delayedCanTxMsg delayedTx;
-    seatHeatingTx.peek(&delayedTx);
-    if (millis() >= delayedTx.transmitTime) {
-      KCAN.write(delayedTx.txMsg);
-      seatHeatingTx.drop();
+  if (!seat_heating_tx.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    seat_heating_tx.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      KCAN.write(delayed_tx.tx_msg);
+      seat_heating_tx.drop();
     }
   }
 }
@@ -195,10 +195,10 @@ void evaluate_pdc_beep()
   if (k_msg.buf[0] == 0xFE) {
     if (!pdc_beep_sent) {
       unsigned long timeNow = millis();
-      delayedCanTxMsg m = {pdc_beep_buf, timeNow};
-      pdcBeepTx.push(&m);
+      delayed_can_tx_msg m = {pdc_beep_buf, timeNow};
+      pdc_beep_tx.push(&m);
       m = {pdc_quiet_buf, timeNow + 150};
-      pdcBeepTx.push(&m);
+      pdc_beep_tx.push(&m);
       pdc_beep_sent = true;
       #if DEBUG_MODE
         Serial.println("Sending PDC beep.");
@@ -214,12 +214,12 @@ void evaluate_pdc_beep()
 
 void check_pdc_queue() 
 {
-  if (!pdcBeepTx.isEmpty()) {
-    delayedCanTxMsg delayedTx;
-    pdcBeepTx.peek(&delayedTx);
-    if (millis() >= delayedTx.transmitTime) {
-      KCAN.write(delayedTx.txMsg);
-      pdcBeepTx.drop();
+  if (!pdc_beep_tx.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    pdc_beep_tx.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      KCAN.write(delayed_tx.tx_msg);
+      pdc_beep_tx.drop();
     }
   }
 }
@@ -231,7 +231,9 @@ void evaluate_engine_rpm()
   RPM = ((uint32_t)k_msg.buf[5] << 8) | (uint32_t)k_msg.buf[4];
   if (!engine_running && (RPM > 2000)) {
     engine_running = true;
-    startup_animation();                                                                                                            // Show off shift light segments during engine startup (>500rpm).
+    #if CONTROL_SHIFTLIGHTS
+      startup_animation();                                                                                                          // Show off shift light segments during engine startup (>500rpm).
+    #endif
     #if EXHAUST_FLAP_CONTROL
       exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
     #endif
@@ -451,8 +453,8 @@ void evaluate_audio_volume()
           volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
           volume_change[4] = floor(audio_volume / 2);                                                                               // Reduce volume to 50%.
           volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
-          delayedCanTxMsg m = {makeMsgBuf(0x6F1, 8, volume_change), millis()};
-          audioVolumeTx.push(&m);
+          delayed_can_tx_msg m = {makeMsgBuf(0x6F1, 8, volume_change), millis()};
+          audio_volume_tx.push(&m);
           volume_reduced = true;
           #if DEBUG_MODE
             sprintf(serial_debug_string, "Will reduce audio volume with door open to: 0x%X", volume_changed_to);
@@ -467,17 +469,17 @@ void evaluate_audio_volume()
               if (volume_change[4] > 0x33) {
                 volume_change[4] = 0x33;                                                                                            // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
               }
-              delayedCanTxMsg m;
+              delayed_can_tx_msg m;
               if (ignition && !engine_running) {
                 m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1000};                                                         // Need this delay when Ignition is on and the warning gong is on.
-                audioVolumeTx.push(&m);
+                audio_volume_tx.push(&m);
                 m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1500};                                                         // Send more in case we get lucky and the gong shuts up early...
-                audioVolumeTx.push(&m);
+                audio_volume_tx.push(&m);
                 m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 2500};
-                audioVolumeTx.push(&m);
+                audio_volume_tx.push(&m);
               } else {
                 m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 200};
-                audioVolumeTx.push(&m);
+                audio_volume_tx.push(&m);
               }
               #if DEBUG_MODE
                 sprintf(serial_debug_string, "Will restore audio volume with door closed. to: 0x%X", volume_change[4]);
@@ -495,17 +497,17 @@ void evaluate_audio_volume()
 
 void check_audio_queue() 
 {
-  if (!audioVolumeTx.isEmpty()) {
-    delayedCanTxMsg delayedTx;
-    audioVolumeTx.peek(&delayedTx);
-    if (millis() >= delayedTx.transmitTime) {
+  if (!audio_volume_tx.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    audio_volume_tx.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
       if (vehicle_awake){
-        DCAN.write(delayedTx.txMsg);
+        DCAN.write(delayed_tx.tx_msg);
         #if DEBUG_MODE
           Serial.println("Sent volume change message on DCAN.");
         #endif
       }
-      audioVolumeTx.drop();
+      audio_volume_tx.drop();
     }
   }
 }

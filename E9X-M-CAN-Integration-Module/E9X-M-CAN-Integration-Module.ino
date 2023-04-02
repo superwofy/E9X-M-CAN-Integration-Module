@@ -86,10 +86,10 @@ const unsigned long MAX_UNDERCLOCK = 24 * 1000000;
 ***********************************************************************************************************************************************************************************************************************************************/
 
 CAN_message_t pt_msg, k_msg, d_msg;
-typedef struct delayedCanTxMsg {
-	CAN_message_t	txMsg;
-	unsigned long	transmitTime;
-} delayedCanTxMsg;
+typedef struct delayed_can_tx_msg {
+	CAN_message_t	tx_msg;
+	unsigned long	transmit_time;
+} delayed_can_tx_msg;
 
 uint32_t cpu_speed_ide;
 
@@ -97,7 +97,7 @@ bool ignition = false, vehicle_awake = true;
 unsigned long vehicle_awake_timer;
 uint8_t dsc_on[] = {0xCF, 0xE3}, dsc_mdm_dtc[] = {0xCF, 0xF3}, dsc_off[] = {0xCF, 0xE7};
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
-cppQueue dscTx(sizeof(delayedCanTxMsg), 3, queue_FIFO);
+cppQueue dsc_tx(sizeof(delayed_can_tx_msg), 3, queue_FIFO);
 
 bool engine_running = false;
 uint32_t RPM = 0;
@@ -167,7 +167,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t pdc_quiet[] = {0, 0, 0, 0};
   CAN_message_t pdc_beep_buf, pdc_quiet_buf;
   bool pdc_beep_sent = false;
-  cppQueue pdcBeepTx(sizeof(delayedCanTxMsg), 4, queue_FIFO);
+  cppQueue pdc_beep_tx(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
 #if F_ZBE_WAKE
   uint8_t f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                           // Network management KOMBI - F-series.
@@ -191,7 +191,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t passenger_seat_status = 0;                                                                                                // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
   bool driver_sent_seat_heating_request = false, passenger_sent_seat_heating_request = false;
   uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
-  cppQueue seatHeatingTx(sizeof(delayedCanTxMsg), 6, queue_FIFO); 
+  cppQueue seat_heating_tx(sizeof(delayed_can_tx_msg), 6, queue_FIFO); 
 #endif
 #if DOOR_VOLUME
   bool left_door_open = false, right_door_open = false;
@@ -199,7 +199,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
   uint8_t volume_restore_offset = 0, volume_changed_to;
   CAN_message_t vol_request_buf;
-  cppQueue audioVolumeTx(sizeof(delayedCanTxMsg), 3, queue_FIFO);
+  cppQueue audio_volume_tx(sizeof(delayed_can_tx_msg), 3, queue_FIFO);
 #endif
 #if DEBUG_MODE
   float battery_voltage = 0;
@@ -328,10 +328,11 @@ void loop()
       }
     }
 
+    #if DOOR_VOLUME
     if (k_msg.id == 0xE2 || k_msg.id == 0xEA) {
       evaluate_door_status();
-      //evaluate_increase_reduce_volume();
     }
+    #endif
 
     else if (k_msg.id == 0x130) {                                                                                                   // Monitor ignition status
       evaluate_ignition_status();

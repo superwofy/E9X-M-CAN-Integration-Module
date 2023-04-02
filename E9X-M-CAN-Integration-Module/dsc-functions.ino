@@ -63,28 +63,28 @@ void evaluate_indicate_ftm_status()
 
 void send_dsc_mode(uint8_t mode) {
   unsigned long timeNow = millis();
-  delayedCanTxMsg m;
+  delayed_can_tx_msg m;
   if (mode == 0) {
     m = {dsc_on_buf, timeNow};
-    dscTx.push(&m);
+    dsc_tx.push(&m);
     m = {dsc_on_buf, timeNow + 50};
-    dscTx.push(&m);
+    dsc_tx.push(&m);
     #if DEBUG_MODE                        
       Serial.println("Sending DSC ON.");
     #endif
   } else if (mode == 1) {
     m = {dsc_mdm_dtc_buf, timeNow};
-    dscTx.push(&m);
+    dsc_tx.push(&m);
     m = {dsc_mdm_dtc_buf, timeNow + 50};
-    dscTx.push(&m);
+    dsc_tx.push(&m);
     #if DEBUG_MODE                        
       Serial.println("Sending DTC/MDM.");
     #endif
   } else {
     m = {dsc_off_buf, timeNow};
-    dscTx.push(&m);
+    dsc_tx.push(&m);
     m = {dsc_off_buf, timeNow + 50};
-    dscTx.push(&m);
+    dsc_tx.push(&m);
     #if DEBUG_MODE                        
       Serial.println("Sending DSC OFF.");
     #endif
@@ -94,12 +94,12 @@ void send_dsc_mode(uint8_t mode) {
 
 void check_dsc_off_queue()
 {
-  if (!dscTx.isEmpty()) {
-    delayedCanTxMsg delayedTx;
-    dscTx.peek(&delayedTx);
-    if (millis() >= delayedTx.transmitTime) {
-      PTCAN.write(delayedTx.txMsg);
-      dscTx.drop();
+  if (!dsc_tx.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    dsc_tx.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      PTCAN.write(delayed_tx.tx_msg);
+      dsc_tx.drop();
     }
   }
 }

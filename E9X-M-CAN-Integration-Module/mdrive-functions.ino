@@ -23,7 +23,9 @@ void read_settings_from_eeprom()
     #endif
   }
 
-  console_power_mode = dme_ckm[0] == 0xF1 ? false : true;
+  #if CKM
+    console_power_mode = dme_ckm[0] == 0xF1 ? false : true;
+  #endif
 
   #if DEBUG_MODE
     Serial.println("Loaded MDrive settings from EEPROM.");

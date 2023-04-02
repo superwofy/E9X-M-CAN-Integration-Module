@@ -200,13 +200,15 @@ void reset_runtime_variables()                                                  
   RPM = 0;
   ignore_m_press = false;
   mdrive_power_active = restore_console_power_mode = false;
-  console_power_mode = dme_ckm[0] == 0xF1 ? false : true;                                                                           // When cycling ignition, restore this to its CKM value.
-  dscTx.flush();
+  #if CKM
+    console_power_mode = dme_ckm[0] == 0xF1 ? false : true;                                                                         // When cycling ignition, restore this to its CKM value.
+  #endif
+  dsc_tx.flush();
   #if AUTO_SEAT_HEATING
-    seatHeatingTx.flush();
+    seat_heating_tx.flush();
   #endif
   #if REVERSE_BEEP
-    pdcBeepTx.flush();
+    pdc_beep_tx.flush();
     pdc_beep_sent = false;
   #endif
   #if SERVOTRONIC_SVT70
