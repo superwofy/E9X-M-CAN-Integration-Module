@@ -204,8 +204,9 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   bool left_door_open = false, right_door_open = false;
   bool volume_reduced = false, volume_requested = false;
   uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
-  uint8_t volume_restore_offset = 0, volume_reduced_to;
+  uint8_t volume_restore_offset = 0, volume_changed_to;
   CAN_message_t vol_request_buf;
+  cppQueue audioVolumeTx(sizeof(delayedCanTxMsg), 2, queue_FIFO);
 #endif
 #if DEBUG_MODE
   float battery_voltage = 0;
@@ -249,7 +250,9 @@ void loop()
     control_exhaust_flap_user();
   #endif
   check_ptcan_status();
-
+  #if DOOR_VOLUME
+    check_audio_queue();
+  #endif
   if (ignition) {
     check_console_buttons();
     send_mdrive_alive_message(10000);

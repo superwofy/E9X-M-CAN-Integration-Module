@@ -431,10 +431,8 @@ void evaluate_door_status()
 
 void send_volume_request()
 {
-  if (!volume_requested) {
-    volume_requested = true;
-    DCAN.write(vol_request_buf);
-  }
+  volume_requested = true;
+  DCAN.write(vol_request_buf);
 }
 
 
@@ -447,31 +445,64 @@ void evaluate_audio_volume()
         sprintf(serial_debug_string, "Received audio volume: 0x%X", audio_volume);
         Serial.println(serial_debug_string);
       #endif
-      uint8_t volume_change[] = {0x63, 0x4, 0x31, 0x23, audio_volume, 0, 0, 0};
+      uint8_t volume_change[] = {0x63, 0x4, 0x31, 0x23, 0, 0, 0, 0};
       volume_requested = false;
       if (!volume_reduced) {
         if (left_door_open || right_door_open) {
           volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
-          volume_change[4] = ceil(audio_volume / 2);                                                                                // Reduce volume to 50%.
-          volume_reduced_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
-          DCAN.write(makeMsgBuf(0x6F1, 8, volume_change));
+          volume_change[4] = floor(audio_volume / 2);                                                                               // Reduce volume to 50%.
+          volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
+          delayedCanTxMsg m = {makeMsgBuf(0x6F1, 8, volume_change), millis()};
+          audioVolumeTx.push(&m);
           volume_reduced = true;
           #if DEBUG_MODE
-            Serial.println("Reduced audio volume with door open.");
+            sprintf(serial_debug_string, "Will reduce audio volume with door open to: 0x%X", volume_changed_to);
+            Serial.println(serial_debug_string);
           #endif
         }
       } else {
         if (!left_door_open && !right_door_open) {
-          if (audio_volume == volume_reduced_to) {
+          if (audio_volume == volume_changed_to) {
             volume_change[4] = audio_volume * 2 + volume_restore_offset;
-            DCAN.write(makeMsgBuf(0x6F1, 8, volume_change));
+            if (volume_change[4] > 0x33) {
+              volume_change[4] = 0x33;                                                                                              // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
+            }
+            delayedCanTxMsg m;
+            if (ignition && !engine_running) {
+              m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1000};                                                           // Need this delay when Ignition is on and the warning gong is on.
+              audioVolumeTx.push(&m);
+              m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 2000};                                                           // Send two in case we get lucky and the gong shuts up early...
+              audioVolumeTx.push(&m);
+            } else {
+              m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 200};
+              audioVolumeTx.push(&m);
+            }
             #if DEBUG_MODE
-              Serial.println("Restored audio volume when door closed.");
+              sprintf(serial_debug_string, "Will restore audio volume with door closed. to: 0x%X", volume_change[4]);
+              Serial.println(serial_debug_string);
             #endif
           }
           volume_reduced = false;
         }
       }
+    }
+  }
+}
+
+
+void check_audio_queue() 
+{
+  if (!audioVolumeTx.isEmpty()) {
+    delayedCanTxMsg delayedTx;
+    audioVolumeTx.peek(&delayedTx);
+    if (millis() >= delayedTx.transmitTime) {
+      if (vehicle_awake){
+        DCAN.write(delayedTx.txMsg);
+        #if DEBUG_MODE
+          Serial.println("Sent volume message on DCAN.");
+        #endif
+      }
+      audioVolumeTx.drop();
     }
   }
 }
