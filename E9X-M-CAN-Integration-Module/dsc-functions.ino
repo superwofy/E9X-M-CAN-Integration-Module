@@ -1,46 +1,3 @@
-void evaluate_dsc_program_from_cc()
-{
-  if (pt_msg.buf[7] != 0xAB) {                                                                                                      // Ignore fakes sent by the module.
-    if (pt_msg.buf[0] == 0x40) {                                                                                                    // DSC or DTC/MDM light
-      if (pt_msg.buf[1] == 0xB8) {                                                                                                  // DTC/MDM
-        if (pt_msg.buf[3] == 0x1D) {                                                                                                // Active
-          if (dsc_program_status != 1) {
-            dsc_program_status = 1;
-            #if DEBUG_MODE
-              Serial.println("Stability control in DTC mode.");
-            #endif
-          }
-        } else {
-          if (dsc_program_status == 1) {
-            dsc_program_status = 0;
-            #if DEBUG_MODE
-              Serial.println("Stability control fully activated from DTC/MDM.");
-            #endif
-          }
-        }
-
-      } else if (pt_msg.buf[1] == 0x24) {                                                                                           // DSC OFF
-        if (pt_msg.buf[3] == 0x1D) {                                                                                                // Active
-          if (dsc_program_status != 2) {
-            dsc_program_status = 2;
-            #if DEBUG_MODE
-              Serial.println("Stability control fully OFF.");
-            #endif
-          }
-        } else {
-          if (dsc_program_status == 2) {
-            dsc_program_status = 0;
-            #if DEBUG_MODE
-              Serial.println("Stability control fully activated from DSC OFF.");
-            #endif
-          }
-        }
-      }
-    }
-  }
-}
-
-
 #if FTM_INDICATOR
 void evaluate_indicate_ftm_status()
 {
@@ -67,7 +24,7 @@ void send_dsc_mode(uint8_t mode) {
   if (mode == 0) {
     m = {dsc_on_buf, timeNow};
     dsc_tx.push(&m);
-    m = {dsc_on_buf, timeNow + 50};
+    m = {dsc_on_buf, timeNow + 20};
     dsc_tx.push(&m);
     #if DEBUG_MODE                        
       Serial.println("Sending DSC ON.");
@@ -75,7 +32,7 @@ void send_dsc_mode(uint8_t mode) {
   } else if (mode == 1) {
     m = {dsc_mdm_dtc_buf, timeNow};
     dsc_tx.push(&m);
-    m = {dsc_mdm_dtc_buf, timeNow + 50};
+    m = {dsc_mdm_dtc_buf, timeNow + 20};
     dsc_tx.push(&m);
     #if DEBUG_MODE                        
       Serial.println("Sending DTC/MDM.");
@@ -83,12 +40,13 @@ void send_dsc_mode(uint8_t mode) {
   } else {
     m = {dsc_off_buf, timeNow};
     dsc_tx.push(&m);
-    m = {dsc_off_buf, timeNow + 50};
+    m = {dsc_off_buf, timeNow + 20};
     dsc_tx.push(&m);
     #if DEBUG_MODE                        
       Serial.println("Sending DSC OFF.");
     #endif
   }
+  dsc_program_status = mode;
 }
 
 

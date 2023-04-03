@@ -159,10 +159,11 @@ void configure_can_controllers()
     filterId = 0x663;                                                                                                               // iDrive diagnostic responses.
     canFilters.push(&filterId);
   #endif
-  #if DEBUG_MODE
-    Serial.println("KCAN filters:");
-  #endif
   filterCount = canFilters.getCount();
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "KCAN filters [%d]:", filterCount);
+    Serial.println(serial_debug_string);
+  #endif
   for (uint8_t i = 0; i < filterCount; i++) {
     canFilters.pop(&filterId);
     #if DEBUG_MODE
@@ -196,16 +197,15 @@ void configure_can_controllers()
     filterId = 0x58E;                                                                                                               // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
     canFilters.push(&filterId);
   #endif
-  filterId = 0x5A9;                                                                                                                 // CC notifications from DSC module
-  canFilters.push(&filterId);
   #if SERVOTRONIC_SVT70
     filterId = 0x60E;                                                                                                               // Receive diagnostic messages from SVT module to forward.
     canFilters.push(&filterId);
   #endif
-  #if DEBUG_MODE
-    Serial.println("PTCAN filters:");
-  #endif
   filterCount = canFilters.getCount();
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "PTCAN filters [%d]:", filterCount);
+    Serial.println(serial_debug_string);
+  #endif
   for (uint8_t i = 0; i < filterCount; i++) {
     canFilters.pop(&filterId);
     #if DEBUG_MODE
@@ -227,10 +227,11 @@ void configure_can_controllers()
   // DCAN
   filterId = 0x6F1;                                                                                                                 // Receive diagnostic queries from DCAN tool to forward.
   canFilters.push(&filterId);
-  #if DEBUG_MODE
-    Serial.println("DCAN filters:");
-  #endif
   filterCount = canFilters.getCount();
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "DCAN filters [%d]:", filterCount);
+    Serial.println(serial_debug_string);
+  #endif
   for (uint8_t i = 0; i < filterCount; i++) {
     canFilters.pop(&filterId);
     #if DEBUG_MODE

@@ -424,13 +424,6 @@ void loop()
         else if (pt_msg.id == 0x58E) {                                                                                              // Since the JBE doesn't forward Servotronic errors from SVT70, we have to do it.
           send_svt_kcan_cc_notification();
         }
-        #endif
-
-        else if (pt_msg.id == 0x5A9) {
-          evaluate_dsc_program_from_cc();
-        }
-
-        #if SERVOTRONIC_SVT70
         else if (pt_msg.id == 0x60E) {                                                                                              // Forward Diagnostic responses from SVT module to DCAN
           if (diagnose_svt) {
             ptcan_to_dcan();
