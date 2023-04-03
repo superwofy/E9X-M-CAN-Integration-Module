@@ -262,12 +262,7 @@ void loop()
         #endif
         toggle_transceiver_standby();
         scale_mcu_speed();
-        #if AUTO_SEAT_HEATING
-          driver_sent_seat_heating_request = false;                                                                                 // Reset the seat heating request now that the car's asleep.
-        #endif
-        #if DOOR_VOLUME
-          volume_reduced = false;                                                                                                   // In case the car falls asleep with the door open.
-        #endif
+        reset_sleep_variables();
       }
       send_mdrive_alive_message(15000);                                                                                             // Send this message while car is awake (but with ignition off) to populate the fields in iDrive.
     }
@@ -311,6 +306,12 @@ void loop()
       }
       #endif
 
+      #if AUTO_SEAT_HEATING
+      else if (k_msg.id == 0x22A || k_msg.id == 0x232) {                                                                            // Monitor passenger and driver's seat heating.
+        evaluate_seat_heating_status();
+      }
+      #endif
+
       #if CKM
       else if (k_msg.id == 0x3A8) {                                                                                                 // Received M Key settings from iDrive.
         save_dme_power_ckm();
@@ -345,40 +346,12 @@ void loop()
     }
 
     #if AUTO_SEAT_HEATING
-    else if (k_msg.id == 0x22A) {                                                                                                   // Passenger's seat heating status message is only sent with ignition on.
-      if (!k_msg.buf[0]) {                                                                                                          // Check if seat heating is already on.
-        //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
-        if (!passenger_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD) 
-            && passenger_seat_status == 9) {                                                                                        // Passenger sitting and their seatbelt is on
-          send_seat_heating_request(false);
-        }
-      } else {
-        passenger_sent_seat_heating_request = true;                                                                                 // Seat heating already on. No need to request anymore.
-      }
-      #if DEBUG_MODE
-        passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
-      #endif
-    }
-
-    else if (k_msg.id == 0x232) {                                                                                                   // Driver's seat heating status message is only sent with ignition on.
-      if (!k_msg.buf[0]) {                                                                                                          // Check if seat heating is already on.
-        if (!driver_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
-          send_seat_heating_request(true);
-        }
-      } else {
-        driver_sent_seat_heating_request = true;                                                                                    // Seat heating already on. No need to request anymore.
-      }
-      #if DEBUG_MODE
-        driver_seat_heating_status = !k_msg.buf[0] ? false : true;
-      #endif
-    }
-
     else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
       ambient_temperature_can = k_msg.buf[0];
     }
 
     else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
-      passenger_seat_status = k_msg.buf[1];
+      evaluate_passenger_seat_status();
     } 
     #endif
 
@@ -413,6 +386,12 @@ void loop()
 
     else if (k_msg.id == 0x4E2) {
       send_zbe_wakeup();
+    }
+    #endif
+
+    #if DOOR_VOLUME
+    else if (k_msg.id == 0x663) {
+      evaluate_audio_volume();
     }
     #endif
   }
@@ -493,12 +472,7 @@ void loop()
           temp_reactivate_ptcan();
         }
       }      
-    } 
-    #if DOOR_VOLUME
-    else if (d_msg.id == 0x663) {
-      evaluate_audio_volume();
     }
-    #endif
   }
   
 /**********************************************************************************************************************************************************************************************************************************************/

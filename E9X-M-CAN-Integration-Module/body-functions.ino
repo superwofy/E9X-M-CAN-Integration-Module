@@ -68,6 +68,41 @@ void evaluate_fog_status()
 
 
 #if AUTO_SEAT_HEATING
+void evaluate_seat_heating_status()
+{
+  if (k_msg.id == 0x22A) {                                                                                                          // Passenger's seat heating status message is only sent with ignition on.
+    passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
+  } else {
+    if (!k_msg.buf[0]) {                                                                                                            // Check if seat heating is already on.
+      if (!driver_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
+        send_seat_heating_request(true);
+      }
+    } else {
+      driver_sent_seat_heating_request = true;                                                                                      // Seat heating already on. No need to request anymore.
+    }
+    driver_seat_heating_status = !k_msg.buf[0] ? false : true;
+  }
+}
+
+
+void evaluate_passenger_seat_status()
+{
+  passenger_seat_status = k_msg.buf[1];
+  if (ignition) {
+    if (!passenger_seat_heating_status) {                                                                                         // Check if seat heating is already on.
+      //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
+      if (!passenger_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) { 
+        if (passenger_seat_status == 9) {                                                                                         // Passenger sitting and their seatbelt is on
+          send_seat_heating_request(false);                                                                                       // Execute heating request here so we don't have to wait 15s for the next 0x22A.
+        }
+      }
+    } else {
+      passenger_sent_seat_heating_request = true;                                                                                 // Seat heating already on. No need to request anymore.
+    }
+  }
+}
+
+
 void send_seat_heating_request(bool driver)
 {
   unsigned long timeNow = millis();
@@ -385,7 +420,9 @@ void evaluate_door_status()
             Serial.println("Driver's door open.");
           #endif
         #endif
-        send_volume_request();
+        if (!right_door_open) {
+          send_volume_request();
+        }
       }
     } else if (k_msg.buf[3] == 0xFC) {
       if (left_door_open) {
@@ -397,7 +434,9 @@ void evaluate_door_status()
             Serial.println("Driver's door closed.");
           #endif
         #endif
-        send_volume_request();
+        if (!right_door_open) {
+          send_volume_request();
+        }
       }
     }
   } else if (k_msg.id == 0xEA) {
@@ -411,7 +450,9 @@ void evaluate_door_status()
             Serial.println("Passenger's door opened.");
           #endif
         #endif
-        send_volume_request();
+        if (!left_door_open) {
+          send_volume_request();
+        }
       }
     } else if (k_msg.buf[3] == 0xFC) {
       if (right_door_open) {
@@ -423,7 +464,9 @@ void evaluate_door_status()
             Serial.println("Passenger's door closed.");
           #endif
         #endif
-        send_volume_request();
+        if (!left_door_open) {
+          send_volume_request();
+        }
       }
     }
   }
@@ -433,64 +476,71 @@ void evaluate_door_status()
 void send_volume_request()
 {
   volume_requested = true;
-  DCAN.write(vol_request_buf);
+  KCAN.write(vol_request_buf);
 }
 
 
 void evaluate_audio_volume()
 {
   if (volume_requested) {                                                                                                           // Make sure that the module is the one that requested this result.
-    if (d_msg.buf[3] == 0x24) {                                                                                                     // status_volumeaudio response.
-      uint8_t audio_volume = d_msg.buf[4];
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Received audio volume: 0x%X", audio_volume);
-        Serial.println(serial_debug_string);
-      #endif
-      uint8_t volume_change[] = {0x63, 0x4, 0x31, 0x23, 0, 0, 0, 0};
-      volume_requested = false;
-      if (!volume_reduced) {
-        if (left_door_open || right_door_open) {
-          volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
-          volume_change[4] = floor(audio_volume / 2);                                                                               // Reduce volume to 50%.
-          volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
-          delayed_can_tx_msg m = {makeMsgBuf(0x6F1, 8, volume_change), millis()};
-          audio_volume_tx.push(&m);
-          volume_reduced = true;
-          #if DEBUG_MODE
-            sprintf(serial_debug_string, "Will reduce audio volume with door open to: 0x%X", volume_changed_to);
-            Serial.println(serial_debug_string);
-          #endif
-        }
-      } else {
-        if (!left_door_open && !right_door_open) {
-          if (volume_reduced) {
-            if (audio_volume == volume_changed_to) {
-              volume_change[4] = audio_volume * 2 + volume_restore_offset;
-              if (volume_change[4] > 0x33) {
-                volume_change[4] = 0x33;                                                                                            // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
-              }
-              delayed_can_tx_msg m;
-              if (ignition && !engine_running) {
-                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1000};                                                         // Need this delay when Ignition is on and the warning gong is on.
-                audio_volume_tx.push(&m);
-                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1500};                                                         // Send more in case we get lucky and the gong shuts up early...
-                audio_volume_tx.push(&m);
-                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 2500};
-                audio_volume_tx.push(&m);
-              } else {
-                m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 200};
-                audio_volume_tx.push(&m);
-              }
-              #if DEBUG_MODE
-                sprintf(serial_debug_string, "Will restore audio volume with door closed. to: 0x%X", volume_change[4]);
-                Serial.println(serial_debug_string);
-              #endif
+    if (k_msg.buf[3] == 0x24) {                                                                                                     // status_volumeaudio response.
+      uint8_t audio_volume = k_msg.buf[4];
+      if (audio_volume > 0) {
+        #if DEBUG_MODE
+          sprintf(serial_debug_string, "Received audio volume: 0x%X", audio_volume);
+          Serial.println(serial_debug_string);
+        #endif
+        uint8_t volume_change[] = {0x63, 4, 0x31, 0x23, 0, 0, 0, 0};
+        if (!volume_reduced) {
+          if (left_door_open || right_door_open) {
+            volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
+            volume_change[4] = floor(audio_volume / 2);                                                                               // Reduce volume to 50%.
+            if ((volume_change[4] + volume_restore_offset) > 0x20) {                                                                  // Don't blow the speakers out if something went wrong...
+              volume_change[4] = 0x20;
+              volume_restore_offset = 0;
             }
-            volume_reduced = false;
+            KCAN.write(makeMsgBuf(0x6F1, 8, volume_change));
+            volume_reduced = true;
+            volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
+            #if DEBUG_MODE
+              sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X", volume_changed_to);
+              Serial.println(serial_debug_string);
+            #endif
+          }
+        } else {
+          if (!left_door_open && !right_door_open) {
+            if (volume_reduced) {
+              if (audio_volume == volume_changed_to) {
+                volume_change[4] = audio_volume * 2 + volume_restore_offset;
+                if (volume_change[4] > 0x33) {
+                  volume_change[4] = 0x33;                                                                                            // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
+                }
+                delayed_can_tx_msg m;
+                if (ignition && !engine_running) {
+                  m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 500};                                                          // Need this delay when Ignition is on and the warning gong is on.
+                  audio_volume_tx.push(&m);
+                  m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1000};                                                         // Send more in case we get lucky and the gong shuts up early...
+                  audio_volume_tx.push(&m);
+                  m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1700};
+                  audio_volume_tx.push(&m);
+                } else {
+                  m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 200};
+                  audio_volume_tx.push(&m);
+                  m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 500};
+                  audio_volume_tx.push(&m);
+                }
+                #if DEBUG_MODE
+                  sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X", volume_change[4]);
+                  Serial.println(serial_debug_string);
+                #endif
+              }
+              volume_reduced = false;
+            }
           }
         }
       }
     }
+    volume_requested = false;
   }
 }
 
@@ -501,10 +551,10 @@ void check_audio_queue()
     delayed_can_tx_msg delayed_tx;
     audio_volume_tx.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
-      if (vehicle_awake){
-        DCAN.write(delayed_tx.tx_msg);
+      if (vehicle_awake) {
+        KCAN.write(delayed_tx.tx_msg);
         #if DEBUG_MODE
-          Serial.println("Sent volume change message on DCAN.");
+          Serial.println("Sent volume change job to iDrive.");
         #endif
       }
       audio_volume_tx.drop();

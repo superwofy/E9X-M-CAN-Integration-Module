@@ -84,7 +84,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 20, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 21, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -155,6 +155,10 @@ void configure_can_controllers()
     filterId = 0x4E2;                                                                                                               // Filter CIC Network management (sent when CIC is on)
     canFilters.push(&filterId);
   #endif
+  #if DOOR_VOLUME
+    filterId = 0x663;                                                                                                               // iDrive diagnostic responses.
+    canFilters.push(&filterId);
+  #endif
   #if DEBUG_MODE
     Serial.println("KCAN filters:");
   #endif
@@ -223,10 +227,6 @@ void configure_can_controllers()
   // DCAN
   filterId = 0x6F1;                                                                                                                 // Receive diagnostic queries from DCAN tool to forward.
   canFilters.push(&filterId);
-  #if DOOR_VOLUME
-    filterId = 0x663;                                                                                                               // iDrive diagnostic responses.
-    canFilters.push(&filterId);
-  #endif
   #if DEBUG_MODE
     Serial.println("DCAN filters:");
   #endif

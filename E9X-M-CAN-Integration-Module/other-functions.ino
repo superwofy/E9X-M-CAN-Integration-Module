@@ -250,6 +250,23 @@ void reset_runtime_variables()                                                  
 }
 
 
+void reset_sleep_variables()
+{
+  #if AUTO_SEAT_HEATING
+    driver_sent_seat_heating_request = false;                                                                                       // Reset the seat heating request now that the car's asleep.
+    passenger_sent_seat_heating_request = false;
+    passenger_seat_status = 0;
+    driver_seat_heating_status = false;
+    passenger_seat_heating_status = false;
+  #endif
+  #if DOOR_VOLUME
+    volume_reduced = false;                                                                                                         // In case the car falls asleep with the door open.
+    volume_requested = false;
+    volume_restore_offset = 0;
+  #endif
+}
+
+
 void cache_can_message_buffers()                                                                                                    // Put all static the buffers in memory during setup().
 {
   dsc_on_buf = makeMsgBuf(0x398, 2, dsc_on);

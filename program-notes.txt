@@ -52,6 +52,7 @@
 //    6131 9253944 - 4-pin CD button
 //    6582 9206444 - 10-pin CD button
 //    6582 9212449 - 10-pin CD button
+// 14. Change audio volume when doors are opened/closed.
 
 // Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
 
