@@ -196,9 +196,13 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
 #if DOOR_VOLUME
   bool left_door_open = false, right_door_open = false;
   bool volume_reduced = false, volume_requested = false;
+  bool disable_volume_change_during_diag = false;
+  bool default_volume_sent = false;
+  unsigned long door_volume_deactivate_timer;
   uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
+  uint8_t default_vol_request[] = {0x63, 2, 0x31, 0x25, 0, 0, 0, 0};
   uint8_t volume_restore_offset = 0, volume_changed_to;
-  CAN_message_t vol_request_buf;
+  CAN_message_t vol_request_buf, default_vol_request_buf;
   cppQueue audio_volume_tx(sizeof(delayed_can_tx_msg), 3, queue_FIFO);
 #endif
 #if DEBUG_MODE
@@ -235,7 +239,6 @@ void loop()
 /***********************************************************************************************************************************************************************************************************************************************
   General section.
 ***********************************************************************************************************************************************************************************************************************************************/
-  check_cpu_temp();                                                                                                                 // Monitor processor temperature to extend lifetime.
   #if EXHAUST_FLAP_CONTROL
     control_exhaust_flap_user();
   #endif
@@ -244,7 +247,8 @@ void loop()
     check_audio_queue();
   #endif
   if (ignition) {
-    check_dsc_off_queue();
+    check_cpu_temp();                                                                                                               // Monitor processor temperature to extend lifetime.
+    check_dsc_queue();
     check_console_buttons();
     send_mdrive_alive_message(10000);
     #if AUTO_SEAT_HEATING
@@ -255,7 +259,7 @@ void loop()
     #endif
   } else {
     if (vehicle_awake) {
-      if ((millis() - vehicle_awake_timer) >= 5000) {
+      if ((millis() - vehicle_awake_timer) >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring .
         #if DEBUG_MODE
           Serial.println("Vehicle Sleeping.");
@@ -333,6 +337,9 @@ void loop()
     if (k_msg.id == 0xE2 || k_msg.id == 0xEA) {
       evaluate_door_status();
     }
+    else if (k_msg.id == 0x663) {
+      evaluate_audio_volume();
+    }
     #endif
 
     else if (k_msg.id == 0x130) {                                                                                                   // Monitor ignition status
@@ -386,12 +393,6 @@ void loop()
 
     else if (k_msg.id == 0x4E2) {
       send_zbe_wakeup();
-    }
-    #endif
-
-    #if DOOR_VOLUME
-    else if (k_msg.id == 0x663) {
-      evaluate_audio_volume();
     }
     #endif
   }
@@ -460,10 +461,20 @@ void loop()
         update_rtc_from_dcan();
       }
       #endif
+      #if DOOR_VOLUME
+      else if (d_msg.buf[0] == 0x63) {                                                                                              // iDrive is at address 0x63
+        deactivate_door_volume_change();                                                                                            // Implement a check so as to not interfere with other DCAN jobs sent to the CIC by an OBD tool.
+      }
+      #endif
       else {
         if (deactivate_ptcan_temporariliy && d_msg.buf[0] != 0xEF) {
           temp_reactivate_ptcan();
         }
+        #if DOOR_VOLUME
+        if (disable_volume_change_during_diag) {
+          reeactivate_door_volume_change();
+        }
+        #endif
       }      
     }
   }

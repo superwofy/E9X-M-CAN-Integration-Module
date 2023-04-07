@@ -50,7 +50,7 @@ void send_dsc_mode(uint8_t mode) {
 }
 
 
-void check_dsc_off_queue()
+void check_dsc_queue()
 {
   if (!dsc_tx.isEmpty()) {
     delayed_can_tx_msg delayed_tx;

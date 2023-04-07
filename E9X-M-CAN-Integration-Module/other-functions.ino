@@ -263,6 +263,7 @@ void reset_sleep_variables()
     volume_reduced = false;                                                                                                         // In case the car falls asleep with the door open.
     volume_requested = false;
     volume_restore_offset = 0;
+    default_volume_sent = false;
   #endif
 }
 
@@ -299,6 +300,7 @@ void cache_can_message_buffers()                                                
   #endif
   #if DOOR_VOLUME
     vol_request_buf = makeMsgBuf(0x6F1, 8, vol_request);
+    default_vol_request_buf = makeMsgBuf(0x6F1, 8, default_vol_request);
   #endif
 }
 

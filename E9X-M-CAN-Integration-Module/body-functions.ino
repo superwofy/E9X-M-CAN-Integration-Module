@@ -34,6 +34,9 @@ void evaluate_ignition_status()
     #if DEBUG_MODE
       Serial.println("Vehicle Awake.");
     #endif
+    #if DOOR_VOLUME
+      send_default_startup_volume();
+    #endif
   }
 
   vehicle_awake_timer = millis();  
@@ -420,9 +423,7 @@ void evaluate_door_status()
             Serial.println("Driver's door open.");
           #endif
         #endif
-        if (!right_door_open) {
-          send_volume_request();
-        }
+        send_volume_request();
       }
     } else if (k_msg.buf[3] == 0xFC) {
       if (left_door_open) {
@@ -434,9 +435,7 @@ void evaluate_door_status()
             Serial.println("Driver's door closed.");
           #endif
         #endif
-        if (!right_door_open) {
-          send_volume_request();
-        }
+        send_volume_request();
       }
     }
   } else if (k_msg.id == 0xEA) {
@@ -445,28 +444,24 @@ void evaluate_door_status()
         right_door_open = true;
         #if DEBUG_MODE
           #if RHD
-            Serial.println("Driver's's door opened.");
+            Serial.println("Driver's door opened.");
           #else
             Serial.println("Passenger's door opened.");
           #endif
         #endif
-        if (!left_door_open) {
-          send_volume_request();
-        }
+        send_volume_request();
       }
     } else if (k_msg.buf[3] == 0xFC) {
       if (right_door_open) {
         right_door_open = false;
         #if DEBUG_MODE
           #if RHD
-            Serial.println("Driver's's door closed.");
+            Serial.println("Driver's door closed.");
           #else
             Serial.println("Passenger's door closed.");
           #endif
         #endif
-        if (!left_door_open) {
-          send_volume_request();
-        }
+        send_volume_request();
       }
     }
   }
@@ -475,8 +470,10 @@ void evaluate_door_status()
 
 void send_volume_request()
 {
-  volume_requested = true;
-  KCAN.write(vol_request_buf);
+  if (!volume_requested && !disable_volume_change_during_diag && default_volume_sent) {
+    volume_requested = true;
+    KCAN.write(vol_request_buf);
+  }
 }
 
 
@@ -545,16 +542,50 @@ void evaluate_audio_volume()
 }
 
 
+void send_default_startup_volume() {
+  delayed_can_tx_msg m = {default_vol_request_buf, millis() + 25000};
+  audio_volume_tx.push(&m);                                                                                                         // Send this after the iDrive wakes up to ensure a volume is set.
+}
+
+
+void deactivate_door_volume_change()
+{
+  if (!disable_volume_change_during_diag) {
+    disable_volume_change_during_diag = true;
+    volume_requested = false;
+    volume_changed_to = 0;
+    volume_restore_offset = 0;
+  }
+  door_volume_deactivate_timer = millis();
+}
+
+
+void reeactivate_door_volume_change()
+{
+  if ((millis() - door_volume_deactivate_timer) >= 30000 && disable_volume_change_during_diag) {                                    // Re-activate after 30s of no iDrive DCAN requests.
+    disable_volume_change_during_diag = false;
+  }
+}
+
+
 void check_audio_queue() 
 {
-  if (!audio_volume_tx.isEmpty()) {
+  if (!audio_volume_tx.isEmpty() && vehicle_awake) {
     delayed_can_tx_msg delayed_tx;
     audio_volume_tx.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       if (vehicle_awake) {
         KCAN.write(delayed_tx.tx_msg);
+        if (delayed_tx.tx_msg.buf[3] == default_vol_request_buf.buf[3]) {
+          default_volume_sent = true;
+          #if DEBUG_MODE
+            Serial.println("Sent default volume job to iDrive.");
+          #endif
+        }
         #if DEBUG_MODE
+        else {
           Serial.println("Sent volume change job to iDrive.");
+        }
         #endif
       }
       audio_volume_tx.drop();

@@ -457,7 +457,7 @@ time_t get_teensy_time()
 
 void check_ptcan_status() 
 {
-  if ((millis() - deactivate_ptcan_timer) >= 30000 && deactivate_ptcan_temporariliy) {                                              // Re-activate after 30s of no LDM DCAN requests.
+  if ((millis() - deactivate_ptcan_timer) >= 30000 && deactivate_ptcan_temporariliy && vehicle_awake) {                             // Re-activate after 30s of no LDM DCAN requests.
     temp_reactivate_ptcan();
   }
 }
