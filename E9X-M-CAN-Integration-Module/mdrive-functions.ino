@@ -122,15 +122,31 @@ void evaluate_m_mfl_button_press()
 {
   if (pt_msg.buf[1] == 0x4C) {                                                                                                      // M button is pressed.
     if (!ignore_m_press) {
-      ignore_m_press = true;                                                                                                      // Ignore further pressed messages until the button is released.
+      ignore_m_press = true;                                                                                                        // Ignore further pressed messages until the button is released.
       toggle_mdrive_message_active();
       send_mdrive_message();
-      toggle_mdrive_dsc_mode();                                                                                                   // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
-      mfl_debounce_timer = millis();
+      toggle_mdrive_dsc_mode();                                                                                                     // Run DSC changing code after MDrive is turned on to hide how long DSC-OFF takes.
+    }
+    if (mfl_pressed_count > 10 && !ignore_m_hold) {                                                                                 // Each count is about 100ms
+      show_idrive_mdrive_settings_screen();
+    } else {
+      mfl_pressed_count++;
     }
   } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
-    ignore_m_press = false;
+    ignore_m_press = ignore_m_hold = false;    
+    mfl_pressed_count = 0;
   }
+}
+
+
+void show_idrive_mdrive_settings_screen()
+{
+  #if DEBUG_MODE
+    Serial.println("Steering wheel M button held. Showing settings screen.");
+  #endif
+  KCAN.write(idrive_mdrive_settings_a_buf);                                                                                         // Send steuern_menu job to iDrive.
+  KCAN.write(idrive_mdrive_settings_b_buf);
+  ignore_m_hold = true;
 }
 
 

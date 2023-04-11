@@ -198,8 +198,9 @@ void reset_runtime_variables()                                                  
   }
   engine_running = false;
   RPM = 0;
-  ignore_m_press = false;
+  ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
+  mfl_pressed_count = 0;
   #if CKM
     console_power_mode = dme_ckm[0] == 0xF1 ? false : true;                                                                         // When cycling ignition, restore this to its CKM value.
   #endif
@@ -273,6 +274,8 @@ void cache_can_message_buffers()                                                
   dsc_on_buf = makeMsgBuf(0x398, 2, dsc_on);
   dsc_mdm_dtc_buf = makeMsgBuf(0x398, 2, dsc_mdm_dtc);
   dsc_off_buf = makeMsgBuf(0x398, 2, dsc_off);
+  idrive_mdrive_settings_a_buf = makeMsgBuf(0x6F1, 8, idrive_mdrive_settings_a);
+  idrive_mdrive_settings_b_buf = makeMsgBuf(0x6F1, 8, idrive_mdrive_settings_b);
   #if SERVOTRONIC_SVT70
     servotronic_cc_on_buf = makeMsgBuf(0x58E, 8, servotronic_cc_on);
   #endif

@@ -111,9 +111,14 @@ uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                          
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
 bool holding_dsc_off_console = false;
 unsigned long mdrive_message_timer;
-unsigned long mfl_debounce_timer, power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
+uint8_t mfl_pressed_count = 0;
+uint8_t idrive_mdrive_settings_a[] = {0x63, 0x10, 0xA, 0x31, 0x52, 0, 0, 6};
+uint8_t idrive_mdrive_settings_b[] = {0x63, 0x21, 0x5C, 0, 0, 0, 0, 0};
+CAN_message_t idrive_mdrive_settings_a_buf, idrive_mdrive_settings_b_buf;
+unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 bool ignore_m_press = false;
+bool ignore_m_hold = false;
 uint8_t clock_mode = 0;
 float last_cpu_temp = 0;
 bool deactivate_ptcan_temporariliy = false;

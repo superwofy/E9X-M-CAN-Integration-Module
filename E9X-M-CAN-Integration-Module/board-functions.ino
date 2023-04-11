@@ -264,7 +264,7 @@ void configure_can_controllers()
 
 void initialize_timers()
 {
-  mfl_debounce_timer = power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
+  power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
   #if DEBUG_MODE
     debug_print_timer = millis();
     loop_timer = micros();

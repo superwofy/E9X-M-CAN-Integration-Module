@@ -59,6 +59,7 @@ Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http:/
 PT-CAN section
 
 1. Monitor steering wheel buttons and request MDrive when Source/M is pressed.
+   Holding the M button brings up the MDrive settings in iDrive.
 2. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
 3. Monitor and align shiftlights with the variable redline request from the DME.
 4. Forwards any diagnostic messages sent by the SVT70 module on the PT-CAN to the D-CAN to enable communication with BMW tools. In the E70 this is implemented in the JBE gateway tables.
