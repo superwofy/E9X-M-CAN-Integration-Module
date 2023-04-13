@@ -142,21 +142,21 @@ void configure_can_controllers()
     canFilters.push(&filterId);
   #endif
   #if REVERSE_BEEP
-    filterId = 0x3B0;                                                                                                               // Reverse gear status.                                         Cycle time 1s (idle)
+    filterId = 0x3B0;                                                                                                               // Reverse gear status.                                         Cycle time 1s (idle).
     canFilters.push(&filterId);
   #endif
   #if DEBUG_MODE
     filterId = 0x3B4;                                                                                                               // Battery voltage from DME.
     canFilters.push(&filterId);
   #endif
-  filterId = 0x3CA;                                                                                                                 // CIC MDrive settings
+  filterId = 0x3CA;                                                                                                                 // CIC MDrive settings                                          Sent when changed.
   canFilters.push(&filterId);
   #if F_ZBE_WAKE
     filterId = 0x4E2;                                                                                                               // Filter CIC Network management (sent when CIC is on)
     canFilters.push(&filterId);
   #endif
   #if DOOR_VOLUME
-    filterId = 0x663;                                                                                                               // iDrive diagnostic responses.
+    filterId = 0x663;                                                                                                               // iDrive diagnostic responses.                                 Sent when response is requested.
     canFilters.push(&filterId);
   #endif
   filterCount = canFilters.getCount();
@@ -457,8 +457,10 @@ time_t get_teensy_time()
 
 void check_ptcan_status() 
 {
-  if ((millis() - deactivate_ptcan_timer) >= 30000 && deactivate_ptcan_temporariliy && vehicle_awake) {                             // Re-activate after 30s of no LDM DCAN requests.
-    temp_reactivate_ptcan();
+  if (deactivate_ptcan_temporariliy && vehicle_awake) {
+    if ((millis() - deactivate_ptcan_timer) >= 30000) {                                                                             // Re-activate after 30s of no LDM DCAN requests.
+      temp_reactivate_ptcan();
+    }
   }
 }
 

@@ -201,9 +201,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
 #if DOOR_VOLUME
   bool left_door_open = false, right_door_open = false;
   bool volume_reduced = false, volume_requested = false;
-  bool disable_volume_change_during_diag = false;
   bool default_volume_sent = false;
-  unsigned long door_volume_deactivate_timer;
   uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
   uint8_t default_vol_request[] = {0x63, 2, 0x31, 0x25, 0, 0, 0, 0};
   uint8_t volume_restore_offset = 0, volume_changed_to;
@@ -216,6 +214,8 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   char serial_debug_string[256];
   unsigned long loop_timer, debug_print_timer, max_loop_timer = 0;
 #endif
+bool disable_idrive_transmit_jobs = false;
+unsigned long idrive_diag_deactivate_timer;
 
 
 void setup() 
@@ -248,6 +248,7 @@ void loop()
     control_exhaust_flap_user();
   #endif
   check_ptcan_status();
+  check_idrive_transmit_status();
   #if DOOR_VOLUME
     check_audio_queue();
   #endif
@@ -466,20 +467,13 @@ void loop()
         update_rtc_from_dcan();
       }
       #endif
-      #if DOOR_VOLUME
       else if (d_msg.buf[0] == 0x63) {                                                                                              // iDrive is at address 0x63
-        deactivate_door_volume_change();                                                                                            // Implement a check so as to not interfere with other DCAN jobs sent to the CIC by an OBD tool.
+        deactivate_idrive_transmit_jobs();                                                                                          // Implement a check so as to not interfere with other DCAN jobs sent to the CIC by an OBD tool.
       }
-      #endif
       else {
         if (deactivate_ptcan_temporariliy && d_msg.buf[0] != 0xEF) {
           temp_reactivate_ptcan();
         }
-        #if DOOR_VOLUME
-        if (disable_volume_change_during_diag) {
-          reeactivate_door_volume_change();
-        }
-        #endif
       }      
     }
   }

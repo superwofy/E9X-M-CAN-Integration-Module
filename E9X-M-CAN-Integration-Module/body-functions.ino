@@ -470,7 +470,7 @@ void evaluate_door_status()
 
 void send_volume_request()
 {
-  if (!volume_requested && !disable_volume_change_during_diag && default_volume_sent) {
+  if (!volume_requested && !disable_idrive_transmit_jobs && default_volume_sent) {
     volume_requested = true;
     KCAN.write(vol_request_buf);
   }
@@ -548,26 +548,6 @@ void send_default_startup_volume() {
 }
 
 
-void deactivate_door_volume_change()
-{
-  if (!disable_volume_change_during_diag) {
-    disable_volume_change_during_diag = true;
-    volume_requested = false;
-    volume_changed_to = 0;
-    volume_restore_offset = 0;
-  }
-  door_volume_deactivate_timer = millis();
-}
-
-
-void reeactivate_door_volume_change()
-{
-  if ((millis() - door_volume_deactivate_timer) >= 30000 && disable_volume_change_during_diag) {                                    // Re-activate after 30s of no iDrive DCAN requests.
-    disable_volume_change_during_diag = false;
-  }
-}
-
-
 void check_audio_queue() 
 {
   if (!audio_volume_tx.isEmpty() && vehicle_awake) {
@@ -593,3 +573,27 @@ void check_audio_queue()
   }
 }
 #endif
+
+
+void deactivate_idrive_transmit_jobs()
+{
+  if (!disable_idrive_transmit_jobs) {
+    #if DOOR_VOLUME
+      disable_idrive_transmit_jobs = true;
+      volume_requested = false;
+      volume_changed_to = 0;
+      volume_restore_offset = 0;
+    #endif
+  }
+  idrive_diag_deactivate_timer = millis();
+}
+
+
+void check_idrive_transmit_status()
+{
+  if (disable_idrive_transmit_jobs && vehicle_awake) {
+    if ((millis() - idrive_diag_deactivate_timer) >= 30000) {                                                                       // Re-activate after 30s of no iDrive DCAN requests.
+      disable_idrive_transmit_jobs = false;
+    }
+  }
+}
