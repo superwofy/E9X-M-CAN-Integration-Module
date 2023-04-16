@@ -17,40 +17,57 @@ USB Type: Dual Serial for debugging, Single for normal operation.
 
 General section
 
-Enable the use of M3 centre console button block. POWER and DSC OFF buttons. Control POWER LED.
-1. Request MDrive when POWER button is pressed.
-2. Illuminate POWER LED when throttle sport mode is on.
-3. Request full DSC OFF after holding DSC OFF button. Turn everything back on with a short press.
-4. Display Launch control flag
-5. Create missing 0x206 message to animate DCT KOMBI shift lights.
+1.  Open the exhaust flap if MDrive is on with POWER set to Sport+.
+2.  Check timeouts for suspended PT-CAN and iDrive diag transmission.
+3.  Check the iDrive diag queue.
+4.  Monitor the CPU temperature and adjust clock speed accordingly.
+5.  Check the DSC transmission queue.
+6.  Enable the use of M3 center console button block. POWER and DSC OFF buttons. Control POWER LED.
+     POWER controls the DME throttle map. Holding POWER during ignition cycling enables diagnosis of the SVT70.
+     Request full DSC OFF after holding DSC OFF button. Turn everything back on with a short press.
+7.  Send MDrive alive message to the network. This fully replaces the 0x399 MDrive status allowing control of:
+     EDC
+     DSC
+     DME throttle map
+     Servotronic via SVT70 module
+8.  Check seat heating transmission queues.
+9.  Check Reverse beep transmission queue.
+10. Check MSA and HDC Check Control queue.
+11. Check Needle sweep animation transmission queue.
+12. Monitor sleep state timeout. Reset runtime variables if the car falls asleep.
 
 
 
 K-CAN section
 
-1.  Monitor throttle, RPM and clutch status to control the shift lights and exhaust flap.
-2.  Monitor the state of the front doors.
-3.  Monitor ignition and DSC program status.
-4.  Transmit DME and SVT70 mode requests.
-5.  Monitor and indicate front foglight status.
-6.  Track time and date settings from iDrive and save in RTC.
-7.  Turn on driver's and passenger's seat heating when ignition is turned on and ambient temperature is below configured threshold.
-8.  Update the car clock from Teensy's RTC if power is lost.
-9.  Send DME POWER CKM (car key memory) message.
-10. Track battery voltage (debug only) and Engine On status.
-11. Receive, save and update MDrive settings from iDrive.
-12. Fully replaces the 0x399 MDrive status allowing control of:
-    EDC
-    DSC
-    DME throttle map
-    Servotronic via SVT70 module
-13. Create the two missing messages required to use an F series ZBE (KCAN1, not KCAN2) in an E6,7,8,9X car.
+1.  Monitor throttle, RPM and clutch status. This is used buy the shift lights, exhaust flap and launch control indicator code.
+2.  Monitor the state of cruise control, HDC and MSA button.
+     Create a HDC function similar to the one in xDrive cars to get rid of that pesky blank button.
+     Display a CC when pressing the Auto Start-stop button. N54 cars never had this option. Again, we would like to get rid of that pesky blank button.
+3.  Check if the vehicle is moving and how fast.
+4.  Check the state of the indicators. Dim the corresponding DRL when on.
+5.  Monitor and indicate front foglight status. Monitor DRL status.
+6.  Turn on driver's and passenger's seat heating when ignition is turned on and ambient temperature is below configured threshold.
+7.  Receive POWER CKM setting from iDrive.
+8.  Monitor reverse gear status and transmit a short beep when engaged.
+9.  Receive EDC CKM setting from iDrive.
+10. Receive, save and update MDrive settings from iDrive.
+11. Monitor the state of the front doors to update audio volume.
+12. Change audio volume when doors are opened/closed.
+13. Monitor ignition status. Send corresponding DME and SVT power modes.
+14. Monitor ambient temperature.
+15. Monitor passenger's seat status. Seatbelt and occupancy sensor.
+16. Update the car clock from Teensy's RTC if power is lost.
+17. Track time and date settings from iDrive and save in Teensy's RTC.
+18. Send DME POWER CKM (car key memory) message.
+19. Track battery voltage (debug only) and Engine On status.
+20. Monitor EDC CKM status sent by the JBE. Correct if it doesn't match the saved EEPROM value.
+21. Create the two missing messages required to use an F series ZBE (KCAN1, not KCAN2) in an E6,7,8,9X car.
    *Should* work with:
     6582 9267955 - 4-pin MEDIA button. **Tested - controller build date 19.04.13
     6131 9253944 - 4-pin CD button
     6582 9206444 - 10-pin CD button
     6582 9212449 - 10-pin CD button
-14. Change audio volume when doors are opened/closed.
 
 Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
 
@@ -59,7 +76,7 @@ Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http:/
 PT-CAN section
 
 1. Monitor steering wheel buttons and request MDrive when Source/M is pressed.
-   Holding the M button brings up the MDrive settings in iDrive.
+   Holding the M button for about 2s brings up the MDrive settings in iDrive.
 2. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
 3. Monitor and align shiftlights with the variable redline request from the DME.
 4. Forwards any diagnostic messages sent by the SVT70 module on the PT-CAN to the D-CAN to enable communication with BMW tools. In the E70 this is implemented in the JBE gateway tables.
@@ -71,7 +88,7 @@ DCAN section
 
 1. Forward any messages sent by the DCAN tool to the PT-CAN to enable communication with the SVT70.
 2. Receive volume data from iDrive.
-3. Monitor bus for communication and suspend 0x6F1 transmissions if an OBD tool is detected.
+3. Monitor bus for communication and suspend 0x6F1 KWP transmissions if an OBD tool is detected.
 
 
 

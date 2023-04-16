@@ -28,47 +28,45 @@ WDT_T4<WDT1> wdt;
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
-#if DEBUG_MODE
-#define EXTRA_DEBUG 0
-#else
-#define DISABLE_USB 0                                                                                                               // In production operation the USB interface is not needed.
-#endif
 
-#define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive
+#define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive.
+#define EDC_CKM_FIX 1                                                                                                               // With Chinese keys/invalid profiles, sometimes the M Key setting for EDC is not recalled correctly.
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
+#define HDC 1                                                                                                                       // Gives a function to the HDC console button in non 4WD cars.
+#define FAKE_MSA 1                                                                                                                  // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
 #define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
+#define DIM_DRL 1                                                                                                                   // Dims DLR on the side that the indicator is on.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
 #if EXHAUST_FLAP_CONTROL
-#define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as the module is powered (30G).
+#define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as Terminal R is turned on.
 #endif
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
-#define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline.
-#define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures.
+#define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline of M3 KOMBI.
+#define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine on. Calibrated for M3 speedo with 335i tacho.
+#define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver and passenger in low temperatures.
 #define RTC 1                                                                                                                       // Set the time/date if power is lost. Requires external battery.
-#if RTC
-  #include <TimeLib.h>
-#endif
-#define F_ZBE_WAKE 0                                                                                                                // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an existing EXX ZBE.
+#define F_ZBE_WAKE 0                                                                                                                // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an EXX ZBE.
 
 #if SERVOTRONIC_SVT70
-  const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                   // New CAN-ID replacing 0x326 in SVT70 bin.
+  const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                   // New CAN-ID replacing 0x326 in SVT70 firmware bin. This stops it from changing modes together with EDC.
 #endif
-const uint16_t DME_FAKE_VEH_MODE_CANID = 0x7F1;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section.
+const uint16_t DME_FAKE_VEH_MODE_CANID = 0x7F1;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
 const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80.
 #if CONTROL_SHIFTLIGHTS
-  const uint16_t START_UPSHIFT_WARN_RPM = 5500*4;                                                                                   // RPM setpoints (warning = desired RPM * 4).
-  const uint16_t MID_UPSHIFT_WARN_RPM = 6000*4;
-  const uint16_t MAX_UPSHIFT_WARN_RPM = 6500*4;
+  const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                 // RPM setpoints (warning = desired RPM * 4).
+  const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
+  const uint16_t MAX_UPSHIFT_WARN_RPM = 6500 * 4;
+  const uint16_t GONG_UPSHIFT_WARN_RPM = 6800 * 4;
 #endif
 #if EXHAUST_FLAP_CONTROL
-  const uint16_t EXHAUST_FLAP_QUIET_RPM = 3500*4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
+  const uint16_t EXHAUST_FLAP_QUIET_RPM = 3500 * 4;                                                                                 // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
 #endif
 #if LAUNCH_CONTROL_INDICATOR
-  const uint16_t LC_RPM = 4000*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
+  const uint16_t LC_RPM = 4000 * 4;                                                                                                 // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
   const uint16_t LC_RPM_MIN = LC_RPM - (250 * 4);
   const uint16_t LC_RPM_MAX = LC_RPM + (250 * 4);
 #endif
@@ -95,17 +93,18 @@ typedef struct delayed_can_tx_msg {
 } delayed_can_tx_msg;
 
 uint32_t cpu_speed_ide;
-
-bool ignition = false, vehicle_awake = true;
+bool terminal_r = false, ignition = false,  vehicle_awake = true;
+bool engine_cranking = false, engine_running = false;
 unsigned long vehicle_awake_timer;
-uint8_t dsc_on[] = {0xCF, 0xE3}, dsc_mdm_dtc[] = {0xCF, 0xF3}, dsc_off[] = {0xCF, 0xE7};
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
-cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 3, queue_FIFO);
-
-bool engine_running = false;
+cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 uint16_t RPM = 0;
 #if CKM
   uint8_t dme_ckm[] = {0, 0xFF};
+  uint8_t dme_ckm_counter = 0;
+#endif
+#if EDC_CKM_FIX
+  uint8_t edc_ckm[] = {0, 0xFF};
 #endif
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
 bool mdrive_status = false, mdrive_settings_updated = false, mdrive_power_active = false;
@@ -115,21 +114,18 @@ uint8_t dsc_program_status = 0;                                                 
 bool holding_dsc_off_console = false;
 unsigned long mdrive_message_timer;
 uint8_t mfl_pressed_count = 0;
-uint8_t idrive_mdrive_settings_a[] = {0x63, 0x10, 0xA, 0x31, 0x52, 0, 0, 6};
-uint8_t idrive_mdrive_settings_b[] = {0x63, 0x21, 0x5C, 0, 0, 0, 0, 0};
 CAN_message_t idrive_mdrive_settings_a_buf, idrive_mdrive_settings_b_buf;
 unsigned long power_button_debounce_timer, dsc_off_button_debounce_timer, dsc_off_button_hold_timer;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
-bool ignore_m_press = false;
-bool ignore_m_hold = false;
+bool ignore_m_press = false, ignore_m_hold = false;
 uint8_t clock_mode = 0;
 float last_cpu_temp = 0;
 bool deactivate_ptcan_temporariliy = false;
 unsigned long deactivate_ptcan_timer;
+CAN_message_t cc_gong_buf;
 
 #if SERVOTRONIC_SVT70
   uint8_t servotronic_message[] = {0, 0xFF};
-  uint8_t servotronic_cc_on[] = {0x40, 0x46, 0x00, 0x29, 0xFF, 0xFF, 0xFF, 0xFF};
   CAN_message_t servotronic_cc_on_buf;
   bool diagnose_svt = false;
   #if DEBUG_MODE
@@ -137,48 +133,46 @@ unsigned long deactivate_ptcan_timer;
   #endif
 #endif
 #if CONTROL_SHIFTLIGHTS
-uint8_t shiftlights_start[] = {0x86, 0x3E};
-uint8_t shiftlights_mid_buildup[] = {0xF6, 0};
-uint8_t shiftlights_startup_buildup[] = {0x56, 0};                                                                                   // Faster sequential buildup. First byte 0-0xF (0xF - slowest).
-uint8_t shiftlights_max_flash[] = {0xA, 0};
-uint8_t shiftlights_off[] = {5, 0};
-CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf;
-CAN_message_t shiftlights_max_flash_buf, shiftlights_off_buf;
-bool shiftlights_segments_active = false;
-uint8_t ignore_shiftlights_off_counter = 0;
-uint16_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
-uint16_t MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
-uint16_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
+  CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf;
+  CAN_message_t shiftlights_max_flash_buf, shiftlights_off_buf;
+  bool shiftlights_segments_active = false;
+  uint8_t ignore_shiftlights_off_counter = 0;
+  uint16_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
+  uint16_t MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
+  uint16_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
+  uint16_t GONG_UPSHIFT_WARN_RPM_ = GONG_UPSHIFT_WARN_RPM;
   bool engine_coolant_warmed_up = false;
   uint16_t var_redline_position;
   uint8_t last_var_rpm_can = 0;
-uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // byte 5: shiftlights always on
-#else
-uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // byte 5: shiftlights unchanged
+  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                 // byte 5: shiftlights always on
+#endif
+#if NEEDLE_SWEEP
+  CAN_message_t speedo_needle_sweep_buf, speedo_needle_release_buf;
+  CAN_message_t tacho_needle_sweep_buf, tacho_needle_release_buf;
+  CAN_message_t fuel_needle_sweep_buf, fuel_needle_release_buf;
+  CAN_message_t oil_needle_sweep_buf, oil_needle_release_buf;
+  CAN_message_t any_needle_sweep_b_buf;
+  cppQueue kombi_needle_txq(sizeof(delayed_can_tx_msg), 10, queue_FIFO);
 #endif
 #if FRONT_FOG_INDICATOR
   bool front_fog_status = false;
   uint8_t last_light_status = 0;
 #endif
+#if DIM_DRL
+  bool drl_status = false, left_dimmed = false, right_dimmed = false;
+  CAN_message_t left_drl_dim_buf, left_drl_bright_buf;
+  CAN_message_t right_drl_dim_buf, right_drl_bright_buf;
+#endif
 #if FTM_INDICATOR
   bool ftm_indicator_status = false;
-  uint8_t ftm_indicator_flash[] = {0x40, 0x50, 1, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
-  uint8_t ftm_indicator_off[] = {0x40, 0x50, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
   CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf;
 #endif
 #if REVERSE_BEEP
-  #if RHD 
-    uint8_t pdc_beep[] = {0, 0, 0, 1};                                                                                              // Front right beep.
-  #else
-    uint8_t pdc_beep[] = {0, 0, 1, 0};                                                                                              // Front left beep.
-  #endif
-  uint8_t pdc_quiet[] = {0, 0, 0, 0};
   CAN_message_t pdc_beep_buf, pdc_quiet_buf;
   bool pdc_beep_sent = false;
-  cppQueue pdc_beep_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
+  cppQueue pdc_beep_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
 #if F_ZBE_WAKE
-  uint8_t f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                           // Network management KOMBI - F-series.
   CAN_message_t f_wakeup_buf;
   uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
   unsigned long zbe_wakeup_last_sent;
@@ -188,37 +182,59 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   unsigned long exhaust_flap_action_timer, exhaust_flap_action_interval = 1500;
 #endif
 #if LAUNCH_CONTROL_INDICATOR
-  uint8_t lc_cc_on[] = {0x40, 0xBE, 1, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
-  uint8_t lc_cc_off[] = {0x40, 0xBE, 1, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
   CAN_message_t lc_cc_on_buf, lc_cc_off_buf;
-  bool lc_cc_active = false, mdm_with_lc = false, clutch_pressed = false, vehicle_moving = false;
+  bool lc_cc_active = false, mdm_with_lc = false, clutch_pressed = false;
 #endif
 #if AUTO_SEAT_HEATING
   bool driver_seat_heating_status = false, passenger_seat_heating_status = false;
   uint8_t ambient_temperature_can = 255;
   uint8_t passenger_seat_status = 0;                                                                                                // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
   bool driver_sent_seat_heating_request = false, passenger_sent_seat_heating_request = false;
-  uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
-  cppQueue seat_heating_txq(sizeof(delayed_can_tx_msg), 7, queue_FIFO); 
+  CAN_message_t seat_heating_button_pressed_dr_buf, seat_heating_button_released_dr_buf;
+  CAN_message_t seat_heating_button_pressed_pas_buf, seat_heating_button_released_pas_buf;
+  cppQueue seat_heating_dr_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
+  cppQueue seat_heating_pas_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
+#endif
+#if RTC
+  #include <TimeLib.h>
+  CAN_message_t set_time_cc_buf;
+  bool rtc_valid = true;
 #endif
 #if DOOR_VOLUME
   bool left_door_open = false, right_door_open = false;
   bool volume_reduced = false, volume_requested = false;
   bool default_volume_sent = false;
-  uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
-  uint8_t default_vol_set[] = {0x63, 2, 0x31, 0x25, 0, 0, 0, 0};
   uint8_t volume_restore_offset = 0, volume_changed_to;
   CAN_message_t vol_request_buf, default_vol_set_buf;
-  cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
+  cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
+#endif
+#if HDC
+  uint16_t vehicle_speed = 0;
+  bool cruise_control_status = false, hdc_button_pressed = false, hdc_requested = false, hdc_active = false;
+  CAN_message_t set_hdc_cruise_control_buf, cancel_hdc_cruise_control_buf;
+  CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
+  CAN_message_t hdc_cc_activated_off_buf, hdc_cc_unavailable_off_buf, hdc_cc_deactivated_off_buf;
+#endif
+#if HDC || LAUNCH_CONTROL_INDICATOR
+  bool vehicle_moving = false;
+#endif
+#if FAKE_MSA
+  bool msa_button_pressed = false;
+  uint8_t msa_fake_status_counter = 0;
+  CAN_message_t msa_deactivated_cc_on_buf, msa_deactivated_cc_off_buf, msa_fake_status_buf;
+#endif
+#if HDC || FAKE_MSA
+  cppQueue kcan_cc_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
 #if DEBUG_MODE
   float battery_voltage = 0;
   extern float tempmonGetTemp(void);
   char serial_debug_string[512];
   unsigned long loop_timer, debug_print_timer, max_loop_timer = 0;
+  uint32_t kcan_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 #endif
-bool disable_idrive_transmit_jobs = false;
-unsigned long idrive_diag_deactivate_timer;
+bool diag_transmit = true;
+unsigned long diag_deactivate_timer;
 
 
 void setup() 
@@ -226,15 +242,19 @@ void setup()
   #if DEBUG_MODE
     unsigned long setup_timer = millis();
   #endif
+  if ( F_CPU_ACTUAL > (528 * 1000000)) {
+    set_arm_clock(528 * 1000000);                                                                                                   // Prevent accidental overclocks. Remove if needed.
+  }
   initialize_watchdog();
-  if ( F_CPU_ACTUAL > (600 * 1000000)) set_arm_clock(600 * 1000000);                                                                // Prevent accidental overclocks. Remove if needed.
   cpu_speed_ide = F_CPU_ACTUAL;
   configure_IO();
-  disable_mcu_peripherals();
   configure_can_controllers();
   cache_can_message_buffers();
-  initialize_timers();
   read_settings_from_eeprom();
+  #if RTC
+    check_rtc_valid();
+  #endif
+  initialize_timers();
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Setup finished in %lu ms, module is ready.", millis() - setup_timer);
     serial_log(serial_debug_string);
@@ -247,13 +267,17 @@ void loop()
 /***********************************************************************************************************************************************************************************************************************************************
   General section.
 ***********************************************************************************************************************************************************************************************************************************************/
+  
   #if EXHAUST_FLAP_CONTROL
     control_exhaust_flap_user();
   #endif
   check_ptcan_transmit_status();
+  check_diag_transmit_status();
   #if DOOR_VOLUME
-    check_idrive_transmit_status();
     check_idrive_queue();
+  #endif
+  #if NEEDLE_SWEEP
+    check_kombi_needle_queue();
   #endif
   if (ignition) {
     check_cpu_temp();                                                                                                               // Monitor processor temperature to extend lifetime.
@@ -265,6 +289,9 @@ void loop()
     #endif
     #if REVERSE_BEEP
       check_pdc_queue();
+    #endif
+    #if HDC || FAKE_MSA
+      check_kcan_cc_queue();
     #endif
   } else {
     if (vehicle_awake) {
@@ -305,15 +332,38 @@ void loop()
       else if (k_msg.id == 0xA8) {                                                                                                  // Monitor clutch pedal status
         evaluate_clutch_status();
       }
+      #endif
 
+      #if HDC
+      else if (k_msg.id == 0x193) {                                                                                                 // Monitor state of cruise control
+        evaluate_cruise_control_status();
+      }
+      else if (k_msg.id == 0x31A) {                                                                                                 // Received HDC button press from IHKA.
+        evaluate_hdc_button();
+      }
+      #endif
+
+      #if FAKE_MSA
+      else if (k_msg.id == 0x195) {                                                                                                 // Monitor state of MSA button
+        evaluate_msa_button();
+      }
+      #endif
+
+      #if LAUNCH_CONTROL_INDICATOR || HDC
       else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
         evaluate_vehicle_moving();
       }
       #endif
 
-      #if FRONT_FOG_INDICATOR
+      #if DIM_DRL
+      else if (k_msg.id == 0x1F6) {                                                                                                 // Monitor indicator status
+        evaluate_indicator_status_dim();
+      }
+      #endif
+
+      #if FRONT_FOG_INDICATOR || DIM_DRL
       else if (k_msg.id == 0x21A) {                                                                                                 // Light status sent by the FRM.
-        evaluate_fog_status();
+        evaluate_light_status();
       }
       #endif
 
@@ -324,7 +374,7 @@ void loop()
       #endif
 
       #if CKM
-      else if (k_msg.id == 0x3A8) {                                                                                                 // Received M Key settings from iDrive.
+      else if (k_msg.id == 0x3A8) {                                                                                                 // Received POWER M Key settings from iDrive.
         save_dme_power_ckm();
       }
       #endif
@@ -332,6 +382,12 @@ void loop()
       #if REVERSE_BEEP
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
         evaluate_pdc_beep();
+      }
+      #endif
+
+      #if EDC_CKM_FIX
+      else if (k_msg.id == 0x3C5) {                                                                                                 // Received EDC M Key settings from iDrive.
+        save_edc_ckm();
       }
       #endif
 
@@ -361,7 +417,7 @@ void loop()
 
     #if AUTO_SEAT_HEATING
     else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
-      ambient_temperature_can = k_msg.buf[0];
+      evaluate_ambient_temperature();
     }
 
     else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
@@ -372,7 +428,7 @@ void loop()
     #if RTC
     else if (k_msg.id == 0x2F8) {
       if (k_msg.buf[0] == 0xFD && k_msg.buf[7] == 0xFC) {                                                                           // Date/time not set
-        update_idrive_time_from_rtc();
+        update_car_time_from_rtc();
       }
     }
 
@@ -390,6 +446,12 @@ void loop()
     #if DEBUG_MODE
     else if (k_msg.id == 0x3B4) {                                                                                                   // Monitor battery voltage from DME.
       evaluate_battery_voltage();
+    }
+    #endif
+
+    #if EDC_CKM_FIX
+    else if (k_msg.id == 0x3C4) {                                                                                                   // Monitor EDC CKM message from the JBE.
+      evaluate_edc_ckm_mismatch();
     }
     #endif
 
@@ -450,32 +512,21 @@ void loop()
   if (DCAN.read(d_msg)) {
     if (d_msg.id == 0x6F1) {
       if (d_msg.buf[0] == 0x1C) {                                                                                                   // Fix for LDM program issues.
-        if (!deactivate_ptcan_temporariliy) {
-          temp_deactivate_ptcan();
-        } else {
-          deactivate_ptcan_timer = millis();
-        }
+        temp_deactivate_ptcan();
       }
       #if SERVOTRONIC_SVT70
       else if (d_msg.buf[0] == 0xE) {                                                                                               // SVT_70 address is 0xE
-        if (diagnose_svt) {                                                                                                         // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
-          dcan_to_ptcan();
+        if (diagnose_svt) {
+          dcan_to_ptcan();                                                                                                          // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
         }
       } 
       #endif
       #if RTC
-      else if (d_msg.buf[0] == 0x60) {                                                                                              // KOMBI is at address 0x60. ISTA sets time by sending it to KOMBI.
+      else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x10 || d_msg.buf[1] == 0x21)) {                                            // KOMBI is at address 0x60. ISTA sets time by sending it to KOMBI.
         update_rtc_from_dcan();
       }
       #endif
-      else if (d_msg.buf[0] == 0x63) {                                                                                              // iDrive is at address 0x63
-        deactivate_idrive_transmit_jobs();                                                                                          // Implement a check so as to not interfere with other DCAN jobs sent to the CIC by an OBD tool.
-      }
-      else {
-        if (deactivate_ptcan_temporariliy && d_msg.buf[0] != 0xEF) {
-          temp_reactivate_ptcan();
-        }
-      }      
+      disable_diag_transmit_jobs();                                                                                                 // Implement a check so as to not interfere with other DCAN jobs sent to the CIC by an OBD tool.    
     }
   }
   
@@ -483,7 +534,7 @@ void loop()
 
   #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
     if (millis() - debug_print_timer >= 500) {
-      print_current_state();                                                                                                      // Print program status to the second Serial port.
+      print_current_state();                                                                                                        // Print program status to the second Serial port.
     }
     loop_timer = micros();
   #endif

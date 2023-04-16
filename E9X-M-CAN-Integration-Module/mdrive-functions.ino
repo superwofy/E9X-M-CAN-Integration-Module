@@ -4,27 +4,28 @@ void read_settings_from_eeprom()
   mdrive_power = EEPROM.read(2);
   mdrive_edc = EEPROM.read(3);
   mdrive_svt = EEPROM.read(4);
-  #if CKM
-    dme_ckm[0] = EEPROM.read(5);
-  #endif
 
-  // Defaults for when EEPROM is not initialized
-  #if CKM
-  if (mdrive_dsc == 0xFF || mdrive_power == 0xFF || mdrive_edc == 0xFF || mdrive_svt == 0xFF || dme_ckm[0] == 0xFF) {
-  #else
+  // Defaults for when EEPROM is not initialized  
   if (mdrive_dsc == 0xFF || mdrive_power == 0xFF || mdrive_edc == 0xFF || mdrive_svt == 0xFF) {
-  #endif
     mdrive_dsc = 0x13;
     mdrive_power = 0x30;
     mdrive_edc = 0x2A;
     mdrive_svt = 0xF1;
-    #if CKM
-      dme_ckm[0] = 0xF1;
-    #endif
   }
 
   #if CKM
+    dme_ckm[0] = EEPROM.read(5);
+    if (dme_ckm[0] == 0xFF) {
+        dme_ckm[0] = 0xF1;
+    }
     console_power_mode = dme_ckm[0] == 0xF1 ? false : true;
+  #endif
+
+  #if EDC_CKM_FIX
+    edc_ckm[0] = EEPROM.read(6);
+    if (edc_ckm[0] == 0xFF) {
+        edc_ckm[0] = 0xF1;
+    }
   #endif
 
   serial_log("Loaded MDrive settings from EEPROM.");
@@ -49,6 +50,9 @@ void update_settings_in_eeprom()
     EEPROM.update(4, mdrive_svt);
     #if CKM
       EEPROM.update(5, dme_ckm[0]);
+    #endif 
+    #if EDC_CKM_FIX
+      EEPROM.update(6, edc_ckm[0]);
     #endif                                                                                          
     serial_log("Saved M settings to EEPROM.");
   }
@@ -133,10 +137,12 @@ void evaluate_m_mfl_button_press()
 
 void show_idrive_mdrive_settings_screen()
 {
-  serial_log("Steering wheel M button held. Showing settings screen.");
-  KCAN.write(idrive_mdrive_settings_a_buf);                                                                                         // Send steuern_menu job to iDrive.
-  KCAN.write(idrive_mdrive_settings_b_buf);
-  ignore_m_hold = true;
+  if (diag_transmit) {
+    serial_log("Steering wheel M button held. Showing settings screen.");
+    kcan_write_msg(idrive_mdrive_settings_a_buf);                                                                                   // Send steuern_menu job to iDrive.
+    kcan_write_msg(idrive_mdrive_settings_b_buf);
+    ignore_m_hold = true;
+  }
 }
 
 
@@ -148,11 +154,8 @@ void send_mdrive_message()
   }
   // Deactivated because no module actually checks this. Perhaps MDSC would?
 //  can_checksum_update(0x399, 6, mdrive_message);                                                                                  // Recalculate checksum.
-  PTCAN.write(makeMsgBuf(0x399, 6, mdrive_message));                                                                                // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
-  mdrive_message_timer = millis();
-  #if EXTRA_DEBUG
-    debug_can_message(0x399, 6, mdrive_message);
-  #endif                                                                      
+  ptcan_write_msg(makeMsgBuf(0x399, 6, mdrive_message));                                                                            // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
+  mdrive_message_timer = millis();                                                                   
 }
 
 
@@ -167,6 +170,15 @@ void send_mdrive_alive_message(uint16_t interval)
       }
       send_mdrive_message();
     }
+    #if CKM
+      if (terminal_r) {
+        if (dme_ckm_counter == 2) {
+          send_dme_power_ckm();                                                                                                     // Send this message periodically as well. Useful if iDrive restarts for some reason...
+          dme_ckm_counter = 0;
+        }
+        dme_ckm_counter++;
+      }
+    #endif
   }
 }
 
@@ -182,6 +194,12 @@ void update_mdrive_message_settings()
     mdrive_message[3] = mdrive_edc;
     mdrive_svt = 0xE9;                                                                                                              // Normal
     mdrive_message[4] = 0x41;
+    #if CKM
+      dme_ckm[0] = 0xF1;                                                                                                            // Normal
+    #endif
+    #if EDC_CKM_FIX
+      edc_ckm[0] = 0xF1;                                                                                                            // Comfort
+    #endif
     serial_log("Reset MDrive settings.");
   } else if ((k_msg.buf[4] == 0xE0 || k_msg.buf[4] == 0xE1)) {                                                                      // Ignore E0/E1 (Invalid).
   } else {
@@ -253,18 +271,14 @@ void send_power_mode()
   }
 
   can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-  PTCAN.write(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode));
-
-  #if EXTRA_DEBUG
-    debug_can_message(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-  #endif 
+  ptcan_write_msg(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode));
 }
 
 
 #if CKM
 void send_dme_power_ckm()
 {
-  KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                        // This is sent by the DME to populate the M Key iDrive section
+  kcan_write_msg(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                    // This is sent by the DME to populate the M Key iDrive section
   serial_log("Sent DME POWER CKM.");
 }
 
@@ -278,6 +292,28 @@ void save_dme_power_ckm()
   #endif
   mdrive_settings_updated = true;
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
+}
+#endif
+
+
+#if EDC_CKM_FIX
+void save_edc_ckm()
+{
+  edc_ckm[0] = k_msg.buf[0];
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "Received new EDC CKM setting: %s", edc_ckm[0] == 0xF1 ? "Comfort" : 
+                                  edc_ckm[0] == 0xF2 ? "Normal" : "Sport");
+    serial_log(serial_debug_string);
+  #endif
+  mdrive_settings_updated = true;
+}
+
+void evaluate_edc_ckm_mismatch()
+{
+  if (k_msg.buf[0] != edc_ckm[0]) {
+    serial_log("EDC CKM setting does not match EEPROM value. Correcting.");
+    kcan_write_msg(makeMsgBuf(0x3C5, 2, edc_ckm));
+  }
 }
 #endif
 
@@ -296,10 +332,6 @@ void send_servotronic_message()
   } else {
     servotronic_message[0] += 8;
   }
-  PTCAN.write(makeMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
-
-  #if EXTRA_DEBUG
-    debug_can_message(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message);
-  #endif  
+  ptcan_write_msg(makeMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
 }
 #endif

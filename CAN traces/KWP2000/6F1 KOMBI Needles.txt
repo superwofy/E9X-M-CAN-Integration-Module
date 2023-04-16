@@ -1,0 +1,50 @@
+Needle sweeps:
+
+
+Speedo
+
+Max:
+23:09:53.837 ->  DCAN:  TS: 45577 ID: 6F1 Buffer: 60 3 22 31 0 0 0 0 									// not needed
+23:09:53.998 ->  DCAN:  TS: 62383 ID: 6F1 Buffer: 60 30 0 0 0 0 0 0 									// not needed
+23:09:54.030 ->  DCAN:  TS: 11388 ID: 6F1 Buffer: 60 5 30 20 6 12 11 0 
+
+
+Release:
+23:10:58.054 ->  DCAN:  TS: 40735 ID: 6F1 Buffer: 60 3 30 20 0 0 0 0 
+
+
+
+Tacho
+
+Max:
+23:11:42.886 ->  DCAN:  TS: 43560 ID: 6F1 Buffer: 60 3 22 31 3 0 0 0 									// not needed
+23:11:42.983 ->  DCAN:  TS: 37196 ID: 6F1 Buffer: 60 30 0 0 0 0 0 0 
+23:11:43.016 ->  DCAN:  TS: 51255 ID: 6F1 Buffer: 60 5 30 21 6 12 3D 0 
+
+Release:
+23:12:09.240 ->  DCAN:  TS: 57021 ID: 6F1 Buffer: 60 3 30 21 0 0 0 0
+
+
+
+Fuel
+
+Max:
+23:12:36.272 ->  DCAN:  TS: 382 ID: 6F1 Buffer: 60 3 22 31 2 0 0 0 										// not needed
+23:12:36.368 ->  DCAN:  TS: 43171 ID: 6F1 Buffer: 60 30 0 0 0 0 0 0  									// not needed
+23:12:36.368 ->  DCAN:  TS: 56065 ID: 6F1 Buffer: 60 5 30 22 6 7 4E 0
+
+Release:
+23:13:02.871 ->  DCAN:  TS: 2487 ID: 6F1 Buffer: 60 3 30 22 0 0 0 0 
+
+
+
+Oil
+
+Max:
+23:14:37.003 ->  DCAN:  TS: 12615 ID: 6F1 Buffer: 60 3 22 31 5 0 0 0 									// not needed
+23:14:37.131 ->  DCAN:  TS: 9233 ID: 6F1 Buffer: 60 30 0 0 0 0 0 0  									// not needed
+23:14:37.164 ->  DCAN:  TS: 23084 ID: 6F1 Buffer: 60 5 30 23 6 7 12 0
+
+Release:
+23:14:51.537 ->  DCAN:  TS: 1636 ID: 6F1 Buffer: 60 3 30 23 0 0 0 0 
+

@@ -16,12 +16,7 @@ void configure_IO()
   
   #if EXHAUST_FLAP_CONTROL
     pinMode(EXHAUST_FLAP_SOLENOID_PIN, OUTPUT);
-    #if QUIET_START
-      actuate_exhaust_solenoid(HIGH);                                                                                               // Close the flap (if vacuum still available)
-      serial_log("Quiet start enabled. Exhaust flap closed.");
-    #else
-      actuate_exhaust_solenoid(LOW);                                                                                                // Keep the solenoid de-energised (flap open)
-    #endif
+    actuate_exhaust_solenoid(LOW);                                                                                                  // Keep the solenoid de-energised (flap open)
   #endif
   #if RTC
     setSyncProvider(get_teensy_time);
@@ -42,16 +37,6 @@ void scale_mcu_speed()
         max_loop_timer = 0;
       #endif
   }
-}
-
-
-void disable_mcu_peripherals()
-{
-  #if !DEBUG_MODE && DISABLE_USB
-    if (digitalRead(POWER_BUTTON_PIN)) {                                                                                            // Bypass USB disable by holding POWER when powering module (waking up the car). This pin should be LOW when holding.
-      USB1_USBCMD = 0;        
-    }
-  #endif
 }
 
 
@@ -82,7 +67,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 21, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 27, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -99,11 +84,23 @@ void configure_can_controllers()
   #endif
   filterId = 0x130;                                                                                                                 // Key/ignition status                                          Cycle time 100ms
   canFilters.push(&filterId);
-  #if LAUNCH_CONTROL_INDICATOR
+  #if HDC
+    filterId = 0x193;                                                                                                               // Kombi cruise control status
+    canFilters.push(&filterId);
+  #endif
+  #if FAKE_MSA
+    filterId = 0x195;                                                                                                               // HDC button status sent by IHKA.
+    canFilters.push(&filterId);
+  #endif
+  #if LAUNCH_CONTROL_INDICATOR || HDC
     filterId = 0x1B4;                                                                                                               // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R on)
     canFilters.push(&filterId);
   #endif
-  #if FRONT_FOG_INDICATOR
+  #if DIM_DRL
+    filterId = 0x1F6;                                                                                                               // Indicator status                                             Cycle time 1s
+    canFilters.push(&filterId);
+  #endif
+  #if FRONT_FOG_INDICATOR || DIM_DRL
     filterId = 0x21A;
     canFilters.push(&filterId);                                                                                                     // Light status                                                 Cycle time 5s (idle)
   #endif
@@ -129,6 +126,10 @@ void configure_can_controllers()
     filterId = 0x2FA;                                                                                                               // Seat occupancy and belt status                               Cycle time 5s
     canFilters.push(&filterId);
   #endif
+  #if HDC
+    filterId = 0x31A;                                                                                                               // HDC button status sent by IHKA.
+    canFilters.push(&filterId);
+  #endif
   #if RTC
     filterId = 0x39E;                                                                                                               // Time and date set by the user in CIC.
     canFilters.push(&filterId);
@@ -145,6 +146,12 @@ void configure_can_controllers()
   #endif
   #if DEBUG_MODE
     filterId = 0x3B4;                                                                                                               // Battery voltage from DME.
+    canFilters.push(&filterId);
+  #endif
+  #if EDC_CKM_FIX
+    filterId = 0x3C4;                                                                                                               // Filter EDC car key memory from JBE.
+    canFilters.push(&filterId);
+    filterId = 0x3C5;                                                                                                               // Filter M Key EDC setting from iDrive.
     canFilters.push(&filterId);
   #endif
   filterId = 0x3CA;                                                                                                                 // CIC MDrive settings                                          Sent when changed.
@@ -246,21 +253,16 @@ void configure_can_controllers()
     #endif
   }
   digitalWrite(DCAN_STBY_PIN, LOW);                                                                                                 // DCAN configured, activate transceiver.
-
-  #if EXTRA_DEBUG
-    KCAN.mailboxStatus();
-    PTCAN.mailboxStatus();
-    DCAN.mailboxStatus();
-  #endif
 }
 
 
 void initialize_timers()
 {
-  power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
   #if DEBUG_MODE
-    debug_print_timer = millis();
-    loop_timer = micros();
+    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer 
+      = debug_print_timer = loop_timer = millis();
+  #else
+    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
   #endif
 }
 
@@ -269,11 +271,9 @@ void initialize_watchdog()
 {
   WDT_timings_t config;
   #if DEBUG_MODE
-    config.trigger = 25;
+    config.trigger = 15;
     config.callback = wdt_callback;
-  #endif
-  #if DEBUG_MODE
-    config.timeout = 30;
+    config.timeout = 20;
   #else
     config.timeout = 10;                                                                                                            // If the watchdog timer is not reset within 10s, re-start the program.
   #endif
@@ -299,19 +299,13 @@ void toggle_transceiver_standby()
       digitalWrite(DCAN_STBY_PIN, LOW);
       serial_log("Deactivated D-CAN transceiver.");
     #endif
-    #if QUIET_START
-      actuate_exhaust_solenoid(LOW);                                                                                                // Release the solenoid to reduce power consumption
-    #endif
   } else {
     digitalWrite(PTCAN_STBY_PIN, LOW);
     serial_log("Re-activated PT-CAN transceiver.");
     serial_log("Closed exhaust flap.");
     #if SERVOTRONIC_SVT70 || RTC
       digitalWrite(DCAN_STBY_PIN, HIGH);
-      serial_log("Re-eactivated D-CAN transceiver.");
-    #endif
-    #if QUIET_START
-      actuate_exhaust_solenoid(HIGH);                                                                                               // Reactivate the solenoid.
+      serial_log("Re-activated D-CAN transceiver.");
     #endif
   }
 }
@@ -431,13 +425,27 @@ time_t get_teensy_time()
 {
   return Teensy3Clock.get();
 }
+
+
+void check_rtc_valid()
+{
+  time_t t = now();
+  uint8_t rtc_day = day(t);
+  uint8_t rtc_month = month(t);
+  uint16_t rtc_year = year(t);
+  if (rtc_day == 1 && rtc_month == 1 && rtc_year == 1970) {
+    serial_log("Teensy RTC invalid. Check RTC battery.");
+    kcan_write_msg(set_time_cc_buf);                                                                                                // Warn that the time needs to be updated by the user.
+    rtc_valid = false;
+  }
+}
 #endif
 
 
 void check_ptcan_transmit_status() 
 {
   if (deactivate_ptcan_temporariliy && vehicle_awake) {
-    if ((millis() - deactivate_ptcan_timer) >= 30000) {                                                                             // Re-activate after 30s of no LDM DCAN requests.
+    if ((millis() - deactivate_ptcan_timer) >= 60000) {                                                                             // Re-activate after period of no LDM DCAN requests.
       temp_reactivate_ptcan();
     }
   }
@@ -446,9 +454,12 @@ void check_ptcan_transmit_status()
 
 void temp_deactivate_ptcan() 
 {
-  digitalWrite(PTCAN_STBY_PIN, HIGH);
-  serial_log("Deactivated PT-CAN transceiver while LDM is being diagnosed/flashed.");
-  deactivate_ptcan_temporariliy = true;
+  if (!deactivate_ptcan_temporariliy) {
+    digitalWrite(PTCAN_STBY_PIN, HIGH);
+    serial_log("Deactivated PT-CAN transceiver while LDM is being diagnosed/flashed.");
+    deactivate_ptcan_temporariliy = true;
+    deactivate_ptcan_timer = millis();
+  }
   deactivate_ptcan_timer = millis();
 }
 
