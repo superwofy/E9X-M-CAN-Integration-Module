@@ -18,9 +18,7 @@ void configure_IO()
     pinMode(EXHAUST_FLAP_SOLENOID_PIN, OUTPUT);
     #if QUIET_START
       actuate_exhaust_solenoid(HIGH);                                                                                               // Close the flap (if vacuum still available)
-      #if DEBUG_MODE
-        Serial.println("Quiet start enabled. Exhaust flap closed.");
-      #endif
+      serial_log("Quiet start enabled. Exhaust flap closed.");
     #else
       actuate_exhaust_solenoid(LOW);                                                                                                // Keep the solenoid de-energised (flap open)
     #endif
@@ -162,7 +160,7 @@ void configure_can_controllers()
   filterCount = canFilters.getCount();
   #if DEBUG_MODE
     sprintf(serial_debug_string, "KCAN filters [%d]:", filterCount);
-    Serial.println(serial_debug_string);
+    serial_log(serial_debug_string);
   #endif
   for (uint8_t i = 0; i < filterCount; i++) {
     canFilters.pop(&filterId);
@@ -171,19 +169,18 @@ void configure_can_controllers()
       setResult = KCAN.setFIFOFilter(i, filterId, STD);
       if (!setResult) {
         sprintf(serial_debug_string, " %x failed", filterId);
-        Serial.print(serial_debug_string);
+        serial_log(serial_debug_string);
+      } else {
+        sprintf(serial_debug_string, " %x", filterId);
+        serial_log(serial_debug_string);
       }
     #else
       KCAN.setFIFOFilter(i, filterId, STD);
     #endif
-    #if DEBUG_MODE
-      Serial.print(" ");
-      Serial.println(filterId, HEX);
-    #endif
   }
 
   // PTCAN
-  filterId = 0x1D6;                                                                                                                 // MFL button status.                                           Cycle time 1s, 100ms (pressed)
+  filterId = 0x1D6;                                                                                                                 // MFL button status.                                           Cycle time 1s (idle), 100ms (pressed)
   canFilters.push(&filterId);
   #if FTM_INDICATOR
     filterId = 0x31D;                                                                                                               // FTM status broadcast by DSC                                  Cycle time 5s (idle)
@@ -204,7 +201,7 @@ void configure_can_controllers()
   filterCount = canFilters.getCount();
   #if DEBUG_MODE
     sprintf(serial_debug_string, "PTCAN filters [%d]:", filterCount);
-    Serial.println(serial_debug_string);
+    serial_log(serial_debug_string);
   #endif
   for (uint8_t i = 0; i < filterCount; i++) {
     canFilters.pop(&filterId);
@@ -213,16 +210,16 @@ void configure_can_controllers()
       setResult = PTCAN.setFIFOFilter(i, filterId, STD);
       if (!setResult) {
         sprintf(serial_debug_string, " %x failed", filterId);
-        Serial.print(serial_debug_string);
+        serial_log(serial_debug_string);
+      } else {
+        sprintf(serial_debug_string, " %x", filterId);
+        serial_log(serial_debug_string);
       }
     #else
       PTCAN.setFIFOFilter(i, filterId, STD);
     #endif
-    #if DEBUG_MODE
-      Serial.print(" ");
-      Serial.println(filterId, HEX);
-    #endif
   }
+  digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // PTCAN configured, activate transceiver.
 
   // DCAN
   filterId = 0x6F1;                                                                                                                 // Receive diagnostic queries from DCAN tool to forward.
@@ -230,7 +227,7 @@ void configure_can_controllers()
   filterCount = canFilters.getCount();
   #if DEBUG_MODE
     sprintf(serial_debug_string, "DCAN filters [%d]:", filterCount);
-    Serial.println(serial_debug_string);
+    serial_log(serial_debug_string);
   #endif
   for (uint8_t i = 0; i < filterCount; i++) {
     canFilters.pop(&filterId);
@@ -239,20 +236,16 @@ void configure_can_controllers()
       setResult = DCAN.setFIFOFilter(i, filterId, STD);
       if (!setResult) {
         sprintf(serial_debug_string, " %x failed", filterId);
-        Serial.print(serial_debug_string);
+        serial_log(serial_debug_string);
+      } else {
+        sprintf(serial_debug_string, " %x", filterId);
+        serial_log(serial_debug_string);
       }
     #else
       DCAN.setFIFOFilter(i, filterId, STD);
     #endif
-    #if DEBUG_MODE
-      Serial.print(" ");
-      Serial.println(filterId, HEX);
-    #endif
   }
   digitalWrite(DCAN_STBY_PIN, LOW);                                                                                                 // DCAN configured, activate transceiver.
-
-  digitalWrite(PTCAN_STBY_PIN, LOW);                                                                                                // PTCAN configured, activate transceiver.
-
 
   #if EXTRA_DEBUG
     KCAN.mailboxStatus();
@@ -291,7 +284,7 @@ void initialize_watchdog()
 #if DEBUG_MODE
 void wdt_callback()
 {
-  Serial.println("Watchdog timer not reset. Program will reset in 5s.");
+  serial_log("Watchdog not fed. Program will reset in 5s.");
 }
 #endif
 
@@ -300,30 +293,22 @@ void toggle_transceiver_standby()
 {
   if (!vehicle_awake) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
-    #if DEBUG_MODE
-      Serial.println("Deactivated PT-CAN transceiver.");
-      Serial.println("Opened exhaust flap.");
-    #endif
+    serial_log("Deactivated PT-CAN transceiver.");
+    serial_log("Opened exhaust flap.");
     #if SERVOTRONIC_SVT70 || RTC
       digitalWrite(DCAN_STBY_PIN, LOW);
-      #if DEBUG_MODE
-        Serial.println("Deactivated D-CAN transceiver.");
-      #endif
+      serial_log("Deactivated D-CAN transceiver.");
     #endif
     #if QUIET_START
       actuate_exhaust_solenoid(LOW);                                                                                                // Release the solenoid to reduce power consumption
     #endif
   } else {
     digitalWrite(PTCAN_STBY_PIN, LOW);
-    #if DEBUG_MODE
-      Serial.println("Re-activated PT-CAN transceiver.");
-      Serial.println("Closed exhaust flap.");
-    #endif
+    serial_log("Re-activated PT-CAN transceiver.");
+    serial_log("Closed exhaust flap.");
     #if SERVOTRONIC_SVT70 || RTC
       digitalWrite(DCAN_STBY_PIN, HIGH);
-      #if DEBUG_MODE
-        Serial.println("Re-eactivated D-CAN transceiver.");
-      #endif
+      serial_log("Re-eactivated D-CAN transceiver.");
     #endif
     #if QUIET_START
       actuate_exhaust_solenoid(HIGH);                                                                                               // Reactivate the solenoid.
@@ -341,26 +326,20 @@ void check_cpu_temp()                                                           
       if (cpu_temp >= TOP_THRESHOLD) {
         if (clock_mode != 2) {
           set_arm_clock(MAX_UNDERCLOCK);
-          #if DEBUG_MODE
-            Serial.println("Processor temperature above top overheat threshold. Underclocking.");
-          #endif
+          serial_log("Processor temperature above top overheat threshold. Underclocking.");
           clock_mode = 2;
         }
       } else if (cpu_temp >= MEDIUM_THRESHOLD) {
         if (clock_mode != 1) {
           set_arm_clock(MEDIUM_UNDERCLOCK);
-          #if DEBUG_MODE
-            Serial.println("Processor temperature above medium overheat threshold. Underclocking.");
-          #endif
+          serial_log("Processor temperature above medium overheat threshold. Underclocking.");
           clock_mode = 1;
         }
       } else {
         if (clock_mode != 0) {
           set_arm_clock(cpu_speed_ide);
           clock_mode = 0;
-          #if DEBUG_MODE
-            Serial.println("Restored clock speed.");
-          #endif
+          serial_log("Restored clock speed.");
         }
       }
     }
@@ -384,7 +363,7 @@ void update_rtc_from_idrive()
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received time from iDrive: %s%d:%s%d", 
               idrive_hour > 9 ? "" : "0", idrive_hour, idrive_minutes > 9 ? "" : "0", idrive_minutes);
-      Serial.println(serial_debug_string);
+      serial_log(serial_debug_string);
     #endif
     setTime(idrive_hour, idrive_minutes, 0, rtc_day, rtc_month, rtc_year);
     t = now();
@@ -400,7 +379,7 @@ void update_rtc_from_idrive()
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received date from iDrive: %s%d/%s%d/%d", 
               idrive_day > 9 ? "" : "0", idrive_day, idrive_month > 9 ? "" : "0", idrive_month, idrive_year);
-      Serial.println(serial_debug_string);
+      serial_log(serial_debug_string);
     #endif
     setTime(rtc_hours, rtc_minutes, rtc_seconds, idrive_day, idrive_month, idrive_year); 
     t = now();
@@ -423,7 +402,7 @@ void update_rtc_from_dcan()
       sprintf(serial_debug_string, "Received time from DCAN: %s%d:%s%d:%s%d", 
               dcan_hour > 9 ? "" : "0", dcan_hour, dcan_minutes > 9 ? "" : "0", dcan_minutes,
               dcan_seconds > 9 ? "" : "0", dcan_seconds);
-      Serial.println(serial_debug_string);
+      serial_log(serial_debug_string);
     #endif
     setTime(dcan_hour, dcan_minutes, dcan_seconds, rtc_day, rtc_month, rtc_year);
     t = now();
@@ -439,7 +418,7 @@ void update_rtc_from_dcan()
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received date from DCAN: %s%d/%s%d/%d", 
               dcan_day > 9 ? "" : "0", dcan_day, dcan_month > 9 ? "" : "0", dcan_month, dcan_year);
-      Serial.println(serial_debug_string);
+      serial_log(serial_debug_string);
     #endif
     setTime(rtc_hours, rtc_minutes, rtc_seconds, dcan_day, dcan_month, dcan_year); 
     t = now();
@@ -455,7 +434,7 @@ time_t get_teensy_time()
 #endif
 
 
-void check_ptcan_status() 
+void check_ptcan_transmit_status() 
 {
   if (deactivate_ptcan_temporariliy && vehicle_awake) {
     if ((millis() - deactivate_ptcan_timer) >= 30000) {                                                                             // Re-activate after 30s of no LDM DCAN requests.
@@ -468,9 +447,7 @@ void check_ptcan_status()
 void temp_deactivate_ptcan() 
 {
   digitalWrite(PTCAN_STBY_PIN, HIGH);
-  #if DEBUG_MODE
-    Serial.println("Deactivated PT-CAN transceiver while LDM is being diagnosed/flashed.");
-  #endif
+  serial_log("Deactivated PT-CAN transceiver while LDM is being diagnosed/flashed.");
   deactivate_ptcan_temporariliy = true;
   deactivate_ptcan_timer = millis();
 }
@@ -479,8 +456,6 @@ void temp_deactivate_ptcan()
 void temp_reactivate_ptcan()
 {
   digitalWrite(PTCAN_STBY_PIN, LOW);
-  #if DEBUG_MODE
-    Serial.println("Re-activated PT-CAN transceiver after LDM diagnosis.");
-  #endif
+  serial_log("Re-activated PT-CAN transceiver after LDM diagnosis.");
   deactivate_ptcan_temporariliy = false;
 }

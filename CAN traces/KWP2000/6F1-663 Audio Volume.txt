@@ -35,7 +35,7 @@ Set volume [24]:
 
 
 
-Set default volume[:
+Set default volume:
 10:55:14.253 ->  DCAN:  TS: 12549 ID: 6F1 Buffer: 63 2 31 25 0 0 0 0
 
 Response:

@@ -10,7 +10,7 @@ void debug_can_message(uint16_t canid, uint8_t len, uint8_t* message)
     Serial.println();
 }
 
-
+#if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2                                                                                        // Check if Dual Serial is set
 void print_current_state()
 {
   SerialUSB1.println("=========== Operation ==========");
@@ -20,7 +20,7 @@ void print_current_state()
   SerialUSB1.println(serial_debug_string);
   sprintf(serial_debug_string, " Engine: %s", engine_running ? "ON" : "OFF");
   SerialUSB1.println(serial_debug_string);
-  sprintf(serial_debug_string, " RPM: %ld", RPM / 4);
+  sprintf(serial_debug_string, " RPM: %d", RPM / 4);
   SerialUSB1.println(serial_debug_string);
   if (vehicle_awake) {
     sprintf(serial_debug_string, " Voltage: %.2f V", battery_voltage);
@@ -164,9 +164,9 @@ void print_current_state()
   #endif
   sprintf(serial_debug_string, " DCAN fix for SVT: %s", diagnose_svt ? "ON" : "OFF");
   SerialUSB1.println(serial_debug_string);
-  sprintf(serial_debug_string, " Forwarded requests from DCAN (>): %lu", dcan_forwarded_count);
+  sprintf(serial_debug_string, " Forwarded requests from DCAN (>): %d", dcan_forwarded_count);
   SerialUSB1.println(serial_debug_string);
-  sprintf(serial_debug_string, " Forwarded responses from PTCAN (<): %lu", ptcan_forwarded_count);
+  sprintf(serial_debug_string, " Forwarded responses from PTCAN (<): %d", ptcan_forwarded_count);
   SerialUSB1.println(serial_debug_string);
 
   SerialUSB1.println("============ Debug =============");
@@ -187,7 +187,14 @@ void print_current_state()
   SerialUSB1.println("================================");
   debug_print_timer = millis();
 }
-#endif  
+#endif
+#endif
+
+void serial_log(const char message[]) {
+  #if DEBUG_MODE
+    Serial.println(message);
+  #endif
+}
 
 
 void reset_runtime_variables()                                                                                                      // Ignition off. Set variables to original state and commit MDrive settings.
@@ -204,12 +211,12 @@ void reset_runtime_variables()                                                  
   #if CKM
     console_power_mode = dme_ckm[0] == 0xF1 ? false : true;                                                                         // When cycling ignition, restore this to its CKM value.
   #endif
-  dsc_tx.flush();
+  dsc_txq.flush();
   #if AUTO_SEAT_HEATING
-    seat_heating_tx.flush();
+    seat_heating_txq.flush();
   #endif
   #if REVERSE_BEEP
-    pdc_beep_tx.flush();
+    pdc_beep_txq.flush();
     pdc_beep_sent = false;
   #endif
   #if SERVOTRONIC_SVT70
@@ -303,7 +310,7 @@ void cache_can_message_buffers()                                                
   #endif
   #if DOOR_VOLUME
     vol_request_buf = makeMsgBuf(0x6F1, 8, vol_request);
-    default_vol_request_buf = makeMsgBuf(0x6F1, 8, default_vol_request);
+    default_vol_set_buf = makeMsgBuf(0x6F1, 8, default_vol_set);
   #endif
 }
 

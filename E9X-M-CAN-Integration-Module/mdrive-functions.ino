@@ -27,9 +27,7 @@ void read_settings_from_eeprom()
     console_power_mode = dme_ckm[0] == 0xF1 ? false : true;
   #endif
 
-  #if DEBUG_MODE
-    Serial.println("Loaded MDrive settings from EEPROM.");
-  #endif
+  serial_log("Loaded MDrive settings from EEPROM.");
   mdrive_message[1] = mdrive_dsc - 2;                                                                                               // Difference between iDrive settting and MDrive CAN message (off) is always 2.
                                                                                                                                     // 1 unchanged, 5 off, 0x11 MDM, 9 On
   mdrive_message[2] = mdrive_power;                                                                                                 // Copy POWER as is.
@@ -52,9 +50,7 @@ void update_settings_in_eeprom()
     #if CKM
       EEPROM.update(5, dme_ckm[0]);
     #endif                                                                                          
-    #if DEBUG_MODE
-        Serial.println("Saved M settings to EEPROM.");
-    #endif
+    serial_log("Saved M settings to EEPROM.");
   }
 }
 
@@ -62,9 +58,7 @@ void update_settings_in_eeprom()
 void toggle_mdrive_message_active()
 {
   if (mdrive_status) {                                                                                                              // Turn off MDrive.
-    #if DEBUG_MODE
-      Serial.println("Status MDrive off.");
-    #endif
+    serial_log("Status MDrive off.");
     mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
     mdrive_message[4] -= 0x10;
     mdrive_status = mdrive_power_active = false;
@@ -76,9 +70,7 @@ void toggle_mdrive_message_active()
       console_power_mode = restore_console_power_mode;
     }                                                                                                                               // Else, POWER unchanged
   } else {                                                                                                                          // Turn on MDrive.
-    #if DEBUG_MODE
-      Serial.println("Status MDrive on.");
-    #endif
+    serial_log("Status MDrive on.");
     if (mdrive_power == 0x20) {                                                                                                     // POWER in Sport.
       mdrive_power_active = true;
     } else if (mdrive_power == 0x30) {                                                                                              // POWER Sport+.
@@ -141,9 +133,7 @@ void evaluate_m_mfl_button_press()
 
 void show_idrive_mdrive_settings_screen()
 {
-  #if DEBUG_MODE
-    Serial.println("Steering wheel M button held. Showing settings screen.");
-  #endif
+  serial_log("Steering wheel M button held. Showing settings screen.");
   KCAN.write(idrive_mdrive_settings_a_buf);                                                                                         // Send steuern_menu job to iDrive.
   KCAN.write(idrive_mdrive_settings_b_buf);
   ignore_m_hold = true;
@@ -170,13 +160,11 @@ void send_mdrive_alive_message(uint16_t interval)
 {
   if ((millis() - mdrive_message_timer) >= interval) {                                                                              // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
     if (!deactivate_ptcan_temporariliy) {
-      #if DEBUG_MODE
-        if (ignition) {
-          Serial.println("Sending Ignition ON MDrive alive message.");
-        } else {
-          Serial.println("Sending Vehicle Awake MDrive alive message.");
-        }
-      #endif
+      if (ignition) {
+        serial_log("Sending Ignition ON MDrive alive message.");
+      } else {
+        serial_log("Sending Vehicle Awake MDrive alive message.");
+      }
       send_mdrive_message();
     }
   }
@@ -194,9 +182,7 @@ void update_mdrive_message_settings()
     mdrive_message[3] = mdrive_edc;
     mdrive_svt = 0xE9;                                                                                                              // Normal
     mdrive_message[4] = 0x41;
-    #if DEBUG_MODE
-      Serial.println("Reset MDrive settings.");
-    #endif
+    serial_log("Reset MDrive settings.");
   } else if ((k_msg.buf[4] == 0xE0 || k_msg.buf[4] == 0xE1)) {                                                                      // Ignore E0/E1 (Invalid).
   } else {
     //Decode settings
@@ -225,7 +211,7 @@ void update_mdrive_message_settings()
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
           mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
-      Serial.println(serial_debug_string);
+      serial_log(serial_debug_string);
     #endif
   }
   send_mdrive_message();
@@ -279,9 +265,7 @@ void send_power_mode()
 void send_dme_power_ckm()
 {
   KCAN.write(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                        // This is sent by the DME to populate the M Key iDrive section
-  #if DEBUG_MODE
-    Serial.println("Sent DME POWER CKM.");
-  #endif
+  serial_log("Sent DME POWER CKM.");
 }
 
 
@@ -290,7 +274,7 @@ void save_dme_power_ckm()
   dme_ckm[0] = k_msg.buf[0];
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Received new POWER CKM setting: %s", dme_ckm[0] == 0xF1 ? "Normal" : "Sport");
-    Serial.println(serial_debug_string);
+    serial_log(serial_debug_string);
   #endif
   mdrive_settings_updated = true;
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;

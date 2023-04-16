@@ -60,20 +60,23 @@ WDT_T4<WDT1> wdt;
 const uint16_t DME_FAKE_VEH_MODE_CANID = 0x7F1;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section.
 const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80.
 #if CONTROL_SHIFTLIGHTS
-  const uint32_t START_UPSHIFT_WARN_RPM = 5500*4;                                                                                   // RPM setpoints (warning = desired RPM * 4).
-  const uint32_t MID_UPSHIFT_WARN_RPM = 6000*4;
-  const uint32_t MAX_UPSHIFT_WARN_RPM = 6500*4;
+  const uint16_t START_UPSHIFT_WARN_RPM = 5500*4;                                                                                   // RPM setpoints (warning = desired RPM * 4).
+  const uint16_t MID_UPSHIFT_WARN_RPM = 6000*4;
+  const uint16_t MAX_UPSHIFT_WARN_RPM = 6500*4;
 #endif
 #if EXHAUST_FLAP_CONTROL
-  const uint32_t EXHAUST_FLAP_QUIET_RPM = 3500*4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
+  const uint16_t EXHAUST_FLAP_QUIET_RPM = 3500*4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
 #endif
 #if LAUNCH_CONTROL_INDICATOR
-  const uint32_t LC_RPM = 4000*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
-  const uint32_t LC_RPM_MIN = LC_RPM - (250 * 4);
-  const uint32_t LC_RPM_MAX = LC_RPM + (250 * 4);
+  const uint16_t LC_RPM = 4000*4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
+  const uint16_t LC_RPM_MIN = LC_RPM - (250 * 4);
+  const uint16_t LC_RPM_MAX = LC_RPM + (250 * 4);
 #endif
 #if CONTROL_SHIFTLIGHTS
-  const uint32_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                     // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
+  const int16_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                      // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
+#endif
+#if DOOR_VOLUME
+  const uint16_t IDRIVE_BOOT_TIME = 30 * 1000;                                                                                      // Amount of time until the iDrive QNX OS accepts tool32 jobs from a cold boot.
 #endif
 
 const float TOP_THRESHOLD = 65.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
@@ -97,10 +100,10 @@ bool ignition = false, vehicle_awake = true;
 unsigned long vehicle_awake_timer;
 uint8_t dsc_on[] = {0xCF, 0xE3}, dsc_mdm_dtc[] = {0xCF, 0xF3}, dsc_off[] = {0xCF, 0xE7};
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
-cppQueue dsc_tx(sizeof(delayed_can_tx_msg), 3, queue_FIFO);
+cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 3, queue_FIFO);
 
 bool engine_running = false;
-uint32_t RPM = 0;
+uint16_t RPM = 0;
 #if CKM
   uint8_t dme_ckm[] = {0, 0xFF};
 #endif
@@ -130,7 +133,7 @@ unsigned long deactivate_ptcan_timer;
   CAN_message_t servotronic_cc_on_buf;
   bool diagnose_svt = false;
   #if DEBUG_MODE
-    uint32_t dcan_forwarded_count = 0, ptcan_forwarded_count = 0;
+    uint16_t dcan_forwarded_count = 0, ptcan_forwarded_count = 0;
   #endif
 #endif
 #if CONTROL_SHIFTLIGHTS
@@ -143,11 +146,11 @@ CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_st
 CAN_message_t shiftlights_max_flash_buf, shiftlights_off_buf;
 bool shiftlights_segments_active = false;
 uint8_t ignore_shiftlights_off_counter = 0;
-uint32_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
-uint32_t MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
-uint32_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
+uint16_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
+uint16_t MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
+uint16_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
   bool engine_coolant_warmed_up = false;
-  uint32_t var_redline_position;
+  uint16_t var_redline_position;
   uint8_t last_var_rpm_can = 0;
 uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // byte 5: shiftlights always on
 #else
@@ -172,7 +175,7 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t pdc_quiet[] = {0, 0, 0, 0};
   CAN_message_t pdc_beep_buf, pdc_quiet_buf;
   bool pdc_beep_sent = false;
-  cppQueue pdc_beep_tx(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
+  cppQueue pdc_beep_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
 #endif
 #if F_ZBE_WAKE
   uint8_t f_wakeup[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                                           // Network management KOMBI - F-series.
@@ -196,22 +199,22 @@ uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                               
   uint8_t passenger_seat_status = 0;                                                                                                // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
   bool driver_sent_seat_heating_request = false, passenger_sent_seat_heating_request = false;
   uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF}, seat_heating_button_released[] = {0xFC, 0xFF};
-  cppQueue seat_heating_tx(sizeof(delayed_can_tx_msg), 6, queue_FIFO); 
+  cppQueue seat_heating_txq(sizeof(delayed_can_tx_msg), 7, queue_FIFO); 
 #endif
 #if DOOR_VOLUME
   bool left_door_open = false, right_door_open = false;
   bool volume_reduced = false, volume_requested = false;
   bool default_volume_sent = false;
   uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
-  uint8_t default_vol_request[] = {0x63, 2, 0x31, 0x25, 0, 0, 0, 0};
+  uint8_t default_vol_set[] = {0x63, 2, 0x31, 0x25, 0, 0, 0, 0};
   uint8_t volume_restore_offset = 0, volume_changed_to;
-  CAN_message_t vol_request_buf, default_vol_request_buf;
-  cppQueue audio_volume_tx(sizeof(delayed_can_tx_msg), 3, queue_FIFO);
+  CAN_message_t vol_request_buf, default_vol_set_buf;
+  cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
 #if DEBUG_MODE
   float battery_voltage = 0;
   extern float tempmonGetTemp(void);
-  char serial_debug_string[256];
+  char serial_debug_string[512];
   unsigned long loop_timer, debug_print_timer, max_loop_timer = 0;
 #endif
 bool disable_idrive_transmit_jobs = false;
@@ -234,7 +237,7 @@ void setup()
   read_settings_from_eeprom();
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Setup finished in %lu ms, module is ready.", millis() - setup_timer);
-    Serial.println(serial_debug_string);
+    serial_log(serial_debug_string);
   #endif
 }
 
@@ -247,10 +250,10 @@ void loop()
   #if EXHAUST_FLAP_CONTROL
     control_exhaust_flap_user();
   #endif
-  check_ptcan_status();
-  check_idrive_transmit_status();
+  check_ptcan_transmit_status();
   #if DOOR_VOLUME
-    check_audio_queue();
+    check_idrive_transmit_status();
+    check_idrive_queue();
   #endif
   if (ignition) {
     check_cpu_temp();                                                                                                               // Monitor processor temperature to extend lifetime.
@@ -267,9 +270,7 @@ void loop()
     if (vehicle_awake) {
       if ((millis() - vehicle_awake_timer) >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring .
-        #if DEBUG_MODE
-          Serial.println("Vehicle Sleeping.");
-        #endif
+        serial_log("Vehicle Sleeping.");
         toggle_transceiver_standby();
         scale_mcu_speed();
         reset_sleep_variables();
@@ -480,9 +481,9 @@ void loop()
   
 /**********************************************************************************************************************************************************************************************************************************************/
 
-  #if DEBUG_MODE
+  #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
     if (millis() - debug_print_timer >= 500) {
-      print_current_state();                                                                                                        // Print program status to the second Serial port.
+      print_current_state();                                                                                                      // Print program status to the second Serial port.
     }
     loop_timer = micros();
   #endif

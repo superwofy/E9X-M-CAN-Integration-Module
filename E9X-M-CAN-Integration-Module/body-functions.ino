@@ -10,9 +10,7 @@ void evaluate_ignition_status()
           KCAN.write(servotronic_cc_on_buf);                                                                                        // Indicate that diagnosing is now possible.
         }
       #endif
-      #if DEBUG_MODE
-        Serial.println("Ignition ON.");
-      #endif
+      serial_log("Ignition ON.");
     }
   } else {
     if (ignition) {
@@ -22,7 +20,7 @@ void evaluate_ignition_status()
         scale_mcu_speed();                                                                                                          // Now that the ignition is off, underclock the MCU
         #if DEBUG_MODE
           sprintf(serial_debug_string, "(%X) Ignition OFF. Reset values.", k_msg.buf[0]);
-          Serial.println(serial_debug_string);
+          serial_log(serial_debug_string);
         #endif
       }
     }
@@ -31,9 +29,7 @@ void evaluate_ignition_status()
   if (!vehicle_awake) {
     vehicle_awake = true;    
     toggle_transceiver_standby();                                                                                                   // Re-activate the transceivers.                                                                                         
-    #if DEBUG_MODE
-      Serial.println("Vehicle Awake.");
-    #endif
+    serial_log("Vehicle Awake.");
     #if DOOR_VOLUME
       send_default_startup_volume();
     #endif
@@ -51,17 +47,13 @@ void evaluate_fog_status()
       if (!front_fog_status) {
         front_fog_status = true;
         digitalWrite(FOG_LED_PIN, HIGH);
-        #if DEBUG_MODE
-          Serial.println("Front fogs on. Turned on FOG LED");
-        #endif
+        serial_log("Front fogs on. Turned on FOG LED");
       }
     } else {
       if (front_fog_status) {
         front_fog_status = false;
         digitalWrite(FOG_LED_PIN, LOW);
-        #if DEBUG_MODE
-          Serial.println("Front fogs off. Turned off FOG LED");
-        #endif
+        serial_log("Front fogs off. Turned off FOG LED");
       }
     }
     last_light_status = k_msg.buf[0];
@@ -120,11 +112,11 @@ void send_seat_heating_request(bool driver)
   KCAN.write(makeMsgBuf(canId, 2, seat_heating_button_pressed));
   CAN_message_t released = makeMsgBuf(canId, 2, seat_heating_button_released);
   delayed_can_tx_msg m = {released, timeNow + 100};
-  seat_heating_tx.push(&m);
+  seat_heating_txq.push(&m);
   m = {released, timeNow + 250};
-  seat_heating_tx.push(&m);
+  seat_heating_txq.push(&m);
   m = {released, timeNow + 400};
-  seat_heating_tx.push(&m);
+  seat_heating_txq.push(&m);
   #if DEBUG_MODE
     if (driver) {
       sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
@@ -133,19 +125,19 @@ void send_seat_heating_request(bool driver)
       sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %.1fC, treshold %.1fC.", 
            (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
     }
-    Serial.println(serial_debug_string);
+    serial_log(serial_debug_string);
   #endif
 }
 
 
 void check_seatheating_queue() 
 {
-  if (!seat_heating_tx.isEmpty()) {
+  if (!seat_heating_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
-    seat_heating_tx.peek(&delayed_tx);
+    seat_heating_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       KCAN.write(delayed_tx.tx_msg);
-      seat_heating_tx.drop();
+      seat_heating_txq.drop();
     }
   }
 }
@@ -156,9 +148,7 @@ void check_seatheating_queue()
 void send_zbe_wakeup()
 {
   KCAN.write(f_wakeup_buf);
-  #if DEBUG_MODE
-    Serial.println("Sent F-ZBE wake-up message.");
-  #endif
+  serial_log("Sent F-ZBE wake-up message.");
 }
 
 
@@ -168,7 +158,7 @@ void send_zbe_acknowledge()
   KCAN.write(makeMsgBuf(0x277, 4, zbe_response));
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent ZBE response to CIC with counter: 0x%X", k_msg.buf[7]);
-    Serial.println(serial_debug_string);
+    serial_log(serial_debug_string);
   #endif
 }
 #endif
@@ -182,9 +172,7 @@ void control_exhaust_flap_user()
       if ((millis() - exhaust_flap_action_timer) >= 500) {
         if (!exhaust_flap_open) {
           actuate_exhaust_solenoid(LOW);
-          #if DEBUG_MODE
-            Serial.println("Opened exhaust flap with MDrive.");
-          #endif
+          serial_log("Opened exhaust flap with MDrive.");
         }
       }
     }
@@ -200,16 +188,12 @@ void control_exhaust_flap_rpm()
         if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
           if (!exhaust_flap_open) {
             actuate_exhaust_solenoid(LOW);
-            #if DEBUG_MODE
-              Serial.println("Exhaust flap opened at RPM setpoint.");
-            #endif
+            serial_log("Exhaust flap opened at RPM setpoint.");
           }
         } else {
           if (exhaust_flap_open) {
             actuate_exhaust_solenoid(HIGH);
-            #if DEBUG_MODE
-              Serial.println("Exhaust flap closed.");
-            #endif
+            serial_log("Exhaust flap closed.");
           }
         }
       }
@@ -234,13 +218,11 @@ void evaluate_pdc_beep()
     if (!pdc_beep_sent) {
       unsigned long timeNow = millis();
       delayed_can_tx_msg m = {pdc_beep_buf, timeNow};
-      pdc_beep_tx.push(&m);
+      pdc_beep_txq.push(&m);
       m = {pdc_quiet_buf, timeNow + 150};
-      pdc_beep_tx.push(&m);
+      pdc_beep_txq.push(&m);
       pdc_beep_sent = true;
-      #if DEBUG_MODE
-        Serial.println("Sending PDC beep.");
-      #endif
+      serial_log("Sending PDC beep.");
     }
   } else {
     if (pdc_beep_sent) {
@@ -252,12 +234,12 @@ void evaluate_pdc_beep()
 
 void check_pdc_queue() 
 {
-  if (!pdc_beep_tx.isEmpty()) {
+  if (!pdc_beep_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
-    pdc_beep_tx.peek(&delayed_tx);
+    pdc_beep_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       KCAN.write(delayed_tx.tx_msg);
-      pdc_beep_tx.drop();
+      pdc_beep_txq.drop();
     }
   }
 }
@@ -266,7 +248,7 @@ void check_pdc_queue()
 
 void evaluate_engine_rpm()
 {
-  RPM = ((uint32_t)k_msg.buf[5] << 8) | (uint32_t)k_msg.buf[4];
+  RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
   if (!engine_running && (RPM > 2000)) {
     engine_running = true;
     #if CONTROL_SHIFTLIGHTS
@@ -275,14 +257,10 @@ void evaluate_engine_rpm()
     #if EXHAUST_FLAP_CONTROL
       exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
     #endif
-    #if DEBUG_MODE
-      Serial.println("Engine started.");
-    #endif
+    serial_log("Engine started.");
   } else if (engine_running && (RPM < 200)) {                                                                                       // Less than 50 RPM. Engine stalled or was stopped.
     engine_running = false;
-    #if DEBUG_MODE
-      Serial.println("Engine stopped.");
-    #endif
+    serial_log("Engine stopped.");
   }
 }
 
@@ -334,25 +312,17 @@ void check_console_buttons()
       if (!console_power_mode) {
         if (!mdrive_power_active) {
           console_power_mode = true;
-          #if DEBUG_MODE
-            Serial.println("Console: POWER mode ON.");
-          #endif 
+          serial_log("Console: POWER mode ON.");
         } else {
           mdrive_power_active = false;                                                                                              // If POWER button was pressed while MDrive POWER is active, disable POWER.
-          #if DEBUG_MODE
-            Serial.println("Deactivated MDrive POWER with console button press.");
-          #endif
+          serial_log("Deactivated MDrive POWER with console button press.");
         }
       } else {
-        #if DEBUG_MODE
-          Serial.println("Console: POWER mode OFF.");
-        #endif
+        serial_log("Console: POWER mode OFF.");
         console_power_mode = false;
         if (mdrive_power_active) {
           mdrive_power_active = false;                                                                                              // If POWER button was pressed while MDrive POWER is active, disable POWER.
-          #if DEBUG_MODE
-            Serial.println("Deactivated MDrive POWER with console button press.");
-          #endif
+          serial_log("Deactivated MDrive POWER with console button press.");
         }
       }
     }
@@ -366,9 +336,7 @@ void check_console_buttons()
       } else {
         if ((millis() - dsc_off_button_hold_timer) >= dsc_hold_time_ms) {                                                           // DSC OFF sequence should only be sent after user holds button for a configured time
           if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {
-            #if DEBUG_MODE
-              Serial.println("Console: DSC OFF button held. Sending DSC OFF.");
-            #endif
+            serial_log("Console: DSC OFF button held. Sending DSC OFF.");
             send_dsc_mode(2);
             dsc_off_button_debounce_timer = millis();
           }
@@ -376,9 +344,7 @@ void check_console_buttons()
       }      
     } else {
       if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {                                                     // A quick tap re-enables everything
-        #if DEBUG_MODE
-          Serial.println("Console: DSC button tapped. Sending DSC ON.");
-        #endif
+        serial_log("Console: DSC button tapped. Sending DSC ON.");
         dsc_off_button_debounce_timer = millis();
         send_dsc_mode(0);
       }
@@ -392,9 +358,7 @@ void check_console_buttons()
 #if RTC
 void update_idrive_time_from_rtc()
 {
-  #if DEBUG_MODE
-    Serial.println("Vehicle date/time not set. Setting from RTC.");
-  #endif
+  serial_log("Vehicle date/time not set. Setting from RTC.");
   time_t t = now();
   uint8_t rtc_hours = hour(t);
   uint8_t rtc_minutes = minute(t);
@@ -416,24 +380,20 @@ void evaluate_door_status()
     if (k_msg.buf[3] == 0xFD) {
       if (!left_door_open) {
         left_door_open = true;
-        #if DEBUG_MODE
-          #if RHD
-            Serial.println("Passenger's door open.");
-          #else
-            Serial.println("Driver's door open.");
-          #endif
+        #if RHD
+          serial_log("Passenger's door open.");
+        #else
+          serial_log("Driver's door open.");
         #endif
         send_volume_request();
       }
     } else if (k_msg.buf[3] == 0xFC) {
       if (left_door_open) {
         left_door_open = false;
-        #if DEBUG_MODE
-          #if RHD
-            Serial.println("Passenger's door closed.");
-          #else
-            Serial.println("Driver's door closed.");
-          #endif
+        #if RHD
+          serial_log("Passenger's door closed.");
+        #else
+          serial_log("Driver's door closed.");
         #endif
         send_volume_request();
       }
@@ -442,24 +402,20 @@ void evaluate_door_status()
     if (k_msg.buf[3] == 0xFD) {
       if (!right_door_open) {
         right_door_open = true;
-        #if DEBUG_MODE
-          #if RHD
-            Serial.println("Driver's door opened.");
-          #else
-            Serial.println("Passenger's door opened.");
-          #endif
+        #if RHD
+          serial_log("Driver's door opened.");
+        #else
+          serial_log("Passenger's door opened.");
         #endif
         send_volume_request();
       }
     } else if (k_msg.buf[3] == 0xFC) {
       if (right_door_open) {
         right_door_open = false;
-        #if DEBUG_MODE
-          #if RHD
-            Serial.println("Driver's door closed.");
-          #else
-            Serial.println("Passenger's door closed.");
-          #endif
+        #if RHD
+          serial_log("Driver's door closed.");
+        #else
+          serial_log("Passenger's door closed.");
         #endif
         send_volume_request();
       }
@@ -485,7 +441,7 @@ void evaluate_audio_volume()
       if (audio_volume > 0) {
         #if DEBUG_MODE
           sprintf(serial_debug_string, "Received audio volume: 0x%X", audio_volume);
-          Serial.println(serial_debug_string);
+          serial_log(serial_debug_string);
         #endif
         uint8_t volume_change[] = {0x63, 4, 0x31, 0x23, 0, 0, 0, 0};
         if (!volume_reduced) {
@@ -501,7 +457,7 @@ void evaluate_audio_volume()
             volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
             #if DEBUG_MODE
               sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X", volume_changed_to);
-              Serial.println(serial_debug_string);
+              serial_log(serial_debug_string);
             #endif
           }
         } else {
@@ -515,20 +471,20 @@ void evaluate_audio_volume()
                 delayed_can_tx_msg m;
                 if (ignition && !engine_running) {
                   m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 500};                                                          // Need this delay when Ignition is on and the warning gong is on.
-                  audio_volume_tx.push(&m);
+                  idrive_txq.push(&m);
                   m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1000};                                                         // Send more in case we get lucky and the gong shuts up early...
-                  audio_volume_tx.push(&m);
+                  idrive_txq.push(&m);
                   m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 1700};
-                  audio_volume_tx.push(&m);
+                  idrive_txq.push(&m);
                 } else {
                   m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 200};
-                  audio_volume_tx.push(&m);
+                  idrive_txq.push(&m);
                   m = {makeMsgBuf(0x6F1, 8, volume_change), millis() + 500};
-                  audio_volume_tx.push(&m);
+                  idrive_txq.push(&m);
                 }
                 #if DEBUG_MODE
                   sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X", volume_change[4]);
-                  Serial.println(serial_debug_string);
+                  serial_log(serial_debug_string);
                 #endif
               }
               volume_reduced = false;
@@ -543,36 +499,34 @@ void evaluate_audio_volume()
 
 
 void send_default_startup_volume() {
-  delayed_can_tx_msg m = {default_vol_request_buf, millis() + 25000};
-  audio_volume_tx.push(&m);                                                                                                         // Send this after the iDrive wakes up to ensure a volume is set.
+  delayed_can_tx_msg m = {default_vol_set_buf, millis() + IDRIVE_BOOT_TIME};
+  idrive_txq.push(&m);                                                                                                              // Send this after the iDrive wakes up to ensure a volume is set.
 }
+#endif
 
 
-void check_audio_queue() 
+#if DOOR_VOLUME
+void check_idrive_queue()
 {
-  if (!audio_volume_tx.isEmpty() && vehicle_awake) {
+  if (!idrive_txq.isEmpty() && !disable_idrive_transmit_jobs) {
     delayed_can_tx_msg delayed_tx;
-    audio_volume_tx.peek(&delayed_tx);
+    idrive_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       if (vehicle_awake) {
         KCAN.write(delayed_tx.tx_msg);
-        if (delayed_tx.tx_msg.buf[3] == default_vol_request_buf.buf[3]) {
-          default_volume_sent = true;
-          #if DEBUG_MODE
-            Serial.println("Sent default volume job to iDrive.");
-          #endif
-        }
-        #if DEBUG_MODE
-        else {
-          Serial.println("Sent volume change job to iDrive.");
-        }
+        #if DOOR_VOLUME
+          if (delayed_tx.tx_msg.buf[3] == default_vol_set[3]) {
+            default_volume_sent = true;
+            serial_log("Sent default volume job to iDrive.");
+          } else if (delayed_tx.tx_msg.buf[3] == 0x23) {
+            serial_log("Sent volume change job to iDrive.");
+          }
         #endif
       }
-      audio_volume_tx.drop();
+      idrive_txq.drop();
     }
   }
 }
-#endif
 
 
 void deactivate_idrive_transmit_jobs()
@@ -597,3 +551,4 @@ void check_idrive_transmit_status()
     }
   }
 }
+#endif
