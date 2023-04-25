@@ -1,0 +1,61 @@
+# CIC
+
+CIC_MDRIVE
+	aktiv
+M_KEY_SETTINGS
+	aktiv
+EDC_CIC
+	aktiv
+DSC_OFF_CIC
+	aktiv
+
+
+# KOMBI
+
+MMI_ENA_SHIFTLIGHTS
+	aktiv
+DSC_VARIANTE
+	wert_02
+
+
+# IHKA
+
+MSA
+	aktiv
+
+
+# SVT 70
+# E70 X5M params
+
+KENNLINIEN1_3_NORM
+	wert_07
+KENNLINIEN1_3_SPORT
+	wert_02
+	wert_03
+	wert_04
+KENNLINIEN4_6_NORM
+	wert_07
+KENNLINIEN4_6_SPORT
+	wert_02
+	wert_03
+	wert_04
+REGLERPARAMETER
+	wert_01
+STUETZSTELLEN_V_LW
+	wert_01
+WANDLERKENNLINIE
+	wert_01
+BETRIEBSWERTE
+	wert_01
+
+
+# JBBF3R
+
+PIA_EDC
+	mit_mmi
+EDC_LED_SWITCH
+	aktiv
+DSC_SWITCH
+	nicht_aktiv
+RPA_SWITCH
+	aktiv

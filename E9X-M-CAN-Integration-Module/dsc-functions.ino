@@ -62,17 +62,19 @@ void evaluate_lc_display()
 {
   if (LC_RPM_MIN <= RPM && RPM <= LC_RPM_MAX) {
     if (clutch_pressed && !vehicle_moving) {
-      kcan_write_msg(lc_cc_on_buf);
-      lc_cc_active = true;
-      if (dsc_program_status == 0) {
-        mdm_with_lc = true;
-        serial_log("Launch Control request DSC ON -> MDM/DTC.");
-        send_dsc_mode(1);
+      if (!reverse_status) {
+        kcan_write_msg(lc_cc_on_buf);
+        lc_cc_active = true;
+        if (dsc_program_status == 0) {
+          mdm_with_lc = true;
+          serial_log("Launch Control request DSC ON -> MDM/DTC.");
+          send_dsc_mode(1);
+        }
+        serial_log("Displayed LC flag CC.");
+        #if CONTROL_SHIFTLIGHTS
+          activate_shiftlight_segments(shiftlights_max_flash_buf);
+        #endif
       }
-      serial_log("Displayed LC flag CC.");
-      #if CONTROL_SHIFTLIGHTS
-        activate_shiftlight_segments(shiftlights_max_flash_buf);
-      #endif
     } else {
       deactivate_lc_display();
       mdm_with_lc = false;                                                                                                          // Vehicle probably launched. MDM/DTC stays on
@@ -115,6 +117,16 @@ void evaluate_clutch_status()
       serial_log("Clutch released.");
   }
 }
+
+
+void evaluate_reverse_status()
+{
+  if (k_msg.buf[0] == 0xFE) {
+    reverse_status = true;
+  } else {
+    reverse_status = false;
+  }
+}
 #endif
 
 
@@ -132,9 +144,13 @@ void evaluate_vehicle_moving()
   }
   #if HDC
     if (vehicle_moving) {
-      vehicle_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
+      if (speed_mph) {
+       vehicle_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
+      } else {
+        vehicle_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 10;
+      }
       if (hdc_active) {
-        if (vehicle_speed > 35) {
+        if (vehicle_speed > max_hdc_speed) {
           serial_log("HDC deactivated due to high vehicle speed.");
           hdc_active = false;
           kcan_write_msg(hdc_cc_deactivated_on_buf);
@@ -154,7 +170,7 @@ void evaluate_hdc_button()
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!hdc_button_pressed) {
       if (!hdc_active) {
-        if (!cruise_control_status && vehicle_speed > 20 && vehicle_speed <= 35) {
+        if (!cruise_control_status && vehicle_speed >= min_hdc_speed && vehicle_speed <= max_hdc_speed) {
           ptcan_write_msg(set_hdc_cruise_control_buf);
           hdc_requested = true;                                                                                                     // Send request. "HDC" will only activate if cruise control conditions permit.
           serial_log("Sent HDC cruise control on message.");
@@ -173,21 +189,22 @@ void evaluate_hdc_button()
       }
       hdc_button_pressed = true;
     }
-  } else {                                                                                                                          // Now receiving released (0xFC) messages from IHKA.
+  } else {                                                                                                                          // Now receiving released (0xFC or 0xF4) messages from IHKA.
     hdc_button_pressed = false;
   }
 }
 
+
 void evaluate_cruise_control_status()
 {
-  if (k_msg.buf[0] == 0x58) {
+  if (k_msg.buf[5] == 0x58 || 
+      (k_msg.buf[5] == 0x5A || k_msg.buf[5] == 0x5B || k_msg.buf[5] == 0x5C || k_msg.buf[5] == 0x5D)) {                            // Status is different based on ACC distance setting.
     if (!cruise_control_status) {
       cruise_control_status = true;
       if (hdc_requested) {
         kcan_write_msg(hdc_cc_activated_on_buf);
-        delayed_can_tx_msg m = {hdc_cc_activated_off_buf, millis() + 3000};
-        kcan_cc_txq.push(&m);
         hdc_active = true;
+        hdc_requested = false;
         serial_log("HDC cruise control activated.");
       } else {
         serial_log("Cruise control activated.");
@@ -198,11 +215,26 @@ void evaluate_cruise_control_status()
       cruise_control_status = false;
       if (hdc_active) {
         serial_log("HDC cruise control deactivated by user.");
+        kcan_write_msg(hdc_cc_activated_off_buf);
         hdc_active = false;
+        hdc_requested = false;
       } else {
         serial_log("Cruise control deactivated.");
       }
     }
+  }
+}
+
+
+void evaluate_speed_units()
+{
+  speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
+  if (speed_mph) {
+    min_hdc_speed = 6;
+    max_hdc_speed = 37;
+  } else {
+    min_hdc_speed = 10;
+    max_hdc_speed = 60;
   }
 }
 #endif

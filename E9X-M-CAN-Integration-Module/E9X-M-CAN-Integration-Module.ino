@@ -93,7 +93,7 @@ typedef struct delayed_can_tx_msg {
 } delayed_can_tx_msg;
 
 uint32_t cpu_speed_ide;
-bool terminal_r = false, ignition = false,  vehicle_awake = true;
+bool terminal_r = false, ignition = false,  vehicle_awake = false;
 bool engine_cranking = false, engine_running = false;
 unsigned long vehicle_awake_timer;
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
@@ -104,7 +104,7 @@ uint16_t RPM = 0;
   uint8_t dme_ckm_counter = 0;
 #endif
 #if EDC_CKM_FIX
-  uint8_t edc_ckm[] = {0, 0xFF};
+  uint8_t edc_ckm[] = {0, 0xFE};
 #endif
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
 bool mdrive_status = false, mdrive_settings_updated = false, mdrive_power_active = false;
@@ -160,8 +160,8 @@ CAN_message_t cc_gong_buf;
 #endif
 #if DIM_DRL
   bool drl_status = false, left_dimmed = false, right_dimmed = false;
-  CAN_message_t left_drl_dim_buf, left_drl_bright_buf;
-  CAN_message_t right_drl_dim_buf, right_drl_bright_buf;
+  CAN_message_t left_drl_dim_off, left_drl_dim_buf, left_drl_bright_buf;
+  CAN_message_t right_drl_dim_off, right_drl_dim_buf, right_drl_bright_buf;
 #endif
 #if FTM_INDICATOR
   bool ftm_indicator_status = false;
@@ -171,6 +171,9 @@ CAN_message_t cc_gong_buf;
   CAN_message_t pdc_beep_buf, pdc_quiet_buf;
   bool pdc_beep_sent = false;
   cppQueue pdc_beep_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
+#endif
+#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR
+  bool reverse_status = false;
 #endif
 #if F_ZBE_WAKE
   CAN_message_t f_wakeup_buf;
@@ -210,6 +213,8 @@ CAN_message_t cc_gong_buf;
 #endif
 #if HDC
   uint16_t vehicle_speed = 0;
+  bool speed_mph = false;
+  uint8_t min_hdc_speed = 10, max_hdc_speed = 60;
   bool cruise_control_status = false, hdc_button_pressed = false, hdc_requested = false, hdc_active = false;
   CAN_message_t set_hdc_cruise_control_buf, cancel_hdc_cruise_control_buf;
   CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
@@ -379,8 +384,9 @@ void loop()
       }
       #endif
 
-      #if REVERSE_BEEP
+      #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
+        evaluate_reverse_status();
         evaluate_pdc_beep();
       }
       #endif
@@ -423,6 +429,12 @@ void loop()
     else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
       evaluate_passenger_seat_status();
     } 
+    #endif
+
+    #if HDC
+    else if (k_msg.id == 0x2F7) {
+      evaluate_speed_units();
+    }
     #endif
 
     #if RTC

@@ -299,13 +299,15 @@ void save_dme_power_ckm()
 #if EDC_CKM_FIX
 void save_edc_ckm()
 {
-  edc_ckm[0] = k_msg.buf[0];
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "Received new EDC CKM setting: %s", edc_ckm[0] == 0xF1 ? "Comfort" : 
-                                  edc_ckm[0] == 0xF2 ? "Normal" : "Sport");
-    serial_log(serial_debug_string);
-  #endif
-  mdrive_settings_updated = true;
+  if (edc_ckm[1] != 0xFE) {                                                                                                         // Ignore our own CKM fix message.
+    edc_ckm[0] = k_msg.buf[0];
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Received new EDC CKM setting: %s", edc_ckm[0] == 0xF1 ? "Comfort" : 
+                                    edc_ckm[0] == 0xF2 ? "Normal" : "Sport");
+      serial_log(serial_debug_string);
+    #endif
+    mdrive_settings_updated = true;
+  }
 }
 
 void evaluate_edc_ckm_mismatch()

@@ -1,7 +1,7 @@
 void configure_IO()
 {
   #if DEBUG_MODE
-    while (!Serial && millis() < 5000);
+    while (!Serial && millis() < 3000);
   #endif
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
   digitalWrite(PTCAN_STBY_PIN, HIGH);
@@ -67,7 +67,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 27, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 28, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -118,6 +118,10 @@ void configure_can_controllers()
     filterId = 0x2CA;                                                                                                               // Ambient temperature                                          Cycle time 1s
     canFilters.push(&filterId);                                                                                            
   #endif
+  #if HDC
+    filterId = 0x2F7;                                                                                                               // Units from KOMBI                                             Sent 3x on Terminal R. Sent when changed.
+    canFilters.push(&filterId);
+  #endif
   #if RTC
     filterId = 0x2F8;                                                                                                               // Time from KOMBI                                              Cycle time 15s (idle). Sent when changed.
     canFilters.push(&filterId);
@@ -140,7 +144,7 @@ void configure_can_controllers()
     filterId = 0x3AB;                                                                                                               // Filter Shiftligths car key memory.
     canFilters.push(&filterId);
   #endif
-  #if REVERSE_BEEP
+  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR
     filterId = 0x3B0;                                                                                                               // Reverse gear status.                                         Cycle time 1s (idle).
     canFilters.push(&filterId);
   #endif

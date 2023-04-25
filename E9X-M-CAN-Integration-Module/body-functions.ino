@@ -20,7 +20,9 @@ void evaluate_ignition_status()
       ignition = engine_cranking = false;
       break;
     case 5:
-      ignition = terminal_r = engine_cranking = false;
+      if (!ignition) {                                                                                                              // If ignition is off and this status is declared, terminal R will be turned off by the car.
+        terminal_r = engine_cranking = false;
+      }
       break;                                                                                                                        // 5 is sent in CA cars when the key is not detected, ignore.
     case 0x41:
       terminal_r = true;
@@ -57,6 +59,10 @@ void evaluate_ignition_status()
   } else if (!ignition && ignition_) {
     reset_runtime_variables();
     scale_mcu_speed();                                                                                                              // Now that the ignition is off, underclock the MCU
+    #if DIM_DRL
+      kcan_write_msg(left_drl_dim_off);                                                                                             // The diag job times out after 10s. Send off now to make sure DRLs don't stay on.
+      kcan_write_msg(right_drl_dim_off);
+    #endif
     #if DEBUG_MODE
       sprintf(serial_debug_string, "(%X) Ignition OFF. Reset values.", k_msg.buf[0]);
       serial_log(serial_debug_string);
@@ -556,8 +562,9 @@ void evaluate_door_status()
 void send_volume_request()
 {
   if (!volume_requested && diag_transmit && default_volume_sent) {
-    volume_requested = true;
     kcan_write_msg(vol_request_buf);
+    volume_requested = true;
+    serial_log("Requested volume from iDrive.");
   }
 }
 
@@ -663,6 +670,7 @@ void check_idrive_queue()
 void disable_diag_transmit_jobs()
 {
   if (diag_transmit) {
+    serial_log("Detected OBD port diagnosis request. Pausing diagnostic jobs.");
     diag_transmit = false;
     #if DOOR_VOLUME
       volume_requested = false;
@@ -676,9 +684,9 @@ void disable_diag_transmit_jobs()
 
 void check_diag_transmit_status()
 {
-  if (diag_transmit && vehicle_awake) {
+  if (!diag_transmit && vehicle_awake) {
     if ((millis() - diag_deactivate_timer) >= 60000) {                                                                              // Re-activate after period of no DCAN requests.
-      diag_transmit = false;
+      diag_transmit = true;
     }
   }
 }
@@ -687,7 +695,7 @@ void check_diag_transmit_status()
 #if FAKE_MSA
 void evaluate_msa_button()
 {
-  if (k_msg.buf[0] == 0xF5) {                                                                                                       // Button pressed.
+  if (k_msg.buf[0] == 0xF5 || k_msg.buf[0] == 0xF1) {                                                                               // Button pressed.
     if (!msa_button_pressed) {
       if (engine_running) {
         kcan_write_msg(msa_deactivated_cc_on_buf);
@@ -697,7 +705,7 @@ void evaluate_msa_button()
       }
     }
     msa_button_pressed = true;
-  } else {                                                                                                                          // Now receiving released (0xF4) messages from IHKA.
+  } else {                                                                                                                          // Now receiving released (0xF4 or 0xF0) messages from IHKA.
     msa_button_pressed = false;
   }
 }

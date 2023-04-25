@@ -326,12 +326,16 @@ void cache_can_message_buffers()                                                
     pdc_quiet_buf = makeMsgBuf(0x1C6, 4, pdc_quiet);
   #endif
   #if DIM_DRL
+    uint8_t left_drl_off[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0};
     uint8_t left_drl_dim[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0x16};
     uint8_t left_drl_bright[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0x64};
+    uint8_t right_drl_off[] = {0x72, 6, 0x30, 3, 7, 0x1E, 0, 0};
     uint8_t right_drl_dim[] = {0x72, 6, 0x30, 3, 7, 0x1E, 0, 0x16};
     uint8_t right_drl_bright[] = {0x72, 6, 0x30, 3, 7, 0x1E, 0, 0x64};
+    left_drl_dim_off = makeMsgBuf(0x6F1, 8, left_drl_off);
     left_drl_dim_buf = makeMsgBuf(0x6F1, 8, left_drl_dim);
     left_drl_bright_buf = makeMsgBuf(0x6F1, 8, left_drl_bright);
+    right_drl_dim_off = makeMsgBuf(0x6F1, 8, right_drl_off);
     right_drl_dim_buf = makeMsgBuf(0x6F1, 8, right_drl_dim);
     right_drl_bright_buf = makeMsgBuf(0x6F1, 8, right_drl_bright);
   #endif
