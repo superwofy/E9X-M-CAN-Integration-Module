@@ -1,17 +1,4 @@
-#if FTM_INDICATOR
-void evaluate_indicate_ftm_status()
-{
-  if (pt_msg.buf[0] == 3 && !ftm_indicator_status) {
-    kcan_write_msg(ftm_indicator_flash_buf);
-    ftm_indicator_status = true;
-    serial_log("Activated FTM indicator.");
-  } else if (pt_msg.buf[0] == 0 && ftm_indicator_status) {
-    kcan_write_msg(ftm_indicator_off_buf);
-    ftm_indicator_status = false;
-    serial_log("Deactivated FTM indicator.");
-  }
-}
-#endif
+// Functions related to chassis (stability control, edc, steeting etc.) go here.
 
 
 void send_dsc_mode(uint8_t mode) {
@@ -58,63 +45,16 @@ void check_dsc_queue()
 
 
 #if LAUNCH_CONTROL_INDICATOR
-void evaluate_lc_display()
-{
-  if (LC_RPM_MIN <= RPM && RPM <= LC_RPM_MAX) {
-    if (clutch_pressed && !vehicle_moving) {
-      if (!reverse_status) {
-        kcan_write_msg(lc_cc_on_buf);
-        lc_cc_active = true;
-        if (dsc_program_status == 0) {
-          mdm_with_lc = true;
-          serial_log("Launch Control request DSC ON -> MDM/DTC.");
-          send_dsc_mode(1);
-        }
-        serial_log("Displayed LC flag CC.");
-        #if CONTROL_SHIFTLIGHTS
-          activate_shiftlight_segments(shiftlights_max_flash_buf);
-        #endif
-      }
-    } else {
-      deactivate_lc_display();
-      mdm_with_lc = false;                                                                                                          // Vehicle probably launched. MDM/DTC stays on
-    }
-  } else {
-    if (lc_cc_active) {
-      if (mdm_with_lc && dsc_program_status == 1) {
-        serial_log("Launch Control aborted. MDM/DTC -> DSC ON.");
-        send_dsc_mode(0);
-        mdm_with_lc = false;
-      }
-    }
-    deactivate_lc_display();
-  }
-}
-
-
-void deactivate_lc_display()
-{
-  if (lc_cc_active) {
-    kcan_write_msg(lc_cc_off_buf);
-    lc_cc_active = false;
-    serial_log("Deactivated LC flag CC.");
-    #if CONTROL_SHIFTLIGHTS
-      deactivate_shiftlights();
-    #endif
-  }  
-}
-
-
 void evaluate_clutch_status()
 {        
   if (k_msg.buf[5] == 0xD) {
     if (!clutch_pressed) {
       clutch_pressed = true;
-      serial_log("Clutch pressed.");
+      serial_log("Clutch pedal pressed.");
     }
   } else if (clutch_pressed) {
     clutch_pressed = false;
-      serial_log("Clutch released.");
+      serial_log("Clutch pedal released.");
   }
 }
 
@@ -122,7 +62,10 @@ void evaluate_clutch_status()
 void evaluate_reverse_status()
 {
   if (k_msg.buf[0] == 0xFE) {
-    reverse_status = true;
+    if (!reverse_status) {
+      reverse_status = true;
+      serial_log("Reverse gear engaged.");
+    }
   } else {
     reverse_status = false;
   }
@@ -185,7 +128,7 @@ void evaluate_hdc_button()
       } else {
         ptcan_write_msg(cancel_hdc_cruise_control_buf);
         hdc_active = false;
-        serial_log("Sent HDC cruise control on message.");
+        serial_log("Sent HDC cruise control off message.");
       }
       hdc_button_pressed = true;
     }
@@ -230,11 +173,30 @@ void evaluate_speed_units()
 {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   if (speed_mph) {
-    min_hdc_speed = 6;
-    max_hdc_speed = 37;
+    min_hdc_speed = 12;
+    max_hdc_speed = 22;
   } else {
-    min_hdc_speed = 10;
-    max_hdc_speed = 60;
+    min_hdc_speed = 15;
+    max_hdc_speed = 35;
   }
+}
+#endif
+
+
+#if SERVOTRONIC_SVT70
+void send_servotronic_message()
+{
+  servotronic_message[0] += 0x10;                                                                                                   // Increase alive counter.
+  if (servotronic_message[0] > 0xEF) {                                                                                              // Alive(first half of byte) must be between 0..E.
+    servotronic_message[0] = 0;
+  }
+  
+  servotronic_message[0] &= 0xF0;                                                                                                   // Discard current mode
+  if (mdrive_status && mdrive_svt == 0xF1) {                                                                                        // Servotronic in sport mode.
+    servotronic_message[0] += 9;
+  } else {
+    servotronic_message[0] += 8;
+  }
+  ptcan_write_msg(makeMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
 }
 #endif

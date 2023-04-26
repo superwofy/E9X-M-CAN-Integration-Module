@@ -1,3 +1,6 @@
+// General body functions dealing with interior/exterior electronics go here.
+
+
 void evaluate_ignition_status()
 {
   vehicle_awake_timer = millis();
@@ -50,10 +53,7 @@ void evaluate_ignition_status()
   if (ignition && !ignition_) {                                                                                                     // Ignition changed from OFF to ON.
     scale_mcu_speed();
     #if SERVOTRONIC_SVT70
-      if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                         // If POWER button is being held when turning on ignition, allow SVT diagnosis.
-        diagnose_svt = true;
-        kcan_write_msg(servotronic_cc_on_buf);                                                                                      // Indicate that diagnosing is now possible.
-      }
+      indicate_svt_diagnosis_on();
     #endif
     serial_log("Ignition ON.");    
   } else if (!ignition && ignition_) {
@@ -71,46 +71,23 @@ void evaluate_ignition_status()
 }
 
 
-#if FRONT_FOG_INDICATOR || DIM_DRL
-void evaluate_light_status()
-{
-  #if FRONT_FOG_INDICATOR 
-    if (k_msg.buf[0] != last_light_status) {
-      if ((k_msg.buf[0] & 32) == 32) {                                                                                              // Check the third bit of the first byte represented in binary for front fog status.
-        if (!front_fog_status) {
-          front_fog_status = true;
-          digitalWrite(FOG_LED_PIN, HIGH);
-          serial_log("Front fogs on. Turned on FOG LED");
-        }
-      } else {
-        if (front_fog_status) {
-          front_fog_status = false;
-          digitalWrite(FOG_LED_PIN, LOW);
-          serial_log("Front fogs off. Turned off FOG LED");
-        }
-      }
-      last_light_status = k_msg.buf[0];
-    }
-  #endif
-  
-  #if DIM_DRL
-    if (k_msg.buf[1] == 0x32) {
-      if (!drl_status) {
-        drl_status = true;
-        serial_log("DRLs on.");
-      }
-    } else {
-      if (drl_status) {
-        drl_status = false;
-        serial_log("DRLs off");
-      }
-    }
-  #endif
-}
-#endif
-
-
 #if DIM_DRL
+void evaluate_drl_status()
+{
+  if (k_msg.buf[1] == 0x32) {
+    if (!drl_status) {
+      drl_status = true;
+      serial_log("DRLs on.");
+    }
+  } else {
+    if (drl_status) {
+      drl_status = false;
+      serial_log("DRLs off");
+    }
+  }
+}
+
+
 void evaluate_indicator_status_dim()
 {
   if (drl_status && diag_transmit) {
@@ -404,37 +381,6 @@ void evaluate_battery_voltage()
 #endif
 
 
-#if SERVOTRONIC_SVT70
-void send_svt_kcan_cc_notification()
-{
-  if (pt_msg.buf[1] == 0x49 && pt_msg.buf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
-    pt_msg.buf[1] = 0x46;
-  }
-  kcan_write_msg(pt_msg);                                                                                                           // Forward the SVT error status to KCAN.
-}
-
-
-void dcan_to_ptcan()
-{
-  if (!deactivate_ptcan_temporariliy) {
-    ptcan_write_msg(d_msg);
-    #if DEBUG_MODE
-      dcan_forwarded_count++;
-    #endif
-  }
-}
-
-
-void ptcan_to_dcan()
-{
-  dcan_write_msg(pt_msg);
-  #if DEBUG_MODE
-    ptcan_forwarded_count++;
-  #endif
-}
-#endif
-
-
 void check_console_buttons()
 {
   if (!digitalRead(POWER_BUTTON_PIN)) {
@@ -639,10 +585,8 @@ void send_default_startup_volume() {
   delayed_can_tx_msg m = {default_vol_set_buf, millis() + IDRIVE_BOOT_TIME};
   idrive_txq.push(&m);                                                                                                              // Send this after the iDrive wakes up to ensure a volume is set.
 }
-#endif
 
 
-#if DOOR_VOLUME
 void check_idrive_queue()
 {
   if (!idrive_txq.isEmpty() && diag_transmit) {
@@ -661,66 +605,6 @@ void check_idrive_queue()
         #endif
       }
       idrive_txq.drop();
-    }
-  }
-}
-#endif
-
-
-void disable_diag_transmit_jobs()
-{
-  if (diag_transmit) {
-    serial_log("Detected OBD port diagnosis request. Pausing diagnostic jobs.");
-    diag_transmit = false;
-    #if DOOR_VOLUME
-      volume_requested = false;
-      volume_changed_to = 0;
-      volume_restore_offset = 0;
-    #endif
-  }
-  diag_deactivate_timer = millis();
-}
-
-
-void check_diag_transmit_status()
-{
-  if (!diag_transmit && vehicle_awake) {
-    if ((millis() - diag_deactivate_timer) >= 60000) {                                                                              // Re-activate after period of no DCAN requests.
-      diag_transmit = true;
-    }
-  }
-}
-
-
-#if FAKE_MSA
-void evaluate_msa_button()
-{
-  if (k_msg.buf[0] == 0xF5 || k_msg.buf[0] == 0xF1) {                                                                               // Button pressed.
-    if (!msa_button_pressed) {
-      if (engine_running) {
-        kcan_write_msg(msa_deactivated_cc_on_buf);
-        serial_log("Sent MSA OFF CC.");
-        delayed_can_tx_msg m = {msa_deactivated_cc_off_buf, millis() + 3000};
-        kcan_cc_txq.push(&m);
-      }
-    }
-    msa_button_pressed = true;
-  } else {                                                                                                                          // Now receiving released (0xF4 or 0xF0) messages from IHKA.
-    msa_button_pressed = false;
-  }
-}
-#endif
-
-
-#if HDC || FAKE_MSA
-void check_kcan_cc_queue()
-{
-  if (!kcan_cc_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
-    kcan_cc_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      kcan_cc_txq.drop();
     }
   }
 }

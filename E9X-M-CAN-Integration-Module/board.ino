@@ -1,3 +1,6 @@
+// Functions configuring Teensy and its transceivers go here.
+
+
 void configure_IO()
 {
   #if DEBUG_MODE
@@ -260,39 +263,6 @@ void configure_can_controllers()
 }
 
 
-void initialize_timers()
-{
-  #if DEBUG_MODE
-    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer 
-      = debug_print_timer = loop_timer = millis();
-  #else
-    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
-  #endif
-}
-
-
-void initialize_watchdog()
-{
-  WDT_timings_t config;
-  #if DEBUG_MODE
-    config.trigger = 15;
-    config.callback = wdt_callback;
-    config.timeout = 20;
-  #else
-    config.timeout = 10;                                                                                                            // If the watchdog timer is not reset within 10s, re-start the program.
-  #endif
-  wdt.begin(config);
-}
-
-
-#if DEBUG_MODE
-void wdt_callback()
-{
-  serial_log("Watchdog not fed. Program will reset in 5s.");
-}
-#endif
-
-
 void toggle_transceiver_standby()
 {
   if (!vehicle_awake) {
@@ -473,4 +443,29 @@ void temp_reactivate_ptcan()
   digitalWrite(PTCAN_STBY_PIN, LOW);
   serial_log("Re-activated PT-CAN transceiver after LDM diagnosis.");
   deactivate_ptcan_temporariliy = false;
+}
+
+
+void disable_diag_transmit_jobs()
+{
+  if (diag_transmit) {
+    serial_log("Detected OBD port diagnosis request. Pausing diagnostic jobs.");
+    diag_transmit = false;
+    #if DOOR_VOLUME
+      volume_requested = false;
+      volume_changed_to = 0;
+      volume_restore_offset = 0;
+    #endif
+  }
+  diag_deactivate_timer = millis();
+}
+
+
+void check_diag_transmit_status()
+{
+  if (!diag_transmit && vehicle_awake) {
+    if ((millis() - diag_deactivate_timer) >= 60000) {                                                                              // Re-activate after period of no DCAN requests.
+      diag_transmit = true;
+    }
+  }
 }

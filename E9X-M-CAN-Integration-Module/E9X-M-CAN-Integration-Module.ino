@@ -156,7 +156,6 @@ CAN_message_t cc_gong_buf;
 #endif
 #if FRONT_FOG_INDICATOR
   bool front_fog_status = false;
-  uint8_t last_light_status = 0;
 #endif
 #if DIM_DRL
   bool drl_status = false, left_dimmed = false, right_dimmed = false;
@@ -214,7 +213,7 @@ CAN_message_t cc_gong_buf;
 #if HDC
   uint16_t vehicle_speed = 0;
   bool speed_mph = false;
-  uint8_t min_hdc_speed = 10, max_hdc_speed = 60;
+  uint8_t min_hdc_speed = 15, max_hdc_speed = 35;
   bool cruise_control_status = false, hdc_button_pressed = false, hdc_requested = false, hdc_active = false;
   CAN_message_t set_hdc_cruise_control_buf, cancel_hdc_cruise_control_buf;
   CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
@@ -368,7 +367,8 @@ void loop()
 
       #if FRONT_FOG_INDICATOR || DIM_DRL
       else if (k_msg.id == 0x21A) {                                                                                                 // Light status sent by the FRM.
-        evaluate_light_status();
+        evaluate_fog_status();
+        evaluate_drl_status();
       }
       #endif
 
@@ -538,6 +538,9 @@ void loop()
         update_rtc_from_dcan();
       }
       #endif
+      else if (d_msg.buf[0] == 0x12) {                                                                                              // DME jobs such as MHD monitoring should be exempt.
+        // do nothing.
+      }
       disable_diag_transmit_jobs();                                                                                                 // Implement a check so as to not interfere with other DCAN jobs sent to the CIC by an OBD tool.    
     }
   }
