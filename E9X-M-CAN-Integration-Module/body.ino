@@ -136,9 +136,7 @@ void evaluate_indicator_status_dim()
 #if AUTO_SEAT_HEATING
 void evaluate_seat_heating_status()
 {
-  if (k_msg.id == 0x22A) {                                                                                                          // Passenger's seat heating status message is only sent with ignition on.
-    passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
-  } else {
+  if (k_msg.id == 0x232) {
     if (!k_msg.buf[0]) {                                                                                                            // Check if seat heating is already on.
       if (!driver_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
         send_seat_heating_request_dr();
@@ -147,10 +145,16 @@ void evaluate_seat_heating_status()
       driver_sent_seat_heating_request = true;                                                                                      // Seat heating already on. No need to request anymore.
     }
     driver_seat_heating_status = !k_msg.buf[0] ? false : true;
+  } 
+  #if AUTO_SEAT_HEATING_PASS
+  else {                                                                                                                            // Passenger's seat heating status message is only sent with ignition on.
+    passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
   }
+  #endif
 }
 
 
+#if AUTO_SEAT_HEATING_PASS
 void evaluate_passenger_seat_status()
 {
   passenger_seat_status = k_msg.buf[1];
@@ -167,6 +171,7 @@ void evaluate_passenger_seat_status()
     }
   }
 }
+#endif
 
 
 void evaluate_ambient_temperature()
@@ -194,6 +199,7 @@ void send_seat_heating_request_dr()
 }
 
 
+#if AUTO_SEAT_HEATING_PASS
 void send_seat_heating_request_pas() 
 {
   unsigned long timeNow = millis();
@@ -211,6 +217,7 @@ void send_seat_heating_request_pas()
     serial_log(serial_debug_string);
   #endif
 }
+#endif
 
 
 void check_seatheating_queue() 
@@ -223,14 +230,16 @@ void check_seatheating_queue()
       seat_heating_dr_txq.drop();
     }
   }
-  if (!seat_heating_pas_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
-    seat_heating_pas_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      seat_heating_pas_txq.drop();
+  #if AUTO_SEAT_HEATING_PASS
+    if (!seat_heating_pas_txq.isEmpty()) {
+      delayed_can_tx_msg delayed_tx;
+      seat_heating_pas_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        kcan_write_msg(delayed_tx.tx_msg);
+        seat_heating_pas_txq.drop();
+      }
     }
-  }
+  #endif
 }
 #endif
 

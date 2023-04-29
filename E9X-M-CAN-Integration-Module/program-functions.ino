@@ -157,12 +157,14 @@ void print_current_state()
     #endif
     sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
     SerialUSB1.println(serial_debug_string);
-    sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
-    sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
-    SerialUSB1.println(serial_debug_string);
-    sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
-    SerialUSB1.println(serial_debug_string);
+    #if AUTO_SEAT_HEATING_PASS
+      sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
+      SerialUSB1.println(serial_debug_string);
+      sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
+      SerialUSB1.println(serial_debug_string);
+      sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
+      SerialUSB1.println(serial_debug_string);
+    #endif
   #endif
   #if DOOR_VOLUME
     #if RHD
@@ -252,7 +254,9 @@ void reset_runtime_variables()                                                  
   dsc_txq.flush();
   #if AUTO_SEAT_HEATING
     seat_heating_dr_txq.flush();
-    seat_heating_pas_txq.flush();
+    #if AUTO_SEAT_HEATING_PASS
+      seat_heating_pas_txq.flush();
+    #endif
   #endif
   #if REVERSE_BEEP
     pdc_beep_txq.flush();
@@ -315,10 +319,12 @@ void reset_sleep_variables()
 {
   #if AUTO_SEAT_HEATING
     driver_sent_seat_heating_request = false;                                                                                       // Reset the seat heating request now that the car's asleep.
-    passenger_sent_seat_heating_request = false;
-    passenger_seat_status = 0;
     driver_seat_heating_status = false;
-    passenger_seat_heating_status = false;
+    #if AUTO_SEAT_HEATING_PASS
+      passenger_sent_seat_heating_request = false;
+      passenger_seat_status = 0;
+      passenger_seat_heating_status = false;
+    #endif
   #endif
   #if DOOR_VOLUME
     volume_reduced = false;                                                                                                         // In case the car falls asleep with the door open.

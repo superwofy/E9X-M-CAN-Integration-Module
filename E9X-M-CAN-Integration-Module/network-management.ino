@@ -62,8 +62,10 @@ void cache_can_message_buffers()                                                
     uint8_t seat_heating_button_released[] = {0xFC, 0xFF};
     seat_heating_button_pressed_dr_buf = makeMsgBuf(0x1E7, 2, seat_heating_button_pressed);
     seat_heating_button_released_dr_buf = makeMsgBuf(0x1E7, 2, seat_heating_button_released);
-    seat_heating_button_pressed_pas_buf = makeMsgBuf(0x1E8, 2, seat_heating_button_pressed);
-    seat_heating_button_released_pas_buf = makeMsgBuf(0x1E8, 2, seat_heating_button_released);
+    #if AUTO_SEAT_HEATING_PASS
+      seat_heating_button_pressed_pas_buf = makeMsgBuf(0x1E8, 2, seat_heating_button_pressed);
+      seat_heating_button_released_pas_buf = makeMsgBuf(0x1E8, 2, seat_heating_button_released);
+    #endif
   #endif
   #if RTC
     uint8_t set_time_cc[] = {0x40, 0xA7, 0, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};

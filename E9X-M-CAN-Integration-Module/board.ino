@@ -108,8 +108,10 @@ void configure_can_controllers()
     canFilters.push(&filterId);                                                                                                     // Light status                                                 Cycle time 5s (idle)
   #endif
   #if AUTO_SEAT_HEATING
-    filterId = 0x22A;                                                                                                               // Passenger's seat heating status
-    canFilters.push(&filterId);
+    #if AUTO_SEAT_HEATING_PASS
+      filterId = 0x22A;                                                                                                             // Passenger's seat heating status
+      canFilters.push(&filterId);
+    #endif
     filterId = 0x232;                                                                                                               // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change)
     canFilters.push(&filterId);
   #endif
@@ -129,7 +131,7 @@ void configure_can_controllers()
     filterId = 0x2F8;                                                                                                               // Time from KOMBI                                              Cycle time 15s (idle). Sent when changed.
     canFilters.push(&filterId);
   #endif
-  #if AUTO_SEAT_HEATING
+  #if AUTO_SEAT_HEATING_PASS
     filterId = 0x2FA;                                                                                                               // Seat occupancy and belt status                               Cycle time 5s
     canFilters.push(&filterId);
   #endif

@@ -47,7 +47,10 @@ WDT_T4<WDT1> wdt;
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline of M3 KOMBI.
 #define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine on. Calibrated for M3 speedo with 335i tacho.
-#define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver and passenger in low temperatures.
+#define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures.
+#if AUTO_SEAT_HEATING
+#define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger in low temperatures.
+#endif
 #define RTC 1                                                                                                                       // Set the time/date if power is lost. Requires external battery.
 #define F_ZBE_WAKE 0                                                                                                                // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an EXX ZBE.
 
@@ -188,14 +191,18 @@ CAN_message_t cc_gong_buf;
   bool lc_cc_active = false, mdm_with_lc = false, clutch_pressed = false;
 #endif
 #if AUTO_SEAT_HEATING
-  bool driver_seat_heating_status = false, passenger_seat_heating_status = false;
+  bool driver_seat_heating_status = false;
   uint8_t ambient_temperature_can = 255;
-  uint8_t passenger_seat_status = 0;                                                                                                // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
-  bool driver_sent_seat_heating_request = false, passenger_sent_seat_heating_request = false;
+  bool driver_sent_seat_heating_request = false;
   CAN_message_t seat_heating_button_pressed_dr_buf, seat_heating_button_released_dr_buf;
-  CAN_message_t seat_heating_button_pressed_pas_buf, seat_heating_button_released_pas_buf;
   cppQueue seat_heating_dr_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
-  cppQueue seat_heating_pas_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
+  #if AUTO_SEAT_HEATING_PASS
+    bool passenger_seat_heating_status = false;
+    uint8_t passenger_seat_status = 0;                                                                                              // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
+    bool passenger_sent_seat_heating_request = false;
+    CAN_message_t seat_heating_button_pressed_pas_buf, seat_heating_button_released_pas_buf;
+    cppQueue seat_heating_pas_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
+  #endif
 #endif
 #if RTC
   #include <TimeLib.h>
@@ -373,7 +380,11 @@ void loop()
       #endif
 
       #if AUTO_SEAT_HEATING
+      #if AUTO_SEAT_HEATING_PAS
       else if (k_msg.id == 0x22A || k_msg.id == 0x232) {                                                                            // Monitor passenger and driver's seat heating.
+      #else
+      else if (k_msg.id == 0x232) { 
+      #endif
         evaluate_seat_heating_status();
       }
       #endif
@@ -426,9 +437,11 @@ void loop()
       evaluate_ambient_temperature();
     }
 
+    #if AUTO_SEAT_HEATING_PASS
     else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
       evaluate_passenger_seat_status();
     } 
+    #endif
     #endif
 
     #if HDC
