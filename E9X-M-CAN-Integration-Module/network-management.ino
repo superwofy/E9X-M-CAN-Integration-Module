@@ -17,11 +17,25 @@ void cache_can_message_buffers()                                                
     uint8_t servotronic_cc_on[] = {0x40, 0x46, 0x00, 0x29, 0xFF, 0xFF, 0xFF, 0xFF};
     servotronic_cc_on_buf = makeMsgBuf(0x58E, 8, servotronic_cc_on);
   #endif
+  #if EDC_CKM_FIX
+    uint8_t edc_button_press[] = {0, 5, 0x30, 1, 7, 0x1A, 0, 0};
+    edc_button_press_buf = makeMsgBuf(0x6F1, 8, edc_button_press);
+  #endif
   #if FTM_INDICATOR
     uint8_t ftm_indicator_flash[] = {0x40, 0x50, 1, 0x69, 0xFF, 0xFF, 0xFF, 0xFF};
     uint8_t ftm_indicator_off[] = {0x40, 0x50, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
     ftm_indicator_flash_buf = makeMsgBuf(0x5A0, 8, ftm_indicator_flash);
     ftm_indicator_off_buf = makeMsgBuf(0x5A0, 8, ftm_indicator_off);
+  #endif
+  #if AUTO_MIRROR_FOLD
+    uint8_t frm_toggle_fold_mirror_a[] = {0x72, 0x10, 7, 0x30, 0x10, 7, 1, 5};
+    uint8_t frm_toggle_fold_mirror_b[] = {0x72, 0x21, 0, 1, 0, 0, 0, 0};
+    uint8_t frm_status_request_a[] = {0x72, 3, 0x30, 0x16, 1, 0, 0, 0};
+    uint8_t frm_status_request_b[] = {0x72, 0x30, 0, 0, 0, 0, 0, 0};
+    frm_toggle_fold_mirror_a_buf = makeMsgBuf(0x6F1, 8, frm_toggle_fold_mirror_a);
+    frm_toggle_fold_mirror_b_buf = makeMsgBuf(0x6F1, 8, frm_toggle_fold_mirror_b);
+    frm_status_request_a_buf = makeMsgBuf(0x6F1, 8, frm_status_request_a);
+    frm_status_request_b_buf = makeMsgBuf(0x6F1, 8, frm_status_request_b);
   #endif
   #if REVERSE_BEEP
     #if RHD 
@@ -32,6 +46,18 @@ void cache_can_message_buffers()                                                
     uint8_t pdc_quiet[] = {0, 0, 0, 0};
     pdc_beep_buf = makeMsgBuf(0x1C6, 4, pdc_beep);
     pdc_quiet_buf = makeMsgBuf(0x1C6, 4, pdc_quiet);
+  #endif
+  #if FRONT_FOG_CORNER
+    uint8_t front_left_fog_on[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x64};
+    uint8_t front_left_fog_off[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0};;
+    uint8_t front_right_fog_on[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x64};
+    uint8_t front_right_fog_off[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0};
+    uint8_t frm_lamp_status_request[] = {0x72, 3, 0x30, 8, 1, 0, 0, 0};
+    front_left_fog_on_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on);
+    front_left_fog_off_buf = makeMsgBuf(0x6F1, 8, front_left_fog_off);
+    front_right_fog_on_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on);
+    front_right_fog_off_buf = makeMsgBuf(0x6F1, 8, front_right_fog_off);
+    frm_lamp_status_request_buf = makeMsgBuf(0x6F1, 8, frm_lamp_status_request);
   #endif
   #if DIM_DRL
     uint8_t left_drl_off[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0};
@@ -169,6 +195,9 @@ void kcan_write_msg(const CAN_message_t &msg)
 
 void ptcan_write_msg(const CAN_message_t &msg) 
 {
+  if (msg.id == 0x6F1 && !diag_transmit) {
+    return;
+  }
   #if DEBUG_MODE
   uint8_t result;
   result = PTCAN.write(msg);
@@ -183,7 +212,7 @@ void ptcan_write_msg(const CAN_message_t &msg)
 }
 
 
-#if SERVOTRONIC_SVT70
+#if SERVOTRONIC_SVT70 || EDC_CKM_FIX
 void dcan_write_msg(const CAN_message_t &msg) 
 {
   #if DEBUG_MODE

@@ -207,20 +207,24 @@ void indicate_svt_diagnosis_on()
 #endif
 
 
-#if FRONT_FOG_INDICATOR
+#if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
 void evaluate_fog_status()
 {
   if ((k_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
     if (!front_fog_status) {
       front_fog_status = true;
-      digitalWrite(FOG_LED_PIN, HIGH);
-      serial_log("Front fogs on. Turned on FOG LED");
+      #if FRONT_FOG_LED_INDICATOR
+        digitalWrite(FOG_LED_PIN, HIGH);
+        serial_log("Front fogs on. Turned on FOG LED");
+      #endif
     }
   } else {
     if (front_fog_status) {
       front_fog_status = false;
-      digitalWrite(FOG_LED_PIN, LOW);
-      serial_log("Front fogs off. Turned off FOG LED");
+      #if FRONT_FOG_LED_INDICATOR
+        digitalWrite(FOG_LED_PIN, LOW);
+        serial_log("Front fogs off. Turned off FOG LED");
+      #endif
     }
   }
 }

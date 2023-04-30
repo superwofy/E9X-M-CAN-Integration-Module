@@ -3,8 +3,8 @@
 
 void configure_IO()
 {
-  #if DEBUG_MODE
-    while (!Serial && millis() < 3000);
+  #if DEBUG_MODE && !AUTO_MIRROR_FOLD                                                                                               // This delay causes the mirrors to unfold slower on init.
+    while (!Serial && millis() < 5000);
   #endif
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
   digitalWrite(PTCAN_STBY_PIN, HIGH);
@@ -13,7 +13,7 @@ void configure_IO()
   pinMode(POWER_BUTTON_PIN, INPUT_PULLUP);                                                                                                 
   pinMode(DSC_BUTTON_PIN, INPUT_PULLUP);
   pinMode(POWER_LED_PIN, OUTPUT);
-  #if FRONT_FOG_INDICATOR
+  #if FRONT_FOG_LED_INDICATOR
     pinMode(FOG_LED_PIN, OUTPUT);
   #endif
   
@@ -70,7 +70,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 28, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 30, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -103,9 +103,9 @@ void configure_can_controllers()
     filterId = 0x1F6;                                                                                                               // Indicator status                                             Cycle time 1s
     canFilters.push(&filterId);
   #endif
-  #if FRONT_FOG_INDICATOR || DIM_DRL
+  #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
     filterId = 0x21A;
-    canFilters.push(&filterId);                                                                                                     // Light status                                                 Cycle time 5s (idle)
+    canFilters.push(&filterId);                                                                                                     // FRM Light status                                             Cycle time 5s (idle)
   #endif
   #if AUTO_SEAT_HEATING
     #if AUTO_SEAT_HEATING_PASS
@@ -113,6 +113,10 @@ void configure_can_controllers()
       canFilters.push(&filterId);
     #endif
     filterId = 0x232;                                                                                                               // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change)
+    canFilters.push(&filterId);
+  #endif
+  #if AUTO_MIRROR_FOLD || CKM
+    filterId = 0x23A;                                                                                                               // Remote button and number sent by CAS
     canFilters.push(&filterId);
   #endif
   #if F_ZBE_WAKE
@@ -133,6 +137,10 @@ void configure_can_controllers()
   #endif
   #if AUTO_SEAT_HEATING_PASS
     filterId = 0x2FA;                                                                                                               // Seat occupancy and belt status                               Cycle time 5s
+    canFilters.push(&filterId);
+  #endif
+  #if EDC_CKM_FIX
+    filterId = 0x315;                                                                                                               // Filter EDC state from JBE.                                   Cycle time 500ms (idle).
     canFilters.push(&filterId);
   #endif
   #if HDC
@@ -158,8 +166,6 @@ void configure_can_controllers()
     canFilters.push(&filterId);
   #endif
   #if EDC_CKM_FIX
-    filterId = 0x3C4;                                                                                                               // Filter EDC car key memory from JBE.
-    canFilters.push(&filterId);
     filterId = 0x3C5;                                                                                                               // Filter M Key EDC setting from iDrive.
     canFilters.push(&filterId);
   #endif
@@ -171,6 +177,10 @@ void configure_can_controllers()
   #endif
   #if DOOR_VOLUME
     filterId = 0x663;                                                                                                               // iDrive diagnostic responses.                                 Sent when response is requested.
+    canFilters.push(&filterId);
+  #endif
+  #if AUTO_MIRROR_FOLD || FRONT_FOG_CORNER 
+    filterId = 0x672;                                                                                                               // FRM diagnostic responses.                                    Sent when response is requested.
     canFilters.push(&filterId);
   #endif
   filterCount = canFilters.getCount();
@@ -272,7 +282,7 @@ void toggle_transceiver_standby()
     serial_log("Deactivated PT-CAN transceiver.");
     serial_log("Opened exhaust flap.");
     #if SERVOTRONIC_SVT70 || RTC
-      digitalWrite(DCAN_STBY_PIN, LOW);
+      digitalWrite(DCAN_STBY_PIN, HIGH);
       serial_log("Deactivated D-CAN transceiver.");
     #endif
   } else {
@@ -280,14 +290,14 @@ void toggle_transceiver_standby()
     serial_log("Re-activated PT-CAN transceiver.");
     serial_log("Closed exhaust flap.");
     #if SERVOTRONIC_SVT70 || RTC
-      digitalWrite(DCAN_STBY_PIN, HIGH);
+      digitalWrite(DCAN_STBY_PIN, LOW);
       serial_log("Re-activated D-CAN transceiver.");
     #endif
   }
 }
 
 
-void check_cpu_temp()                                                                                                               // Underclock the processor if it starts to heat up.
+void check_teensy_cpu_temp()                                                                                                        // Underclock the processor if it starts to heat up.
 {
   if (ignition) {                                                                                                                   // If ignition is off, the processor will already be underclocked.
     float cpu_temp = tempmonGetTemp();
@@ -459,7 +469,6 @@ void disable_diag_transmit_jobs()
       volume_restore_offset = 0;
     #endif
   }
-  diag_deactivate_timer = millis();
 }
 
 
@@ -468,6 +477,7 @@ void check_diag_transmit_status()
   if (!diag_transmit && vehicle_awake) {
     if ((millis() - diag_deactivate_timer) >= 60000) {                                                                              // Re-activate after period of no DCAN requests.
       diag_transmit = true;
+      serial_log("Resuming diagnostic jobs after timeout.");
     }
   }
 }

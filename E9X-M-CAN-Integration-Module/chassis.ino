@@ -33,11 +33,7 @@ void check_dsc_queue()
     delayed_can_tx_msg delayed_tx;
     dsc_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
-      if (delayed_tx.tx_msg.id == 0x592 || delayed_tx.tx_msg.id == 0x5A9) {
-        kcan_write_msg(delayed_tx.tx_msg);
-      } else {
-        ptcan_write_msg(delayed_tx.tx_msg);
-      }
+      ptcan_write_msg(delayed_tx.tx_msg);
       dsc_txq.drop();
     }
   }
@@ -46,7 +42,7 @@ void check_dsc_queue()
 
 #if LAUNCH_CONTROL_INDICATOR
 void evaluate_clutch_status()
-{        
+{ 
   if (k_msg.buf[5] == 0xD) {
     if (!clutch_pressed) {
       clutch_pressed = true;
@@ -54,7 +50,7 @@ void evaluate_clutch_status()
     }
   } else if (clutch_pressed) {
     clutch_pressed = false;
-      serial_log("Clutch pedal released.");
+    serial_log("Clutch pedal released.");
   }
 }
 

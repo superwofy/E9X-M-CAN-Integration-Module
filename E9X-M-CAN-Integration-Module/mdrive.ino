@@ -14,17 +14,27 @@ void read_settings_from_eeprom()
   }
 
   #if CKM
-    dme_ckm[0] = EEPROM.read(5);
-    if (dme_ckm[0] == 0xFF) {
-        dme_ckm[0] = 0xF1;
-    }
-    console_power_mode = dme_ckm[0] == 0xF1 ? false : true;
-  #endif
+    dme_ckm[0][0] = EEPROM.read(5);
+    dme_ckm[1][0] = EEPROM.read(6);
+    dme_ckm[2][0] = EEPROM.read(7);
 
+    // Defaults for when EEPROM is not initialized  
+    if (dme_ckm[0][0] == 0xFF || dme_ckm[1][0] == 0xFF || dme_ckm[2][0] == 0xFF) {
+      dme_ckm[0][0] = 0xF1;
+      dme_ckm[1][0] = 0xF1;
+      dme_ckm[2][0] = 0xF1;
+    }
+  #endif
   #if EDC_CKM_FIX
-    edc_ckm[0] = EEPROM.read(6);
-    if (edc_ckm[0] == 0xFF) {
-        edc_ckm[0] = 0xF1;
+    edc_ckm[0] = EEPROM.read(8);
+    edc_ckm[1] = EEPROM.read(9);
+    edc_ckm[2] = EEPROM.read(10);
+
+    // Defaults for when EEPROM is not initialized  
+    if (edc_ckm[0] == 0xFF || edc_ckm[1] == 0xFF || edc_ckm[2] == 0xFF) {
+      edc_ckm[0] = 0xF1;
+      edc_ckm[1] = 0xF1;
+      edc_ckm[2] = 0xF1;
     }
   #endif
 
@@ -49,10 +59,14 @@ void update_settings_in_eeprom()
     EEPROM.update(3, mdrive_edc);
     EEPROM.update(4, mdrive_svt);
     #if CKM
-      EEPROM.update(5, dme_ckm[0]);
+      EEPROM.update(5, dme_ckm[0][0]);
+      EEPROM.update(6, dme_ckm[1][0]);
+      EEPROM.update(7, dme_ckm[2][0]);
     #endif 
     #if EDC_CKM_FIX
-      EEPROM.update(6, edc_ckm[0]);
+      EEPROM.update(8, edc_ckm[0]);
+      EEPROM.update(9, edc_ckm[1]);
+      EEPROM.update(10, edc_ckm[2]);
     #endif                                                                                          
     serial_log("Saved M settings to EEPROM.");
   }
@@ -186,21 +200,7 @@ void send_mdrive_alive_message(uint16_t interval)
 void update_mdrive_message_settings()
 {
   if (k_msg.buf[4] == 0xEC || k_msg.buf[4] == 0xF4 || k_msg.buf[4] == 0xE4) {                                                       // Reset requested.
-    mdrive_dsc = 3;                                                                                                                 // Unchanged
-    mdrive_message[1] = 1;
-    mdrive_power = 0;                                                                                                               // Unchanged
-    mdrive_message[2] = mdrive_power;
-    mdrive_edc = 0x20;                                                                                                              // Unchanged
-    mdrive_message[3] = mdrive_edc;
-    mdrive_svt = 0xE9;                                                                                                              // Normal
-    mdrive_message[4] = 0x41;
-    #if CKM
-      dme_ckm[0] = 0xF1;                                                                                                            // Normal
-    #endif
-    #if EDC_CKM_FIX
-      edc_ckm[0] = 0xF1;                                                                                                            // Comfort
-    #endif
-    serial_log("Reset MDrive settings.");
+    reset_mdrive_settings();
   } else if ((k_msg.buf[4] == 0xE0 || k_msg.buf[4] == 0xE1)) {                                                                      // Ignore E0/E1 (Invalid).
   } else {
     //Decode settings
@@ -233,6 +233,26 @@ void update_mdrive_message_settings()
     #endif
   }
   send_mdrive_message();
+}
+
+
+void reset_mdrive_settings()
+{
+  mdrive_dsc = 3;                                                                                                                   // Unchanged
+  mdrive_message[1] = 1;
+  mdrive_power = 0;                                                                                                                 // Unchanged
+  mdrive_message[2] = mdrive_power;
+  mdrive_edc = 0x20;                                                                                                                // Unchanged
+  mdrive_message[3] = mdrive_edc;
+  mdrive_svt = 0xE9;                                                                                                                // Normal
+  mdrive_message[4] = 0x41;
+  #if CKM
+    dme_ckm[cas_key_number][0] = 0xF1;                                                                                              // Normal
+  #endif
+  #if EDC_CKM_FIX
+    edc_ckm[cas_key_number] = 0xF1;                                                                                                 // Comfort
+  #endif
+  serial_log("Reset MDrive settings.");
 }
 
 
@@ -278,43 +298,87 @@ void send_power_mode()
 #if CKM
 void send_dme_power_ckm()
 {
-  kcan_write_msg(makeMsgBuf(0x3A9, 2, dme_ckm));                                                                                    // This is sent by the DME to populate the M Key iDrive section
+  kcan_write_msg(makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                    // This is sent by the DME to populate the M Key iDrive section
   serial_log("Sent DME POWER CKM.");
 }
 
 
-void save_dme_power_ckm()
+void update_dme_power_ckm()
 {
-  dme_ckm[0] = k_msg.buf[0];
+  dme_ckm[cas_key_number][0] = k_msg.buf[0];
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Received new POWER CKM setting: %s", dme_ckm[0] == 0xF1 ? "Normal" : "Sport");
+    sprintf(serial_debug_string, "Received new POWER CKM setting: %s for key number %d", 
+            k_msg.buf[0] == 0xF1 ? "Normal" : "Sport", cas_key_number);
     serial_log(serial_debug_string);
   #endif
   mdrive_settings_updated = true;
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
+
+
+void evaluate_key_number()
+{
+  if (k_msg.buf[0] / 11 != cas_key_number) {
+    cas_key_number = k_msg.buf[0] / 11;                                                                                             // Key 1 = 0, Key 2 = 11, Key 3 = 22...
+    if (cas_key_number > 2) {
+      serial_log("Received wrong key personalisation number. Assuming default");
+      cas_key_number = 3;                                                                                                           // Default.
+    }
+    #if DEBUG_MODE
+    else {
+      sprintf(serial_debug_string, "Received key number: %d", cas_key_number + 1);
+      serial_log(serial_debug_string);
+    }
+    #endif
+    console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
+  }
+}
 #endif
 
 
 #if EDC_CKM_FIX
-void save_edc_ckm()
+void update_edc_ckm()
 {
-  if (edc_ckm[1] != 0xFE) {                                                                                                         // Ignore our own CKM fix message.
-    edc_ckm[0] = k_msg.buf[0];
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Received new EDC CKM setting: %s", edc_ckm[0] == 0xF1 ? "Comfort" : 
-                                    edc_ckm[0] == 0xF2 ? "Normal" : "Sport");
-      serial_log(serial_debug_string);
-    #endif
-    mdrive_settings_updated = true;
-  }
+  edc_ckm[cas_key_number] = k_msg.buf[0];
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "Received new EDC CKM setting: %s for key %d.", k_msg.buf[0] == 0xF1 ? "Comfort" : 
+                                  k_msg.buf[0] == 0xF2 ? "Normal" : "Sport", cas_key_number);
+    serial_log(serial_debug_string);
+  #endif
+  mdrive_settings_updated = true;
 }
+
 
 void evaluate_edc_ckm_mismatch()
 {
-  if (k_msg.buf[0] != edc_ckm[0]) {
-    serial_log("EDC CKM setting does not match EEPROM value. Correcting.");
-    kcan_write_msg(makeMsgBuf(0x3C5, 2, edc_ckm));
+  if (!edc_state_modified) {
+    if (k_msg.buf[1] != edc_ckm[cas_key_number]) {
+      serial_log("EDC EEPROM CKM setting match the current value. Correcting.");
+      uint8_t edc_state = k_msg.buf[1] == 0xFA ? 3 : k_msg.buf[1] - 0xF0;                                                           // Normalize these values for easier comparison.
+      uint8_t edc_memory = edc_ckm[cas_key_number] == 0xFA ? 3 : edc_ckm[cas_key_number] - 0xF0;
+      if ((edc_memory == 1 && edc_state == 2) || (edc_memory == 2 && edc_state == 3) || (edc_memory == 3 && edc_state == 1)) {
+        unsigned long timeNow = millis();
+        kcan_write_msg(edc_button_press_buf);
+        delayed_can_tx_msg m = {edc_button_press_buf, timeNow + 1200};
+        edc_ckm_txq.push(&m);
+      } else {
+        kcan_write_msg(edc_button_press_buf);
+      }
+      edc_state_modified = true;
+    }
+  }
+}
+
+
+void check_edc_ckm_queue()
+{
+  if (!edc_ckm_txq.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    edc_ckm_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      edc_ckm_txq.drop();
+    }
   }
 }
 #endif

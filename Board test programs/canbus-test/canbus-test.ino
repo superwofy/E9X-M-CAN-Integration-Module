@@ -50,7 +50,6 @@ void loop()
 
 	if (KCAN.read(k_msg)) {
 		Serial.print(" KCAN: ");
-		Serial.print(" TS: "); Serial.print(k_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(k_msg.id, HEX);
 		Serial.print(" Buffer: ");
     if (k_msg.flags.remote) {
@@ -64,7 +63,6 @@ void loop()
 
 	if (PTCAN.read(pt_msg)) {
 		Serial.print(" PTCAN: ");
-		Serial.print(" TS: "); Serial.print(pt_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(pt_msg.id, HEX);
 		Serial.print(" Buffer: ");
     if (pt_msg.flags.remote) {
@@ -78,7 +76,6 @@ void loop()
 
 	if (DCAN.read(d_msg)) {
 		Serial.print(" DCAN: ");
-		Serial.print(" TS: "); Serial.print(d_msg.timestamp);
 		Serial.print(" ID: "); Serial.print(d_msg.id, HEX);
 		Serial.print(" Buffer: ");
     if (d_msg.flags.remote) {
@@ -93,12 +90,11 @@ void loop()
 
 
 
-CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf, uint8_t txSeq) 
+CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf) 
 {
   CAN_message_t tx_msg;
   tx_msg.id = txID;
   tx_msg.len = txLen;
-  tx_msg.seq = txSeq;
   for (uint8_t i = 0; i < txLen; i++) {
       tx_msg.buf[i] = txBuf[i];
   }

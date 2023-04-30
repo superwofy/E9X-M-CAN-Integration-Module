@@ -9,6 +9,9 @@ void initialize_timers()
   #else
     power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
   #endif
+  #if FRONT_FOG_CORNER
+    corner_timer = vehicle_awake_timer;
+  #endif
 }
 
 
@@ -126,7 +129,7 @@ void print_current_state()
       SerialUSB1.print("Sport"); break;
   }
   SerialUSB1.println();
-  sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[0] == 0xF1 ? "Normal" : "Sport");
+  sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport");
   SerialUSB1.println(serial_debug_string);
 
   SerialUSB1.println("========= Body ==========");
@@ -184,7 +187,7 @@ void print_current_state()
     sprintf(serial_debug_string, " Exhaust flap: %s", exhaust_flap_open ? "Open" : "Closed");
     SerialUSB1.println(serial_debug_string);
   #endif
-  #if FRONT_FOG_INDICATOR
+  #if FRONT_FOG_LED_INDICATOR
     sprintf(serial_debug_string, " Front fogs: %s", front_fog_status ? "ON" : "OFF");
     SerialUSB1.println(serial_debug_string);
   #endif
@@ -249,7 +252,11 @@ void reset_runtime_variables()                                                  
   mdrive_power_active = restore_console_power_mode = false;
   mfl_pressed_count = 0;
   #if CKM
-    console_power_mode = dme_ckm[0] == 0xF1 ? false : true;                                                                         // When cycling ignition, restore this to its CKM value.
+    console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                         // When cycling ignition, restore this to its CKM value.
+  #endif
+  #if EDC_CKM_FIX
+    edc_state_modified = false;
+    edc_ckm_txq.flush();
   #endif
   dsc_txq.flush();
   #if AUTO_SEAT_HEATING
@@ -286,11 +293,30 @@ void reset_runtime_variables()                                                  
     MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
   #endif
   digitalWrite(POWER_LED_PIN, LOW);
-  #if FRONT_FOG_INDICATOR
-    front_fog_status = false;
+  #if FRONT_FOG_LED_INDICATOR
     digitalWrite(FOG_LED_PIN, LOW);
   #endif
+  #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
+    front_fog_status = false;
+  #endif
+  #if FRONT_FOG_CORNER
+    if (left_fog_on) {
+      kcan_write_msg(front_left_fog_off_buf);
+    }
+    if (right_fog_on) {
+      kcan_write_msg(front_right_fog_off_buf);
+    }
+    left_fog_on = right_fog_on = false;
+    left_corner_on = right_corner_on = false;
+    frm_lamp_status_requested = false;
+  #endif
   #if DIM_DRL
+    if (left_dimmed) {                                                                                                              // Send off now to make sure DRLs don't stay on.
+      kcan_write_msg(left_drl_dim_off);
+    }
+    if (right_dimmed) {
+      kcan_write_msg(right_drl_dim_off);
+    }
     drl_status = left_dimmed = right_dimmed = false;
   #endif
   #if FTM_INDICATOR
@@ -307,8 +333,6 @@ void reset_runtime_variables()                                                  
     msa_button_pressed = false;
     msa_fake_status_counter = 0;
   #endif
-  update_settings_in_eeprom();
-  mdrive_settings_updated = false;
   if (deactivate_ptcan_temporariliy) {
     temp_reactivate_ptcan();
   }
@@ -332,4 +356,10 @@ void reset_sleep_variables()
     volume_restore_offset = 0;
     default_volume_sent = false;
   #endif
+  update_settings_in_eeprom();
+  #if AUTO_MIRROR_FOLD
+    save_fold_state_to_eeprom();
+    frm_status_requested = false;
+  #endif
+  mdrive_settings_updated = false;
 }

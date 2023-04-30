@@ -1,0 +1,38 @@
+JOB: status_tuer
+
+
+Mirrors unfolded:
+
+13:26:34.424 ->  DCAN:  TS: 3829 ID: 6F1 Buffer: 72 3 30 16 1 0 0 0 
+13:26:34.424 ->  DCAN:  TS: 16987 ID: 672 Buffer: F1 10 10 70 16 1 AA AB 
+13:26:34.424 ->  DCAN:  TS: 17318 ID: 6F1 Buffer: 72 30 0 0 0 0 0 0 
+13:26:34.424 ->  DCAN:  TS: 17460 ID: 672 Buffer: F1 21 80 3 22 0 6C 41 
+13:26:34.424 ->  DCAN:  TS: 17599 ID: 672 Buffer: F1 22 9F AB 0 0 0 FF  										// STAT_SPIEGEL_BEIGEKLAPPT = 0
+13:26:34.457 ->  DCAN:  TS: 30120 ID: 6F1 Buffer: 72 3 30 10 1 0 0 0 
+13:26:34.523 ->  DCAN:  TS: 1733 ID: 672 Buffer: F1 10 7 70 10 1 BE 93 
+13:26:34.523 ->  DCAN:  TS: 2066 ID: 6F1 Buffer: 72 30 0 0 0 0 0 0 
+13:26:34.523 ->  DCAN:  TS: 2211 ID: 672 Buffer: F1 21 60 54 FF FF FF FF 
+
+
+Mirrors folded:
+
+13:27:00.772 ->  DCAN:  TS: 15952 ID: 6F1 Buffer: 72 3 30 16 1 0 0 0 
+13:27:00.804 ->  DCAN:  TS: 28830 ID: 672 Buffer: F1 10 10 70 16 1 AA AB 
+13:27:00.804 ->  DCAN:  TS: 29161 ID: 6F1 Buffer: 72 30 0 0 0 0 0 0 
+13:27:00.804 ->  DCAN:  TS: 29303 ID: 672 Buffer: F1 21 80 3 22 0 6C 41 
+13:27:00.804 ->  DCAN:  TS: 29442 ID: 672 Buffer: F1 22 9F AB 1 0 0 FF 											// STAT_SPIEGEL_BEIGEKLAPPT = 1
+13:27:00.836 ->  DCAN:  TS: 42102 ID: 6F1 Buffer: 72 3 30 10 1 0 0 0 
+13:27:00.935 ->  DCAN:  TS: 26602 ID: 672 Buffer: F1 10 7 70 10 1 BE 93 
+13:27:00.935 ->  DCAN:  TS: 26938 ID: 6F1 Buffer: 72 30 0 0 0 0 0 0 
+13:27:00.935 ->  DCAN:  TS: 27081 ID: 672 Buffer: F1 21 60 54 FF FF FF FF
+
+
+
+Arduino:
+
+uint8_t test[] = {0x72, 3, 0x30, 0x16, 1, 0, 0, 0};
+DCAN.write(makeMsgBuf(0x6F1, 8, test));
+
+13:35:53.385 ->  DCAN:  TS: 11254 ID: 672 Buffer: F1 10 10 70 16 1 A8 A9 
+13:35:53.385 ->  DCAN:  TS: 11730 ID: 672 Buffer: F1 21 80 3 22 0 6C 41 
+13:35:53.385 ->  DCAN:  TS: 11869 ID: 672 Buffer: F1 22 9F AB 0 0 0 FF 

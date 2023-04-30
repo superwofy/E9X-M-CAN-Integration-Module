@@ -30,14 +30,19 @@ WDT_T4<WDT1> wdt;
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 
 #define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive.
-#define EDC_CKM_FIX 1                                                                                                               // With Chinese keys/invalid profiles, sometimes the M Key setting for EDC is not recalled correctly.
+#define EDC_CKM_FIX 1                                                                                                               // Sometimes the M Key setting for EDC is not recalled correctly - especially with CA.
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
 #define HDC 1                                                                                                                       // Gives a function to the HDC console button in non 4WD cars.
 #define FAKE_MSA 1                                                                                                                  // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
+#define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Un-fold mirrors when locking. Can be done with coding but this integrates nicer.
+#if AUTO_MIRROR_FOLD
+const uint16_t AUTO_MIRROR_FOLD_DELAY = 800;                                                                                        // Delay in ms before folding/unfolding action.
+#endif
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
-#define FRONT_FOG_INDICATOR 1                                                                                                       // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
+#define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
+#define FRONT_FOG_CORNER 1                                                                                                          // Turn on corresponding fog light when turning.
 #define DIM_DRL 1                                                                                                                   // Dims DLR on the side that the indicator is on.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
@@ -53,6 +58,7 @@ WDT_T4<WDT1> wdt;
 #endif
 #define RTC 1                                                                                                                       // Set the time/date if power is lost. Requires external battery.
 #define F_ZBE_WAKE 0                                                                                                                // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an EXX ZBE.
+
 
 #if SERVOTRONIC_SVT70
   const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                   // New CAN-ID replacing 0x326 in SVT70 firmware bin. This stops it from changing modes together with EDC.
@@ -79,7 +85,6 @@ const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                         
 #if DOOR_VOLUME
   const uint16_t IDRIVE_BOOT_TIME = 30 * 1000;                                                                                      // Amount of time until the iDrive QNX OS accepts tool32 jobs from a cold boot.
 #endif
-
 const float TOP_THRESHOLD = 65.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
 const float MEDIUM_THRESHOLD = 60.0;
 const float HYSTERESIS = 2.0;
@@ -103,11 +108,15 @@ CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 uint16_t RPM = 0;
 #if CKM
-  uint8_t dme_ckm[] = {0, 0xFF};
+  uint8_t dme_ckm[4][2] = {{0, 0xFF}, {0, 0xFF}, {0, 0xFF}, {0xF1, 0xFF}};
   uint8_t dme_ckm_counter = 0;
+  uint8_t cas_key_number = 3;                                                                                                       // 0 = Key 1, 1 = Key 2...
 #endif
 #if EDC_CKM_FIX
-  uint8_t edc_ckm[] = {0, 0xFE};
+  uint8_t edc_ckm[] = {0, 0, 0, 0xF1};
+  bool edc_state_modified = false;
+  CAN_message_t edc_button_press_buf;
+  cppQueue edc_ckm_txq(sizeof(delayed_can_tx_msg), 2, queue_FIFO);
 #endif
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
 bool mdrive_status = false, mdrive_settings_updated = false, mdrive_power_active = false;
@@ -157,8 +166,17 @@ CAN_message_t cc_gong_buf;
   CAN_message_t any_needle_sweep_b_buf;
   cppQueue kombi_needle_txq(sizeof(delayed_can_tx_msg), 10, queue_FIFO);
 #endif
-#if FRONT_FOG_INDICATOR
+#if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
   bool front_fog_status = false;
+#endif
+#if FRONT_FOG_CORNER
+  bool left_fog_on = false, right_fog_on = false;
+  bool left_corner_on = false, right_corner_on = false;
+  bool frm_lamp_status_requested = false;
+  unsigned long corner_timer;
+  CAN_message_t front_left_fog_on_buf, front_left_fog_off_buf;
+  CAN_message_t front_right_fog_on_buf, front_right_fog_off_buf;
+  CAN_message_t frm_lamp_status_request_buf;
 #endif
 #if DIM_DRL
   bool drl_status = false, left_dimmed = false, right_dimmed = false;
@@ -168,6 +186,12 @@ CAN_message_t cc_gong_buf;
 #if FTM_INDICATOR
   bool ftm_indicator_status = false;
   CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf;
+#endif
+#if AUTO_MIRROR_FOLD
+  bool mirrors_folded, frm_status_requested = false;
+  CAN_message_t frm_status_request_a_buf, frm_status_request_b_buf;
+  CAN_message_t frm_toggle_fold_mirror_a_buf, frm_toggle_fold_mirror_b_buf;
+  cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
 #endif
 #if REVERSE_BEEP
   CAN_message_t pdc_beep_buf, pdc_quiet_buf;
@@ -237,6 +261,9 @@ CAN_message_t cc_gong_buf;
 #if HDC || FAKE_MSA
   cppQueue kcan_cc_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
+#if KEY_EEPROM_ANTI_THEFT
+  #include "secrets.h"
+#endif
 #if DEBUG_MODE
   float battery_voltage = 0;
   extern float tempmonGetTemp(void);
@@ -261,14 +288,27 @@ void setup()
   configure_IO();
   configure_can_controllers();
   cache_can_message_buffers();
+  initialize_timers();
   read_settings_from_eeprom();
+  #if AUTO_MIRROR_FOLD
+    load_fold_state_from_eeprom();
+  #endif
   #if RTC
     check_rtc_valid();
   #endif
-  initialize_timers();
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Setup finished in %lu ms, module is ready.", millis() - setup_timer);
     serial_log(serial_debug_string);
+  #endif
+  #if AUTO_MIRROR_FOLD
+    if (mirrors_folded) {
+      #if DEBUG_MODE
+        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
+        serial_log("Mirrors folded when car was locked. Un-folding mirrors.");
+      #else
+        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY * 2);                                                                             // Make sure FRM is awake before trying to unfold.
+      #endif
+    }
   #endif
 }
 
@@ -290,8 +330,11 @@ void loop()
   #if NEEDLE_SWEEP
     check_kombi_needle_queue();
   #endif
+  #if AUTO_MIRROR_FOLD
+    check_mirror_fold_queue();
+  #endif
   if (ignition) {
-    check_cpu_temp();                                                                                                               // Monitor processor temperature to extend lifetime.
+    check_teensy_cpu_temp();                                                                                                        // Monitor processor temperature to extend lifetime.
     check_dsc_queue();
     check_console_buttons();
     send_mdrive_alive_message(10000);
@@ -303,6 +346,12 @@ void loop()
     #endif
     #if HDC || FAKE_MSA
       check_kcan_cc_queue();
+    #endif
+    #if EDC_CKM_FIX
+      check_edc_ckm_queue();
+    #endif
+    #if FRONT_FOG_CORNER
+      request_corner_status();
     #endif
   } else {
     if (vehicle_awake) {
@@ -372,10 +421,14 @@ void loop()
       }
       #endif
 
-      #if FRONT_FOG_INDICATOR || DIM_DRL
+      #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
       else if (k_msg.id == 0x21A) {                                                                                                 // Light status sent by the FRM.
-        evaluate_fog_status();
-        evaluate_drl_status();
+        #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
+          evaluate_fog_status();
+        #endif
+        #if DIM_DRL
+          evaluate_drl_status();
+        #endif
       }
       #endif
 
@@ -389,9 +442,15 @@ void loop()
       }
       #endif
 
+      #if EDC_CKM_FIX
+      else if (k_msg.id == 0x315) {                                                                                                 // Monitor EDC status message from the JBE.
+        evaluate_edc_ckm_mismatch();
+      }
+      #endif
+
       #if CKM
       else if (k_msg.id == 0x3A8) {                                                                                                 // Received POWER M Key settings from iDrive.
-        save_dme_power_ckm();
+        update_dme_power_ckm();
       }
       #endif
 
@@ -404,7 +463,7 @@ void loop()
 
       #if EDC_CKM_FIX
       else if (k_msg.id == 0x3C5) {                                                                                                 // Received EDC M Key settings from iDrive.
-        save_edc_ckm();
+        update_edc_ckm();
       }
       #endif
 
@@ -431,6 +490,17 @@ void loop()
         #endif
       }
     }
+
+    #if AUTO_MIRROR_FOLD || CKM
+    else if (k_msg.id == 0x23A) {                                                                                                   // Monitor remote function status
+      #if AUTO_MIRROR_FOLD
+        evaluate_remote_button();
+      #endif
+      #if CKM
+        evaluate_key_number();
+      #endif
+    }
+    #endif
 
     #if AUTO_SEAT_HEATING
     else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
@@ -474,12 +544,6 @@ void loop()
     }
     #endif
 
-    #if EDC_CKM_FIX
-    else if (k_msg.id == 0x3C4) {                                                                                                   // Monitor EDC CKM message from the JBE.
-      evaluate_edc_ckm_mismatch();
-    }
-    #endif
-
     #if F_ZBE_WAKE
     else if (k_msg.id == 0x273) {                                                                                                   // This message wakes up the F CIC controller.
       send_zbe_acknowledge();
@@ -487,6 +551,16 @@ void loop()
 
     else if (k_msg.id == 0x4E2) {
       send_zbe_wakeup();
+    }
+    #endif
+
+    #if AUTO_MIRROR_FOLD || FRONT_FOG_CORNER
+    else if (k_msg.id == 0x672) {
+      evaluate_mirror_fold_status();
+      
+      #if FRONT_FOG_CORNER
+        evaluate_corner_light_status();
+      #endif
     }
     #endif
   }
@@ -552,9 +626,12 @@ void loop()
       }
       #endif
       else if (d_msg.buf[0] == 0x12) {                                                                                              // DME jobs such as MHD monitoring should be exempt.
-        // do nothing.
+        // TODO
       }
-      disable_diag_transmit_jobs();                                                                                                 // Implement a check so as to not interfere with other DCAN jobs sent to the CIC by an OBD tool.    
+      else {
+        disable_diag_transmit_jobs();                                                                                               // Implement a check so as to not interfere with other DCAN jobs sent to the car by an OBD tool.    
+      }
+      diag_deactivate_timer = millis();
     }
   }
   
@@ -565,6 +642,11 @@ void loop()
       print_current_state();                                                                                                        // Print program status to the second Serial port.
     }
     loop_timer = micros();
+  #endif
+  #if DEBUG_MODE
+    while (Serial.available()) {
+      serial_interpreter();
+    }
   #endif
   
   wdt.feed();                                                                                                                       // Reset the watchdog timer.

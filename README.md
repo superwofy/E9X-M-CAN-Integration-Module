@@ -35,6 +35,7 @@ I use it to:
 * Display a Needle sweep animation on startup.
 * Display Launch Control flag.
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
+* Fold/Un-fold mirrors when locking/unlocking.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Enable FXX KCAN1 CIC controllers.
 * Enable full diagnosis and coding of SVT70 modules.
@@ -44,6 +45,7 @@ I use it to:
 * Close the exhaust flap before engine start to reduce start noise.
 * Reduce audio volume when opening doors.
 * Dim corresponding front DRL when indicator is on.
+* Turn on corresponding front fog light when cornering light is on.
 See program notes: [here](program-notes.txt)
 
 
@@ -58,6 +60,8 @@ See program notes: [here](program-notes.txt)
 ![launchcontrol](img/launch-control/kombi.jpg "launchcontrol")
 
 ![fog](img/Fog/indicatoron.jpg "fog")
+
+![buttons](img/hdc-msa-buttons.jpg "buttons")
 
 ![case](img/case.jpg "case")
 

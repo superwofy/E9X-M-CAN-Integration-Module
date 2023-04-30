@@ -20,21 +20,22 @@ General section
 1.  Open the exhaust flap if MDrive is on with POWER set to Sport+.
 2.  Check timeouts for suspended PT-CAN and iDrive diag transmission.
 3.  Check the iDrive diag queue.
-4.  Monitor the CPU temperature and adjust clock speed accordingly.
-5.  Check the DSC transmission queue.
-6.  Enable the use of M3 center console button block. POWER and DSC OFF buttons. Control POWER LED.
+4.  Check Needle sweep animation transmission queue.
+5.  Check Mirror fold transmission queue.
+6.  Monitor the CPU temperature and adjust clock speed accordingly.
+7.  Check the DSC transmission queue.
+8.  Enable the use of M3 center console button block. POWER and DSC OFF buttons. Control POWER LED.
      POWER controls the DME throttle map. Holding POWER during ignition cycling enables diagnosis of the SVT70.
      Request full DSC OFF after holding DSC OFF button. Turn everything back on with a short press.
-7.  Send MDrive alive message to the network. This fully replaces the 0x399 MDrive status allowing control of:
+9.  Send MDrive alive message to the network. This fully replaces the 0x399 MDrive status allowing control of:
      EDC
      DSC
      DME throttle map
      Servotronic via SVT70 module
-8.  Check seat heating transmission queues.
-9.  Check Reverse beep transmission queue.
-10. Check MSA and HDC Check Control queue.
-11. Check Needle sweep animation transmission queue.
-12. Monitor sleep state timeout. Reset runtime variables if the car falls asleep.
+10. Check seat heating transmission queues.
+11. Check Reverse beep transmission queue.
+12. Check MSA and HDC Check Control queue.
+13. Monitor sleep state timeout. Reset runtime variables if the car falls asleep.
 
 
 
@@ -55,19 +56,21 @@ K-CAN section
 11. Monitor the state of the front doors to update audio volume.
 12. Change audio volume when doors are opened/closed.
 13. Monitor ignition status. Send corresponding DME and SVT power modes.
-14. Monitor ambient temperature.
-15. Monitor passenger's seat status. Seatbelt and occupancy sensor.
-16. Update the car clock from Teensy's RTC if power is lost.
-17. Track time and date settings from iDrive and save in Teensy's RTC.
-18. Send DME POWER CKM (car key memory) message.
-19. Track battery voltage (debug only) and Engine On status.
-20. Monitor EDC CKM status sent by the JBE. Correct if it doesn't match the saved EEPROM value.
-21. Create the two missing messages required to use an F series ZBE (KCAN1, not KCAN2) in an E6,7,8,9X car.
+14. Monitor remote number and button status.
+15. Monitor ambient temperature.
+16. Monitor passenger's seat status. Seatbelt and occupancy sensor.
+17. Update the car clock from Teensy's RTC if power is lost.
+18. Track time and date settings from iDrive and save in Teensy's RTC.
+19. Send DME POWER CKM (car key memory) message.
+20. Track battery voltage (debug only) and Engine On status.
+21. Monitor EDC CKM status sent by the JBE. Correct if it doesn't match the saved EEPROM value.
+22. Create the two missing messages required to use an F series ZBE (KCAN1, not KCAN2) in an E6,7,8,9X car.
    *Should* work with:
     6582 9267955 - 4-pin MEDIA button. **Tested - controller build date 19.04.13
     6131 9253944 - 4-pin CD button
     6582 9206444 - 10-pin CD button
     6582 9212449 - 10-pin CD button
+23. Monitor FRM status response for mirror fold status.
 
 Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
 

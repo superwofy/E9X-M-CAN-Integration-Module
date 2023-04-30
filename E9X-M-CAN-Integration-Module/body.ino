@@ -59,10 +59,6 @@ void evaluate_ignition_status()
   } else if (!ignition && ignition_) {
     reset_runtime_variables();
     scale_mcu_speed();                                                                                                              // Now that the ignition is off, underclock the MCU
-    #if DIM_DRL
-      kcan_write_msg(left_drl_dim_off);                                                                                             // The diag job times out after 10s. Send off now to make sure DRLs don't stay on.
-      kcan_write_msg(right_drl_dim_off);
-    #endif
     #if DEBUG_MODE
       sprintf(serial_debug_string, "(%X) Ignition OFF. Reset values.", k_msg.buf[0]);
       serial_log(serial_debug_string);
@@ -101,7 +97,7 @@ void evaluate_indicator_status_dim()
         left_dimmed = false;
         serial_log("Restored left DRL brightness.");
       }
-    } else if (k_msg.buf[0] == 0x91) {                                                                                              // Left
+    } else if (k_msg.buf[0] == 0x91) {                                                                                              // Left indicator
       if (right_dimmed) {
         kcan_write_msg(right_drl_bright_buf);
         right_dimmed = false;
@@ -114,7 +110,7 @@ void evaluate_indicator_status_dim()
         }
       #endif
       left_dimmed = true;
-    } else if (k_msg.buf[0] == 0xA1) {                                                                                              // Right
+    } else if (k_msg.buf[0] == 0xA1) {                                                                                              // Right indicator
       if (left_dimmed) {
         kcan_write_msg(left_drl_bright_buf);
         left_dimmed = false;
@@ -493,9 +489,9 @@ void evaluate_door_status()
       if (!right_door_open) {
         right_door_open = true;
         #if RHD
-          serial_log("Driver's door opened.");
+          serial_log("Driver's door open.");
         #else
-          serial_log("Passenger's door opened.");
+          serial_log("Passenger's door open.");
         #endif
         send_volume_request();
       }
@@ -614,6 +610,161 @@ void check_idrive_queue()
         #endif
       }
       idrive_txq.drop();
+    }
+  }
+}
+#endif
+
+
+#if AUTO_MIRROR_FOLD
+void load_fold_state_from_eeprom()
+{
+  mirrors_folded = EEPROM.read(11) == 1 ? true : false;
+}
+
+
+void save_fold_state_to_eeprom()
+{
+  EEPROM.update(11, mirrors_folded);
+}
+
+
+void evaluate_remote_button()
+{
+  if (!engine_running) {                                                                                                            // Ignore if locking car while running.
+    if (k_msg.buf[1] == 0x30 && k_msg.buf[2] == 4) {
+      if (!mirrors_folded) {
+        serial_log("Remote lock button pressed. Checking mirror status.");
+        kcan_write_msg(frm_status_request_a_buf);
+        frm_status_requested = true;
+      }
+    } else if (k_msg.buf[1] == 0x30 && k_msg.buf[2] == 1) {
+      if (mirrors_folded) {
+        serial_log("Remote unlock button pressed. Un-folding mirrors.");
+        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
+      }
+    }
+  }
+}
+
+
+void evaluate_mirror_fold_status()
+{
+  if (frm_status_requested) {                                                                                                       // Make sure the request came from this module.
+    if (k_msg.buf[1] == 0x22) {
+      if (k_msg.buf[4] == 1) {
+        mirrors_folded = true;
+        serial_log("Mirrors already folded.");
+      } else {
+        mirrors_folded = false;
+        #if DOOR_VOLUME
+        if (!left_door_open && !right_door_open) {
+          serial_log("Folding mirrors after lock button pressed.");
+          toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
+        }
+        #else
+        serial_log("Folding mirrors after lock button pressed.");
+        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
+        #endif
+      }
+      frm_status_requested = false;
+    } else if (k_msg.buf[1] == 0x10) {
+      kcan_write_msg(frm_status_request_b_buf);
+    }
+  }
+}
+
+
+void toggle_mirror_fold(uint16_t delay)
+{
+  delayed_can_tx_msg m;
+  unsigned long timeNow = millis();
+  m = {frm_toggle_fold_mirror_a_buf, timeNow + delay};
+  mirror_fold_txq.push(&m);
+  m = {frm_toggle_fold_mirror_b_buf, timeNow + delay + 10};
+  mirror_fold_txq.push(&m);
+  mirrors_folded = !mirrors_folded;
+}
+
+
+void check_mirror_fold_queue()
+{
+  if (!mirror_fold_txq.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    mirror_fold_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      mirror_fold_txq.drop();
+    }
+  }
+}
+#endif
+
+
+#if FRONT_FOG_CORNER
+void request_corner_status()
+{
+  if (engine_running) {
+    if (millis() - corner_timer >= 333) {
+      if (!front_fog_status) {
+        kcan_write_msg(frm_lamp_status_request_buf);
+        frm_lamp_status_requested = true;
+        corner_timer = millis();
+      }
+    }
+  }
+}
+
+
+void evaluate_corner_light_status()
+{
+  if (frm_lamp_status_requested) {
+    if (k_msg.buf[1] == 0x10 && k_msg.buf[2] == 0x24) {
+      if (!front_fog_status) {
+        if (k_msg.buf[6] > 0) {                                                                                                     // Left corner light
+          if (!left_corner_on) {
+            left_corner_on = true;
+            serial_log("Left corner light on.");
+            if (!left_fog_on) {
+              kcan_write_msg(front_left_fog_on_buf);
+              left_fog_on = true;
+              serial_log("Turned left fog light on.");
+            }
+          }
+        } else {
+          if (left_corner_on) {
+            left_corner_on = false;
+            serial_log("Left corner light off.");
+            if (left_fog_on) {
+              kcan_write_msg(front_left_fog_off_buf);
+              left_fog_on = false;
+              serial_log("Turned left fog light off.");
+            }
+          }
+        }
+        if (k_msg.buf[7] > 0) {                                                                                                     // Right corner light
+          if (!right_corner_on) {
+            right_corner_on = true;
+            serial_log("Right corner light on.");
+            if (!right_fog_on) {
+              kcan_write_msg(front_right_fog_on_buf);
+              right_fog_on = true;
+              serial_log("Turned right fog light on.");
+            }
+          }
+        } else {
+          if (right_corner_on) {
+            right_corner_on = false;
+            serial_log("Right corner light off.");
+            if (right_fog_on) {
+              kcan_write_msg(front_right_fog_off_buf);
+              right_fog_on = false;
+              serial_log("Turned right fog light off.");
+            }
+          }
+        }
+      }
+      frm_lamp_status_requested = false;
     }
   }
 }
