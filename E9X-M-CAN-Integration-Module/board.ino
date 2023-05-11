@@ -3,8 +3,12 @@
 
 void configure_IO()
 {
-  #if DEBUG_MODE && !AUTO_MIRROR_FOLD                                                                                               // This delay causes the mirrors to unfold slower on init.
-    while (!Serial && millis() < 5000);
+  #if DEBUG_MODE
+    #if !AUTO_MIRROR_FOLD                                                                                                           // This delay causes the mirrors to unfold slower on init.
+      while (!Serial && millis() <= 5000);
+    #else
+      while (!Serial && millis() <= 500);
+    #endif
   #endif
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
   digitalWrite(PTCAN_STBY_PIN, HIGH);
@@ -105,7 +109,7 @@ void configure_can_controllers()
   #endif
   #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
     filterId = 0x21A;
-    canFilters.push(&filterId);                                                                                                     // FRM Light status                                             Cycle time 5s (idle)
+    canFilters.push(&filterId);                                                                                                     // FRM Light status                                             Cycle time 5s (idle). Sent when changed.
   #endif
   #if AUTO_SEAT_HEATING
     #if AUTO_SEAT_HEATING_PASS
@@ -166,13 +170,13 @@ void configure_can_controllers()
     canFilters.push(&filterId);
   #endif
   #if EDC_CKM_FIX
-    filterId = 0x3C5;                                                                                                               // Filter M Key EDC setting from iDrive.
+    filterId = 0x3C5;                                                                                                               // Filter M Key EDC setting from iDrive.                        Sent when changed.
     canFilters.push(&filterId);
   #endif
   filterId = 0x3CA;                                                                                                                 // CIC MDrive settings                                          Sent when changed.
   canFilters.push(&filterId);
-  #if F_ZBE_WAKE
-    filterId = 0x4E2;                                                                                                               // Filter CIC Network management (sent when CIC is on)
+  #if F_ZBE_WAKE || CKM
+    filterId = 0x4E2;                                                                                                               // Filter CIC Network management.                               Sent when CIC is on, cycle time 1.5s.
     canFilters.push(&filterId);
   #endif
   #if DOOR_VOLUME
@@ -194,10 +198,10 @@ void configure_can_controllers()
       bool setResult;
       setResult = KCAN.setFIFOFilter(i, filterId, STD);
       if (!setResult) {
-        sprintf(serial_debug_string, " %x failed", filterId);
+        sprintf(serial_debug_string, " %X failed", filterId);
         serial_log(serial_debug_string);
       } else {
-        sprintf(serial_debug_string, " %x", filterId);
+        sprintf(serial_debug_string, " %X", filterId);
         serial_log(serial_debug_string);
       }
     #else
@@ -235,10 +239,10 @@ void configure_can_controllers()
       bool setResult;
       setResult = PTCAN.setFIFOFilter(i, filterId, STD);
       if (!setResult) {
-        sprintf(serial_debug_string, " %x failed", filterId);
+        sprintf(serial_debug_string, " %X failed", filterId);
         serial_log(serial_debug_string);
       } else {
-        sprintf(serial_debug_string, " %x", filterId);
+        sprintf(serial_debug_string, " %X", filterId);
         serial_log(serial_debug_string);
       }
     #else
@@ -261,10 +265,10 @@ void configure_can_controllers()
       bool setResult;
       setResult = DCAN.setFIFOFilter(i, filterId, STD);
       if (!setResult) {
-        sprintf(serial_debug_string, " %x failed", filterId);
+        sprintf(serial_debug_string, " %X failed", filterId);
         serial_log(serial_debug_string);
       } else {
-        sprintf(serial_debug_string, " %x", filterId);
+        sprintf(serial_debug_string, " %X", filterId);
         serial_log(serial_debug_string);
       }
     #else
@@ -461,7 +465,7 @@ void temp_reactivate_ptcan()
 void disable_diag_transmit_jobs()
 {
   if (diag_transmit) {
-    serial_log("Detected OBD port diagnosis request. Pausing diagnostic jobs.");
+    serial_log("Detected OBD port diagnosis request. Pausing all diagnostic jobs.");
     diag_transmit = false;
     #if DOOR_VOLUME
       volume_requested = false;

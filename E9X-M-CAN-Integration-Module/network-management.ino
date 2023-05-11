@@ -1,4 +1,13 @@
 // Functions that interface with the controller network(s) go here.
+// KWP2000 message structure (8 bytes): {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0x16};
+// [0] - Controller diagnostic address. e.g FRM (0x72), JBE (0).
+// [1] - ?. Sometimes represents the sequence of responses. I.e 0x10, 0x21, 0x22...
+// [2] - KWP2000 SID, e.g. InputOutputControlByLocalIdentifier (0x30).
+// [3] - Control target, e.g PWM-port dim value (3)
+// [4] - Control type, e.g ShortTermAdjustment (7)
+// [5] - Job dependent
+// [6] - Job dependent
+// [7] - Job dependent
 
 
 void cache_can_message_buffers()                                                                                                    // Put all static the buffers in memory during setup().

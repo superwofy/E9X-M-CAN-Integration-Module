@@ -191,6 +191,10 @@ void print_current_state()
     sprintf(serial_debug_string, " Front fogs: %s", front_fog_status ? "ON" : "OFF");
     SerialUSB1.println(serial_debug_string);
   #endif
+   #if FRONT_FOG_CORNER
+    sprintf(serial_debug_string, " Dipped beam: %s", dipped_beam_status ? "ON" : "OFF");
+    SerialUSB1.println(serial_debug_string);
+  #endif
   #if DIM_DRL
     sprintf(serial_debug_string, " DRL: %s", drl_status ? "ON" : "OFF");
     SerialUSB1.println(serial_debug_string);
@@ -306,8 +310,8 @@ void reset_runtime_variables()                                                  
     if (right_fog_on) {
       kcan_write_msg(front_right_fog_off_buf);
     }
-    left_fog_on = right_fog_on = false;
-    left_corner_on = right_corner_on = false;
+    fog_corner_txq.flush();
+    dipped_beam_status = left_fog_on = right_fog_on = false;
     frm_lamp_status_requested = false;
   #endif
   #if DIM_DRL

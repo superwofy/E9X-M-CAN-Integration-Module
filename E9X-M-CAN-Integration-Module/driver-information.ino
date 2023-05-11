@@ -124,13 +124,13 @@ void needle_sweep_animation()
     kombi_needle_txq.push(&m);
     m = {oil_needle_sweep_buf, timeNow + 150};
     kombi_needle_txq.push(&m);
-    m = {speedo_needle_release_buf, timeNow + 900};
+    m = {tacho_needle_release_buf, timeNow + 900};
     kombi_needle_txq.push(&m);
-    m = {tacho_needle_release_buf, timeNow + 950};
+    m = {speedo_needle_release_buf, timeNow + 950};
     kombi_needle_txq.push(&m);
-    m = {fuel_needle_release_buf, timeNow + 1000};
+    m = {oil_needle_release_buf, timeNow + 1000};
     kombi_needle_txq.push(&m);
-    m = {oil_needle_release_buf, timeNow + 1050};
+    m = {fuel_needle_release_buf, timeNow + 1050};
     kombi_needle_txq.push(&m);
     serial_log("Sending needle sweep animation.");
   }

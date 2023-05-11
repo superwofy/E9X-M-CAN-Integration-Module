@@ -702,15 +702,46 @@ void check_mirror_fold_queue()
 
 
 #if FRONT_FOG_CORNER
+void check_fog_corner_queue()
+{
+  if (!fog_corner_txq.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    fog_corner_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      fog_corner_txq.drop();
+    }
+  }
+}
+
+
 void request_corner_status()
 {
   if (engine_running) {
-    if (millis() - corner_timer >= 333) {
-      if (!front_fog_status) {
-        kcan_write_msg(frm_lamp_status_request_buf);
-        frm_lamp_status_requested = true;
-        corner_timer = millis();
+    if (dipped_beam_status) {
+      if (millis() - corner_timer >= 200) {
+        if (!front_fog_status) {
+          kcan_write_msg(frm_lamp_status_request_buf);
+          frm_lamp_status_requested = true;
+          corner_timer = millis();
+        }
       }
+    }
+  }
+}
+
+
+void evaluate_dipped_beam_status()
+{
+  if ((k_msg.buf[0] & 1) == 1) {                                                                                                    // Check the 8th bit of this byte for dipped beam status.
+   if (!dipped_beam_status) {
+      dipped_beam_status = true;
+      serial_log("Dipped beam on.");
+    }
+  } else {
+    if (dipped_beam_status) {
+      dipped_beam_status = false;
+      serial_log("Dipped beam off");
     }
   }
 }
@@ -722,45 +753,33 @@ void evaluate_corner_light_status()
     if (k_msg.buf[1] == 0x10 && k_msg.buf[2] == 0x24) {
       if (!front_fog_status) {
         if (k_msg.buf[6] > 0) {                                                                                                     // Left corner light
-          if (!left_corner_on) {
-            left_corner_on = true;
-            serial_log("Left corner light on.");
-            if (!left_fog_on) {
-              kcan_write_msg(front_left_fog_on_buf);
-              left_fog_on = true;
-              serial_log("Turned left fog light on.");
-            }
+          delayed_can_tx_msg m = {front_left_fog_on_buf, millis() + 50};
+          fog_corner_txq.push(&m);                                                                                                  // On messages time out after about 10s. Transmission must be repeated.
+          if (!left_fog_on) {
+            left_fog_on = true;
+            serial_log("Left corner light on. Turned left fog light on.");
           }
         } else {
-          if (left_corner_on) {
-            left_corner_on = false;
-            serial_log("Left corner light off.");
-            if (left_fog_on) {
-              kcan_write_msg(front_left_fog_off_buf);
-              left_fog_on = false;
-              serial_log("Turned left fog light off.");
-            }
+          if (left_fog_on) {
+            delayed_can_tx_msg m = {front_left_fog_off_buf, millis() + 50};
+            fog_corner_txq.push(&m);
+            left_fog_on = false;
+            serial_log("Left corner light off. Turned left fog light off.");
           }
         }
-        if (k_msg.buf[7] > 0) {                                                                                                     // Right corner light
-          if (!right_corner_on) {
-            right_corner_on = true;
-            serial_log("Right corner light on.");
-            if (!right_fog_on) {
-              kcan_write_msg(front_right_fog_on_buf);
-              right_fog_on = true;
-              serial_log("Turned right fog light on.");
-            }
+          if (k_msg.buf[7] > 0) {                                                                                                   // Right corner light
+          delayed_can_tx_msg m = {front_right_fog_on_buf, millis() + 50};
+          fog_corner_txq.push(&m);
+          if (!right_fog_on) {
+            right_fog_on = true;
+            serial_log("Right corner light on. Turned right fog light on.");
           }
         } else {
-          if (right_corner_on) {
-            right_corner_on = false;
-            serial_log("Right corner light off.");
-            if (right_fog_on) {
-              kcan_write_msg(front_right_fog_off_buf);
-              right_fog_on = false;
-              serial_log("Turned right fog light off.");
-            }
+          if (right_fog_on) {
+            delayed_can_tx_msg m = {front_right_fog_off_buf, millis() + 50};
+            fog_corner_txq.push(&m);
+            right_fog_on = false;
+            serial_log("Right corner light off. Turned right fog light off.");
           }
         }
       }

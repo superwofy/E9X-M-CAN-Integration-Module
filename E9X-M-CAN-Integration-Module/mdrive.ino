@@ -184,15 +184,6 @@ void send_mdrive_alive_message(uint16_t interval)
       }
       send_mdrive_message();
     }
-    #if CKM
-      if (terminal_r) {
-        if (dme_ckm_counter == 2) {
-          send_dme_power_ckm();                                                                                                     // Send this message periodically as well. Useful if iDrive restarts for some reason...
-          dme_ckm_counter = 0;
-        }
-        dme_ckm_counter++;
-      }
-    #endif
   }
 }
 
@@ -300,6 +291,18 @@ void send_dme_power_ckm()
 {
   kcan_write_msg(makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                    // This is sent by the DME to populate the M Key iDrive section
   serial_log("Sent DME POWER CKM.");
+}
+
+
+void send_timed_dme_power_ckm()
+{
+  if (terminal_r) {
+    if (dme_ckm_counter == 20) {
+      send_dme_power_ckm();                                                                                                         // Send this message periodically. Useful if iDrive restarts for some reason...
+      dme_ckm_counter = 0;
+    }
+    dme_ckm_counter++;
+  }
 }
 
 

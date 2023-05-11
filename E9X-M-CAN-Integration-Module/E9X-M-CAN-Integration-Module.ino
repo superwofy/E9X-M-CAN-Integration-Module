@@ -42,7 +42,7 @@ const uint16_t AUTO_MIRROR_FOLD_DELAY = 800;                                    
 #endif
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
-#define FRONT_FOG_CORNER 1                                                                                                          // Turn on corresponding fog light when turning.
+#define FRONT_FOG_CORNER 1                                                                                                          // Turn on corresponding fog light when turning. Requires AHL.
 #define DIM_DRL 1                                                                                                                   // Dims DLR on the side that the indicator is on.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
@@ -72,7 +72,7 @@ const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                         
   const uint16_t GONG_UPSHIFT_WARN_RPM = 6800 * 4;
 #endif
 #if EXHAUST_FLAP_CONTROL
-  const uint16_t EXHAUST_FLAP_QUIET_RPM = 3500 * 4;                                                                                 // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
+  const uint16_t EXHAUST_FLAP_QUIET_RPM = 3000 * 4;                                                                                 // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
 #endif
 #if LAUNCH_CONTROL_INDICATOR
   const uint16_t LC_RPM = 4000 * 4;                                                                                                 // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
@@ -170,13 +170,13 @@ CAN_message_t cc_gong_buf;
   bool front_fog_status = false;
 #endif
 #if FRONT_FOG_CORNER
-  bool left_fog_on = false, right_fog_on = false;
-  bool left_corner_on = false, right_corner_on = false;
+  bool dipped_beam_status = false, left_fog_on = false, right_fog_on = false;
   bool frm_lamp_status_requested = false;
   unsigned long corner_timer;
   CAN_message_t front_left_fog_on_buf, front_left_fog_off_buf;
   CAN_message_t front_right_fog_on_buf, front_right_fog_off_buf;
   CAN_message_t frm_lamp_status_request_buf;
+  cppQueue fog_corner_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
 #if DIM_DRL
   bool drl_status = false, left_dimmed = false, right_dimmed = false;
@@ -208,7 +208,7 @@ CAN_message_t cc_gong_buf;
 #endif
 #if EXHAUST_FLAP_CONTROL
   bool exhaust_flap_sport = false, exhaust_flap_open = true;
-  unsigned long exhaust_flap_action_timer, exhaust_flap_action_interval = 1500;
+  unsigned long exhaust_flap_action_timer, exhaust_flap_action_interval = 1000;
 #endif
 #if LAUNCH_CONTROL_INDICATOR
   CAN_message_t lc_cc_on_buf, lc_cc_off_buf;
@@ -351,6 +351,7 @@ void loop()
       check_edc_ckm_queue();
     #endif
     #if FRONT_FOG_CORNER
+      check_fog_corner_queue();
       request_corner_status();
     #endif
   } else {
@@ -425,6 +426,9 @@ void loop()
       else if (k_msg.id == 0x21A) {                                                                                                 // Light status sent by the FRM.
         #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
           evaluate_fog_status();
+        #endif
+        #if FRONT_FOG_CORNER
+          evaluate_dipped_beam_status();
         #endif
         #if DIM_DRL
           evaluate_drl_status();
@@ -502,6 +506,12 @@ void loop()
     }
     #endif
 
+    #if F_ZBE_WAKE
+    else if (k_msg.id == 0x273) {
+      send_zbe_acknowledge();
+    }
+    #endif
+
     #if AUTO_SEAT_HEATING
     else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
       evaluate_ambient_temperature();
@@ -544,13 +554,14 @@ void loop()
     }
     #endif
 
-    #if F_ZBE_WAKE
-    else if (k_msg.id == 0x273) {                                                                                                   // This message wakes up the F CIC controller.
-      send_zbe_acknowledge();
-    }
-
+    #if F_ZBE_WAKE || CKM
     else if (k_msg.id == 0x4E2) {
-      send_zbe_wakeup();
+      #if F_ZBE_WAKE
+        send_zbe_wakeup();
+      #endif
+      #if CKM
+        send_timed_dme_power_ckm();
+      #endif
     }
     #endif
 
