@@ -259,7 +259,7 @@ void reset_runtime_variables()                                                  
     console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                         // When cycling ignition, restore this to its CKM value.
   #endif
   #if EDC_CKM_FIX
-    edc_state_modified = false;
+    edc_mismatch_check_counter = 0;
     edc_ckm_txq.flush();
   #endif
   dsc_txq.flush();

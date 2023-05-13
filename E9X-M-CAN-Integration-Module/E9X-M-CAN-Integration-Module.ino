@@ -114,7 +114,7 @@ uint16_t RPM = 0;
 #endif
 #if EDC_CKM_FIX
   uint8_t edc_ckm[] = {0, 0, 0, 0xF1};
-  bool edc_state_modified = false;
+  uint8_t edc_mismatch_check_counter = 0;
   CAN_message_t edc_button_press_buf;
   cppQueue edc_ckm_txq(sizeof(delayed_can_tx_msg), 2, queue_FIFO);
 #endif
@@ -636,9 +636,16 @@ void loop()
         update_rtc_from_dcan();
       }
       #endif
-      else if (d_msg.buf[0] == 0x12) {                                                                                              // DME jobs such as MHD monitoring should be exempt.
-        // TODO
+
+      //MHD monitoring exceptions:
+      else if (d_msg.buf[0] == 0x12){
+        if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                       // SID 34h requestDownload Service
+          disable_diag_transmit_jobs();
+        }
       }
+      else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+      else if (d_msg.buf[0] == 0x40 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+
       else {
         disable_diag_transmit_jobs();                                                                                               // Implement a check so as to not interfere with other DCAN jobs sent to the car by an OBD tool.    
       }

@@ -329,7 +329,7 @@ void evaluate_key_number()
     }
     #if DEBUG_MODE
     else {
-      sprintf(serial_debug_string, "Received key number: %d", cas_key_number + 1);
+      sprintf(serial_debug_string, "Received key number: %d.", cas_key_number + 1);
       serial_log(serial_debug_string);
     }
     #endif
@@ -354,7 +354,7 @@ void update_edc_ckm()
 
 void evaluate_edc_ckm_mismatch()
 {
-  if (!edc_state_modified) {
+  if (edc_mismatch_check_counter < 2) {
     if (k_msg.buf[1] != edc_ckm[cas_key_number]) {
       serial_log("EDC EEPROM CKM setting match the current value. Correcting.");
       uint8_t edc_state = k_msg.buf[1] == 0xFA ? 3 : k_msg.buf[1] - 0xF0;                                                           // Normalize these values for easier comparison.
@@ -367,8 +367,8 @@ void evaluate_edc_ckm_mismatch()
       } else {
         kcan_write_msg(edc_button_press_buf);
       }
-      edc_state_modified = true;
     }
+    edc_mismatch_check_counter++;
   }
 }
 
