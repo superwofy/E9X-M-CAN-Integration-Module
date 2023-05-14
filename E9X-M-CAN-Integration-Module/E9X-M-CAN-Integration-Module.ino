@@ -63,7 +63,7 @@ const uint16_t AUTO_MIRROR_FOLD_DELAY = 800;                                    
 #if SERVOTRONIC_SVT70
   const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                   // New CAN-ID replacing 0x326 in SVT70 firmware bin. This stops it from changing modes together with EDC.
 #endif
-const uint16_t DME_FAKE_VEH_MODE_CANID = 0x7F1;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
+const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
 const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80.
 #if CONTROL_SHIFTLIGHTS
   const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                 // RPM setpoints (warning = desired RPM * 4).
@@ -132,8 +132,6 @@ const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hol
 bool ignore_m_press = false, ignore_m_hold = false;
 uint8_t clock_mode = 0;
 float last_cpu_temp = 0;
-bool deactivate_ptcan_temporariliy = false;
-unsigned long deactivate_ptcan_timer;
 CAN_message_t cc_gong_buf;
 
 #if SERVOTRONIC_SVT70
@@ -322,7 +320,6 @@ void loop()
   #if EXHAUST_FLAP_CONTROL
     control_exhaust_flap_user();
   #endif
-  check_ptcan_transmit_status();
   check_diag_transmit_status();
   #if DOOR_VOLUME
     check_idrive_queue();
@@ -446,12 +443,6 @@ void loop()
       }
       #endif
 
-      #if EDC_CKM_FIX
-      else if (k_msg.id == 0x315) {                                                                                                 // Monitor EDC status message from the JBE.
-        evaluate_edc_ckm_mismatch();
-      }
-      #endif
-
       #if CKM
       else if (k_msg.id == 0x3A8) {                                                                                                 // Received POWER M Key settings from iDrive.
         update_dme_power_ckm();
@@ -487,12 +478,6 @@ void loop()
 
     else if (k_msg.id == 0x130) {                                                                                                   // Monitor ignition status
       evaluate_ignition_status();
-      if (ignition) {
-        send_power_mode();                                                                                                          // state_spt request from DME.   
-        #if SERVOTRONIC_SVT70
-          send_servotronic_message();
-        #endif
-      }
     }
 
     #if AUTO_MIRROR_FOLD || CKM
@@ -587,7 +572,17 @@ void loop()
         if (pt_msg.id == 0x1D6) {                                                                                                   // A button was pressed on the steering wheel.
           evaluate_m_mfl_button_press();
         }
-
+              
+        else if (pt_msg.id == 0x315) {                                                                                               // Monitor EDC status message from the JBE.
+          #if EDC_CKM_FIX
+            evaluate_edc_ckm_mismatch();
+          #endif
+          send_power_mode();                                                                                                        // state_spt request from DME.   
+          #if SERVOTRONIC_SVT70
+            send_servotronic_message();
+          #endif
+        }
+      
         #if FTM_INDICATOR
         else if (pt_msg.id == 0x31D) {                                                                                              // FTM initialization is ongoing.
           evaluate_indicate_ftm_status();
@@ -621,9 +616,15 @@ void loop()
     
   if (DCAN.read(d_msg)) {
     if (d_msg.id == 0x6F1) {
-      if (d_msg.buf[0] == 0x1C) {                                                                                                   // Fix for LDM program issues.
-        temp_deactivate_ptcan();
+      //MHD monitoring exceptions:
+      if (d_msg.buf[0] == 0x12){
+        if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                       // SID 34h requestDownload Service
+          disable_diag_transmit_jobs();
+        }
       }
+      else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+      else if (d_msg.buf[0] == 0x40 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+
       #if SERVOTRONIC_SVT70
       else if (d_msg.buf[0] == 0xE) {                                                                                               // SVT_70 address is 0xE
         if (diagnose_svt) {
@@ -636,15 +637,6 @@ void loop()
         update_rtc_from_dcan();
       }
       #endif
-
-      //MHD monitoring exceptions:
-      else if (d_msg.buf[0] == 0x12){
-        if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                       // SID 34h requestDownload Service
-          disable_diag_transmit_jobs();
-        }
-      }
-      else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
-      else if (d_msg.buf[0] == 0x40 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
 
       else {
         disable_diag_transmit_jobs();                                                                                               // Implement a check so as to not interfere with other DCAN jobs sent to the car by an OBD tool.    

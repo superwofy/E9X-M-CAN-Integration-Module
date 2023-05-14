@@ -99,8 +99,8 @@ MSD81 IKM0S binary modification
 
 [PROGRAM]
 
-0x83738   and  0x83739  -> F1 07      CAN message table
-0x1F3AD4  and  0x1F3AD5 -> F1 07      CAN filters
+0x83738   and  0x83739  -> 1F 03      CAN message table
+0x1F3AD4  and  0x1F3AD5 -> 1F 03      CAN filters
 
 Replace 15 03 (0x315 represented in Little Endian) to stop MSD81 from reacting to Vehicle Mode changes (triggered by JBBF through EDC button)
 This also allows state_spt (throttle map) to be controlled independently from the main "MDrive" with the console switch.

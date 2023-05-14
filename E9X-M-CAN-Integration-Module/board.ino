@@ -74,7 +74,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 30, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 29, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -143,10 +143,6 @@ void configure_can_controllers()
     filterId = 0x2FA;                                                                                                               // Seat occupancy and belt status                               Cycle time 5s
     canFilters.push(&filterId);
   #endif
-  #if EDC_CKM_FIX
-    filterId = 0x315;                                                                                                               // Filter EDC state from JBE.                                   Cycle time 500ms (idle).
-    canFilters.push(&filterId);
-  #endif
   #if HDC
     filterId = 0x31A;                                                                                                               // HDC button status sent by IHKA.
     canFilters.push(&filterId);
@@ -212,6 +208,8 @@ void configure_can_controllers()
   // PTCAN
   filterId = 0x1D6;                                                                                                                 // MFL button status.                                           Cycle time 1s (idle), 100ms (pressed)
   canFilters.push(&filterId);
+  filterId = 0x315;                                                                                                                 // Vehicle mode (+EDC) from JBE.                                Cycle time 500ms (idle).
+  canFilters.push(&filterId);
   #if FTM_INDICATOR
     filterId = 0x31D;                                                                                                               // FTM status broadcast by DSC                                  Cycle time 5s (idle)
     canFilters.push(&filterId);
@@ -223,8 +221,6 @@ void configure_can_controllers()
   #if SERVOTRONIC_SVT70
     filterId = 0x58E;                                                                                                               // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
     canFilters.push(&filterId);
-  #endif
-  #if SERVOTRONIC_SVT70
     filterId = 0x60E;                                                                                                               // Receive diagnostic messages from SVT module to forward.
     canFilters.push(&filterId);
   #endif
@@ -430,36 +426,6 @@ void check_rtc_valid()
   }
 }
 #endif
-
-
-void check_ptcan_transmit_status() 
-{
-  if (deactivate_ptcan_temporariliy && vehicle_awake) {
-    if ((millis() - deactivate_ptcan_timer) >= 60000) {                                                                             // Re-activate after period of no LDM DCAN requests.
-      temp_reactivate_ptcan();
-    }
-  }
-}
-
-
-void temp_deactivate_ptcan() 
-{
-  if (!deactivate_ptcan_temporariliy) {
-    digitalWrite(PTCAN_STBY_PIN, HIGH);
-    serial_log("Deactivated PT-CAN transceiver while LDM is being diagnosed/flashed.");
-    deactivate_ptcan_temporariliy = true;
-    deactivate_ptcan_timer = millis();
-  }
-  deactivate_ptcan_timer = millis();
-}
-
-
-void temp_reactivate_ptcan()
-{
-  digitalWrite(PTCAN_STBY_PIN, LOW);
-  serial_log("Re-activated PT-CAN transceiver after LDM diagnosis.");
-  deactivate_ptcan_temporariliy = false;
-}
 
 
 void disable_diag_transmit_jobs()

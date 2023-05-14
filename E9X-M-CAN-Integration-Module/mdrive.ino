@@ -176,14 +176,12 @@ void send_mdrive_message()
 void send_mdrive_alive_message(uint16_t interval)
 {
   if ((millis() - mdrive_message_timer) >= interval) {                                                                              // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
-    if (!deactivate_ptcan_temporariliy) {
-      if (ignition) {
-        serial_log("Sending Ignition ON MDrive alive message.");
-      } else {
-        serial_log("Sending Vehicle Awake MDrive alive message.");
-      }
-      send_mdrive_message();
+    if (ignition) {
+      serial_log("Sending Ignition ON MDrive alive message.");
+    } else {
+      serial_log("Sending Vehicle Awake MDrive alive message.");
     }
+    send_mdrive_message();
   }
 }
 
@@ -355,9 +353,9 @@ void update_edc_ckm()
 void evaluate_edc_ckm_mismatch()
 {
   if (edc_mismatch_check_counter < 2) {
-    if (k_msg.buf[1] != edc_ckm[cas_key_number]) {
+    if (pt_msg.buf[1] != edc_ckm[cas_key_number]) {
       serial_log("EDC EEPROM CKM setting match the current value. Correcting.");
-      uint8_t edc_state = k_msg.buf[1] == 0xFA ? 3 : k_msg.buf[1] - 0xF0;                                                           // Normalize these values for easier comparison.
+      uint8_t edc_state = pt_msg.buf[1] == 0xFA ? 3 : pt_msg.buf[1] - 0xF0;                                                           // Normalize these values for easier comparison.
       uint8_t edc_memory = edc_ckm[cas_key_number] == 0xFA ? 3 : edc_ckm[cas_key_number] - 0xF0;
       if ((edc_memory == 1 && edc_state == 2) || (edc_memory == 2 && edc_state == 3) || (edc_memory == 3 && edc_state == 1)) {
         unsigned long timeNow = millis();

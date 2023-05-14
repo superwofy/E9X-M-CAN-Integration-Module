@@ -337,9 +337,6 @@ void reset_runtime_variables()                                                  
     msa_button_pressed = false;
     msa_fake_status_counter = 0;
   #endif
-  if (deactivate_ptcan_temporariliy) {
-    temp_reactivate_ptcan();
-  }
 }
 
 

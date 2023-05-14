@@ -408,6 +408,7 @@ void check_console_buttons()
         }
       }
     }
+    send_power_mode();
   } 
   
   if (!digitalRead(DSC_BUTTON_PIN)) {

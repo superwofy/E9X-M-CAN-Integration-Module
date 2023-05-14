@@ -240,12 +240,10 @@ void dcan_write_msg(const CAN_message_t &msg)
 
 void dcan_to_ptcan()
 {
-  if (!deactivate_ptcan_temporariliy) {
-    ptcan_write_msg(d_msg);
-    #if DEBUG_MODE
-      dcan_forwarded_count++;
-    #endif
-  }
+  ptcan_write_msg(d_msg);
+  #if DEBUG_MODE
+    dcan_forwarded_count++;
+  #endif
 }
 
 

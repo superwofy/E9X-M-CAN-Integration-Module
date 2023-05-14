@@ -11,7 +11,7 @@ Hardware used:
 * Small copper heatsink.
 * N-channel MOSFET that can be driven with 3V3. I had some FQP50N06Ls.
 * 1N4007 diode (exhaust solenoid flyback).
-* 10K Ohm (pull-down), 600 Ohm (R-gate) and 10 Ohm (Fog LED) resistor.
+* 10K Ohm (pull-down), 600 Ohm (R-gate), 390 Ohm (POWER LED) and 10 Ohm (Fog LED) resistor.
 * OSRAM LO M676-Q2S1 FOG button illumination LED.
 * KINGBRIGHT KM2520ZGC-G03 FOG indicator LED.
 * Micro USB right-angle cable.
