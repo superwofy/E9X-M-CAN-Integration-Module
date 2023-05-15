@@ -27,8 +27,7 @@ void send_dsc_mode(uint8_t mode) {
 }
 
 
-void check_dsc_queue()
-{
+void check_dsc_queue() {
   if (!dsc_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     dsc_txq.peek(&delayed_tx);
@@ -41,8 +40,7 @@ void check_dsc_queue()
 
 
 #if LAUNCH_CONTROL_INDICATOR
-void evaluate_clutch_status()
-{ 
+void evaluate_clutch_status() {
   if (k_msg.buf[5] == 0xD) {
     if (!clutch_pressed) {
       clutch_pressed = true;
@@ -53,10 +51,11 @@ void evaluate_clutch_status()
     serial_log("Clutch pedal released.");
   }
 }
+#endif
 
 
-void evaluate_reverse_status()
-{
+#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR
+void evaluate_reverse_status() {
   if (k_msg.buf[0] == 0xFE) {
     if (!reverse_status) {
       reverse_status = true;
@@ -70,8 +69,7 @@ void evaluate_reverse_status()
 
 
 #if LAUNCH_CONTROL_INDICATOR || HDC
-void evaluate_vehicle_moving()
-{
+void evaluate_vehicle_moving() {
   if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0xD0) {
     if (vehicle_moving) {
       vehicle_moving = false;
@@ -104,15 +102,14 @@ void evaluate_vehicle_moving()
 
 
 #if HDC
-void evaluate_hdc_button()
-{
+void evaluate_hdc_button() {
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!hdc_button_pressed) {
       if (!hdc_active) {
         if (!cruise_control_status && vehicle_speed >= min_hdc_speed && vehicle_speed <= max_hdc_speed) {
           ptcan_write_msg(set_hdc_cruise_control_buf);
           hdc_requested = true;                                                                                                     // Send request. "HDC" will only activate if cruise control conditions permit.
-          serial_log("Sent HDC cruise control on message.");
+          serial_log("Sent HDC cruise control ON message.");
         } else if (!vehicle_moving) {
           serial_log("Car must be moving for HDC.");
         } else {
@@ -124,7 +121,7 @@ void evaluate_hdc_button()
       } else {
         ptcan_write_msg(cancel_hdc_cruise_control_buf);
         hdc_active = false;
-        serial_log("Sent HDC cruise control off message.");
+        serial_log("Sent HDC cruise control OFF message.");
       }
       hdc_button_pressed = true;
     }
@@ -134,8 +131,7 @@ void evaluate_hdc_button()
 }
 
 
-void evaluate_cruise_control_status()
-{
+void evaluate_cruise_control_status() {
   if (k_msg.buf[5] == 0x58 || 
       (k_msg.buf[5] == 0x5A || k_msg.buf[5] == 0x5B || k_msg.buf[5] == 0x5C || k_msg.buf[5] == 0x5D)) {                            // Status is different based on ACC distance setting.
     if (!cruise_control_status) {
@@ -165,8 +161,7 @@ void evaluate_cruise_control_status()
 }
 
 
-void evaluate_speed_units()
-{
+void evaluate_speed_units() {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   if (speed_mph) {
     min_hdc_speed = 12;
@@ -180,8 +175,7 @@ void evaluate_speed_units()
 
 
 #if SERVOTRONIC_SVT70
-void send_servotronic_message()
-{
+void send_servotronic_message() {
   servotronic_message[0] += 0x10;                                                                                                   // Increase alive counter.
   if (servotronic_message[0] > 0xEF) {                                                                                              // Alive(first half of byte) must be between 0..E.
     servotronic_message[0] = 0;

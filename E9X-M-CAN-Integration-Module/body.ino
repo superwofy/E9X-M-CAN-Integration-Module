@@ -1,16 +1,12 @@
 // General body functions dealing with interior/exterior electronics go here.
 
 
-void evaluate_ignition_status()
-{
+void evaluate_ignition_status() {
   vehicle_awake_timer = millis();
   if (!vehicle_awake) {
     vehicle_awake = true;    
     toggle_transceiver_standby();                                                                                                   // Re-activate the transceivers.                                                                                         
     serial_log("Vehicle Awake.");
-    #if DOOR_VOLUME
-      send_default_startup_volume();
-    #endif
   }  
 
   bool ignition_ = ignition;
@@ -23,7 +19,7 @@ void evaluate_ignition_status()
       ignition = engine_cranking = false;
       break;
     case 5:
-      if (!ignition) {                                                                                                              // If ignition is off and this status is declared, terminal R will be turned off by the car.
+      if (!ignition) {                                                                                                              // If ignition is OFF and this status is declared, terminal R will be turned OFF by the car.
         terminal_r = engine_cranking = false;
       }
       break;                                                                                                                        // 5 is sent in CA cars when the key is not detected, ignore.
@@ -58,7 +54,7 @@ void evaluate_ignition_status()
     serial_log("Ignition ON.");    
   } else if (!ignition && ignition_) {
     reset_runtime_variables();
-    scale_mcu_speed();                                                                                                              // Now that the ignition is off, underclock the MCU
+    scale_mcu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
     #if DEBUG_MODE
       sprintf(serial_debug_string, "(%X) Ignition OFF. Reset values.", k_msg.buf[0]);
       serial_log(serial_debug_string);
@@ -68,24 +64,22 @@ void evaluate_ignition_status()
 
 
 #if DIM_DRL
-void evaluate_drl_status()
-{
+void evaluate_drl_status() {
   if (k_msg.buf[1] == 0x32) {
     if (!drl_status) {
       drl_status = true;
-      serial_log("DRLs on.");
+      serial_log("DRLs ON.");
     }
   } else {
     if (drl_status) {
       drl_status = false;
-      serial_log("DRLs off");
+      serial_log("DRLs OFF");
     }
   }
 }
 
 
-void evaluate_indicator_status_dim()
-{
+void evaluate_indicator_status_dim() {
   if (drl_status && diag_transmit) {
     if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                              // Off or Hazards
       if (right_dimmed) {
@@ -130,20 +124,19 @@ void evaluate_indicator_status_dim()
 
 
 #if AUTO_SEAT_HEATING
-void evaluate_seat_heating_status()
-{
+void evaluate_seat_heating_status() {
   if (k_msg.id == 0x232) {
-    if (!k_msg.buf[0]) {                                                                                                            // Check if seat heating is already on.
+    if (!k_msg.buf[0]) {                                                                                                            // Check if seat heating is already ON.
       if (!driver_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
         send_seat_heating_request_dr();
       }
     } else {
-      driver_sent_seat_heating_request = true;                                                                                      // Seat heating already on. No need to request anymore.
+      driver_sent_seat_heating_request = true;                                                                                      // Seat heating already ON. No need to request anymore.
     }
     driver_seat_heating_status = !k_msg.buf[0] ? false : true;
   } 
   #if AUTO_SEAT_HEATING_PASS
-  else {                                                                                                                            // Passenger's seat heating status message is only sent with ignition on.
+  else {                                                                                                                            // Passenger's seat heating status message is only sent with ignition ON.
     passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
   }
   #endif
@@ -151,33 +144,30 @@ void evaluate_seat_heating_status()
 
 
 #if AUTO_SEAT_HEATING_PASS
-void evaluate_passenger_seat_status()
-{
+void evaluate_passenger_seat_status() {
   passenger_seat_status = k_msg.buf[1];
   if (ignition) {
-    if (!passenger_seat_heating_status) {                                                                                           // Check if seat heating is already on.
-      //This will be ignored if already on and cycling ignition. Press message will be ignored by IHK anyway.
+    if (!passenger_seat_heating_status) {                                                                                           // Check if seat heating is already ON.
+      //This will be ignored if already ON and cycling ignition. Press message will be ignored by IHK anyway.
       if (!passenger_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) { 
-        if (passenger_seat_status == 9) {                                                                                           // Passenger sitting and their seatbelt is on
+        if (passenger_seat_status == 9) {                                                                                           // Passenger sitting and their seatbelt is ON
           send_seat_heating_request_pas();                                                                                          // Execute heating request here so we don't have to wait 15s for the next 0x22A.
         }
       }
     } else {
-      passenger_sent_seat_heating_request = true;                                                                                   // Seat heating already on. No need to request anymore.
+      passenger_sent_seat_heating_request = true;                                                                                   // Seat heating already ON. No need to request anymore.
     }
   }
 }
 #endif
 
 
-void evaluate_ambient_temperature()
-{
+void evaluate_ambient_temperature() {
   ambient_temperature_can = k_msg.buf[0];
 }
 
 
-void send_seat_heating_request_dr()
-{
+void send_seat_heating_request_dr() {
   unsigned long timeNow = millis();
   kcan_write_msg(seat_heating_button_pressed_dr_buf);
   driver_sent_seat_heating_request = true;
@@ -196,8 +186,7 @@ void send_seat_heating_request_dr()
 
 
 #if AUTO_SEAT_HEATING_PASS
-void send_seat_heating_request_pas() 
-{
+void send_seat_heating_request_pas() {
   unsigned long timeNow = millis();
   kcan_write_msg(seat_heating_button_pressed_pas_buf);
   passenger_sent_seat_heating_request = true;
@@ -216,8 +205,7 @@ void send_seat_heating_request_pas()
 #endif
 
 
-void check_seatheating_queue() 
-{
+void check_seatheating_queue() {
   if (!seat_heating_dr_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     seat_heating_dr_txq.peek(&delayed_tx);
@@ -241,15 +229,13 @@ void check_seatheating_queue()
 
 
 #if F_ZBE_WAKE
-void send_zbe_wakeup()
-{
+void send_zbe_wakeup() {
   kcan_write_msg(f_wakeup_buf);
   serial_log("Sent F-ZBE wake-up message.");
 }
 
 
-void send_zbe_acknowledge()
-{
+void send_zbe_acknowledge() {
   zbe_response[2] = k_msg.buf[7];
   kcan_write_msg(makeMsgBuf(0x277, 4, zbe_response));
   #if DEBUG_MODE
@@ -261,8 +247,7 @@ void send_zbe_acknowledge()
 
 
 #if EXHAUST_FLAP_CONTROL
-void control_exhaust_flap_user()
-{
+void control_exhaust_flap_user() {
   if (engine_running) {
     if (exhaust_flap_sport) {                                                                                                       // Flap always open in sport mode.
       if ((millis() - exhaust_flap_action_timer) >= 500) {
@@ -290,8 +275,7 @@ void control_exhaust_flap_user()
 }
 
 
-void control_exhaust_flap_rpm()
-{
+void control_exhaust_flap_rpm() {
   if (engine_running) {
     if (!exhaust_flap_sport) {
       if ((millis() - exhaust_flap_action_timer) >= exhaust_flap_action_interval) {                                                 // Avoid vacuum drain, oscillation and apply startup delay.
@@ -312,8 +296,7 @@ void control_exhaust_flap_rpm()
 }
 
 
-void actuate_exhaust_solenoid(bool activate)
-{
+void actuate_exhaust_solenoid(bool activate) {
   digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, activate);
   exhaust_flap_action_timer = millis();
   exhaust_flap_open = !activate;                                                                                                    // Flap position is the inverse of solenoid state. When active, the flap is closed.
@@ -322,8 +305,7 @@ void actuate_exhaust_solenoid(bool activate)
 
 
 #if REVERSE_BEEP
-void evaluate_pdc_beep()
-{
+void evaluate_pdc_beep() {
   if (k_msg.buf[0] == 0xFE) {
     if (!pdc_beep_sent) {
       unsigned long timeNow = millis();
@@ -342,8 +324,7 @@ void evaluate_pdc_beep()
 }
 
 
-void check_pdc_queue() 
-{
+void check_pdc_queue()  {
   if (!pdc_beep_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     pdc_beep_txq.peek(&delayed_tx);
@@ -356,8 +337,7 @@ void check_pdc_queue()
 #endif
 
 
-void evaluate_engine_rpm()
-{
+void evaluate_engine_rpm() {
   RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
   if (!engine_running && (RPM > 2000)) {
     engine_running = true;
@@ -379,15 +359,13 @@ void evaluate_engine_rpm()
 
 
 #if DEBUG_MODE
-void evaluate_battery_voltage() 
-{
-  battery_voltage = (((k_msg.buf[1] - 240 ) * 256.0) + k_msg.buf[0]) / 68.0;
+void evaluate_battery_voltage() {
+  battery_voltage = (((pt_msg.buf[1] - 240 ) * 256.0) + pt_msg.buf[0]) / 68.0;
 }
 #endif
 
 
-void check_console_buttons()
-{
+void check_console_buttons() {
   if (!digitalRead(POWER_BUTTON_PIN)) {
     if ((millis() - power_button_debounce_timer) >= power_debounce_time_ms) {                                                       // POWER console button should only change throttle mapping.
       power_button_debounce_timer = millis();
@@ -439,8 +417,7 @@ void check_console_buttons()
 
 
 #if RTC
-void update_car_time_from_rtc()
-{
+void update_car_time_from_rtc() {
   if (rtc_valid) {                                                                                                                  // Make sure time in RTC is actually valid before forcing it.
     serial_log("Vehicle date/time not set. Setting from RTC.");
     time_t t = now();
@@ -461,8 +438,7 @@ void update_car_time_from_rtc()
 
 
 #if DOOR_VOLUME
-void evaluate_door_status()
-{
+void evaluate_door_status() {
   if (k_msg.id == 0xE2) {
     if (k_msg.buf[3] == 0xFD) {
       if (!left_door_open) {
@@ -511,8 +487,7 @@ void evaluate_door_status()
 }
 
 
-void send_volume_request()
-{
+void send_volume_request() {
   if (!volume_requested && diag_transmit && default_volume_sent) {
     kcan_write_msg(vol_request_buf);
     volume_requested = true;
@@ -521,8 +496,7 @@ void send_volume_request()
 }
 
 
-void evaluate_audio_volume()
-{
+void evaluate_audio_volume() {
   if (volume_requested) {                                                                                                           // Make sure that the module is the one that requested this result.
     if (k_msg.buf[3] == 0x24) {                                                                                                     // status_volumeaudio response.
       uint8_t audio_volume = k_msg.buf[4];
@@ -559,7 +533,7 @@ void evaluate_audio_volume()
                 delayed_can_tx_msg m;
                 unsigned long timeNow = millis();
                 if (ignition && !engine_running) {
-                  m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 500};                                                         // Need this delay when Ignition is on and the warning gong is on.
+                  m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 500};                                                         // Need this delay when Ignition is ON and the warning gong is ON.
                   idrive_txq.push(&m);
                   m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 1000};                                                        // Send more in case we get lucky and the gong shuts up early...
                   idrive_txq.push(&m);
@@ -587,28 +561,15 @@ void evaluate_audio_volume()
 }
 
 
-void send_default_startup_volume() {
-  delayed_can_tx_msg m = {default_vol_set_buf, millis() + IDRIVE_BOOT_TIME};
-  idrive_txq.push(&m);                                                                                                              // Send this after the iDrive wakes up to ensure a volume is set.
-}
-
-
-void check_idrive_queue()
-{
+void check_idrive_queue() {
   if (!idrive_txq.isEmpty() && diag_transmit) {
     delayed_can_tx_msg delayed_tx;
     idrive_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       if (vehicle_awake) {
-        kcan_write_msg(delayed_tx.tx_msg);
-        #if DOOR_VOLUME
-          if (delayed_tx.tx_msg.buf[3] == default_vol_set_buf.buf[3]) {
-            default_volume_sent = true;
-            serial_log("Sent default volume job to iDrive.");
-          } else if (delayed_tx.tx_msg.buf[3] == 0x23) {
-            serial_log("Sent volume change job to iDrive.");
-          }
-        #endif
+        if (delayed_tx.tx_msg.buf[3] == 0x23) {
+          serial_log("Sent volume change job to iDrive.");
+        }
       }
       idrive_txq.drop();
     }
@@ -617,67 +578,123 @@ void check_idrive_queue()
 #endif
 
 
+#if CKM || DOOR_VOLUME
+void check_idrive_alive_monitor() {
+  if (millis() - idrive_alive_timer >= 2300) {                                                                                      // This message should be received every 2s.
+    if (!idrive_died) {
+      idrive_died = true;
+      serial_log("iDrive booting/rebooting.");
+      #if DOOR_VOLUME
+        default_volume_sent = false;
+      #endif
+      #if CKM
+        dme_ckm_sent = false;
+      #endif
+    }
+  } else {
+    if (idrive_died) {                                                                                                              // It's back.
+      idrive_died = false;
+    }
+  }
+
+  #if CKM
+    if (!dme_ckm_sent) {
+      serial_log("Queueing POWER CKM after iDrive boot/reboot.");
+      CAN_message_t ckm_buf = makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]);
+      unsigned long timeNow = millis();
+      kcan_write_msg(ckm_buf);
+      delayed_can_tx_msg m = {ckm_buf, timeNow + 200};
+      dme_ckm_tx_queue.push(&m);
+      m = {ckm_buf, timeNow + 400};
+      dme_ckm_tx_queue.push(&m);
+      dme_ckm_sent = true;
+    }
+  #endif
+}
+
+
+void update_idrive_alive_timer() {
+  idrive_alive_timer = millis();
+
+  #if DOOR_VOLUME
+  if (k_msg.buf[7] == 3) {                                                                                                      // 0x273 has been transmitted X times according to the counter.
+    if (!default_volume_sent) {
+      kcan_write_msg(default_vol_set_buf);                                                                                      // Run the default volume KWP job. This must run before any set volumes.
+      serial_log("Sent default volume job to iDrive after boot/reboot.");
+      default_volume_sent = true;
+    }
+  }
+  #endif
+}
+#endif
+
+
 #if AUTO_MIRROR_FOLD
-void load_fold_state_from_eeprom()
-{
-  mirrors_folded = EEPROM.read(11) == 1 ? true : false;
-}
-
-
-void save_fold_state_to_eeprom()
-{
-  EEPROM.update(11, mirrors_folded);
-}
-
-
-void evaluate_remote_button()
-{
+void evaluate_remote_button() {
   if (!engine_running) {                                                                                                            // Ignore if locking car while running.
-    if (k_msg.buf[1] == 0x30 && k_msg.buf[2] == 4) {
-      if (!mirrors_folded) {
-        serial_log("Remote lock button pressed. Checking mirror status.");
-        kcan_write_msg(frm_status_request_a_buf);
-        frm_status_requested = true;
+    if (k_msg.buf[2] != last_lock_status_can) {                                                                                     // Lock/Unlock messages are sent many times. Should only react to the first.
+      if (k_msg.buf[1] == 0x30 || k_msg.buf[1] == 0x33) {
+        if (k_msg.buf[2] == 4) {
+          lock_button_pressed = true;
+          serial_log("Remote lock button pressed. Checking mirror status.");
+          kcan_write_msg(frm_status_request_a_buf);
+          frm_status_requested = true;
+        } else if (k_msg.buf[2] == 1) {
+          unlock_button_pressed = true;
+          serial_log("Remote unlock button pressed. Checking mirror status.");
+          kcan_write_msg(frm_status_request_a_buf);
+          frm_status_requested = true;
+        } else if (k_msg.buf[2] == 0) {
+          serial_log("Remote buttons released.");
+          lock_button_pressed = unlock_button_pressed = false;
+        }
       }
-    } else if (k_msg.buf[1] == 0x30 && k_msg.buf[2] == 1) {
-      if (mirrors_folded) {
-        serial_log("Remote unlock button pressed. Un-folding mirrors.");
-        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
-      }
+      last_lock_status_can = k_msg.buf[2];
     }
   }
 }
 
 
-void evaluate_mirror_fold_status()
-{
+void evaluate_mirror_fold_status() {
   if (frm_status_requested) {                                                                                                       // Make sure the request came from this module.
     if (k_msg.buf[1] == 0x22) {
       if (k_msg.buf[4] == 1) {
         mirrors_folded = true;
-        serial_log("Mirrors already folded.");
+        serial_log("Mirrors are folded.");
       } else {
         mirrors_folded = false;
-        #if DOOR_VOLUME
-        if (!left_door_open && !right_door_open) {
-          serial_log("Folding mirrors after lock button pressed.");
-          toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
-        }
-        #else
-        serial_log("Folding mirrors after lock button pressed.");
-        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
-        #endif
+        serial_log("Mirrors are un-folded.");
       }
       frm_status_requested = false;
     } else if (k_msg.buf[1] == 0x10) {
       kcan_write_msg(frm_status_request_b_buf);
     }
+
+    if (lock_button_pressed) {
+      if (!mirrors_folded) {
+        #if DOOR_VOLUME
+          if (!left_door_open && !right_door_open) {
+            serial_log("Folding mirrors after lock button pressed.");
+            toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
+          }
+          #else
+            serial_log("Folding mirrors after lock button pressed.");
+            toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
+        #endif
+      }
+      lock_button_pressed = false;
+    } else if (unlock_button_pressed) {
+      if (mirrors_folded) {
+        serial_log("Un-folding mirrors after unlock button pressed.");
+        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
+        unlock_button_pressed = false;
+      }
+    }
   }
 }
 
 
-void toggle_mirror_fold(uint16_t delay)
-{
+void toggle_mirror_fold(uint16_t delay) {
   delayed_can_tx_msg m;
   unsigned long timeNow = millis();
   m = {frm_toggle_fold_mirror_a_buf, timeNow + delay};
@@ -688,8 +705,7 @@ void toggle_mirror_fold(uint16_t delay)
 }
 
 
-void check_mirror_fold_queue()
-{
+void check_mirror_fold_queue() {
   if (!mirror_fold_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     mirror_fold_txq.peek(&delayed_tx);
@@ -703,8 +719,7 @@ void check_mirror_fold_queue()
 
 
 #if FRONT_FOG_CORNER
-void check_fog_corner_queue()
-{
+void check_fog_corner_queue() {
   if (!fog_corner_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     fog_corner_txq.peek(&delayed_tx);
@@ -716,11 +731,10 @@ void check_fog_corner_queue()
 }
 
 
-void request_corner_status()
-{
+void request_corner_status() {
   if (engine_running) {
     if (dipped_beam_status) {
-      if (millis() - corner_timer >= 200) {
+      if (millis() - corner_timer >= 333) {
         if (!front_fog_status) {
           kcan_write_msg(frm_lamp_status_request_buf);
           frm_lamp_status_requested = true;
@@ -732,55 +746,58 @@ void request_corner_status()
 }
 
 
-void evaluate_dipped_beam_status()
-{
+void evaluate_dipped_beam_status() {
   if ((k_msg.buf[0] & 1) == 1) {                                                                                                    // Check the 8th bit of this byte for dipped beam status.
    if (!dipped_beam_status) {
       dipped_beam_status = true;
-      serial_log("Dipped beam on.");
+      serial_log("Dipped beam ON.");
     }
   } else {
     if (dipped_beam_status) {
       dipped_beam_status = false;
-      serial_log("Dipped beam off");
+      serial_log("Dipped beam OFF");
+
+      delayed_can_tx_msg m = {front_fogs_off_buf, millis() + 100};
+      fog_corner_txq.push(&m);
+      frm_lamp_status_requested = true;                                                                                             // Make one more request to make sure light is turned off.
     }
   }
 }
 
 
-void evaluate_corner_light_status()
-{
+void evaluate_corner_light_status() {
   if (frm_lamp_status_requested) {
     if (k_msg.buf[1] == 0x10 && k_msg.buf[2] == 0x24) {
+      kcan_write_msg(frm_lamp_status_request_b_buf);
       if (!front_fog_status) {
         if (k_msg.buf[6] > 0) {                                                                                                     // Left corner light
-          delayed_can_tx_msg m = {front_left_fog_on_buf, millis() + 50};
-          fog_corner_txq.push(&m);                                                                                                  // On messages time out after about 10s. Transmission must be repeated.
+          delayed_can_tx_msg m = {front_left_fog_on_buf, millis() + 100};
+          fog_corner_txq.push(&m);                                                                                                  // ON messages time out after about 10s. Transmission must be repeated.
           if (!left_fog_on) {
             left_fog_on = true;
-            serial_log("Left corner light on. Turned left fog light on.");
+            serial_log("Left corner light ON. Turned left fog light ON.");
           }
         } else {
           if (left_fog_on) {
-            delayed_can_tx_msg m = {front_left_fog_off_buf, millis() + 50};
+            delayed_can_tx_msg m = {front_fogs_off_buf, millis() + 100};
             fog_corner_txq.push(&m);
             left_fog_on = false;
-            serial_log("Left corner light off. Turned left fog light off.");
+            serial_log("Left corner light OFF. Turned fog lights OFF.");
           }
         }
           if (k_msg.buf[7] > 0) {                                                                                                   // Right corner light
-          delayed_can_tx_msg m = {front_right_fog_on_buf, millis() + 50};
+          delayed_can_tx_msg m = {front_right_fog_on_buf, millis() + 100};
           fog_corner_txq.push(&m);
           if (!right_fog_on) {
             right_fog_on = true;
-            serial_log("Right corner light on. Turned right fog light on.");
+            serial_log("Right corner light ON. Turned right fog light ON.");
           }
         } else {
           if (right_fog_on) {
-            delayed_can_tx_msg m = {front_right_fog_off_buf, millis() + 50};
+            delayed_can_tx_msg m = {front_fogs_off_buf, millis() + 100};
             fog_corner_txq.push(&m);
             right_fog_on = false;
-            serial_log("Right corner light off. Turned right fog light off.");
+            serial_log("Right corner light OFF. Turned fog lights OFF.");
           }
         }
       }

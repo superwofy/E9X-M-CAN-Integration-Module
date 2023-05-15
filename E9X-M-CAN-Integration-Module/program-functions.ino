@@ -1,8 +1,7 @@
 // Functions related to the operation of the program and debugging go here.
 
 
-void initialize_timers()
-{
+void initialize_timers() {
   #if DEBUG_MODE
     power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer 
       = debug_print_timer = loop_timer = millis();
@@ -15,8 +14,7 @@ void initialize_timers()
 }
 
 
-void initialize_watchdog()
-{
+void initialize_watchdog() {
   WDT_timings_t config;
   #if DEBUG_MODE
     config.trigger = 15;
@@ -30,16 +28,14 @@ void initialize_watchdog()
 
 
 #if DEBUG_MODE
-void wdt_callback()
-{
+void wdt_callback() {
   serial_log("Watchdog not fed. Program will reset in 5s.");
 }
 #endif
 
 
 #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2                                                                                        // Check if Dual Serial is set
-void print_current_state()
-{
+void print_current_state() {
   SerialUSB1.println("=========== Operation ==========");
   sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "active" : "standby");
   SerialUSB1.println(serial_debug_string);
@@ -244,8 +240,7 @@ void serial_log(const char message[]) {
 }
 
 
-void reset_runtime_variables()                                                                                                      // Ignition off. Set variables to original state and commit MDrive settings.
-{
+void reset_runtime_variables() {                                                                                                    // Ignition OFF. Set variables to pre-ignition state.
   dsc_program_status = 0;
   if (mdrive_status) {
     toggle_mdrive_message_active();
@@ -304,18 +299,20 @@ void reset_runtime_variables()                                                  
     front_fog_status = false;
   #endif
   #if FRONT_FOG_CORNER
+    fog_corner_txq.flush();
     if (left_fog_on) {
-      kcan_write_msg(front_left_fog_off_buf);
+      delayed_can_tx_msg m = {front_left_fog_off_buf, millis() + 100};
+      fog_corner_txq.push(&m);
     }
     if (right_fog_on) {
-      kcan_write_msg(front_right_fog_off_buf);
+      delayed_can_tx_msg m = {front_right_fog_off_buf, millis() + 100};
+      fog_corner_txq.push(&m);
     }
-    fog_corner_txq.flush();
     dipped_beam_status = left_fog_on = right_fog_on = false;
     frm_lamp_status_requested = false;
   #endif
   #if DIM_DRL
-    if (left_dimmed) {                                                                                                              // Send off now to make sure DRLs don't stay on.
+    if (left_dimmed) {                                                                                                              // Send OFF now to make sure DRLs don't stay ON.
       kcan_write_msg(left_drl_dim_off);
     }
     if (right_dimmed) {
@@ -340,8 +337,7 @@ void reset_runtime_variables()                                                  
 }
 
 
-void reset_sleep_variables()
-{
+void reset_sleep_variables() {
   #if AUTO_SEAT_HEATING
     driver_sent_seat_heating_request = false;                                                                                       // Reset the seat heating request now that the car's asleep.
     driver_seat_heating_status = false;
@@ -351,16 +347,22 @@ void reset_sleep_variables()
       passenger_seat_heating_status = false;
     #endif
   #endif
+  #if CKM
+    dme_ckm_sent = false;
+    dme_ckm_tx_queue.flush();
+  #endif
   #if DOOR_VOLUME
     volume_reduced = false;                                                                                                         // In case the car falls asleep with the door open.
     volume_requested = false;
     volume_restore_offset = 0;
     default_volume_sent = false;
+    idrive_txq.flush();
   #endif
   update_settings_in_eeprom();
   #if AUTO_MIRROR_FOLD
-    save_fold_state_to_eeprom();
     frm_status_requested = false;
+    lock_button_pressed  = unlock_button_pressed = false;
+    last_lock_status_can = 0;
   #endif
   mdrive_settings_updated = false;
 }

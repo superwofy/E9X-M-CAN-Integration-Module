@@ -10,8 +10,7 @@
 // [7] - Job dependent
 
 
-void cache_can_message_buffers()                                                                                                    // Put all static the buffers in memory during setup().
-{
+void cache_can_message_buffers() {                                                                                                  // Put all static the buffers in memory during setup().
   uint8_t dsc_on[] = {0xCF, 0xE3}, dsc_mdm_dtc[] = {0xCF, 0xF3}, dsc_off[] = {0xCF, 0xE7};
   dsc_on_buf = makeMsgBuf(0x398, 2, dsc_on);
   dsc_mdm_dtc_buf = makeMsgBuf(0x398, 2, dsc_mdm_dtc);
@@ -58,15 +57,19 @@ void cache_can_message_buffers()                                                
   #endif
   #if FRONT_FOG_CORNER
     uint8_t front_left_fog_on[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x64};
-    uint8_t front_left_fog_off[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0};;
+    uint8_t front_left_fog_off[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0};
     uint8_t front_right_fog_on[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x64};
     uint8_t front_right_fog_off[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0};
+    uint8_t front_fogs_off[] = {0x72, 6, 0x30, 0x29, 7, 0, 1, 2};
     uint8_t frm_lamp_status_request[] = {0x72, 3, 0x30, 8, 1, 0, 0, 0};
+    uint8_t frm_lamp_status_request_b[] = {0x72, 0x30, 0, 0, 0, 0, 0, 0};
     front_left_fog_on_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on);
     front_left_fog_off_buf = makeMsgBuf(0x6F1, 8, front_left_fog_off);
     front_right_fog_on_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on);
     front_right_fog_off_buf = makeMsgBuf(0x6F1, 8, front_right_fog_off);
+    front_fogs_off_buf = makeMsgBuf(0x6F1, 8, front_fogs_off);                                                                      // This job only works with ignition ON.
     frm_lamp_status_request_buf = makeMsgBuf(0x6F1, 8, frm_lamp_status_request);
+    frm_lamp_status_request_b_buf = makeMsgBuf(0x6F1, 8, frm_lamp_status_request_b);
   #endif
   #if DIM_DRL
     uint8_t left_drl_off[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0};
@@ -171,8 +174,7 @@ void cache_can_message_buffers()                                                
 }
 
 
-CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf) 
-{
+CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf) {
   CAN_message_t tx_msg;
   tx_msg.id = txID;
   tx_msg.len = txLen;
@@ -183,8 +185,7 @@ CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf)
 }
 
 
-void kcan_write_msg(const CAN_message_t &msg) 
-{
+void kcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
     return;
   }
@@ -202,8 +203,7 @@ void kcan_write_msg(const CAN_message_t &msg)
 }
 
 
-void ptcan_write_msg(const CAN_message_t &msg) 
-{
+void ptcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
     return;
   }
@@ -221,9 +221,8 @@ void ptcan_write_msg(const CAN_message_t &msg)
 }
 
 
-#if SERVOTRONIC_SVT70 || EDC_CKM_FIX
-void dcan_write_msg(const CAN_message_t &msg) 
-{
+#if SERVOTRONIC_SVT70
+void dcan_write_msg(const CAN_message_t &msg) {
   #if DEBUG_MODE
   uint8_t result;
   result = DCAN.write(msg);
@@ -238,8 +237,7 @@ void dcan_write_msg(const CAN_message_t &msg)
 }
 
 
-void dcan_to_ptcan()
-{
+void dcan_to_ptcan() {
   ptcan_write_msg(d_msg);
   #if DEBUG_MODE
     dcan_forwarded_count++;
@@ -247,8 +245,7 @@ void dcan_to_ptcan()
 }
 
 
-void ptcan_to_dcan()
-{
+void ptcan_to_dcan() {
   dcan_write_msg(pt_msg);
   #if DEBUG_MODE
     ptcan_forwarded_count++;

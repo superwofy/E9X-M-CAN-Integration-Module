@@ -2,20 +2,18 @@
 
 
 #if CONTROL_SHIFTLIGHTS
-void shiftlight_startup_animation()
-{
+void shiftlight_startup_animation() {
   activate_shiftlight_segments(shiftlights_startup_buildup_buf);
   serial_log("Showing shift light on engine startup.");
   #if NEEDLE_SWEEP
     ignore_shiftlights_off_counter = 10;
   #else
-    ignore_shiftlights_off_counter = 8;                                                                                             // Skip a few off cycles to allow segments to light up.
+    ignore_shiftlights_off_counter = 8;                                                                                             // Skip a few OFF cycles to allow segments to light up.
   #endif
 }
 
 
-void evaluate_shiftlight_display()
-{
+void evaluate_shiftlight_display() {
   if (START_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                             // First yellow segment.                                                              
     activate_shiftlight_segments(shiftlights_start_buf);
     #if DEBUG_MODE
@@ -49,23 +47,20 @@ void evaluate_shiftlight_display()
 }
 
 
-void deactivate_shiftlights()
-{
+void deactivate_shiftlights() {
   kcan_write_msg(shiftlights_off_buf);                                                                            
   shiftlights_segments_active = false;
   serial_log("Deactivated shiftlights segments");
 }
 
 
-void activate_shiftlight_segments(CAN_message_t message)
-{
+void activate_shiftlight_segments(CAN_message_t message) {
   kcan_write_msg(message);                                                               
   shiftlights_segments_active = true;
 }
 
 
-void evaluate_update_shiftlight_sync()
-{
+void evaluate_update_shiftlight_sync() {
   if (!engine_coolant_warmed_up) {
     if (pt_msg.buf[0] != last_var_rpm_can) {
       var_redline_position = ((pt_msg.buf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                                 // This is where the variable redline actually starts on the KOMBI (x4).
@@ -98,8 +93,7 @@ void evaluate_update_shiftlight_sync()
 
 
 #if NEEDLE_SWEEP
-void check_kombi_needle_queue()
-{
+void check_kombi_needle_queue() {
   if (!kombi_needle_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     kombi_needle_txq.peek(&delayed_tx);
@@ -111,26 +105,25 @@ void check_kombi_needle_queue()
 }
 
 
-void needle_sweep_animation()
-{
+void needle_sweep_animation() {
   if (diag_transmit) {
     delayed_can_tx_msg m;
     unsigned long timeNow = millis();
     m = {speedo_needle_sweep_buf, timeNow};
     kombi_needle_txq.push(&m);
-    m = {tacho_needle_sweep_buf, timeNow + 50};
+    m = {tacho_needle_sweep_buf, timeNow + 75};
     kombi_needle_txq.push(&m);
-    m = {fuel_needle_sweep_buf, timeNow + 100};
+    m = {fuel_needle_sweep_buf, timeNow + 150};
     kombi_needle_txq.push(&m);
-    m = {oil_needle_sweep_buf, timeNow + 150};
+    m = {oil_needle_sweep_buf, timeNow + 225};
     kombi_needle_txq.push(&m);
     m = {tacho_needle_release_buf, timeNow + 900};
     kombi_needle_txq.push(&m);
-    m = {speedo_needle_release_buf, timeNow + 950};
+    m = {speedo_needle_release_buf, timeNow + 975};
     kombi_needle_txq.push(&m);
-    m = {oil_needle_release_buf, timeNow + 1000};
+    m = {oil_needle_release_buf, timeNow + 1050};
     kombi_needle_txq.push(&m);
-    m = {fuel_needle_release_buf, timeNow + 1050};
+    m = {fuel_needle_release_buf, timeNow + 1125};
     kombi_needle_txq.push(&m);
     serial_log("Sending needle sweep animation.");
   }
@@ -139,8 +132,7 @@ void needle_sweep_animation()
 
 
 #if LAUNCH_CONTROL_INDICATOR
-void evaluate_lc_display()
-{
+void evaluate_lc_display() {
   if (LC_RPM_MIN <= RPM && RPM <= LC_RPM_MAX) {
     if (clutch_pressed && !vehicle_moving) {
       if (!reverse_status) {
@@ -158,7 +150,7 @@ void evaluate_lc_display()
       }
     } else {
       deactivate_lc_display();
-      mdm_with_lc = false;                                                                                                          // Vehicle probably launched. MDM/DTC stays on
+      mdm_with_lc = false;                                                                                                          // Vehicle probably launched. MDM/DTC stays ON
     }
   } else {
     if (lc_cc_active) {
@@ -173,8 +165,7 @@ void evaluate_lc_display()
 }
 
 
-void deactivate_lc_display()
-{
+void deactivate_lc_display() {
   if (lc_cc_active) {
     kcan_write_msg(lc_cc_off_buf);
     lc_cc_active = false;
@@ -188,8 +179,7 @@ void deactivate_lc_display()
 
 
 #if SERVOTRONIC_SVT70
-void send_svt_kcan_cc_notification()
-{
+void send_svt_kcan_cc_notification() {
   if (pt_msg.buf[1] == 0x49 && pt_msg.buf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
     pt_msg.buf[1] = 0x46;
   }
@@ -197,9 +187,8 @@ void send_svt_kcan_cc_notification()
 }
 
 
-void indicate_svt_diagnosis_on()
-{
-  if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                             // If POWER button is being held when turning on ignition, allow SVT diagnosis.
+void indicate_svt_diagnosis_on() {
+  if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                             // If POWER button is being held when turning ignition ON, allow SVT diagnosis.
     diagnose_svt = true;
     serial_log("Diagnosig SVT70 module now possible.");
     kcan_write_msg(servotronic_cc_on_buf);                                                                                          // Indicate that diagnosing is now possible.
@@ -209,14 +198,13 @@ void indicate_svt_diagnosis_on()
 
 
 #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
-void evaluate_fog_status()
-{
+void evaluate_fog_status() {
   if ((k_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
     if (!front_fog_status) {
       front_fog_status = true;
       #if FRONT_FOG_LED_INDICATOR
         digitalWrite(FOG_LED_PIN, HIGH);
-        serial_log("Front fogs on. Turned on FOG LED");
+        serial_log("Front fogs ON. Turned ON FOG LED");
       #endif
     }
   } else {
@@ -224,7 +212,7 @@ void evaluate_fog_status()
       front_fog_status = false;
       #if FRONT_FOG_LED_INDICATOR
         digitalWrite(FOG_LED_PIN, LOW);
-        serial_log("Front fogs off. Turned off FOG LED");
+        serial_log("Front fogs OFF. Turned OFF FOG LED");
       #endif
     }
   }
@@ -233,8 +221,7 @@ void evaluate_fog_status()
 
 
 #if FTM_INDICATOR
-void evaluate_indicate_ftm_status()
-{
+void evaluate_indicate_ftm_status() {
   if (pt_msg.buf[0] == 3 && !ftm_indicator_status) {
     kcan_write_msg(ftm_indicator_flash_buf);
     ftm_indicator_status = true;
@@ -249,8 +236,7 @@ void evaluate_indicate_ftm_status()
 
 
 #if FAKE_MSA
-void evaluate_msa_button()
-{
+void evaluate_msa_button() {
   if (k_msg.buf[0] == 0xF5 || k_msg.buf[0] == 0xF1) {                                                                               // Button pressed.
     if (!msa_button_pressed) {
       if (engine_running) {
@@ -269,8 +255,7 @@ void evaluate_msa_button()
 
 
 #if HDC || FAKE_MSA
-void check_kcan_cc_queue()
-{
+void check_kcan_cc_queue() {
   if (!kcan_cc_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     kcan_cc_txq.peek(&delayed_tx);

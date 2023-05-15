@@ -2,8 +2,7 @@
 
 
 #if DEBUG_MODE
-void serial_interpreter()
-{
+void serial_interpreter() {
   String cmd = Serial.readStringUntil('\n');
   if (cmd == "module_reboot") {
     module_reboot();
@@ -59,11 +58,11 @@ void serial_interpreter()
     serial_log("  Serial: Activated front left fog light.");
   }
   else if (cmd == "front_right_fog_off") {
-    kcan_write_msg(front_right_fog_on_buf);
+    kcan_write_msg(front_right_fog_off_buf);
     serial_log("  Serial: Deactivated front right fog light.");
   }
   else if (cmd == "front_left_fog_off") {
-    kcan_write_msg(front_left_fog_on_buf);
+    kcan_write_msg(front_left_fog_off_buf);
     serial_log("  Serial: Deactivated front left fog light.");
   }
   #endif
@@ -76,8 +75,7 @@ void serial_interpreter()
 }
 
 
-void module_reboot()
-{
+void module_reboot() {
   serial_log("Serial: Will reboot after watchdog timeout.");
   exit(0);
 }

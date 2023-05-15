@@ -38,20 +38,20 @@ WDT_T4<WDT1> wdt;
 #define FAKE_MSA 1                                                                                                                  // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Un-fold mirrors when locking. Can be done with coding but this integrates nicer.
 #if AUTO_MIRROR_FOLD
-const uint16_t AUTO_MIRROR_FOLD_DELAY = 800;                                                                                        // Delay in ms before folding/unfolding action.
+const uint16_t AUTO_MIRROR_FOLD_DELAY = 500;                                                                                        // Delay in ms before folding/unfolding action.
 #endif
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
-#define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn on an external LED when front fogs are on. M3 clusters lack this indicator.
-#define FRONT_FOG_CORNER 1                                                                                                          // Turn on corresponding fog light when turning. Requires AHL.
-#define DIM_DRL 1                                                                                                                   // Dims DLR on the side that the indicator is on.
+#define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack this indicator.
+#define FRONT_FOG_CORNER 1                                                                                                          // Turn ON corresponding fog light when turning. Requires AHL.
+#define DIM_DRL 1                                                                                                                   // Dims DLR ON the side that the indicator is ON.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
 #if EXHAUST_FLAP_CONTROL
-#define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as Terminal R is turned on.
+#define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as Terminal R is turned ON.
 #endif
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline of M3 KOMBI.
-#define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine on. Calibrated for M3 speedo with 335i tacho.
+#define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine ON. Calibrated for M3 speedo with 335i tacho.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures.
 #if AUTO_SEAT_HEATING
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger in low temperatures.
@@ -82,9 +82,6 @@ const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                         
 #if CONTROL_SHIFTLIGHTS
   const int16_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                      // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
 #endif
-#if DOOR_VOLUME
-  const uint16_t IDRIVE_BOOT_TIME = 30 * 1000;                                                                                      // Amount of time until the iDrive QNX OS accepts tool32 jobs from a cold boot.
-#endif
 const float TOP_THRESHOLD = 65.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
 const float MEDIUM_THRESHOLD = 60.0;
 const float HYSTERESIS = 2.0;
@@ -109,8 +106,8 @@ cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 uint16_t RPM = 0;
 #if CKM
   uint8_t dme_ckm[4][2] = {{0, 0xFF}, {0, 0xFF}, {0, 0xFF}, {0xF1, 0xFF}};
-  uint8_t dme_ckm_counter = 0;
-  uint8_t cas_key_number = 3;                                                                                                       // 0 = Key 1, 1 = Key 2...
+  cppQueue dme_ckm_tx_queue(sizeof(delayed_can_tx_msg), 5, queue_FIFO);
+  bool dme_ckm_sent = false;
 #endif
 #if EDC_CKM_FIX
   uint8_t edc_ckm[] = {0, 0, 0, 0xF1};
@@ -118,11 +115,14 @@ uint16_t RPM = 0;
   CAN_message_t edc_button_press_buf;
   cppQueue edc_ckm_txq(sizeof(delayed_can_tx_msg), 2, queue_FIFO);
 #endif
+#if CKM || EDC_CKM_FIX
+  uint8_t cas_key_number = 3;                                                                                                       // 0 = Key 1, 1 = Key 2...
+#endif
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
 bool mdrive_status = false, mdrive_settings_updated = false, mdrive_power_active = false;
 bool console_power_mode, restore_console_power_mode = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
-uint8_t dsc_program_status = 0;                                                                                                     // 0 = on, 1 = DTC, 2 = DSC OFF
+uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DTC, 2 = DSC OFF
 bool holding_dsc_off_console = false;
 unsigned long mdrive_message_timer;
 uint8_t mfl_pressed_count = 0;
@@ -154,8 +154,11 @@ CAN_message_t cc_gong_buf;
   bool engine_coolant_warmed_up = false;
   uint16_t var_redline_position;
   uint8_t last_var_rpm_can = 0;
-  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                 // byte 5: shiftlights always on
+  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // byte 5: shiftlights always on
+#else
+  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // byte 5: shiftlights always on
 #endif
+
 #if NEEDLE_SWEEP
   CAN_message_t speedo_needle_sweep_buf, speedo_needle_release_buf;
   CAN_message_t tacho_needle_sweep_buf, tacho_needle_release_buf;
@@ -173,8 +176,9 @@ CAN_message_t cc_gong_buf;
   unsigned long corner_timer;
   CAN_message_t front_left_fog_on_buf, front_left_fog_off_buf;
   CAN_message_t front_right_fog_on_buf, front_right_fog_off_buf;
-  CAN_message_t frm_lamp_status_request_buf;
-  cppQueue fog_corner_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
+  CAN_message_t front_fogs_off_buf;
+  CAN_message_t frm_lamp_status_request_buf, frm_lamp_status_request_b_buf;
+  cppQueue fog_corner_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
 #endif
 #if DIM_DRL
   bool drl_status = false, left_dimmed = false, right_dimmed = false;
@@ -187,6 +191,8 @@ CAN_message_t cc_gong_buf;
 #endif
 #if AUTO_MIRROR_FOLD
   bool mirrors_folded, frm_status_requested = false;
+  bool lock_button_pressed  = false, unlock_button_pressed = false;
+  uint8_t last_lock_status_can = 0;
   CAN_message_t frm_status_request_a_buf, frm_status_request_b_buf;
   CAN_message_t frm_toggle_fold_mirror_a_buf, frm_toggle_fold_mirror_b_buf;
   cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
@@ -239,6 +245,10 @@ CAN_message_t cc_gong_buf;
   CAN_message_t vol_request_buf, default_vol_set_buf;
   cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
 #endif
+#if CKM || DOOR_VOLUME
+  unsigned long idrive_alive_timer = 0;
+  bool idrive_died = false;
+#endif
 #if HDC
   uint16_t vehicle_speed = 0;
   bool speed_mph = false;
@@ -273,63 +283,60 @@ bool diag_transmit = true;
 unsigned long diag_deactivate_timer;
 
 
-void setup() 
-{
+void setup() {
   #if DEBUG_MODE
     unsigned long setup_timer = millis();
   #endif
   if ( F_CPU_ACTUAL > (528 * 1000000)) {
     set_arm_clock(528 * 1000000);                                                                                                   // Prevent accidental overclocks. Remove if needed.
   }
-  initialize_watchdog();
   cpu_speed_ide = F_CPU_ACTUAL;
   configure_IO();
   configure_can_controllers();
   cache_can_message_buffers();
-  initialize_timers();
   read_settings_from_eeprom();
-  #if AUTO_MIRROR_FOLD
-    load_fold_state_from_eeprom();
-  #endif
   #if RTC
     check_rtc_valid();
   #endif
+  initialize_timers();
+  initialize_watchdog();
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Setup finished in %lu ms, module is ready.", millis() - setup_timer);
     serial_log(serial_debug_string);
   #endif
-  #if AUTO_MIRROR_FOLD
-    if (mirrors_folded) {
-      #if DEBUG_MODE
-        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
-        serial_log("Mirrors folded when car was locked. Un-folding mirrors.");
-      #else
-        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY * 2);                                                                             // Make sure FRM is awake before trying to unfold.
-      #endif
-    }
-  #endif
 }
 
 
-void loop()
-{
+void loop() {
 /***********************************************************************************************************************************************************************************************************************************************
   General section.
 ***********************************************************************************************************************************************************************************************************************************************/
   
-  #if EXHAUST_FLAP_CONTROL
-    control_exhaust_flap_user();
-  #endif
-  check_diag_transmit_status();
-  #if DOOR_VOLUME
-    check_idrive_queue();
-  #endif
-  #if NEEDLE_SWEEP
-    check_kombi_needle_queue();
-  #endif
-  #if AUTO_MIRROR_FOLD
-    check_mirror_fold_queue();
-  #endif
+  if (vehicle_awake) {
+    #if EXHAUST_FLAP_CONTROL
+      control_exhaust_flap_user();
+    #endif
+    check_diag_transmit_status();
+    #if DOOR_VOLUME
+      check_idrive_queue();
+    #endif
+    #if NEEDLE_SWEEP
+      check_kombi_needle_queue();
+    #endif
+    #if AUTO_MIRROR_FOLD
+      check_mirror_fold_queue();
+    #endif
+    #if CKM
+      check_ckm_queue();
+    #endif
+    #if FRONT_FOG_CORNER
+      check_fog_corner_queue();
+    #endif
+    #if CKM || DOOR_VOLUME
+      check_idrive_alive_monitor();
+    #endif
+  }
+
   if (ignition) {
     check_teensy_cpu_temp();                                                                                                        // Monitor processor temperature to extend lifetime.
     check_dsc_queue();
@@ -348,7 +355,6 @@ void loop()
       check_edc_ckm_queue();
     #endif
     #if FRONT_FOG_CORNER
-      check_fog_corner_queue();
       request_corner_status();
     #endif
   } else {
@@ -360,7 +366,7 @@ void loop()
         scale_mcu_speed();
         reset_sleep_variables();
       }
-      send_mdrive_alive_message(15000);                                                                                             // Send this message while car is awake (but with ignition off) to populate the fields in iDrive.
+      send_mdrive_alive_message(15000);                                                                                             // Send this message while car is awake (but with ignition OFF) to populate the fields in iDrive.
     }
   }
 
@@ -491,9 +497,14 @@ void loop()
     }
     #endif
 
-    #if F_ZBE_WAKE
+    #if F_ZBE_WAKE || CKM || DOOR_VOLUME
     else if (k_msg.id == 0x273) {
-      send_zbe_acknowledge();
+      #if F_ZBE_WAKE
+        send_zbe_acknowledge();
+      #endif
+      #if CKM || DOOR_VOLUME
+        update_idrive_alive_timer();
+      #endif
     }
     #endif
 
@@ -533,27 +544,19 @@ void loop()
     }
     #endif
 
-    #if DEBUG_MODE
-    else if (k_msg.id == 0x3B4) {                                                                                                   // Monitor battery voltage from DME.
-      evaluate_battery_voltage();
-    }
-    #endif
-
-    #if F_ZBE_WAKE || CKM
+    #if F_ZBE_WAKE
     else if (k_msg.id == 0x4E2) {
       #if F_ZBE_WAKE
         send_zbe_wakeup();
-      #endif
-      #if CKM
-        send_timed_dme_power_ckm();
       #endif
     }
     #endif
 
     #if AUTO_MIRROR_FOLD || FRONT_FOG_CORNER
     else if (k_msg.id == 0x672) {
-      evaluate_mirror_fold_status();
-      
+      #if AUTO_MIRROR_FOLD 
+        evaluate_mirror_fold_status();
+      #endif
       #if FRONT_FOG_CORNER
         evaluate_corner_light_status();
       #endif
@@ -592,6 +595,12 @@ void loop()
         #if CONTROL_SHIFTLIGHTS
         else if (pt_msg.id == 0x332) {                                                                                              // Monitor variable redline broadcast from DME.
           evaluate_update_shiftlight_sync();
+        }
+        #endif
+
+        #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
+        else if (k_msg.id == 0x3B4) {                                                                                               // Monitor battery voltage from DME.
+          evaluate_battery_voltage();
         }
         #endif
 

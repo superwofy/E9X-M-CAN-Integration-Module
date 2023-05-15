@@ -1,13 +1,10 @@
 // Functions configuring Teensy and its transceivers go here.
 
 
-void configure_IO()
-{
+void configure_IO() {
   #if DEBUG_MODE
     #if !AUTO_MIRROR_FOLD                                                                                                           // This delay causes the mirrors to unfold slower on init.
       while (!Serial && millis() <= 5000);
-    #else
-      while (!Serial && millis() <= 500);
     #endif
   #endif
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
@@ -47,13 +44,12 @@ void scale_mcu_speed()
 }
 
 
-void configure_can_controllers()
-{
+void configure_can_controllers() {
   KCAN.begin();
   PTCAN.begin();
   DCAN.begin();
 
-  KCAN.setClock(CLK_60MHz);                                                                                                         // Increase from the default 24MHz clock. Run before baudrate.
+  KCAN.setClock(CLK_60MHz);                                                                                                         // Increase from the default 24MHz clock. Run before setBaudRate.
   PTCAN.setClock(CLK_60MHz);
   DCAN.setClock(CLK_60MHz);
 
@@ -74,7 +70,7 @@ void configure_can_controllers()
 
   uint16_t filterId;
   uint8_t filterCount = 0;
-  cppQueue canFilters(sizeof(filterId), 29, queue_FIFO);
+  cppQueue canFilters(sizeof(filterId), 28, queue_FIFO);
 
   // KCAN
   #if LAUNCH_CONTROL_INDICATOR
@@ -100,7 +96,7 @@ void configure_can_controllers()
     canFilters.push(&filterId);
   #endif
   #if LAUNCH_CONTROL_INDICATOR || HDC
-    filterId = 0x1B4;                                                                                                               // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R on)
+    filterId = 0x1B4;                                                                                                               // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R ON)
     canFilters.push(&filterId);
   #endif
   #if DIM_DRL
@@ -120,11 +116,11 @@ void configure_can_controllers()
     canFilters.push(&filterId);
   #endif
   #if AUTO_MIRROR_FOLD || CKM
-    filterId = 0x23A;                                                                                                               // Remote button and number sent by CAS
+    filterId = 0x23A;                                                                                                               // Remote button and number sent by CAS                         Sent 3x when changed.
     canFilters.push(&filterId);
   #endif
-  #if F_ZBE_WAKE
-    filterId = 0x273;                                                                                                               // Filter CIC status.
+  #if F_ZBE_WAKE || CKM || DOOR_VOLUME
+    filterId = 0x273;                                                                                                               // Filter CIC status and ZBE challenge.                         Sent when CIC is idle or a button is pressed on the ZBE.
     canFilters.push(&filterId);
   #endif
   #if AUTO_SEAT_HEATING
@@ -152,7 +148,7 @@ void configure_can_controllers()
     canFilters.push(&filterId);
   #endif
   #if CKM
-    filterId = 0x3A8;                                                                                                               // Filter M Key POWER setting from iDrive.
+    filterId = 0x3A8;                                                                                                               // Filter M Key POWER setting from iDrive.                      Sent when changed.
     canFilters.push(&filterId);
     filterId = 0x3AB;                                                                                                               // Filter Shiftligths car key memory.
     canFilters.push(&filterId);
@@ -161,18 +157,14 @@ void configure_can_controllers()
     filterId = 0x3B0;                                                                                                               // Reverse gear status.                                         Cycle time 1s (idle).
     canFilters.push(&filterId);
   #endif
-  #if DEBUG_MODE
-    filterId = 0x3B4;                                                                                                               // Battery voltage from DME.
-    canFilters.push(&filterId);
-  #endif
   #if EDC_CKM_FIX
     filterId = 0x3C5;                                                                                                               // Filter M Key EDC setting from iDrive.                        Sent when changed.
     canFilters.push(&filterId);
   #endif
   filterId = 0x3CA;                                                                                                                 // CIC MDrive settings                                          Sent when changed.
   canFilters.push(&filterId);
-  #if F_ZBE_WAKE || CKM
-    filterId = 0x4E2;                                                                                                               // Filter CIC Network management.                               Sent when CIC is on, cycle time 1.5s.
+  #if F_ZBE_WAKE
+    filterId = 0x4E2;                                                                                                               // Filter CIC Network management.                               Sent when CIC is ON, cycle time 1.5s.
     canFilters.push(&filterId);
   #endif
   #if DOOR_VOLUME
@@ -217,6 +209,10 @@ void configure_can_controllers()
   #if CONTROL_SHIFTLIGHTS
     filterId = 0x332;                                                                                                               // Variable redline position from DME                           Cycle time 1s
     canFilters.push(&filterId); 
+  #endif
+  #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
+    filterId = 0x3B4;                                                                                                               // Battery voltage from DME.
+    canFilters.push(&filterId);
   #endif
   #if SERVOTRONIC_SVT70
     filterId = 0x58E;                                                                                                               // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
@@ -275,8 +271,7 @@ void configure_can_controllers()
 }
 
 
-void toggle_transceiver_standby()
-{
+void toggle_transceiver_standby() {
   if (!vehicle_awake) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
     serial_log("Deactivated PT-CAN transceiver.");
@@ -297,9 +292,8 @@ void toggle_transceiver_standby()
 }
 
 
-void check_teensy_cpu_temp()                                                                                                        // Underclock the processor if it starts to heat up.
-{
-  if (ignition) {                                                                                                                   // If ignition is off, the processor will already be underclocked.
+void check_teensy_cpu_temp() {                                                                                                      // Underclock the processor if it starts to heat up.
+  if (ignition) {                                                                                                                   // If ignition is OFF, the processor will already be underclocked.
     float cpu_temp = tempmonGetTemp();
 
     if (abs(cpu_temp - last_cpu_temp) > HYSTERESIS) {
@@ -329,8 +323,7 @@ void check_teensy_cpu_temp()                                                    
 
 
 #if RTC
-void update_rtc_from_idrive()
-{
+void update_rtc_from_idrive() {
   if (k_msg.buf[3] == 0xFE) {                                                                                                       // Only time is updated
     uint8_t idrive_hour = k_msg.buf[0];
     uint8_t idrive_minutes = k_msg.buf[1];
@@ -368,8 +361,7 @@ void update_rtc_from_idrive()
 }
 
 
-void update_rtc_from_dcan()
-{
+void update_rtc_from_dcan() {
   if (d_msg.buf[1] == 0x10) {                                                                                                       // Only time is updated
     uint8_t dcan_hour = d_msg.buf[5];
     uint8_t dcan_minutes = d_msg.buf[6];
@@ -407,14 +399,12 @@ void update_rtc_from_dcan()
 }
 
 
-time_t get_teensy_time()
-{
+time_t get_teensy_time() {
   return Teensy3Clock.get();
 }
 
 
-void check_rtc_valid()
-{
+void check_rtc_valid() {
   time_t t = now();
   uint8_t rtc_day = day(t);
   uint8_t rtc_month = month(t);
@@ -428,8 +418,7 @@ void check_rtc_valid()
 #endif
 
 
-void disable_diag_transmit_jobs()
-{
+void disable_diag_transmit_jobs() {
   if (diag_transmit) {
     serial_log("Detected OBD port diagnosis request. Pausing all diagnostic jobs.");
     diag_transmit = false;
@@ -442,9 +431,8 @@ void disable_diag_transmit_jobs()
 }
 
 
-void check_diag_transmit_status()
-{
-  if (!diag_transmit && vehicle_awake) {
+void check_diag_transmit_status() {
+  if (!diag_transmit) {
     if ((millis() - diag_deactivate_timer) >= 60000) {                                                                              // Re-activate after period of no DCAN requests.
       diag_transmit = true;
       serial_log("Resuming diagnostic jobs after timeout.");
