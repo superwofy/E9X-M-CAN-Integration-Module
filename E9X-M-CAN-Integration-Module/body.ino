@@ -23,6 +23,8 @@ void evaluate_ignition_status() {
         terminal_r = engine_cranking = false;
       }
       break;                                                                                                                        // 5 is sent in CA cars when the key is not detected, ignore.
+    case 0x27:                                                                                                                      // Sent when PGS is resetting. Ignore.
+      break;
     case 0x41:
       terminal_r = true;
       ignition = engine_cranking = false;
@@ -385,8 +387,8 @@ void check_console_buttons() {
           serial_log("Deactivated MDrive POWER with console button press.");
         }
       }
+      send_power_mode();
     }
-    send_power_mode();
   } 
   
   if (!digitalRead(DSC_BUTTON_PIN)) {

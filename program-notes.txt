@@ -55,14 +55,14 @@ K-CAN section
 10. Receive, save and update MDrive settings from iDrive.
 11. Monitor the state of the front doors to update audio volume.
 12. Change audio volume when doors are opened/closed.
-13. Monitor ignition status. Send corresponding DME and SVT power modes.
+13. Monitor ignition status.
 14. Monitor remote number and button status.
-15. Monitor ambient temperature.
-16. Monitor passenger's seat status. Seatbelt and occupancy sensor.
-17. Update the car clock from Teensy's RTC if power is lost.
-18. Track time and date settings from iDrive and save in Teensy's RTC.
-19. Send DME POWER CKM (car key memory) message.
-20. Track battery voltage (debug only) and Engine On status.
+15. Monitor iDrive alive status.
+16. Monitor ambient temperature.
+17. Monitor passenger's seat status. Seatbelt and occupancy sensor.
+18. Update the car clock from Teensy's RTC if power is lost.
+19. Track time and date settings from iDrive and save in Teensy's RTC.
+20. Send DME POWER CKM (car key memory) message.
 21. Monitor EDC CKM status sent by the JBE. Correct if it doesn't match the saved EEPROM value.
 22. Create the two missing messages required to use an F series ZBE (KCAN1, not KCAN2) in an E6,7,8,9X car.
    *Should* work with:
@@ -71,6 +71,7 @@ K-CAN section
     6582 9206444 - 10-pin CD button
     6582 9212449 - 10-pin CD button
 23. Monitor FRM status response for mirror fold status.
+24. Monitor FRM status response for corner light status.
 
 Credit to Trevor for providing insight into 0x273, 0x277, 0x2CA and 0x0AA http://www.loopybunny.co.uk/CarPC/k_can.html
 
@@ -80,10 +81,12 @@ PT-CAN section
 
 1. Monitor steering wheel buttons and request MDrive when Source/M is pressed.
    Holding the M button for about 2s brings up the MDrive settings in iDrive.
-2. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
-3. Monitor and align shiftlights with the variable redline request from the DME.
-4. Forwards any diagnostic messages sent by the SVT70 module on the PT-CAN to the D-CAN to enable communication with BMW tools. In the E70 this is implemented in the JBE gateway tables.
-5. Forward CC (check control) notifications from the SVT70 to KCAN so that KOMBI can display them.
+2. Monitor vehicle mode from JBE and send corresponding DME and SVT power modes.
+3. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
+4. Monitor and align shiftlights with the variable redline request from the DME.
+5. Track battery voltage (debug only) and Engine On status.
+6. Forwards any diagnostic messages sent by the SVT70 module on the PT-CAN to the D-CAN to enable communication with BMW tools. In the E70 this is implemented in the JBE gateway tables.
+7. Forward CC (check control) notifications from the SVT70 to KCAN so that KOMBI can display them.
 
 
 

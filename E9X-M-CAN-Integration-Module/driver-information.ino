@@ -190,7 +190,7 @@ void send_svt_kcan_cc_notification() {
 void indicate_svt_diagnosis_on() {
   if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                             // If POWER button is being held when turning ignition ON, allow SVT diagnosis.
     diagnose_svt = true;
-    serial_log("Diagnosig SVT70 module now possible.");
+    serial_log("Diagnosing SVT70 module now possible.");
     kcan_write_msg(servotronic_cc_on_buf);                                                                                          // Indicate that diagnosing is now possible.
   }
 }

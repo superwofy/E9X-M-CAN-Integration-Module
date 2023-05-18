@@ -252,7 +252,7 @@ CAN_message_t cc_gong_buf;
 #if HDC
   uint16_t vehicle_speed = 0;
   bool speed_mph = false;
-  uint8_t min_hdc_speed = 15, max_hdc_speed = 35;
+  uint8_t min_hdc_speed = 20, max_hdc_speed = 35;
   bool cruise_control_status = false, hdc_button_pressed = false, hdc_requested = false, hdc_active = false;
   CAN_message_t set_hdc_cruise_control_buf, cancel_hdc_cruise_control_buf;
   CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
@@ -281,6 +281,15 @@ CAN_message_t cc_gong_buf;
 #endif
 bool diag_transmit = true;
 unsigned long diag_deactivate_timer;
+
+#if AUTO_MIRROR_FOLD
+extern "C" void startup_middle_hook(void);
+extern "C" volatile uint32_t systick_millis_count;
+void startup_middle_hook(void) {
+  // force millis() to be 300 to skip startup delays
+  systick_millis_count = 300;
+}
+#endif
 
 
 void setup() {

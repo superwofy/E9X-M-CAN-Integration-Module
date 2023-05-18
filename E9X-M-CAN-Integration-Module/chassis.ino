@@ -167,7 +167,7 @@ void evaluate_speed_units() {
     min_hdc_speed = 12;
     max_hdc_speed = 22;
   } else {
-    min_hdc_speed = 15;
+    min_hdc_speed = 20;
     max_hdc_speed = 35;
   }
 }

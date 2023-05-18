@@ -205,7 +205,10 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 void ptcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
-    return;
+    if (diagnose_svt && msg.buf[0] == 0xE){                                                                                         // Exception for SVT diagnosis.
+    } else {
+      return;
+    }
   }
   #if DEBUG_MODE
   uint8_t result;

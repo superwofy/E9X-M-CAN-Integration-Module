@@ -65,6 +65,12 @@ void serial_interpreter() {
     kcan_write_msg(front_left_fog_off_buf);
     serial_log("  Serial: Deactivated front left fog light.");
   }
+  else if (cmd == "front_fogs_off") {
+    if (ignition) {
+      kcan_write_msg(front_fogs_off_buf);
+      serial_log("  Serial: Deactivated front fog lights.");
+    }
+  }
   #endif
   #if AUTO_MIRROR_FOLD
     else if (cmd == "toggle_mirror_fold") {
