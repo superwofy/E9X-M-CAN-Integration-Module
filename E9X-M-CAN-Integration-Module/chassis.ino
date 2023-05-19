@@ -54,7 +54,7 @@ void evaluate_clutch_status() {
 #endif
 
 
-#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR
+#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
 void evaluate_reverse_status() {
   if (k_msg.buf[0] == 0xFE) {
     if (!reverse_status) {
@@ -68,7 +68,7 @@ void evaluate_reverse_status() {
 #endif
 
 
-#if LAUNCH_CONTROL_INDICATOR || HDC
+#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ
 void evaluate_vehicle_moving() {
   if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0xD0) {
     if (vehicle_moving) {

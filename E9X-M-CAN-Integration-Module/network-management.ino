@@ -45,6 +45,16 @@ void cache_can_message_buffers() {                                              
     frm_status_request_a_buf = makeMsgBuf(0x6F1, 8, frm_status_request_a);
     frm_status_request_b_buf = makeMsgBuf(0x6F1, 8, frm_status_request_b);
   #endif
+  #if ANTI_THEFT_SEQ
+    uint8_t ekp_pwm_off[] = {0x17, 4, 0x30, 6, 4, 0, 0, 0};
+    uint8_t ekp_return_to_normal[] = {0x17, 2, 0x30, 0, 0, 0, 0, 0};
+    uint8_t key_cc_on[] = {0x40, 0x26, 0, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
+    uint8_t key_cc_off[] = {0x40, 0x26, 0, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
+    key_cc_on_buf = makeMsgBuf(0x5C0, 8, key_cc_on);
+    key_cc_off_buf = makeMsgBuf(0x5C0, 8, key_cc_off);
+    ekp_pwm_off_buf = makeMsgBuf(0x6F1, 8, ekp_pwm_off);
+    ekp_return_to_normal_buf = makeMsgBuf(0x6F1, 8, ekp_return_to_normal);
+  #endif
   #if REVERSE_BEEP
     #if RHD 
       uint8_t pdc_beep[] = {0, 0, 0, 1};                                                                                            // Front right beep.
@@ -112,7 +122,11 @@ void cache_can_message_buffers() {                                              
   #if CONTROL_SHIFTLIGHTS
     uint8_t shiftlights_start[] = {0x86, 0x3E};
     uint8_t shiftlights_mid_buildup[] = {0xF6, 0};
-    uint8_t shiftlights_startup_buildup[] = {0x56, 0};                                                                              // Faster sequential buildup. First byte 0-0xF (0xF - slowest).
+    #if NEEDLE_SWEEP
+      uint8_t shiftlights_startup_buildup[] = {0x86, 0};
+    #else
+      uint8_t shiftlights_startup_buildup[] = {0x56, 0};                                                                            // Faster sequential buildup. First bit 0-0xF (0xF - slowest).
+    #endif
     uint8_t shiftlights_max_flash[] = {0xA, 0};
     uint8_t shiftlights_off[] = {5, 0};
     shiftlights_start_buf = makeMsgBuf(0x206, 2, shiftlights_start);
@@ -122,21 +136,29 @@ void cache_can_message_buffers() {                                              
     shiftlights_off_buf = makeMsgBuf(0x206, 2, shiftlights_off);
   #endif
   #if NEEDLE_SWEEP
-    uint8_t speedo_needle_sweep[] = {0x60, 5, 0x30, 0x20, 6, 0x12, 0x11, 0};                                                        // Set to 325 KM/h
+    uint8_t speedo_needle_max[] = {0x60, 5, 0x30, 0x20, 6, 0x12, 0x11, 0};                                                          // Set to 325 KM/h
+    uint8_t speedo_needle_min[] = {0x60, 5, 0x30, 0x20, 6, 0, 0, 0};                                                                // Set to 0
     uint8_t speedo_needle_release[] = {0x60, 3, 0x30, 0x20, 0, 0, 0, 0};
-    uint8_t tacho_needle_sweep[] = {0x60, 5, 0x30, 0x21, 6, 0x12, 0x3D, 0};                                                         // Set to 8000 RPM
+    uint8_t tacho_needle_max[] = {0x60, 5, 0x30, 0x21, 6, 0x12, 0x3D, 0};                                                           // Set to 8000 RPM
+    uint8_t tacho_needle_min[] = {0x60, 5, 0x30, 0x21, 6, 0, 0, 0};                                                                 // Set to 0
     uint8_t tacho_needle_release[] = {0x60, 3, 0x30, 0x21, 0, 0, 0, 0};
-    uint8_t fuel_needle_sweep[] = {0x60, 5, 0x30, 0x22, 6, 7, 0x4E, 0};                                                             // Set to 100%
+    uint8_t fuel_needle_max[] = {0x60, 5, 0x30, 0x22, 6, 7, 0x4E, 0};                                                               // Set to 100%
+    uint8_t fuel_needle_min[] = {0x60, 5, 0x30, 0x22, 6, 0, 0, 0};                                                                  // Set to 0%
     uint8_t fuel_needle_release[] = {0x60, 3, 0x30, 0x22, 0, 0, 0, 0};
-    uint8_t oil_needle_sweep[] = {0x60, 5, 0x30, 0x23, 6, 7, 0x12, 0};                                                              // Set to 150 C
+    uint8_t oil_needle_max[] = {0x60, 5, 0x30, 0x23, 6, 7, 0x12, 0};                                                                // Set to 150 C
+    uint8_t oil_needle_min[] = {0x60, 5, 0x30, 0x23, 6, 0, 0, 0};                                                                   // Set to 0 C
     uint8_t oil_needle_release[] = {0x60, 3, 0x30, 0x23, 0, 0, 0, 0};
-    speedo_needle_sweep_buf = makeMsgBuf(0x6F1, 8, speedo_needle_sweep);
+    speedo_needle_max_buf = makeMsgBuf(0x6F1, 8, speedo_needle_max);
+    speedo_needle_min_buf = makeMsgBuf(0x6F1, 8, speedo_needle_min);
     speedo_needle_release_buf = makeMsgBuf(0x6F1, 8, speedo_needle_release);
-    tacho_needle_sweep_buf = makeMsgBuf(0x6F1, 8, tacho_needle_sweep);
+    tacho_needle_max_buf = makeMsgBuf(0x6F1, 8, tacho_needle_max);
+    tacho_needle_min_buf = makeMsgBuf(0x6F1, 8, tacho_needle_min);
     tacho_needle_release_buf = makeMsgBuf(0x6F1, 8, tacho_needle_release);
-    fuel_needle_sweep_buf = makeMsgBuf(0x6F1, 8, fuel_needle_sweep);
+    fuel_needle_max_buf = makeMsgBuf(0x6F1, 8, fuel_needle_max);
+    fuel_needle_min_buf = makeMsgBuf(0x6F1, 8, fuel_needle_min);
     fuel_needle_release_buf = makeMsgBuf(0x6F1, 8, fuel_needle_release);
-    oil_needle_sweep_buf = makeMsgBuf(0x6F1, 8, oil_needle_sweep);
+    oil_needle_max_buf = makeMsgBuf(0x6F1, 8, oil_needle_max);
+    oil_needle_min_buf = makeMsgBuf(0x6F1, 8, oil_needle_min);
     oil_needle_release_buf = makeMsgBuf(0x6F1, 8, oil_needle_release);
   #endif
   #if DOOR_VOLUME

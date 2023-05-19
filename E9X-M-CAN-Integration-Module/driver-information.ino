@@ -6,7 +6,7 @@ void shiftlight_startup_animation() {
   activate_shiftlight_segments(shiftlights_startup_buildup_buf);
   serial_log("Showing shift light on engine startup.");
   #if NEEDLE_SWEEP
-    ignore_shiftlights_off_counter = 10;
+    ignore_shiftlights_off_counter = 18;
   #else
     ignore_shiftlights_off_counter = 8;                                                                                             // Skip a few OFF cycles to allow segments to light up.
   #endif
@@ -109,21 +109,39 @@ void needle_sweep_animation() {
   if (diag_transmit) {
     delayed_can_tx_msg m;
     unsigned long timeNow = millis();
-    m = {speedo_needle_sweep_buf, timeNow};
+    m = {speedo_needle_max_buf, timeNow + 100};
     kombi_needle_txq.push(&m);
-    m = {tacho_needle_sweep_buf, timeNow + 75};
+    m = {tacho_needle_max_buf, timeNow + 200};
     kombi_needle_txq.push(&m);
-    m = {fuel_needle_sweep_buf, timeNow + 150};
+    m = {fuel_needle_max_buf, timeNow + 300};
     kombi_needle_txq.push(&m);
-    m = {oil_needle_sweep_buf, timeNow + 225};
+    m = {oil_needle_max_buf, timeNow + 400};
     kombi_needle_txq.push(&m);
-    m = {tacho_needle_release_buf, timeNow + 900};
+
+    m = {tacho_needle_min_buf, timeNow + 1000};
     kombi_needle_txq.push(&m);
-    m = {speedo_needle_release_buf, timeNow + 975};
+    m = {speedo_needle_min_buf, timeNow + 1100};
     kombi_needle_txq.push(&m);
-    m = {oil_needle_release_buf, timeNow + 1050};
+    m = {oil_needle_min_buf, timeNow + 1200};
     kombi_needle_txq.push(&m);
-    m = {fuel_needle_release_buf, timeNow + 1125};
+    m = {fuel_needle_min_buf, timeNow + 1300};
+    kombi_needle_txq.push(&m);
+
+    m = {speedo_needle_release_buf, timeNow + 1900};
+    kombi_needle_txq.push(&m);
+    m = {tacho_needle_release_buf, timeNow + 2000};
+    kombi_needle_txq.push(&m);
+    m = {fuel_needle_release_buf, timeNow + 2100};
+    kombi_needle_txq.push(&m);
+    m = {oil_needle_release_buf, timeNow + 2200};
+    kombi_needle_txq.push(&m);
+    m = {tacho_needle_release_buf, timeNow + 2700};                                                                                 // Send the release twice to make sure needles now work.
+    kombi_needle_txq.push(&m);
+    m = {speedo_needle_release_buf, timeNow + 2800};
+    kombi_needle_txq.push(&m);
+    m = {oil_needle_release_buf, timeNow + 2900};
+    kombi_needle_txq.push(&m);
+    m = {fuel_needle_release_buf, timeNow + 3000};
     kombi_needle_txq.push(&m);
     serial_log("Sending needle sweep animation.");
   }

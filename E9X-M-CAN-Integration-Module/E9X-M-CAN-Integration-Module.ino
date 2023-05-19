@@ -37,8 +37,9 @@ WDT_T4<WDT1> wdt;
 #define HDC 1                                                                                                                       // Gives a function to the HDC console button in non 4WD cars.
 #define FAKE_MSA 1                                                                                                                  // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Un-fold mirrors when locking. Can be done with coding but this integrates nicer.
-#if AUTO_MIRROR_FOLD
-const uint16_t AUTO_MIRROR_FOLD_DELAY = 500;                                                                                        // Delay in ms before folding/unfolding action.
+#define ANTI_THEFT_SEQ 1                                                                                                            // Disable fuel pump until the steering wheel M button is pressed a number of times.
+#if ANTI_THEFT_SEQ
+const uint8_t ANTI_THEFT_SEQ_NUMBER = 3;                                                                                            // Number of times to press the button for the EKP to be re-activated.
 #endif
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack this indicator.
@@ -82,11 +83,13 @@ const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                         
 #if CONTROL_SHIFTLIGHTS
   const int16_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                      // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
 #endif
-const float TOP_THRESHOLD = 65.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
-const float MEDIUM_THRESHOLD = 60.0;
+const float MAX_THRESHOLD = 62.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
+const float MEDIUM_THRESHOLD = 57.0;
+const float MILD_THRESHOLD = 52.0;
 const float HYSTERESIS = 2.0;
-const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
 const unsigned long MAX_UNDERCLOCK = 24 * 1000000;
+const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
+const unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
@@ -116,7 +119,7 @@ uint16_t RPM = 0;
   cppQueue edc_ckm_txq(sizeof(delayed_can_tx_msg), 2, queue_FIFO);
 #endif
 #if CKM || EDC_CKM_FIX
-  uint8_t cas_key_number = 3;                                                                                                       // 0 = Key 1, 1 = Key 2...
+  uint8_t cas_key_number = 0;                                                                                                       // 0 = Key 1, 1 = Key 2...
 #endif
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
 bool mdrive_status = false, mdrive_settings_updated = false, mdrive_power_active = false;
@@ -158,14 +161,13 @@ CAN_message_t cc_gong_buf;
 #else
   uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // byte 5: shiftlights always on
 #endif
-
 #if NEEDLE_SWEEP
-  CAN_message_t speedo_needle_sweep_buf, speedo_needle_release_buf;
-  CAN_message_t tacho_needle_sweep_buf, tacho_needle_release_buf;
-  CAN_message_t fuel_needle_sweep_buf, fuel_needle_release_buf;
-  CAN_message_t oil_needle_sweep_buf, oil_needle_release_buf;
-  CAN_message_t any_needle_sweep_b_buf;
-  cppQueue kombi_needle_txq(sizeof(delayed_can_tx_msg), 10, queue_FIFO);
+  CAN_message_t speedo_needle_max_buf, speedo_needle_min_buf, speedo_needle_release_buf;
+  CAN_message_t tacho_needle_max_buf, tacho_needle_min_buf, tacho_needle_release_buf;
+  CAN_message_t fuel_needle_max_buf, fuel_needle_min_buf, fuel_needle_release_buf;
+  CAN_message_t oil_needle_max_buf, oil_needle_min_buf, oil_needle_release_buf;
+  CAN_message_t any_needle_max_b_buf;
+  cppQueue kombi_needle_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
 #endif
 #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
   bool front_fog_status = false;
@@ -195,14 +197,21 @@ CAN_message_t cc_gong_buf;
   uint8_t last_lock_status_can = 0;
   CAN_message_t frm_status_request_a_buf, frm_status_request_b_buf;
   CAN_message_t frm_toggle_fold_mirror_a_buf, frm_toggle_fold_mirror_b_buf;
-  cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
+  cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 12, queue_FIFO);
+#endif
+#if ANTI_THEFT_SEQ
+  bool anti_theft_released = false, key_cc_sent = false;
+  unsigned long anti_theft_timer;
+  uint8_t anti_theft_pressed_count = 0;
+  CAN_message_t key_cc_on_buf, key_cc_off_buf;
+  CAN_message_t ekp_pwm_off_buf, ekp_return_to_normal_buf;
 #endif
 #if REVERSE_BEEP
   CAN_message_t pdc_beep_buf, pdc_quiet_buf;
   bool pdc_beep_sent = false;
   cppQueue pdc_beep_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
-#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR
+#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
   bool reverse_status = false;
 #endif
 #if F_ZBE_WAKE
@@ -269,9 +278,6 @@ CAN_message_t cc_gong_buf;
 #if HDC || FAKE_MSA
   cppQueue kcan_cc_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
-#if KEY_EEPROM_ANTI_THEFT
-  #include "secrets.h"
-#endif
 #if DEBUG_MODE
   float battery_voltage = 0;
   extern float tempmonGetTemp(void);
@@ -334,6 +340,9 @@ void loop() {
     #endif
     #if AUTO_MIRROR_FOLD
       check_mirror_fold_queue();
+    #endif
+    #if ANTI_THEFT_SEQ
+      check_anti_theft_status();
     #endif
     #if CKM
       check_ckm_queue();
@@ -422,7 +431,7 @@ void loop() {
       }
       #endif
 
-      #if LAUNCH_CONTROL_INDICATOR || HDC
+      #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ
       else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
         evaluate_vehicle_moving();
       }
@@ -464,10 +473,12 @@ void loop() {
       }
       #endif
 
-      #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR
+      #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
         evaluate_reverse_status();
-        evaluate_pdc_beep();
+        #if REVERSE_BEEP
+          evaluate_pdc_beep();
+        #endif
       }
       #endif
 
@@ -580,12 +591,19 @@ void loop() {
   
   if (vehicle_awake) {
     if (PTCAN.read(pt_msg)) {                                                                                                       // Read data.
-      if (ignition) {
-        if (pt_msg.id == 0x1D6) {                                                                                                   // A button was pressed on the steering wheel.
-          evaluate_m_mfl_button_press();
-        }
-              
-        else if (pt_msg.id == 0x315) {                                                                                               // Monitor EDC status message from the JBE.
+      #if ANTI_THEFT_SEQ                                                                                                            // We need this button data with ignition off too
+      if (pt_msg.id == 0x1D6) {                                                                                                     // A button was pressed on the steering wheel.
+        evaluate_m_mfl_button_press();
+      }
+      #endif
+      #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
+      else if (pt_msg.id == 0x3B4) {                                                                                                // Monitor battery voltage from DME.
+        evaluate_battery_voltage();
+      }
+      #endif
+      
+      if (ignition) {              
+        if (pt_msg.id == 0x315) {                                                                                                   // Monitor EDC status message from the JBE.
           #if EDC_CKM_FIX
             evaluate_edc_ckm_mismatch();
           #endif
@@ -594,6 +612,12 @@ void loop() {
             send_servotronic_message();
           #endif
         }
+
+        #if !ANTI_THEFT_SEQ
+        else if (pt_msg.id == 0x1D6) {
+          evaluate_m_mfl_button_press();
+        }
+        #endif
       
         #if FTM_INDICATOR
         else if (pt_msg.id == 0x31D) {                                                                                              // FTM initialization is ongoing.
@@ -604,12 +628,6 @@ void loop() {
         #if CONTROL_SHIFTLIGHTS
         else if (pt_msg.id == 0x332) {                                                                                              // Monitor variable redline broadcast from DME.
           evaluate_update_shiftlight_sync();
-        }
-        #endif
-
-        #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
-        else if (k_msg.id == 0x3B4) {                                                                                               // Monitor battery voltage from DME.
-          evaluate_battery_voltage();
         }
         #endif
 
@@ -634,7 +652,7 @@ void loop() {
     
   if (DCAN.read(d_msg)) {
     if (d_msg.id == 0x6F1) {
-      //MHD monitoring exceptions:
+      // MHD monitoring exceptions:
       if (d_msg.buf[0] == 0x12){
         if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                       // SID 34h requestDownload Service
           disable_diag_transmit_jobs();
@@ -642,6 +660,7 @@ void loop() {
       }
       else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
       else if (d_msg.buf[0] == 0x40 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+      // End MHD exceptions.
 
       #if SERVOTRONIC_SVT70
       else if (d_msg.buf[0] == 0xE) {                                                                                               // SVT_70 address is 0xE

@@ -59,3 +59,10 @@ DSC_SWITCH
 	nicht_aktiv
 RPA_SWITCH
 	aktiv
+
+
+
+# FRM
+
+ASP_KOMFORT_EINKLAPP
+	nicht_aktiv

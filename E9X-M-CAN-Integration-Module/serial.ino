@@ -5,6 +5,7 @@
 void serial_interpreter() {
   String cmd = Serial.readStringUntil('\n');
   if (cmd == "module_reboot") {
+    serial_log("Serial: Will reboot after watchdog timeout.");
     module_reboot();
   } 
   #if EXHAUST_FLAP_CONTROL
@@ -26,7 +27,8 @@ void serial_interpreter() {
       for (uint8_t i = 0; i < 16; i++) {
         EEPROM.update(i, 0xFF);
       }
-    serial_log("  Serial: Reset EEPROM values.");
+    serial_log("  Serial: Reset EEPROM values. Rebooting");
+    module_reboot();
   } 
   else if (cmd == "reset_mdrive") {
     reset_mdrive_settings();
@@ -72,17 +74,50 @@ void serial_interpreter() {
     }
   }
   #endif
+  #if NEEDLE_SWEEP || CONTROL_SHIFTLIGHTS
+  else if (cmd == "startup_animation") {
+    #if CONTROL_SHIFTLIGHTS
+      Serial.print("  Serial: ");
+      shiftlight_startup_animation();
+    #endif
+    #if NEEDLE_SWEEP
+      if (ignition) {
+        Serial.print("  Serial: ");
+        needle_sweep_animation();
+      }
+    #endif
+  }
+  #endif
   #if AUTO_MIRROR_FOLD
     else if (cmd == "toggle_mirror_fold") {
-    toggle_mirror_fold(0);
-    serial_log("  Serial: Sent mirror fold request.");
-  }
+      toggle_mirror_fold();
+      serial_log("  Serial: Sent mirror fold request.");
+    }
+    else if (cmd == "mirror_fold_status") {
+      lock_button_pressed = unlock_button_pressed = false;
+      frm_status_requested = true;
+      kcan_write_msg(frm_status_request_a_buf);
+      Serial.print("  Serial: ");
+    }
+  #endif
+  #if ANTI_THEFT_SEQ
+    else if (cmd == "release_anti_theft") {
+      kcan_write_msg(ekp_return_to_normal_buf);
+      kcan_write_msg(key_cc_off_buf);
+      anti_theft_released = key_cc_sent = true;
+      serial_log("  Serial: Released EKP anti theft.");
+    }
+    else if (cmd == "lock_anti_theft") {
+      reset_key_cc();
+      anti_theft_released = false;
+      anti_theft_pressed_count = 0;
+      serial_log("  Serial: Locked EKP anti theft.");
+    }
   #endif
 }
 
 
 void module_reboot() {
-  serial_log("Serial: Will reboot after watchdog timeout.");
-  exit(0);
+  while(1);
 }
 #endif

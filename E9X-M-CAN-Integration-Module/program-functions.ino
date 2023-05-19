@@ -11,6 +11,9 @@ void initialize_timers() {
   #if FRONT_FOG_CORNER
     corner_timer = vehicle_awake_timer;
   #endif
+  #if ANTI_THEFT_SEQ
+    anti_theft_timer = vehicle_awake_timer;
+  #endif
 }
 
 
@@ -37,12 +40,16 @@ void wdt_callback() {
 #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2                                                                                        // Check if Dual Serial is set
 void print_current_state() {
   SerialUSB1.println("=========== Operation ==========");
-  sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "active" : "standby");
+  sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "Active" : "Standby");
   SerialUSB1.println(serial_debug_string);
   sprintf(serial_debug_string, " Terminal R: %s", terminal_r ? "ON" : "OFF");
   SerialUSB1.println(serial_debug_string);
   sprintf(serial_debug_string, " Ignition: %s", ignition ? "ON" : "OFF");
   SerialUSB1.println(serial_debug_string);
+  #if ANTI_THEFT_SEQ
+    sprintf(serial_debug_string, " Anti-theft: %s", anti_theft_released ? "OFF" : "Active");
+    SerialUSB1.println(serial_debug_string);
+  #endif
   sprintf(serial_debug_string, " Engine: %s", engine_running ? "ON" : "OFF");
   SerialUSB1.println(serial_debug_string);
   sprintf(serial_debug_string, " RPM: %d", RPM / 4);
@@ -125,8 +132,12 @@ void print_current_state() {
       SerialUSB1.print("Sport"); break;
   }
   SerialUSB1.println();
-  sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport");
+  sprintf(serial_debug_string, " Console POWER: %s", console_power_mode ? "ON" : "OFF");
   SerialUSB1.println(serial_debug_string);
+  #if CKM
+    sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport");
+    SerialUSB1.println(serial_debug_string);
+  #endif
 
   SerialUSB1.println("========= Body ==========");
   #if RTC
@@ -334,6 +345,9 @@ void reset_runtime_variables() {                                                
     msa_button_pressed = false;
     msa_fake_status_counter = 0;
   #endif
+  #if ANTI_THEFT_SEQ
+    reset_key_cc();
+  #endif
 }
 
 
@@ -363,6 +377,10 @@ void reset_sleep_variables() {
     frm_status_requested = false;
     lock_button_pressed  = unlock_button_pressed = false;
     last_lock_status_can = 0;
+  #endif
+  #if ANTI_THEFT_SEQ
+    anti_theft_released = key_cc_sent = false;
+    anti_theft_pressed_count = 0;
   #endif
   mdrive_settings_updated = false;
 }

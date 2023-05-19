@@ -95,7 +95,7 @@ void configure_can_controllers() {
     filterId = 0x195;                                                                                                               // HDC button status sent by IHKA.
     canFilters.push(&filterId);
   #endif
-  #if LAUNCH_CONTROL_INDICATOR || HDC
+  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ
     filterId = 0x1B4;                                                                                                               // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R ON)
     canFilters.push(&filterId);
   #endif
@@ -153,7 +153,7 @@ void configure_can_controllers() {
     filterId = 0x3AB;                                                                                                               // Filter Shiftligths car key memory.
     canFilters.push(&filterId);
   #endif
-  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR
+  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
     filterId = 0x3B0;                                                                                                               // Reverse gear status.                                         Cycle time 1s (idle).
     canFilters.push(&filterId);
   #endif
@@ -297,16 +297,22 @@ void check_teensy_cpu_temp() {                                                  
     float cpu_temp = tempmonGetTemp();
 
     if (abs(cpu_temp - last_cpu_temp) > HYSTERESIS) {
-      if (cpu_temp >= TOP_THRESHOLD) {
-        if (clock_mode != 2) {
+      if (cpu_temp >= MAX_THRESHOLD) {
+        if (clock_mode != 3) {
           set_arm_clock(MAX_UNDERCLOCK);
-          serial_log("Processor temperature above top overheat threshold. Underclocking.");
-          clock_mode = 2;
+          serial_log("Processor temperature above max overheat threshold. Underclocking.");
+          clock_mode = 3;
         }
       } else if (cpu_temp >= MEDIUM_THRESHOLD) {
-        if (clock_mode != 1) {
+        if (clock_mode != 2) {
           set_arm_clock(MEDIUM_UNDERCLOCK);
           serial_log("Processor temperature above medium overheat threshold. Underclocking.");
+          clock_mode = 2;
+        }
+      } else if (cpu_temp >= MILD_THRESHOLD) {
+        if (clock_mode != 1) {
+          set_arm_clock(MILD_UNDERCLOCK);
+          serial_log("Processor temperature above mild overheat threshold. Underclocking.");
           clock_mode = 1;
         }
       } else {

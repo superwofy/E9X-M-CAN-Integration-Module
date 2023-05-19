@@ -36,6 +36,7 @@ I use it to:
 * Display Launch Control flag.
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
 * Fold/Un-fold mirrors when locking/unlocking.
+* Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Enable FXX KCAN1 CIC controllers.
 * Enable full diagnosis and coding of SVT70 modules.

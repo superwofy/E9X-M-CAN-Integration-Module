@@ -22,20 +22,21 @@ General section
 3.  Check the iDrive diag queue.
 4.  Check Needle sweep animation transmission queue.
 5.  Check Mirror fold transmission queue.
-6.  Monitor the CPU temperature and adjust clock speed accordingly.
-7.  Check the DSC transmission queue.
-8.  Enable the use of M3 center console button block. POWER and DSC OFF buttons. Control POWER LED.
+6.  Check anti-theft status.
+7.  Monitor the CPU temperature and adjust clock speed accordingly.
+9.  Check the DSC transmission queue.
+9.  Enable the use of M3 center console button block. POWER and DSC OFF buttons. Control POWER LED.
      POWER controls the DME throttle map. Holding POWER during ignition cycling enables diagnosis of the SVT70.
      Request full DSC OFF after holding DSC OFF button. Turn everything back on with a short press.
-9.  Send MDrive alive message to the network. This fully replaces the 0x399 MDrive status allowing control of:
+10. Send MDrive alive message to the network. This fully replaces the 0x399 MDrive status allowing control of:
      EDC
      DSC
      DME throttle map
      Servotronic via SVT70 module
-10. Check seat heating transmission queues.
-11. Check Reverse beep transmission queue.
-12. Check MSA and HDC Check Control queue.
-13. Monitor sleep state timeout. Reset runtime variables if the car falls asleep.
+11. Check seat heating transmission queues.
+12. Check Reverse beep transmission queue.
+13. Check MSA and HDC Check Control queue.
+14. Monitor sleep state timeout. Reset runtime variables if the car falls asleep.
 
 
 
@@ -81,6 +82,7 @@ PT-CAN section
 
 1. Monitor steering wheel buttons and request MDrive when Source/M is pressed.
    Holding the M button for about 2s brings up the MDrive settings in iDrive.
+   Pressing the M button X times releases the anti-theft.
 2. Monitor vehicle mode from JBE and send corresponding DME and SVT power modes.
 3. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
 4. Monitor and align shiftlights with the variable redline request from the DME.

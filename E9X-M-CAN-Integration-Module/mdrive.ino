@@ -128,27 +128,62 @@ void evaluate_m_mfl_button_press() {
   if (pt_msg.buf[1] == 0x4C) {                                                                                                      // M button is pressed.
     if (!ignore_m_press) {
       ignore_m_press = true;                                                                                                        // Ignore further pressed messages until the button is released.
-      toggle_mdrive_message_active();
-      send_mdrive_message();
-      toggle_mdrive_dsc_mode();
+      #if ANTI_THEFT_SEQ
+      if (anti_theft_released && ignition) {                                                                                        // Disable normal M button function when used for anti-theft.
+      #endif
+        toggle_mdrive_message_active();
+        send_mdrive_message();
+        toggle_mdrive_dsc_mode();
+      #if ANTI_THEFT_SEQ
+      }
+      #endif
     }
     if (mfl_pressed_count > 10 && !ignore_m_hold) {                                                                                 // Each count is about 100ms
+      #if ANTI_THEFT_SEQ
+      if (anti_theft_released && ignition) {
+      #endif
       show_idrive_mdrive_settings_screen();
+      #if ANTI_THEFT_SEQ
+      }
+      #endif
     } else {
       mfl_pressed_count++;
     }
   } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
-    ignore_m_press = ignore_m_hold = false;    
+    ignore_m_press = ignore_m_hold = false;
     mfl_pressed_count = 0;
+
+    #if ANTI_THEFT_SEQ
+    if (!anti_theft_released) {
+      if (anti_theft_pressed_count < ANTI_THEFT_SEQ_NUMBER - 1) {
+        anti_theft_pressed_count++;
+      } else {
+        anti_theft_released = true;
+        kcan_write_msg(ekp_return_to_normal_buf);
+        serial_log("Anti-theft released. EKP control restored to DME.");
+        if (key_cc_sent) {
+          kcan_write_msg(key_cc_off_buf);
+          key_cc_sent = false;
+        }
+        kcan_write_msg(ekp_return_to_normal_buf);
+      }
+    }
+    #endif
   }
 }
 
 
 void show_idrive_mdrive_settings_screen() {
   if (diag_transmit) {
-    serial_log("Steering wheel M button held. Showing settings screen.");
-    kcan_write_msg(idrive_mdrive_settings_a_buf);                                                                                   // Send steuern_menu job to iDrive.
-    kcan_write_msg(idrive_mdrive_settings_b_buf);
+    #if ANTI_THEFT_SEQ
+    if (anti_theft_released) {
+    #endif
+      serial_log("Steering wheel M button held. Showing settings screen.");
+      kcan_write_msg(idrive_mdrive_settings_a_buf);                                                                                 // Send steuern_menu job to iDrive.
+      kcan_write_msg(idrive_mdrive_settings_b_buf);
+    #if ANTI_THEFT_SEQ
+    }
+    #endif
     ignore_m_hold = true;
   }
 }
@@ -167,13 +202,15 @@ void send_mdrive_message() {
 
 
 void send_mdrive_alive_message(uint16_t interval) {
-  if ((millis() - mdrive_message_timer) >= interval) {                                                                              // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
-    if (ignition) {
-      serial_log("Sending Ignition ON MDrive alive message.");
-    } else {
-      serial_log("Sending Vehicle Awake MDrive alive message.");
+  if (terminal_r) {
+    if ((millis() - mdrive_message_timer) >= interval) {                                                                            // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
+      if (ignition) {
+        serial_log("Sending Ignition ON MDrive alive message.");
+      } else {
+        serial_log("Sending Vehicle Awake MDrive alive message.");
+      }
+      send_mdrive_message();
     }
-    send_mdrive_message();
   }
 }
 

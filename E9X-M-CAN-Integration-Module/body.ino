@@ -10,9 +10,13 @@ void evaluate_ignition_status() {
   }  
 
   bool ignition_ = ignition;
+  bool terminal_r_ = terminal_r;
   switch(k_msg.buf[0]) {
     case 0:
       ignition = terminal_r = engine_cranking = false;
+      #if ANTI_THEFT_SEQ
+        reset_key_cc();
+      #endif
       break;
     case 1:
       terminal_r = true;
@@ -61,6 +65,12 @@ void evaluate_ignition_status() {
       sprintf(serial_debug_string, "(%X) Ignition OFF. Reset values.", k_msg.buf[0]);
       serial_log(serial_debug_string);
     #endif
+  }
+
+  if (terminal_r && !terminal_r_) {
+    serial_log("Terminal R ON.");
+  } else if (!terminal_r && terminal_r_) {
+    serial_log("Terminal R OFF.");
   }
 }
 
@@ -343,11 +353,17 @@ void evaluate_engine_rpm() {
   RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
   if (!engine_running && (RPM > 2000)) {
     engine_running = true;
+    #if ANTI_THEFT_SEQ
+    if (anti_theft_released) {
+    #endif
     #if CONTROL_SHIFTLIGHTS
       shiftlight_startup_animation();                                                                                               // Show off shift light segments during engine startup (>500rpm).
     #endif
     #if NEEDLE_SWEEP
       needle_sweep_animation();
+    #endif
+    #if ANTI_THEFT_SEQ
+    }
     #endif
     #if EXHAUST_FLAP_CONTROL
       exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
@@ -582,36 +598,38 @@ void check_idrive_queue() {
 
 #if CKM || DOOR_VOLUME
 void check_idrive_alive_monitor() {
-  if (millis() - idrive_alive_timer >= 2300) {                                                                                      // This message should be received every 2s.
-    if (!idrive_died) {
-      idrive_died = true;
-      serial_log("iDrive booting/rebooting.");
-      #if DOOR_VOLUME
-        default_volume_sent = false;
-      #endif
-      #if CKM
-        dme_ckm_sent = false;
-      #endif
+  if (terminal_r) {
+    if (millis() - idrive_alive_timer >= 4000) {                                                                                    // This message should be received every 2s.
+      if (!idrive_died) {
+        idrive_died = true;
+        serial_log("iDrive booting/rebooting.");
+        #if DOOR_VOLUME
+          default_volume_sent = false;
+        #endif
+        #if CKM
+          dme_ckm_sent = false;
+        #endif
+      }
+    } else {
+      if (idrive_died) {                                                                                                              // It's back.
+        idrive_died = false;
+      }
     }
-  } else {
-    if (idrive_died) {                                                                                                              // It's back.
-      idrive_died = false;
-    }
-  }
 
-  #if CKM
-    if (!dme_ckm_sent) {
-      serial_log("Queueing POWER CKM after iDrive boot/reboot.");
-      CAN_message_t ckm_buf = makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]);
-      unsigned long timeNow = millis();
-      kcan_write_msg(ckm_buf);
-      delayed_can_tx_msg m = {ckm_buf, timeNow + 200};
-      dme_ckm_tx_queue.push(&m);
-      m = {ckm_buf, timeNow + 400};
-      dme_ckm_tx_queue.push(&m);
-      dme_ckm_sent = true;
-    }
-  #endif
+    #if CKM
+      if (!dme_ckm_sent) {
+        serial_log("Queueing POWER CKM after iDrive boot/reboot.");
+        CAN_message_t ckm_buf = makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]);
+        unsigned long timeNow = millis();
+        kcan_write_msg(ckm_buf);
+        delayed_can_tx_msg m = {ckm_buf, timeNow + 200};
+        dme_ckm_tx_queue.push(&m);
+        m = {ckm_buf, timeNow + 400};
+        dme_ckm_tx_queue.push(&m);
+        dme_ckm_sent = true;
+      }
+    #endif
+  }
 }
 
 
@@ -660,48 +678,48 @@ void evaluate_remote_button() {
 void evaluate_mirror_fold_status() {
   if (frm_status_requested) {                                                                                                       // Make sure the request came from this module.
     if (k_msg.buf[1] == 0x22) {
-      if (k_msg.buf[4] == 1) {
-        mirrors_folded = true;
-        serial_log("Mirrors are folded.");
-      } else {
+      if (k_msg.buf[4] == 0) {
         mirrors_folded = false;
         serial_log("Mirrors are un-folded.");
+      } else {
+        mirrors_folded = true;
+        serial_log("Mirrors are folded.");
       }
       frm_status_requested = false;
+
+      if (lock_button_pressed) {
+        if (!mirrors_folded) {
+          #if DOOR_VOLUME
+            if (!left_door_open && !right_door_open) {
+              serial_log("Folding mirrors after lock button pressed.");
+              toggle_mirror_fold();
+            }
+            #else
+              serial_log("Folding mirrors after lock button pressed.");
+              toggle_mirror_fold();
+          #endif
+        }
+        lock_button_pressed = false;
+      } else if (unlock_button_pressed) {
+        if (mirrors_folded) {
+          serial_log("Un-folding mirrors after unlock button pressed.");
+          toggle_mirror_fold();
+          unlock_button_pressed = false;
+        }
+      }
     } else if (k_msg.buf[1] == 0x10) {
       kcan_write_msg(frm_status_request_b_buf);
-    }
-
-    if (lock_button_pressed) {
-      if (!mirrors_folded) {
-        #if DOOR_VOLUME
-          if (!left_door_open && !right_door_open) {
-            serial_log("Folding mirrors after lock button pressed.");
-            toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
-          }
-          #else
-            serial_log("Folding mirrors after lock button pressed.");
-            toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
-        #endif
-      }
-      lock_button_pressed = false;
-    } else if (unlock_button_pressed) {
-      if (mirrors_folded) {
-        serial_log("Un-folding mirrors after unlock button pressed.");
-        toggle_mirror_fold(AUTO_MIRROR_FOLD_DELAY);
-        unlock_button_pressed = false;
-      }
     }
   }
 }
 
 
-void toggle_mirror_fold(uint16_t delay) {
+void toggle_mirror_fold() {
   delayed_can_tx_msg m;
   unsigned long timeNow = millis();
-  m = {frm_toggle_fold_mirror_a_buf, timeNow + delay};
+  m = {frm_toggle_fold_mirror_a_buf, timeNow + 50};
   mirror_fold_txq.push(&m);
-  m = {frm_toggle_fold_mirror_b_buf, timeNow + delay + 10};
+  m = {frm_toggle_fold_mirror_b_buf, timeNow + 50 + 10};
   mirror_fold_txq.push(&m);
   mirrors_folded = !mirrors_folded;
 }
@@ -773,11 +791,13 @@ void evaluate_corner_light_status() {
       kcan_write_msg(frm_lamp_status_request_b_buf);
       if (!front_fog_status) {
         if (k_msg.buf[6] > 0) {                                                                                                     // Left corner light
-          delayed_can_tx_msg m = {front_left_fog_on_buf, millis() + 100};
-          fog_corner_txq.push(&m);                                                                                                  // ON messages time out after about 10s. Transmission must be repeated.
-          if (!left_fog_on) {
-            left_fog_on = true;
-            serial_log("Left corner light ON. Turned left fog light ON.");
+          if (!reverse_status) {
+            delayed_can_tx_msg m = {front_left_fog_on_buf, millis() + 100};
+            fog_corner_txq.push(&m);                                                                                                // ON messages time out after about 10s. Transmission must be repeated.
+            if (!left_fog_on) {
+              left_fog_on = true;
+              serial_log("Left corner light ON. Turned left fog light ON.");
+            }
           }
         } else {
           if (left_fog_on) {
@@ -788,11 +808,13 @@ void evaluate_corner_light_status() {
           }
         }
           if (k_msg.buf[7] > 0) {                                                                                                   // Right corner light
-          delayed_can_tx_msg m = {front_right_fog_on_buf, millis() + 100};
-          fog_corner_txq.push(&m);
-          if (!right_fog_on) {
-            right_fog_on = true;
-            serial_log("Right corner light ON. Turned right fog light ON.");
+          if (!reverse_status) {
+            delayed_can_tx_msg m = {front_right_fog_on_buf, millis() + 100};
+            fog_corner_txq.push(&m);
+            if (!right_fog_on) {
+              right_fog_on = true;
+              serial_log("Right corner light ON. Turned right fog light ON.");
+            }
           }
         } else {
           if (right_fog_on) {
@@ -805,6 +827,35 @@ void evaluate_corner_light_status() {
       }
       frm_lamp_status_requested = false;
     }
+  }
+}
+#endif
+
+
+#if ANTI_THEFT_SEQ
+void check_anti_theft_status() {
+  if (millis() >= 2000) {                                                                                                           // Delay ensures that some time passed after Teensy (re)started to receive CAN messages.
+    if (!anti_theft_released && !vehicle_moving && !engine_running) {                                                               // Make sure we don't cut this off while the car is in motion!!!
+      if (millis() - anti_theft_timer >= 1000) {
+        kcan_write_msg(ekp_pwm_off_buf);
+        if (terminal_r) {
+          if (!key_cc_sent) {
+            serial_log("Sending anti-theft key CC. EKP is disabled.");
+            key_cc_sent = true;
+          }
+          kcan_write_msg(key_cc_on_buf);
+        }
+        anti_theft_timer = millis();
+      }
+    }
+  }
+}
+
+
+void reset_key_cc() {
+  if (key_cc_sent) {
+    kcan_write_msg(key_cc_off_buf);
+    key_cc_sent = false;
   }
 }
 #endif
