@@ -657,12 +657,14 @@ void evaluate_remote_button() {
         if (k_msg.buf[2] == 4) {
           lock_button_pressed = true;
           serial_log("Remote lock button pressed. Checking mirror status.");
-          kcan_write_msg(frm_status_request_a_buf);
+          delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 100};
+          mirror_fold_txq.push(&m);
           frm_status_requested = true;
         } else if (k_msg.buf[2] == 1) {
           unlock_button_pressed = true;
           serial_log("Remote unlock button pressed. Checking mirror status.");
-          kcan_write_msg(frm_status_request_a_buf);
+          delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 100};
+          mirror_fold_txq.push(&m);
           frm_status_requested = true;
         } else if (k_msg.buf[2] == 0) {
           serial_log("Remote buttons released.");
@@ -715,11 +717,15 @@ void evaluate_mirror_fold_status() {
 
 
 void toggle_mirror_fold() {
+  uint16_t delay = 200;
+  if (millis() < 2000) {
+    delay = 500;
+  }
   delayed_can_tx_msg m;
   unsigned long timeNow = millis();
-  m = {frm_toggle_fold_mirror_a_buf, timeNow + 50};
+  m = {frm_toggle_fold_mirror_a_buf, timeNow + delay};
   mirror_fold_txq.push(&m);
-  m = {frm_toggle_fold_mirror_b_buf, timeNow + 50 + 10};
+  m = {frm_toggle_fold_mirror_b_buf, timeNow + delay + 20};
   mirror_fold_txq.push(&m);
   mirrors_folded = !mirrors_folded;
 }
@@ -751,21 +757,6 @@ void check_fog_corner_queue() {
 }
 
 
-void request_corner_status() {
-  if (engine_running) {
-    if (dipped_beam_status) {
-      if (millis() - corner_timer >= 333) {
-        if (!front_fog_status) {
-          kcan_write_msg(frm_lamp_status_request_buf);
-          frm_lamp_status_requested = true;
-          corner_timer = millis();
-        }
-      }
-    }
-  }
-}
-
-
 void evaluate_dipped_beam_status() {
   if ((k_msg.buf[0] & 1) == 1) {                                                                                                    // Check the 8th bit of this byte for dipped beam status.
    if (!dipped_beam_status) {
@@ -777,55 +768,123 @@ void evaluate_dipped_beam_status() {
       dipped_beam_status = false;
       serial_log("Dipped beam OFF");
 
-      delayed_can_tx_msg m = {front_fogs_off_buf, millis() + 100};
-      fog_corner_txq.push(&m);
-      frm_lamp_status_requested = true;                                                                                             // Make one more request to make sure light is turned off.
+      if (left_fog_on || right_fog_on) {
+        delayed_can_tx_msg m = {front_fogs_all_off_buf, millis() + 100};
+        fog_corner_txq.push(&m);
+        left_fog_on = right_fog_on = false;
+      }
     }
   }
 }
 
 
-void evaluate_corner_light_status() {
-  if (frm_lamp_status_requested) {
-    if (k_msg.buf[1] == 0x10 && k_msg.buf[2] == 0x24) {
-      kcan_write_msg(frm_lamp_status_request_b_buf);
-      if (!front_fog_status) {
-        if (k_msg.buf[6] > 0) {                                                                                                     // Left corner light
-          if (!reverse_status) {
-            delayed_can_tx_msg m = {front_left_fog_on_buf, millis() + 100};
-            fog_corner_txq.push(&m);                                                                                                // ON messages time out after about 10s. Transmission must be repeated.
-            if (!left_fog_on) {
-              left_fog_on = true;
-              serial_log("Left corner light ON. Turned left fog light ON.");
-            }
-          }
-        } else {
-          if (left_fog_on) {
-            delayed_can_tx_msg m = {front_fogs_off_buf, millis() + 100};
-            fog_corner_txq.push(&m);
-            left_fog_on = false;
-            serial_log("Left corner light OFF. Turned fog lights OFF.");
-          }
-        }
-          if (k_msg.buf[7] > 0) {                                                                                                   // Right corner light
-          if (!reverse_status) {
-            delayed_can_tx_msg m = {front_right_fog_on_buf, millis() + 100};
-            fog_corner_txq.push(&m);
-            if (!right_fog_on) {
-              right_fog_on = true;
-              serial_log("Right corner light ON. Turned right fog light ON.");
-            }
-          }
-        } else {
-          if (right_fog_on) {
-            delayed_can_tx_msg m = {front_fogs_off_buf, millis() + 100};
-            fog_corner_txq.push(&m);
-            right_fog_on = false;
-            serial_log("Right corner light OFF. Turned fog lights OFF.");
-          }
+void evaluate_steering_angle_fog() {
+  if (!front_fog_status && !reverse_status && dipped_beam_status) {
+    steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
+
+    // Max left angle is 1005 / 23
+    if (steering_angle >= 435) { 
+      steering_angle = steering_angle - 2849;
+    }
+
+    if (steering_angle > FOG_CORNER_STEERTING_ANGLE) {
+      if (!left_fog_on) {
+        unsigned long timenow = millis();
+        delayed_can_tx_msg m = {front_left_fog_on_a_buf, timenow};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_b_buf, timenow + 100};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_c_buf, timenow + 200};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_d_buf, timenow + 300};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_e_buf, timenow + 400};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_f_buf, timenow + 500};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_g_buf, timenow + 600};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_h_buf, timenow + 700};
+        fog_corner_txq.push(&m);
+        if (!left_fog_on) {
+          left_fog_on = true;
+          serial_log("Steering angle below setpoint. Turned left fog light ON.");
         }
       }
-      frm_lamp_status_requested = false;
+    } else if (steering_angle < (FOG_CORNER_STEERTING_ANGLE - STEERTING_ANGLE_HYSTERESIS)) {
+      if (left_fog_on) {
+        unsigned long timenow = millis();
+        delayed_can_tx_msg m = {front_left_fog_on_g_buf, timenow};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_f_buf, timenow + 100};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_e_buf, timenow + 200};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_d_buf, timenow + 300};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_c_buf, timenow + 400};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_b_buf, timenow + 500};
+        fog_corner_txq.push(&m);
+        m = {front_left_fog_on_a_buf, timenow + 600};
+        fog_corner_txq.push(&m);
+        m = {front_fogs_all_off_buf, millis() + 100};
+        fog_corner_txq.push(&m);
+        if (left_fog_on) {
+          left_fog_on = false;
+          serial_log("Steering angle returned. Turned left fog light OFF.");
+        }
+      }
+    }
+
+    if (steering_angle < -FOG_CORNER_STEERTING_ANGLE) {
+      if (!right_fog_on) {
+        unsigned long timenow = millis();
+        delayed_can_tx_msg m = {front_right_fog_on_a_buf, timenow};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_b_buf, timenow + 100};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_c_buf, timenow + 200};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_d_buf, timenow + 300};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_e_buf, timenow + 400};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_f_buf, timenow + 500};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_g_buf, timenow + 600};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_h_buf, timenow + 700};
+        fog_corner_txq.push(&m);
+        if (!right_fog_on) {
+          right_fog_on = true;
+          serial_log("Steering angle above setpoint. Turned right fog light ON.");
+        }
+      }
+    } else if (steering_angle > (-FOG_CORNER_STEERTING_ANGLE + STEERTING_ANGLE_HYSTERESIS)) {
+      if (right_fog_on) {
+        unsigned long timenow = millis();
+        delayed_can_tx_msg m = {front_right_fog_on_g_buf, timenow};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_f_buf, timenow + 100};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_e_buf, timenow + 200};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_d_buf, timenow + 300};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_c_buf, timenow + 400};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_b_buf, timenow + 500};
+        fog_corner_txq.push(&m);
+        m = {front_right_fog_on_a_buf, timenow + 600};
+        fog_corner_txq.push(&m);
+        m = {front_fogs_all_off_buf, timenow + 700};
+        fog_corner_txq.push(&m);
+        if (right_fog_on) {
+          right_fog_on = false;
+          serial_log("Steering angle returned. Turned right fog light OFF.");
+        }
+      }
     }
   }
 }
@@ -847,6 +906,14 @@ void check_anti_theft_status() {
         }
         anti_theft_timer = millis();
       }
+    }
+  }
+  if (!anti_theft_txq.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    anti_theft_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      anti_theft_txq.drop();
     }
   }
 }

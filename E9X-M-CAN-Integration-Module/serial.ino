@@ -24,9 +24,9 @@ void serial_interpreter() {
     toggle_mdrive_dsc_mode(); 
   } 
   else if (cmd == "reset_eeprom") {
-      for (uint8_t i = 0; i < 16; i++) {
-        EEPROM.update(i, 0xFF);
-      }
+    for (uint8_t i = 0; i < 16; i++) {
+      EEPROM.update(i, 0xFF);
+    }
     serial_log("  Serial: Reset EEPROM values. Rebooting");
     module_reboot();
   } 
@@ -52,11 +52,43 @@ void serial_interpreter() {
   }
   #if FRONT_FOG_CORNER
   else if (cmd == "front_right_fog_on") {
-    kcan_write_msg(front_right_fog_on_buf);
+    unsigned long timenow = millis();
+    delayed_can_tx_msg m = {front_right_fog_on_a_buf, timenow};
+    fog_corner_txq.push(&m);
+    m = {front_right_fog_on_b_buf, timenow + 100};
+    fog_corner_txq.push(&m);
+    m = {front_right_fog_on_c_buf, timenow + 200};
+    fog_corner_txq.push(&m);
+    m = {front_right_fog_on_d_buf, timenow + 300};
+    fog_corner_txq.push(&m);
+    m = {front_right_fog_on_e_buf, timenow + 400};
+    fog_corner_txq.push(&m);
+    m = {front_right_fog_on_f_buf, timenow + 500};
+    fog_corner_txq.push(&m);
+    m = {front_right_fog_on_g_buf, timenow + 600};
+    fog_corner_txq.push(&m);
+    m = {front_right_fog_on_h_buf, timenow + 700};
+    fog_corner_txq.push(&m);
     serial_log("  Serial: Activated front right fog light.");
   }
   else if (cmd == "front_left_fog_on") {
-    kcan_write_msg(front_left_fog_on_buf);
+    unsigned long timenow = millis();
+    delayed_can_tx_msg m = {front_left_fog_on_a_buf, timenow};
+    fog_corner_txq.push(&m);
+    m = {front_left_fog_on_b_buf, timenow + 100};
+    fog_corner_txq.push(&m);
+    m = {front_left_fog_on_c_buf, timenow + 200};
+    fog_corner_txq.push(&m);
+    m = {front_left_fog_on_d_buf, timenow + 300};
+    fog_corner_txq.push(&m);
+    m = {front_left_fog_on_e_buf, timenow + 400};
+    fog_corner_txq.push(&m);
+    m = {front_left_fog_on_f_buf, timenow + 500};
+    fog_corner_txq.push(&m);
+    m = {front_left_fog_on_g_buf, timenow + 600};
+    fog_corner_txq.push(&m);
+    m = {front_left_fog_on_h_buf, timenow + 700};
+    fog_corner_txq.push(&m);
     serial_log("  Serial: Activated front left fog light.");
   }
   else if (cmd == "front_right_fog_off") {
@@ -69,7 +101,7 @@ void serial_interpreter() {
   }
   else if (cmd == "front_fogs_off") {
     if (ignition) {
-      kcan_write_msg(front_fogs_off_buf);
+      kcan_write_msg(front_fogs_all_off_buf);
       serial_log("  Serial: Deactivated front fog lights.");
     }
   }

@@ -84,11 +84,12 @@ PT-CAN section
    Holding the M button for about 2s brings up the MDrive settings in iDrive.
    Pressing the M button X times releases the anti-theft.
 2. Monitor vehicle mode from JBE and send corresponding DME and SVT power modes.
-3. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
-4. Monitor and align shiftlights with the variable redline request from the DME.
-5. Track battery voltage (debug only) and Engine On status.
-6. Forwards any diagnostic messages sent by the SVT70 module on the PT-CAN to the D-CAN to enable communication with BMW tools. In the E70 this is implemented in the JBE gateway tables.
-7. Forward CC (check control) notifications from the SVT70 to KCAN so that KOMBI can display them.
+3. Monitor steering angle for the corner fog feature.
+4. Monitor and indicate FTM status in KOMBI by flashing tyre icon when initializing.
+5. Monitor and align shiftlights with the variable redline request from the DME.
+6. Track battery voltage (debug only) and Engine On status.
+7. Forwards any diagnostic messages sent by the SVT70 module on the PT-CAN to the D-CAN to enable communication with BMW tools. In the E70 this is implemented in the JBE gateway tables.
+8. Forward CC (check control) notifications from the SVT70 to KCAN so that KOMBI can display them.
 
 
 

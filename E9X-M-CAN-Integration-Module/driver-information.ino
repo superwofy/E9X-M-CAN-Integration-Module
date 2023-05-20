@@ -224,6 +224,9 @@ void evaluate_fog_status() {
         digitalWrite(FOG_LED_PIN, HIGH);
         serial_log("Front fogs ON. Turned ON FOG LED");
       #endif
+      #if FRONT_FOG_CORNER
+        left_fog_on = right_fog_on = false;
+      #endif
     }
   } else {
     if (front_fog_status) {

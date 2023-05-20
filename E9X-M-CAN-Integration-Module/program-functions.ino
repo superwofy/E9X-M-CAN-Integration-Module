@@ -8,9 +8,6 @@ void initialize_timers() {
   #else
     power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
   #endif
-  #if FRONT_FOG_CORNER
-    corner_timer = vehicle_awake_timer;
-  #endif
   #if ANTI_THEFT_SEQ
     anti_theft_timer = vehicle_awake_timer;
   #endif
@@ -320,7 +317,6 @@ void reset_runtime_variables() {                                                
       fog_corner_txq.push(&m);
     }
     dipped_beam_status = left_fog_on = right_fog_on = false;
-    frm_lamp_status_requested = false;
   #endif
   #if DIM_DRL
     if (left_dimmed) {                                                                                                              // Send OFF now to make sure DRLs don't stay ON.
@@ -381,6 +377,7 @@ void reset_sleep_variables() {
   #if ANTI_THEFT_SEQ
     anti_theft_released = key_cc_sent = false;
     anti_theft_pressed_count = 0;
+    anti_theft_txq.flush();
   #endif
   mdrive_settings_updated = false;
 }

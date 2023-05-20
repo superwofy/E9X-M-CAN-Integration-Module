@@ -198,6 +198,10 @@ void configure_can_controllers() {
   }
 
   // PTCAN
+  #if FRONT_FOG_CORNER
+    filterId = 0xC8;                                                                                                                // Steering angle.                                              Cycle time 200ms.
+    canFilters.push(&filterId);
+  #endif
   filterId = 0x1D6;                                                                                                                 // MFL button status.                                           Cycle time 1s (idle), 100ms (pressed)
   canFilters.push(&filterId);
   filterId = 0x315;                                                                                                                 // Vehicle mode (+EDC) from JBE.                                Cycle time 500ms (idle).

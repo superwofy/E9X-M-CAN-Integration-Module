@@ -165,7 +165,10 @@ void evaluate_m_mfl_button_press() {
           kcan_write_msg(key_cc_off_buf);
           key_cc_sent = false;
         }
-        kcan_write_msg(ekp_return_to_normal_buf);
+        delayed_can_tx_msg m = {ekp_return_to_normal_buf, millis() + 500};                                                          // Make sure these messages are received.
+        anti_theft_txq.push(&m);
+        m = {key_cc_off_buf, millis() + 500};
+        anti_theft_txq.push(&m);
       }
     }
     #endif

@@ -43,7 +43,11 @@ const uint8_t ANTI_THEFT_SEQ_NUMBER = 3;                                        
 #endif
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack this indicator.
-#define FRONT_FOG_CORNER 1                                                                                                          // Turn ON corresponding fog light when turning. Requires AHL.
+#define FRONT_FOG_CORNER 1                                                                                                          // Turn ON corresponding fog light when turning.
+#if FRONT_FOG_CORNER
+const int8_t FOG_CORNER_STEERTING_ANGLE = 80;                                                                                       // Steering angle at which to activate fog corner function.
+const int8_t STEERTING_ANGLE_HYSTERESIS = 10;
+#endif
 #define DIM_DRL 1                                                                                                                   // Dims DLR ON the side that the indicator is ON.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
@@ -174,13 +178,13 @@ CAN_message_t cc_gong_buf;
 #endif
 #if FRONT_FOG_CORNER
   bool dipped_beam_status = false, left_fog_on = false, right_fog_on = false;
-  bool frm_lamp_status_requested = false;
-  unsigned long corner_timer;
-  CAN_message_t front_left_fog_on_buf, front_left_fog_off_buf;
-  CAN_message_t front_right_fog_on_buf, front_right_fog_off_buf;
-  CAN_message_t front_fogs_off_buf;
-  CAN_message_t frm_lamp_status_request_buf, frm_lamp_status_request_b_buf;
-  cppQueue fog_corner_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
+  int16_t steering_angle = 0;
+  CAN_message_t front_left_fog_on_a_buf, front_left_fog_on_b_buf, front_left_fog_on_c_buf, front_left_fog_on_d_buf;
+  CAN_message_t front_left_fog_on_e_buf, front_left_fog_on_f_buf, front_left_fog_on_g_buf, front_left_fog_on_h_buf;
+  CAN_message_t front_right_fog_on_a_buf, front_right_fog_on_b_buf, front_right_fog_on_c_buf, front_right_fog_on_d_buf;
+  CAN_message_t front_right_fog_on_e_buf, front_right_fog_on_f_buf, front_right_fog_on_g_buf, front_right_fog_on_h_buf;
+  CAN_message_t front_left_fog_off_buf, front_right_fog_off_buf, front_fogs_all_off_buf;
+  cppQueue fog_corner_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
 #endif
 #if DIM_DRL
   bool drl_status = false, left_dimmed = false, right_dimmed = false;
@@ -205,6 +209,7 @@ CAN_message_t cc_gong_buf;
   uint8_t anti_theft_pressed_count = 0;
   CAN_message_t key_cc_on_buf, key_cc_off_buf;
   CAN_message_t ekp_pwm_off_buf, ekp_return_to_normal_buf;
+  cppQueue anti_theft_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
 #if REVERSE_BEEP
   CAN_message_t pdc_beep_buf, pdc_quiet_buf;
@@ -371,9 +376,6 @@ void loop() {
     #endif
     #if EDC_CKM_FIX
       check_edc_ckm_queue();
-    #endif
-    #if FRONT_FOG_CORNER
-      request_corner_status();
     #endif
   } else {
     if (vehicle_awake) {
@@ -577,9 +579,6 @@ void loop() {
       #if AUTO_MIRROR_FOLD 
         evaluate_mirror_fold_status();
       #endif
-      #if FRONT_FOG_CORNER
-        evaluate_corner_light_status();
-      #endif
     }
     #endif
   }
@@ -612,6 +611,12 @@ void loop() {
             send_servotronic_message();
           #endif
         }
+
+        #if FRONT_FOG_CORNER
+        else if (pt_msg.id == 0xC8) {
+          evaluate_steering_angle_fog();
+        }
+        #endif
 
         #if !ANTI_THEFT_SEQ
         else if (pt_msg.id == 0x1D6) {

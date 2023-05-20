@@ -1,8 +1,7 @@
 # E9X-M-CAN-Integration-Module
  
-Unlike my previous modules, this one has access to PTCAN and KCAN. While the code is quite specific for my particular car, much of the CAN message logic may be useful.
+Unlike my previous modules, this one has access to PTCAN, KCAN and DCAN. While the code is quite specific for my particular car, much of the CAN message logic may be useful.
 Included are also tools to allow full manipulation of the program section in the MSD81 bin file.
-MDrive settings now configurable from iDrive!
 
 
 Hardware used:
@@ -30,7 +29,7 @@ I use it to:
 	* Control Servotronic mode with the M button - through SVT70 module.
 	* Control the exhaust flap position with the M button.
 	* Display M Drive settings when holding M button
-* Control M Key settings from iDrive.
+	* Control M Key settings from iDrive.
 * Display Shiftlights - including startup animation, sync with the M3 KOMBI variable redline.
 * Display a Needle sweep animation on startup.
 * Display Launch Control flag.
@@ -38,15 +37,18 @@ I use it to:
 * Fold/Un-fold mirrors when locking/unlocking.
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
+* Audibly warn when reverse is engaged.
+* Create a HDC function similar to the one in xDrive cars.
+* Display a CC when pressing the Auto Start-stop button instead of a blank button.
 * Enable FXX KCAN1 CIC controllers.
 * Enable full diagnosis and coding of SVT70 modules.
 * Turn on heated seats below a set temperature.
 * Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding, etc.).
 	-> After uploading to Teensy, set the time manually/with ISTA to initialize the RTC to the same time.
 * Close the exhaust flap before engine start to reduce start noise.
-* Reduce audio volume when opening doors.
+* Reduce audio volume when opening doors. Restore when closing.
 * Dim corresponding front DRL when indicator is on.
-* Turn on corresponding front fog light when cornering light is on.
+* Turn on corresponding front fog light when steering angle threshold is exceeded.
 See program notes: [here](program-notes.txt)
 
 

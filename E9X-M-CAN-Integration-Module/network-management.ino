@@ -66,20 +66,44 @@ void cache_can_message_buffers() {                                              
     pdc_quiet_buf = makeMsgBuf(0x1C6, 4, pdc_quiet);
   #endif
   #if FRONT_FOG_CORNER
-    uint8_t front_left_fog_on[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x64};
+    uint8_t front_left_fog_on_a[] = {0x72, 6, 0x30, 3, 7, 6, 0, 8};                                                                 // Soft on/off buffers.
+    uint8_t front_left_fog_on_b[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x16};
+    uint8_t front_left_fog_on_c[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x24};
+    uint8_t front_left_fog_on_d[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x32};
+    uint8_t front_left_fog_on_e[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x40};
+    uint8_t front_left_fog_on_f[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x48};
+    uint8_t front_left_fog_on_g[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x56};
+    uint8_t front_left_fog_on_h[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x64};
     uint8_t front_left_fog_off[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0};
-    uint8_t front_right_fog_on[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x64};
+    uint8_t front_right_fog_on_a[] = {0x72, 6, 0x30, 3, 7, 7, 0, 8};
+    uint8_t front_right_fog_on_b[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x16};
+    uint8_t front_right_fog_on_c[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x24};
+    uint8_t front_right_fog_on_d[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x32};
+    uint8_t front_right_fog_on_e[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x40};
+    uint8_t front_right_fog_on_f[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x48};
+    uint8_t front_right_fog_on_g[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x56};
+    uint8_t front_right_fog_on_h[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x64};
     uint8_t front_right_fog_off[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0};
-    uint8_t front_fogs_off[] = {0x72, 6, 0x30, 0x29, 7, 0, 1, 2};
-    uint8_t frm_lamp_status_request[] = {0x72, 3, 0x30, 8, 1, 0, 0, 0};
-    uint8_t frm_lamp_status_request_b[] = {0x72, 0x30, 0, 0, 0, 0, 0, 0};
-    front_left_fog_on_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on);
+    uint8_t front_fogs_all_off[] = {0x72, 6, 0x30, 0x29, 7, 0, 1, 2};
+    front_left_fog_on_a_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on_a);
+    front_left_fog_on_b_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on_b);
+    front_left_fog_on_c_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on_c);
+    front_left_fog_on_d_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on_d);
+    front_left_fog_on_e_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on_e);
+    front_left_fog_on_f_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on_f);
+    front_left_fog_on_g_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on_g);
+    front_left_fog_on_h_buf = makeMsgBuf(0x6F1, 8, front_left_fog_on_h);
     front_left_fog_off_buf = makeMsgBuf(0x6F1, 8, front_left_fog_off);
-    front_right_fog_on_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on);
+    front_right_fog_on_a_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on_a);
+    front_right_fog_on_b_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on_b);
+    front_right_fog_on_c_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on_c);
+    front_right_fog_on_d_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on_d);
+    front_right_fog_on_e_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on_e);
+    front_right_fog_on_f_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on_f);
+    front_right_fog_on_g_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on_g);
+    front_right_fog_on_h_buf = makeMsgBuf(0x6F1, 8, front_right_fog_on_h);
     front_right_fog_off_buf = makeMsgBuf(0x6F1, 8, front_right_fog_off);
-    front_fogs_off_buf = makeMsgBuf(0x6F1, 8, front_fogs_off);                                                                      // This job only works with ignition ON.
-    frm_lamp_status_request_buf = makeMsgBuf(0x6F1, 8, frm_lamp_status_request);
-    frm_lamp_status_request_b_buf = makeMsgBuf(0x6F1, 8, frm_lamp_status_request_b);
+    front_fogs_all_off_buf = makeMsgBuf(0x6F1, 8, front_fogs_all_off);                                                              // This job only works with ignition ON.
   #endif
   #if DIM_DRL
     uint8_t left_drl_off[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0};
@@ -212,13 +236,13 @@ void kcan_write_msg(const CAN_message_t &msg) {
     return;
   }
   #if DEBUG_MODE
-  uint8_t result;
-  result = KCAN.write(msg);
-  if (result != 1) {
-    sprintf(serial_debug_string, "KCAN write failed for ID: %lx with error %d.", msg.id, result);
-    serial_log(serial_debug_string);
-    kcan_error_counter++;
-  }
+    uint8_t result;
+    result = KCAN.write(msg);
+    if (result != 1) {
+      sprintf(serial_debug_string, "KCAN write failed for ID: %lx with error %d.", msg.id, result);
+      serial_log(serial_debug_string);
+      kcan_error_counter++;
+    }
   #else
     KCAN.write(msg);
   #endif
@@ -233,13 +257,13 @@ void ptcan_write_msg(const CAN_message_t &msg) {
     }
   }
   #if DEBUG_MODE
-  uint8_t result;
-  result = PTCAN.write(msg);
-  if (result != 1) {
-    sprintf(serial_debug_string, "PTCAN write failed for ID: %lx with error %d.", msg.id, result);
-    serial_log(serial_debug_string);
-    ptcan_error_counter++;
-  }
+    uint8_t result;
+    result = PTCAN.write(msg);
+    if (result != 1) {
+      sprintf(serial_debug_string, "PTCAN write failed for ID: %lx with error %d.", msg.id, result);
+      serial_log(serial_debug_string);
+      ptcan_error_counter++;
+    }
   #else
     PTCAN.write(msg);
   #endif
@@ -249,13 +273,13 @@ void ptcan_write_msg(const CAN_message_t &msg) {
 #if SERVOTRONIC_SVT70
 void dcan_write_msg(const CAN_message_t &msg) {
   #if DEBUG_MODE
-  uint8_t result;
-  result = DCAN.write(msg);
-  if (result != 1) {
-    sprintf(serial_debug_string, "DCAN write failed for ID: %lx with error %d.", msg.id, result);
-    serial_log(serial_debug_string);
-    dcan_error_counter++;
-  }
+    uint8_t result;
+    result = DCAN.write(msg);
+    if (result != 1) {
+      sprintf(serial_debug_string, "DCAN write failed for ID: %lx with error %d.", msg.id, result);
+      serial_log(serial_debug_string);
+      dcan_error_counter++;
+    }
   #else
     DCAN.write(msg);
   #endif
