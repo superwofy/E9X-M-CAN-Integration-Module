@@ -231,33 +231,6 @@ void check_pdc_queue()  {
 #endif
 
 
-void evaluate_engine_rpm() {
-  RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
-  if (!engine_running && (RPM > 2000)) {
-    engine_running = true;
-    #if ANTI_THEFT_SEQ
-    if (anti_theft_released) {
-    #endif
-    #if CONTROL_SHIFTLIGHTS
-      shiftlight_startup_animation();                                                                                               // Show off shift light segments during engine startup (>500rpm).
-    #endif
-    #if NEEDLE_SWEEP
-      needle_sweep_animation();
-    #endif
-    #if ANTI_THEFT_SEQ
-    }
-    #endif
-    #if EXHAUST_FLAP_CONTROL
-      exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
-    #endif
-    serial_log("Engine started.");
-  } else if (engine_running && (RPM < 200)) {                                                                                       // Less than 50 RPM. Engine stalled or was stopped.
-    engine_running = false;
-    serial_log("Engine stopped.");
-  }
-}
-
-
 #if DEBUG_MODE
 void evaluate_battery_voltage() {
   battery_voltage = (((pt_msg.buf[1] - 240 ) * 256.0) + pt_msg.buf[0]) / 68.0;
@@ -338,55 +311,6 @@ void update_car_time_from_rtc() {
 
 
 #if DOOR_VOLUME
-void evaluate_door_status() {
-  if (k_msg.id == 0xE2) {
-    if (k_msg.buf[3] == 0xFD) {
-      if (!left_door_open) {
-        left_door_open = true;
-        #if RHD
-          serial_log("Passenger's door open.");
-        #else
-          serial_log("Driver's door open.");
-        #endif
-        send_volume_request();
-      }
-    } else if (k_msg.buf[3] == 0xFC) {
-      if (left_door_open) {
-        left_door_open = false;
-        #if RHD
-          serial_log("Passenger's door closed.");
-        #else
-          serial_log("Driver's door closed.");
-        #endif
-        send_volume_request();
-      }
-    }
-  } else if (k_msg.id == 0xEA) {
-    if (k_msg.buf[3] == 0xFD) {
-      if (!right_door_open) {
-        right_door_open = true;
-        #if RHD
-          serial_log("Driver's door open.");
-        #else
-          serial_log("Passenger's door open.");
-        #endif
-        send_volume_request();
-      }
-    } else if (k_msg.buf[3] == 0xFC) {
-      if (right_door_open) {
-        right_door_open = false;
-        #if RHD
-          serial_log("Driver's door closed.");
-        #else
-          serial_log("Passenger's door closed.");
-        #endif
-        send_volume_request();
-      }
-    }
-  }
-}
-
-
 void send_volume_request() {
   if (!volume_requested && diag_transmit && default_volume_sent) {
     kcan_write_msg(vol_request_buf);

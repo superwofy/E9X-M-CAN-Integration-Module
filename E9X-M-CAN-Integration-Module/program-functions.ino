@@ -17,9 +17,9 @@ void initialize_timers() {
 void initialize_watchdog() {
   WDT_timings_t config;
   #if DEBUG_MODE
-    config.trigger = 15;
+    config.trigger = 10;
     config.callback = wdt_callback;
-    config.timeout = 20;
+    config.timeout = 15;
   #else
     config.timeout = 10;                                                                                                            // If the watchdog timer is not reset within 10s, re-start the program.
   #endif
@@ -34,109 +34,109 @@ void wdt_callback() {
 #endif
 
 
-#if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2                                                                                        // Check if Dual Serial is set
-void print_current_state() {
-  SerialUSB1.println("=========== Operation ==========");
+#if DEBUG_MODE
+void print_current_state(usb_serial_class &status_serial) {
+  status_serial.println("=========== Operation ==========");
   sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "Active" : "Standby");
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " Terminal R: %s", terminal_r ? "ON" : "OFF");
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " Ignition: %s", ignition ? "ON" : "OFF");
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   #if ANTI_THEFT_SEQ
     sprintf(serial_debug_string, " Anti-theft: %s", anti_theft_released ? "OFF" : "Active");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
   sprintf(serial_debug_string, " Engine: %s", engine_running ? "ON" : "OFF");
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " RPM: %d", RPM / 4);
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   #if HDC
     sprintf(serial_debug_string, " Speed: %d", vehicle_speed);
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Cruise Control: %s", cruise_control_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
   if (vehicle_awake) {
     sprintf(serial_debug_string, " Voltage: %.2f V", battery_voltage);
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   } else {
-    SerialUSB1.println(" Voltage: Unknown");
+    status_serial.println(" Voltage: Unknown");
   }
   if (ignition) {
     if (dsc_program_status == 0) {
-      SerialUSB1.println(" DSC: Fully ON");
+      status_serial.println(" DSC: Fully ON");
     } else if (dsc_program_status == 1) {
-      SerialUSB1.println(" DSC: DTC/MDM mode");
+      status_serial.println(" DSC: DTC/MDM mode");
     } else {
-      SerialUSB1.println(" DSC: Fully OFF");
+      status_serial.println(" DSC: Fully OFF");
     }
   } else {
-    SerialUSB1.println(" DSC: Asleep");
+    status_serial.println(" DSC: Asleep");
   }
   #if LAUNCH_CONTROL_INDICATOR
     sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
 
-  SerialUSB1.println("============ MDrive ============");
+  status_serial.println("============ MDrive ============");
   if (ignition) {
     sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   } else {
-    SerialUSB1.println(" Inactive");
+    status_serial.println(" Inactive");
   }
-  SerialUSB1.print(" Settings: DSC-");
+  status_serial.print(" Settings: DSC-");
   switch (mdrive_dsc) {
     case 3:
-      SerialUSB1.print("Unchanged"); break;
+      status_serial.print("Unchanged"); break;
     case 7:
-      SerialUSB1.print("OFF"); break;
+      status_serial.print("OFF"); break;
     case 0x13:
-      SerialUSB1.print("DTC/MDM"); break;
+      status_serial.print("DTC/MDM"); break;
     case 0xB:
-      SerialUSB1.print("ON"); break;
+      status_serial.print("ON"); break;
   }
-  SerialUSB1.print("  POWER-");
+  status_serial.print("  POWER-");
   switch (mdrive_power) {
     case 0:
-      SerialUSB1.print("Unchanged"); break;
+      status_serial.print("Unchanged"); break;
     case 0x10:
-      SerialUSB1.print("Normal"); break;
+      status_serial.print("Normal"); break;
     case 0x20:
-      SerialUSB1.print("Sport"); break;
+      status_serial.print("Sport"); break;
     case 0x30:
-      SerialUSB1.print("Sport+"); break;
+      status_serial.print("Sport+"); break;
   }
-  SerialUSB1.print("  EDC-");
+  status_serial.print("  EDC-");
   switch (mdrive_edc) {
     case 0x20:
-      SerialUSB1.print("Unchanged"); break;
+      status_serial.print("Unchanged"); break;
     case 0x21:
-      SerialUSB1.print("Comfort"); break;
+      status_serial.print("Comfort"); break;
     case 0x22:
-      SerialUSB1.print("Normal"); break;
+      status_serial.print("Normal"); break;
     case 0x2A:
-      SerialUSB1.print("Sport"); break;
+      status_serial.print("Sport"); break;
   }
-  SerialUSB1.print("  SVT-");
+  status_serial.print("  SVT-");
   switch (mdrive_svt) {
     case 0xE9:
-      SerialUSB1.print("Normal"); break;
+      status_serial.print("Normal"); break;
     case 0xF1:
-      SerialUSB1.print("Sport"); break;
+      status_serial.print("Sport"); break;
   }
-  SerialUSB1.println();
+  status_serial.println();
   sprintf(serial_debug_string, " Console POWER: %s", console_power_mode ? "ON" : "OFF");
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   #if CKM
     sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
 
-  SerialUSB1.println("========= Body ==========");
+  status_serial.println("========= Body ==========");
   #if RTC
     time_t t = now();
     uint8_t rtc_hours = hour(t);
@@ -149,7 +149,7 @@ void print_current_state() {
             rtc_hours > 9 ? "" : "0", rtc_hours, rtc_minutes > 9 ? "" : "0", rtc_minutes, 
             rtc_seconds > 9 ? "" : "0", rtc_seconds, 
             rtc_day > 9 ? "" : "0", rtc_day, rtc_month > 9 ? "" : "0", rtc_month, rtc_year);
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
   #if AUTO_SEAT_HEATING
     if (ambient_temperature_can != 255) {
@@ -157,20 +157,20 @@ void print_current_state() {
     } else {
       sprintf(serial_debug_string, " Ambient temp: Unknown");
     }
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
     #if REVERSE_BEEP
       sprintf(serial_debug_string, " Reverse gear: %s", pdc_beep_sent ? "ON" : "OFF");
-      SerialUSB1.println(serial_debug_string);
+      status_serial.println(serial_debug_string);
     #endif
     sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
     #if AUTO_SEAT_HEATING_PASS
       sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
-      SerialUSB1.println(serial_debug_string);
+      status_serial.println(serial_debug_string);
       sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
-      SerialUSB1.println(serial_debug_string);
+      status_serial.println(serial_debug_string);
       sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
-      SerialUSB1.println(serial_debug_string);
+      status_serial.println(serial_debug_string);
     #endif
   #endif
   #if DOOR_VOLUME
@@ -179,50 +179,50 @@ void print_current_state() {
     #else
       sprintf(serial_debug_string, " Driver's's door: %s", left_door_open ? "Open" : "Closed");
     #endif
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
     #if RHD
       sprintf(serial_debug_string, " Driver's door: %s", right_door_open ? "Open" : "Closed");
     #else
       sprintf(serial_debug_string, " Passenger's door: %s", right_door_open ? "Open" : "Closed");
     #endif
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
   #if EXHAUST_FLAP_CONTROL
     sprintf(serial_debug_string, " Exhaust flap: %s", exhaust_flap_open ? "Open" : "Closed");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
   #if FRONT_FOG_LED_INDICATOR
     sprintf(serial_debug_string, " Front fogs: %s", front_fog_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
    #if FRONT_FOG_CORNER
     sprintf(serial_debug_string, " Dipped beam: %s", dipped_beam_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
   #if DIM_DRL
     sprintf(serial_debug_string, " DRL: %s", drl_status ? "ON" : "OFF");
-    SerialUSB1.println(serial_debug_string);
+    status_serial.println(serial_debug_string);
   #endif
   #if FTM_INDICATOR
     if (ignition) {
       sprintf(serial_debug_string, " FTM indicator: %s", ftm_indicator_status ? "ON" : "OFF");
-      SerialUSB1.println(serial_debug_string);
+      status_serial.println(serial_debug_string);
     } else {
-      SerialUSB1.println(" FTM indicator: Inactive");
+      status_serial.println(" FTM indicator: Inactive");
     }
   #endif
   sprintf(serial_debug_string, " DCAN fix for SVT: %s", diagnose_svt ? "ON" : "OFF");
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " Forwarded requests from DCAN (>): %d", dcan_forwarded_count);
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " Forwarded responses from PTCAN (<): %d", ptcan_forwarded_count);
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
 
-  SerialUSB1.println("============ Debug =============");
+  status_serial.println("============ Debug =============");
   sprintf(serial_debug_string, " CPU temperature: %.2f °C", tempmonGetTemp());
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " CPU speed: %ld MHz", F_CPU_ACTUAL / 1000000);
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   unsigned long loop_calc = micros() - loop_timer;
   if (loop_calc > max_loop_timer) {
     max_loop_timer = loop_calc;
@@ -232,10 +232,10 @@ void print_current_state() {
   } else {
     sprintf(serial_debug_string, " Max loop execution time: %ld μSeconds", max_loop_timer);
   }
-  SerialUSB1.println(serial_debug_string);
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " KCAN errors: %ld PTCAN errors: %ld DCAN errors: %ld", kcan_error_counter, ptcan_error_counter, dcan_error_counter);
-  SerialUSB1.println(serial_debug_string);
-  SerialUSB1.println("================================");
+  status_serial.println(serial_debug_string);
+  status_serial.println("================================");
   debug_print_timer = millis();
 }
 #endif
@@ -373,6 +373,11 @@ void reset_sleep_variables() {
     frm_status_requested = false;
     lock_button_pressed  = unlock_button_pressed = false;
     last_lock_status_can = 0;
+  #endif
+  #if UNFOLD_WITH_DOOR
+    if (unfold_with_door_open) {                                                                                                    // Car fell asleep with doors unlocked and mirrors folded.
+      EEPROM.update(11, unfold_with_door_open);
+    }
   #endif
   #if ANTI_THEFT_SEQ
     anti_theft_released = key_cc_sent = false;

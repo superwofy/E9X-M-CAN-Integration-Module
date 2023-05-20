@@ -19,6 +19,9 @@ void setup() {
   #endif
   initialize_timers();
   initialize_watchdog();
+  #if UNFOLD_WITH_DOOR
+    unfold_with_door_open = EEPROM.read(11) == 1 ? true : false;
+  #endif
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Setup finished in %lu ms, module is ready.", millis() - setup_timer);
     serial_log(serial_debug_string);
@@ -194,10 +197,13 @@ void loop() {
       }
     }
 
-    #if DOOR_VOLUME
+    #if DOOR_VOLUME || AUTO_MIRROR_FOLD
     if (k_msg.id == 0xE2 || k_msg.id == 0xEA) {
       evaluate_door_status();
     }
+    #endif
+
+    #if DOOR_VOLUME
     else if (k_msg.id == 0x663) {
       evaluate_audio_volume();
     }
@@ -373,6 +379,7 @@ void loop() {
         }
       } 
       #endif
+      
       #if RTC
       else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x10 || d_msg.buf[1] == 0x21)) {                                            // KOMBI is at address 0x60. ISTA sets time by sending it to KOMBI.
         update_rtc_from_dcan();
@@ -388,9 +395,9 @@ void loop() {
   
 /**********************************************************************************************************************************************************************************************************************************************/
 
-  #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
+  #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2                                                                                      // Check if Dual Serial is set.
     if (millis() - debug_print_timer >= 500) {
-      print_current_state();                                                                                                        // Print program status to the second Serial port.
+      print_current_state(SerialUSB1);                                                                                              // Print program status to the second Serial port.
     }
     loop_timer = micros();
   #endif

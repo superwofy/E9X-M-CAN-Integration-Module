@@ -46,12 +46,26 @@ void cache_can_message_buffers() {                                              
     frm_status_request_b_buf = makeMsgBuf(0x6F1, 8, frm_status_request_b);
   #endif
   #if ANTI_THEFT_SEQ
+    #if ANTI_THEFT_SEQ_ALARM
+      uint8_t alarm_siren_on[] = {0x41, 3, 0x31, 4, 2, 0, 0, 0};
+      uint8_t alarm_siren_off[] = {0x41, 3, 0x31, 4, 3, 0, 0, 0};
+      uint8_t alarm_led_on[] = {0x41, 4, 0x30, 2, 7, 1, 0, 0};
+      uint8_t alarm_led_off[] = {0x41, 3, 0x30, 2, 0, 0, 0, 0};
+      alarm_siren_on_buf = makeMsgBuf(0x6F1, 8, alarm_siren_on);
+      alarm_siren_off_buf = makeMsgBuf(0x6F1, 8, alarm_siren_off);
+      alarm_led_on_buf = makeMsgBuf(0x6F1, 8, alarm_led_on);
+      alarm_led_off_buf = makeMsgBuf(0x6F1, 8, alarm_led_off);
+    #endif
     uint8_t ekp_pwm_off[] = {0x17, 4, 0x30, 6, 4, 0, 0, 0};
     uint8_t ekp_return_to_normal[] = {0x17, 2, 0x30, 0, 0, 0, 0, 0};
     uint8_t key_cc_on[] = {0x40, 0x26, 0, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
     uint8_t key_cc_off[] = {0x40, 0x26, 0, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
+    uint8_t start_cc_on[] = {0x40, 0x2F, 1, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
+    uint8_t start_cc_off[] = {0x40, 0x2F, 1, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
     key_cc_on_buf = makeMsgBuf(0x5C0, 8, key_cc_on);
     key_cc_off_buf = makeMsgBuf(0x5C0, 8, key_cc_off);
+    start_cc_on_buf = makeMsgBuf(0x5C0, 8, start_cc_on);
+    start_cc_off_buf = makeMsgBuf(0x5C0, 8, start_cc_off);
     ekp_pwm_off_buf = makeMsgBuf(0x6F1, 8, ekp_pwm_off);
     ekp_return_to_normal_buf = makeMsgBuf(0x6F1, 8, ekp_return_to_normal);
   #endif
@@ -233,7 +247,11 @@ CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf) {
 
 void kcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
-    return;
+    if (msg.buf[0] == 0x41 && (msg.buf[2] == 0x30 || msg.buf[2] == 0x31)) {
+      // Exception for alarm jobs.
+    } else {
+      return;
+    }
   }
   #if DEBUG_MODE
     uint8_t result;

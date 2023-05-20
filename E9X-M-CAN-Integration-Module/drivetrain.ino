@@ -1,3 +1,50 @@
+// Engine/driveline functions go here.
+
+
+void evaluate_engine_rpm() {
+  RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
+  if (!engine_running && (RPM > 2000)) {
+    engine_running = true;
+    #if ANTI_THEFT_SEQ
+    if (anti_theft_released) {
+    #endif
+    #if CONTROL_SHIFTLIGHTS
+      shiftlight_startup_animation();                                                                                               // Show off shift light segments during engine startup (>500rpm).
+    #endif
+    #if NEEDLE_SWEEP
+      needle_sweep_animation();
+    #endif
+    #if ANTI_THEFT_SEQ
+    }
+    #endif
+    #if EXHAUST_FLAP_CONTROL
+      exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
+    #endif
+    serial_log("Engine started.");
+    #if ANTI_THEFT_SEQ_ALARM
+      alarm_after_engine_stall = true;
+      serial_log("Anti-theft active. Alarm will sound after stall.");      
+    #endif
+  } else if (engine_running && (RPM < 200)) {                                                                                       // Less than 50 RPM. Engine stalled or was stopped.
+    engine_running = false;
+    serial_log("Engine stopped.");
+    #if ANTI_THEFT_SEQ_ALARM
+      if (alarm_after_engine_stall) {
+        kcan_write_msg(alarm_siren_on_buf);
+        serial_log("Alarm ON.");
+        alarm_active = true;
+        unsigned long timenow = millis();
+        delayed_can_tx_msg m;
+        for (uint8_t i = 0; i < 6; i++) {                                                                                           // Alarm test job times out after about 15s.
+          m = {alarm_siren_on_buf, timenow + 15000 * i};
+          alarm_siren_txq.push(&m);
+        }
+      }
+    #endif
+  }
+}
+
+
 void read_settings_from_eeprom() {
   mdrive_dsc = EEPROM.read(1);
   mdrive_power = EEPROM.read(2);
@@ -164,10 +211,25 @@ void evaluate_m_mfl_button_press() {
         if (key_cc_sent) {
           kcan_write_msg(key_cc_off_buf);
           key_cc_sent = false;
+          #if ANTI_THEFT_SEQ_ALARM
+            kcan_write_msg(alarm_led_off_buf);
+          #endif
+          kcan_write_msg(start_cc_on_buf);
+          serial_log("Sent start ready CC.");
         }
+        #if ANTI_THEFT_SEQ_ALARM
+          if (alarm_active) {
+            kcan_write_msg(alarm_siren_off_buf);
+            alarm_after_engine_stall = alarm_active = false;
+            alarm_siren_txq.flush();
+            serial_log("Deactivated alarm.");
+          }
+        #endif
         delayed_can_tx_msg m = {ekp_return_to_normal_buf, millis() + 500};                                                          // Make sure these messages are received.
         anti_theft_txq.push(&m);
-        m = {key_cc_off_buf, millis() + 500};
+        m = {key_cc_off_buf, millis() + 100};
+        anti_theft_txq.push(&m);
+        m = {start_cc_off_buf, millis() + 500};
         anti_theft_txq.push(&m);
       }
     }
@@ -345,28 +407,6 @@ void update_dme_power_ckm() {
 #endif
 
 
-#if CKM || EDC_CKM_FIX
-void evaluate_key_number() {
-  if (k_msg.buf[0] / 11 != cas_key_number) {
-    cas_key_number = k_msg.buf[0] / 11;                                                                                             // Key 1 = 0, Key 2 = 11, Key 3 = 22...
-    if (cas_key_number > 2) {
-      serial_log("Received wrong key personalisation number. Assuming default");
-      cas_key_number = 3;                                                                                                           // Default.
-    }
-    #if DEBUG_MODE
-    else {
-      sprintf(serial_debug_string, "Received key number: %d.", cas_key_number + 1);
-      serial_log(serial_debug_string);
-    }
-    #endif
-    #if CKM
-      console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
-    #endif
-  }
-}
-#endif
-
-
 #if EDC_CKM_FIX
 void update_edc_ckm() {
   edc_ckm[cas_key_number] = k_msg.buf[0];
@@ -414,7 +454,7 @@ void check_edc_ckm_queue() {
 
 #if ANTI_THEFT_SEQ
 void check_anti_theft_status() {
-  if (millis() >= 2000) {                                                                                                           // Delay ensures that some time passed after Teensy (re)started to receive CAN messages.
+  if (millis() >= 5000) {                                                                                                           // Delay ensures that time passed after Teensy (re)started to receive messages, and LPFP to prime.
     if (!anti_theft_released && !vehicle_moving && !engine_running) {                                                               // Make sure we don't cut this off while the car is in motion!!!
       if (millis() - anti_theft_timer >= 1000) {
         kcan_write_msg(ekp_pwm_off_buf);
@@ -422,6 +462,9 @@ void check_anti_theft_status() {
           if (!key_cc_sent) {
             serial_log("Sending anti-theft key CC. EKP is disabled.");
             key_cc_sent = true;
+            #if ANTI_THEFT_SEQ_ALARM
+              kcan_write_msg(alarm_led_on_buf);
+            #endif
           }
           kcan_write_msg(key_cc_on_buf);
         }
@@ -429,14 +472,16 @@ void check_anti_theft_status() {
       }
     }
   }
-  if (!anti_theft_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
-    anti_theft_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      anti_theft_txq.drop();
+  #if ANTI_THEFT_SEQ_ALARM
+    if (!anti_theft_txq.isEmpty()) {
+      delayed_can_tx_msg delayed_tx;
+      anti_theft_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        kcan_write_msg(delayed_tx.tx_msg);
+        anti_theft_txq.drop();
+      }
     }
-  }
+  #endif
 }
 
 
@@ -444,6 +489,9 @@ void reset_key_cc() {
   if (key_cc_sent) {
     kcan_write_msg(key_cc_off_buf);
     key_cc_sent = false;
+    #if ANTI_THEFT_SEQ_ALARM
+      kcan_write_msg(alarm_led_off_buf);
+    #endif
   }
 }
 #endif

@@ -37,9 +37,13 @@ WDT_T4<WDT1> wdt;
 #define HDC 1                                                                                                                       // Gives a function to the HDC console button in non 4WD cars.
 #define FAKE_MSA 1                                                                                                                  // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Un-fold mirrors when locking. Can be done with coding but this integrates nicer.
+#if AUTO_MIRROR_FOLD
+#define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
+#endif
 #define ANTI_THEFT_SEQ 1                                                                                                            // Disable fuel pump until the steering wheel M button is pressed a number of times.
 #if ANTI_THEFT_SEQ
 const uint8_t ANTI_THEFT_SEQ_NUMBER = 3;                                                                                            // Number of times to press the button for the EKP to be re-activated.
+#define ANTI_THEFT_SEQ_ALARM 1                                                                                                      // Sound the alarm if engine is started without disabling anti-theft.
 #endif
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack this indicator.
@@ -196,6 +200,9 @@ CAN_message_t cc_gong_buf;
   CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf;
 #endif
 #if AUTO_MIRROR_FOLD
+  #if UNFOLD_WITH_DOOR
+    bool unfold_with_door_open = false;
+  #endif
   bool mirrors_folded, frm_status_requested = false;
   bool lock_button_pressed  = false, unlock_button_pressed = false;
   uint8_t last_lock_status_can = 0;
@@ -204,10 +211,17 @@ CAN_message_t cc_gong_buf;
   cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 12, queue_FIFO);
 #endif
 #if ANTI_THEFT_SEQ
+  #if ANTI_THEFT_SEQ_ALARM
+    bool alarm_after_engine_stall = false, alarm_active = false;
+    CAN_message_t alarm_led_on_buf, alarm_led_off_buf;
+    CAN_message_t alarm_siren_on_buf, alarm_siren_off_buf;
+    cppQueue alarm_siren_txq(sizeof(delayed_can_tx_msg), 8, queue_FIFO);
+  #endif
   bool anti_theft_released = false, key_cc_sent = false;
   unsigned long anti_theft_timer;
   uint8_t anti_theft_pressed_count = 0;
   CAN_message_t key_cc_on_buf, key_cc_off_buf;
+  CAN_message_t start_cc_on_buf, start_cc_off_buf;
   CAN_message_t ekp_pwm_off_buf, ekp_return_to_normal_buf;
   cppQueue anti_theft_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);
 #endif
@@ -252,12 +266,14 @@ CAN_message_t cc_gong_buf;
   bool rtc_valid = true;
 #endif
 #if DOOR_VOLUME
-  bool left_door_open = false, right_door_open = false;
   bool volume_reduced = false, volume_requested = false;
   bool default_volume_sent = false;
   uint8_t volume_restore_offset = 0, volume_changed_to;
   CAN_message_t vol_request_buf, default_vol_set_buf;
   cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 6, queue_FIFO);
+#endif
+#if DOOR_VOLUME || AUTO_MIRROR_FOLD
+  bool left_door_open = false, right_door_open = false;
 #endif
 #if CKM || DOOR_VOLUME
   unsigned long idrive_alive_timer = 0;
@@ -297,7 +313,7 @@ unsigned long diag_deactivate_timer;
 extern "C" void startup_middle_hook(void);
 extern "C" volatile uint32_t systick_millis_count;
 void startup_middle_hook(void) {
-  // force millis() to be 300 to skip startup delays
+  // force millis() to be 300 to skip USB startup delays
   systick_millis_count = 300;
 }
 #endif

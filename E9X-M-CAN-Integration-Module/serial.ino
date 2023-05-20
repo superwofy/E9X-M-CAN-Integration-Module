@@ -7,6 +7,11 @@ void serial_interpreter() {
   if (cmd == "module_reboot") {
     serial_log("Serial: Will reboot after watchdog timeout.");
     module_reboot();
+  }
+  if (cmd == "print_status") {
+    Serial.println();
+    print_current_state(Serial);
+    Serial.println();
   } 
   #if EXHAUST_FLAP_CONTROL
   else if (cmd == "open_exhaust_flap") {
@@ -103,6 +108,8 @@ void serial_interpreter() {
     if (ignition) {
       kcan_write_msg(front_fogs_all_off_buf);
       serial_log("  Serial: Deactivated front fog lights.");
+    } else {
+      serial_log("  Serial: Activate ignition first.");
     }
   }
   #endif
@@ -145,6 +152,24 @@ void serial_interpreter() {
       anti_theft_pressed_count = 0;
       serial_log("  Serial: Locked EKP anti theft.");
     }
+    #if ANTI_THEFT_SEQ_ALARM
+      else if (cmd == "alarm_siren_on") {
+        kcan_write_msg(alarm_siren_on_buf);
+        serial_log("  Serial: Alarm siren ON.");
+      }
+      else if (cmd == "alarm_siren_off") {
+        kcan_write_msg(alarm_siren_off_buf);
+        serial_log("  Serial: Alarm siren OFF.");
+      }
+      else if (cmd == "test_trip_stall_alarm") {
+        if (ignition) {
+          engine_running = alarm_after_engine_stall = true;
+          serial_log("  Serial: Stall alarm tripped.");
+        } else {
+          serial_log("  Serial: Activate ignition first.");
+        }
+      }
+    #endif
   #endif
 }
 

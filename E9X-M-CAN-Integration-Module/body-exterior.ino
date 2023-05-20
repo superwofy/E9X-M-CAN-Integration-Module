@@ -61,6 +61,77 @@ void evaluate_indicator_status_dim() {
 #endif
 
 
+#if DOOR_VOLUME || AUTO_MIRROR_FOLD
+void evaluate_door_status() {
+  if (k_msg.id == 0xE2) {
+    if (k_msg.buf[3] == 0xFD) {
+      if (!left_door_open) {
+        left_door_open = true;
+        #if RHD
+          serial_log("Passenger's door open.");
+        #else
+          serial_log("Driver's door open.");
+          #if UNFOLD_WITH_DOOR
+            if (unfold_with_door_open) {
+              toggle_mirror_fold();
+              unfold_with_door_open = false;
+            }
+          #endif
+        #endif
+        #if DOOR_VOLUME
+          send_volume_request();
+        #endif
+      }
+    } else if (k_msg.buf[3] == 0xFC) {
+      if (left_door_open) {
+        left_door_open = false;
+        #if RHD
+          serial_log("Passenger's door closed.");
+        #else
+          serial_log("Driver's door closed.");
+        #endif
+        #if DOOR_VOLUME
+          send_volume_request();
+        #endif
+      }
+    }
+  } else if (k_msg.id == 0xEA) {
+    if (k_msg.buf[3] == 0xFD) {
+      if (!right_door_open) {
+        right_door_open = true;
+        #if RHD
+          serial_log("Driver's door open.");
+          #if UNFOLD_WITH_DOOR
+            if (unfold_with_door_open) {
+              toggle_mirror_fold();
+              unfold_with_door_open = false;
+            }
+          #endif
+        #else
+          serial_log("Passenger's door open.");
+        #endif
+        #if DOOR_VOLUME
+          send_volume_request();
+        #endif
+      }
+    } else if (k_msg.buf[3] == 0xFC) {
+      if (right_door_open) {
+        right_door_open = false;
+        #if RHD
+          serial_log("Driver's door closed.");
+        #else
+          serial_log("Passenger's door closed.");
+        #endif
+        #if DOOR_VOLUME
+          send_volume_request();
+        #endif
+      }
+    }
+  }
+}
+#endif
+
+
 #if EXHAUST_FLAP_CONTROL
 void control_exhaust_flap_user() {
   if (engine_running) {
@@ -119,6 +190,28 @@ void actuate_exhaust_solenoid(bool activate) {
 #endif
 
 
+#if CKM || EDC_CKM_FIX
+void evaluate_key_number() {
+  if (k_msg.buf[0] / 11 != cas_key_number) {
+    cas_key_number = k_msg.buf[0] / 11;                                                                                             // Key 1 = 0, Key 2 = 11, Key 3 = 22...
+    if (cas_key_number > 2) {
+      serial_log("Received wrong key personalisation number. Assuming default");
+      cas_key_number = 3;                                                                                                           // Default.
+    }
+    #if DEBUG_MODE
+    else {
+      sprintf(serial_debug_string, "Received key number: %d.", cas_key_number + 1);
+      serial_log(serial_debug_string);
+    }
+    #endif
+    #if CKM
+      console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
+    #endif
+  }
+}
+#endif
+
+
 #if AUTO_MIRROR_FOLD
 void evaluate_remote_button() {
   if (!engine_running) {                                                                                                            // Ignore if locking car while running.
@@ -130,6 +223,9 @@ void evaluate_remote_button() {
           delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 100};
           mirror_fold_txq.push(&m);
           frm_status_requested = true;
+          #if UNFOLD_WITH_DOOR
+            unfold_with_door_open = false;
+          #endif
         } else if (k_msg.buf[2] == 1) {
           unlock_button_pressed = true;
           serial_log("Remote unlock button pressed. Checking mirror status.");
@@ -138,7 +234,6 @@ void evaluate_remote_button() {
           frm_status_requested = true;
         } else if (k_msg.buf[2] == 0) {
           serial_log("Remote buttons released.");
-          lock_button_pressed = unlock_button_pressed = false;
         }
       }
       last_lock_status_can = k_msg.buf[2];
@@ -149,7 +244,7 @@ void evaluate_remote_button() {
 
 void evaluate_mirror_fold_status() {
   if (frm_status_requested) {                                                                                                       // Make sure the request came from this module.
-    if (k_msg.buf[1] == 0x22) {
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {
       if (k_msg.buf[4] == 0) {
         mirrors_folded = false;
         serial_log("Mirrors are un-folded.");
@@ -161,26 +256,31 @@ void evaluate_mirror_fold_status() {
 
       if (lock_button_pressed) {
         if (!mirrors_folded) {
-          #if DOOR_VOLUME
-            if (!left_door_open && !right_door_open) {
-              serial_log("Folding mirrors after lock button pressed.");
-              toggle_mirror_fold();
-            }
-            #else
-              serial_log("Folding mirrors after lock button pressed.");
-              toggle_mirror_fold();
-          #endif
+          if (!left_door_open && !right_door_open) {
+            serial_log("Folding mirrors after lock button pressed.");
+            toggle_mirror_fold();
+          }
         }
         lock_button_pressed = false;
       } else if (unlock_button_pressed) {
         if (mirrors_folded) {
-          serial_log("Un-folding mirrors after unlock button pressed.");
-          toggle_mirror_fold();
+          serial_log("Will un-fold mirrors when door is opened after unlock button pressed.");
+          #if UNFOLD_WITH_DOOR
+            unfold_with_door_open = true;
+          #else
+            toggle_mirror_fold();
+          #endif
           unlock_button_pressed = false;
         }
       }
-    } else if (k_msg.buf[1] == 0x10) {
+    } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
       kcan_write_msg(frm_status_request_b_buf);
+    } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x21) {
+      // Ignore {F1 21 80 3 22 0 6C 41}.
+    } else {                                                                                                                        // Try again.
+      serial_log("Did not receive the mirror status. Re-trying.");
+      delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 200};
+      mirror_fold_txq.push(&m);
     }
   }
 }
@@ -195,7 +295,7 @@ void toggle_mirror_fold() {
   unsigned long timeNow = millis();
   m = {frm_toggle_fold_mirror_a_buf, timeNow + delay};
   mirror_fold_txq.push(&m);
-  m = {frm_toggle_fold_mirror_b_buf, timeNow + delay + 20};
+  m = {frm_toggle_fold_mirror_b_buf, timeNow + delay + 10};
   mirror_fold_txq.push(&m);
   mirrors_folded = !mirrors_folded;
 }

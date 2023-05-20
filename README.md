@@ -36,6 +36,7 @@ I use it to:
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
 * Fold/Un-fold mirrors when locking/unlocking.
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
+	-> If engine is started without releasing this immobilizer, alarm will sound once engine stalls.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Audibly warn when reverse is engaged.
 * Create a HDC function similar to the one in xDrive cars.
