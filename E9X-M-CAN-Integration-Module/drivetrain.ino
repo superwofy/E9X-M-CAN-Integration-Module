@@ -410,3 +410,40 @@ void check_edc_ckm_queue() {
   }
 }
 #endif
+
+
+#if ANTI_THEFT_SEQ
+void check_anti_theft_status() {
+  if (millis() >= 2000) {                                                                                                           // Delay ensures that some time passed after Teensy (re)started to receive CAN messages.
+    if (!anti_theft_released && !vehicle_moving && !engine_running) {                                                               // Make sure we don't cut this off while the car is in motion!!!
+      if (millis() - anti_theft_timer >= 1000) {
+        kcan_write_msg(ekp_pwm_off_buf);
+        if (terminal_r) {
+          if (!key_cc_sent) {
+            serial_log("Sending anti-theft key CC. EKP is disabled.");
+            key_cc_sent = true;
+          }
+          kcan_write_msg(key_cc_on_buf);
+        }
+        anti_theft_timer = millis();
+      }
+    }
+  }
+  if (!anti_theft_txq.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    anti_theft_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      anti_theft_txq.drop();
+    }
+  }
+}
+
+
+void reset_key_cc() {
+  if (key_cc_sent) {
+    kcan_write_msg(key_cc_off_buf);
+    key_cc_sent = false;
+  }
+}
+#endif
