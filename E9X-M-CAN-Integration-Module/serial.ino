@@ -11,7 +11,10 @@ void serial_interpreter() {
   if (cmd == "print_status") {
     Serial.println();
     print_current_state(Serial);
-    Serial.println();
+  }
+  if (cmd == "cc_gong") {
+    serial_log("Serial: Sending CC gong.");
+    kcan_write_msg(cc_gong_buf);
   } 
   #if EXHAUST_FLAP_CONTROL
   else if (cmd == "open_exhaust_flap") {
@@ -170,6 +173,9 @@ void serial_interpreter() {
         }
       }
     #endif
+    else {
+      serial_log("  Serial: Unknown command.");
+    }
   #endif
 }
 

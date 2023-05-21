@@ -220,7 +220,7 @@ void evaluate_remote_button() {
         if (k_msg.buf[2] == 4) {
           lock_button_pressed = true;
           serial_log("Remote lock button pressed. Checking mirror status.");
-          delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 100};
+          delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 200};
           mirror_fold_txq.push(&m);
           frm_status_requested = true;
           #if UNFOLD_WITH_DOOR
@@ -229,7 +229,7 @@ void evaluate_remote_button() {
         } else if (k_msg.buf[2] == 1) {
           unlock_button_pressed = true;
           serial_log("Remote unlock button pressed. Checking mirror status.");
-          delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 100};
+          delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 200};
           mirror_fold_txq.push(&m);
           frm_status_requested = true;
         } else if (k_msg.buf[2] == 0) {

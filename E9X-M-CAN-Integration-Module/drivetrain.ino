@@ -206,30 +206,40 @@ void evaluate_m_mfl_button_press() {
         anti_theft_pressed_count++;
       } else {
         anti_theft_released = true;
-        kcan_write_msg(ekp_return_to_normal_buf);
+        kcan_write_msg(ekp_return_to_normal_buf);                                                                                   // KWP To EKP.
         serial_log("Anti-theft released. EKP control restored to DME.");
-        if (key_cc_sent) {
-          kcan_write_msg(key_cc_off_buf);
-          key_cc_sent = false;
-          #if ANTI_THEFT_SEQ_ALARM
-            kcan_write_msg(alarm_led_off_buf);
-          #endif
-          kcan_write_msg(start_cc_on_buf);
-          serial_log("Sent start ready CC.");
-        }
+        delayed_can_tx_msg m;
+        unsigned long timenow = millis();
         #if ANTI_THEFT_SEQ_ALARM
           if (alarm_active) {
-            kcan_write_msg(alarm_siren_off_buf);
+            m = {alarm_siren_off_buf, timenow};                                                                                     // KWP to DWA.
+            anti_theft_txq.push(&m);
             alarm_after_engine_stall = alarm_active = false;
             alarm_siren_txq.flush();
             serial_log("Deactivated alarm.");
           }
         #endif
-        delayed_can_tx_msg m = {ekp_return_to_normal_buf, millis() + 500};                                                          // Make sure these messages are received.
+        if (key_cc_sent) {
+          m = {key_cc_off_buf, timenow + 50};                                                                                       // CC to KCAN.
+          anti_theft_txq.push(&m);
+          key_cc_sent = false;
+          #if ANTI_THEFT_SEQ_ALARM
+            m = {alarm_led_off_buf, timenow + 100};                                                                                 // KWP to DWA.
+            anti_theft_txq.push(&m);
+          #endif
+          if (terminal_r) {
+            m = {start_cc_on_buf, timenow + 400};                                                                                   // CC to KCAN.
+            anti_theft_txq.push(&m);
+            serial_log("Sent start ready CC.");
+          }
+        }
+        if (!terminal_r) {
+          kcan_write_msg(cc_gong_buf);                                                                                              // KWP to KOMBI.
+          serial_log("Sent start ready gong.");
+        }
+        m = {ekp_return_to_normal_buf, timenow + 500};                                                                              // Make sure these messages are received.
         anti_theft_txq.push(&m);
-        m = {key_cc_off_buf, millis() + 100};
-        anti_theft_txq.push(&m);
-        m = {start_cc_off_buf, millis() + 500};
+        m = {start_cc_off_buf, timenow + 800};
         anti_theft_txq.push(&m);
       }
     }

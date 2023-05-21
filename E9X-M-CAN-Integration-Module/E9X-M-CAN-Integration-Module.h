@@ -50,7 +50,7 @@ const uint8_t ANTI_THEFT_SEQ_NUMBER = 3;                                        
 #define FRONT_FOG_CORNER 1                                                                                                          // Turn ON/OFF corresponding fog light when turning.
 #if FRONT_FOG_CORNER
 const int8_t FOG_CORNER_STEERTING_ANGLE = 80;                                                                                       // Steering angle at which to activate fog corner function.
-const int8_t STEERTING_ANGLE_HYSTERESIS = 10;
+const int8_t STEERTING_ANGLE_HYSTERESIS = 15;
 #endif
 #define DIM_DRL 1                                                                                                                   // Dims DLR ON the side that the indicator is ON.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
@@ -91,10 +91,10 @@ const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                         
 #if CONTROL_SHIFTLIGHTS
   const int16_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                      // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
 #endif
-const float MAX_THRESHOLD = 62.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
-const float MEDIUM_THRESHOLD = 57.0;
-const float MILD_THRESHOLD = 52.0;
-const float HYSTERESIS = 2.0;
+const float MAX_THRESHOLD = 63.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
+const float MEDIUM_THRESHOLD = 58.0;
+const float MILD_THRESHOLD = 53.0;
+const float HYSTERESIS = 3.0;
 const unsigned long MAX_UNDERCLOCK = 24 * 1000000;
 const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
 const unsigned long MILD_UNDERCLOCK = 450 * 1000000;
@@ -313,7 +313,7 @@ unsigned long diag_deactivate_timer;
 extern "C" void startup_middle_hook(void);
 extern "C" volatile uint32_t systick_millis_count;
 void startup_middle_hook(void) {
-  // force millis() to be 300 to skip USB startup delays
+  // Force millis() to be 300 to skip USB startup delays. The module needs to boot very quickly to revceive the unlock message.
   systick_millis_count = 300;
 }
 #endif

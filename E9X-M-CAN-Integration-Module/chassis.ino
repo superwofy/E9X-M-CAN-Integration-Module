@@ -59,10 +59,21 @@ void evaluate_reverse_status() {
   if (k_msg.buf[0] == 0xFE) {
     if (!reverse_status) {
       reverse_status = true;
-      serial_log("Reverse gear engaged.");
+      serial_log("Reverse gear ON.");
+      #if FRONT_FOG_CORNER
+        if (left_fog_on || right_fog_on) {
+          serial_log("Deactivating corner fogs with reverse ON.");
+          delayed_can_tx_msg m = {front_fogs_all_off_buf, millis() + 100};
+          fog_corner_txq.push(&m);
+          left_fog_on = right_fog_on = false;
+        }
+      #endif
     }
   } else {
-    reverse_status = false;
+    if (reverse_status) {
+      reverse_status = false;
+      serial_log("Reverse gear OFF.");
+    }
   }
 }
 #endif

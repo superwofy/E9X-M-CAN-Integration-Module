@@ -312,17 +312,18 @@ void update_car_time_from_rtc() {
 
 #if DOOR_VOLUME
 void send_volume_request() {
-  if (!volume_requested && diag_transmit && default_volume_sent) {
-    kcan_write_msg(vol_request_buf);
+  if (!volume_requested && diag_transmit) {
+    delayed_can_tx_msg m = {vol_request_buf, millis() + 100};
+    idrive_txq.push(&m);
     volume_requested = true;
-    serial_log("Requested volume from iDrive.");
+    serial_log("Requesting volume from iDrive.");
   }
 }
 
 
 void evaluate_audio_volume() {
   if (volume_requested) {                                                                                                           // Make sure that the module is the one that requested this result.
-    if (k_msg.buf[3] == 0x24) {                                                                                                     // status_volumeaudio response.
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[3] == 0x24) {                                                                             // status_volumeaudio response.
       uint8_t audio_volume = k_msg.buf[4];
       if (audio_volume > 0) {
         #if DEBUG_MODE
@@ -378,9 +379,16 @@ void evaluate_audio_volume() {
             }
           }
         }
+      } else {
+        serial_log("Received volume 0 from iDrive");
+        if (!default_volume_sent) {
+          kcan_write_msg(default_vol_set_buf);
+          default_volume_sent = true;
+          serial_log("Sent default volume job to iDrive after receiving volume 0.");
+        }
       }
+      volume_requested = false;
     }
-    volume_requested = false;
   }
 }
 
@@ -391,6 +399,7 @@ void check_idrive_queue() {
     idrive_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       if (vehicle_awake) {
+        kcan_write_msg(delayed_tx.tx_msg);
         if (delayed_tx.tx_msg.buf[3] == 0x23) {
           serial_log("Sent volume change job to iDrive.");
         }

@@ -399,9 +399,9 @@ void loop() {
     if (millis() - debug_print_timer >= 500) {
       print_current_state(SerialUSB1);                                                                                              // Print program status to the second Serial port.
     }
-    loop_timer = micros();
   #endif
   #if DEBUG_MODE
+    loop_timer = micros();
     while (Serial.available()) {
       serial_interpreter();
     }
