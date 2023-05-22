@@ -5,12 +5,24 @@
 void serial_interpreter() {
   String cmd = Serial.readStringUntil('\n');
   if (cmd == "module_reboot") {
-    serial_log("Serial: Will reboot after watchdog timeout.");
+    serial_log("Serial: Rebooting.");
+    delay(200);
     module_reboot();
   }
+  if (cmd == "test_watchdog") {
+    serial_log("Serial: Will reboot after watchdog timeout.");
+    while(1);
+  }
   if (cmd == "print_status") {
-    Serial.println();
     print_current_state(Serial);
+  }
+  if (cmd == "print_voltage") {
+    if (battery_voltage > 0) {
+      sprintf(serial_debug_string, " Serial: %.2f V", battery_voltage);
+      Serial.println(serial_debug_string);
+    } else {
+      Serial.println(" Serial: voltage unavailable.");
+    }
   }
   if (cmd == "cc_gong") {
     serial_log("Serial: Sending CC gong.");
@@ -39,8 +51,8 @@ void serial_interpreter() {
     module_reboot();
   } 
   else if (cmd == "reset_mdrive") {
-    reset_mdrive_settings();
     Serial.print("  Serial: ");
+    reset_mdrive_settings();
   } 
   else if (cmd == "sleep_ptcan") {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
@@ -173,14 +185,11 @@ void serial_interpreter() {
         }
       }
     #endif
-  else {
-    serial_log("  Serial: Unknown command.");
-  }
   #endif
 }
 
 
 void module_reboot() {
-  while(1);
+  wdt.reset();
 }
 #endif

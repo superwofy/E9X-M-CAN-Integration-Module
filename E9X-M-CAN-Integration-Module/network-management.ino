@@ -8,6 +8,7 @@
 // [5] - Job dependent
 // [6] - Job dependent
 // [7] - Job dependent
+// KWP jobs are reflected by the JBE across buses. I.e. sending 6F1 to KCAN will be forwarded to PTCAN too.
 
 
 void cache_can_message_buffers() {                                                                                                  // Put all static the buffers in memory during setup().

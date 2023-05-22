@@ -15,48 +15,63 @@ void evaluate_drl_status() {
     }
   }
 }
+#endif
 
 
+#if DIM_DRL || FRONT_FOG_CORNER
 void evaluate_indicator_status_dim() {
+  #if DIM_DRL
   if (drl_status && diag_transmit) {
+  #endif
     if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                              // Off or Hazards
-      if (right_dimmed) {
-        kcan_write_msg(right_drl_bright_buf);
-        right_dimmed = false;
-        serial_log("Restored right DRL brightness.");
-      } else if (left_dimmed) {
-        kcan_write_msg(left_drl_bright_buf);
-        left_dimmed = false;
-        serial_log("Restored left DRL brightness.");
-      }
+      #if DIM_DRL
+        if (right_dimmed) {
+          kcan_write_msg(right_drl_bright_buf);
+          right_dimmed = false;
+          serial_log("Restored right DRL brightness.");
+        } else if (left_dimmed) {
+          kcan_write_msg(left_drl_bright_buf);
+          left_dimmed = false;
+          serial_log("Restored left DRL brightness.");
+        }
+        indicators_on = false;
+      #endif
     } else if (k_msg.buf[0] == 0x91) {                                                                                              // Left indicator
-      if (right_dimmed) {
-        kcan_write_msg(right_drl_bright_buf);
-        right_dimmed = false;
-        serial_log("Restored right DRL brightness.");
-      }
-      kcan_write_msg(left_drl_dim_buf);
-      #if DEBUG_MODE
-        if (!left_dimmed) {
-          serial_log("Dimmed left DRL.");
+      #if DIM_DRL
+        if (right_dimmed) {
+          kcan_write_msg(right_drl_bright_buf);
+          right_dimmed = false;
+          serial_log("Restored right DRL brightness.");
         }
+        kcan_write_msg(left_drl_dim_buf);
+        #if DEBUG_MODE
+          if (!left_dimmed) {
+            serial_log("Dimmed left DRL.");
+          }
+        #endif
+        left_dimmed = true;
       #endif
-      left_dimmed = true;
+      indicators_on = true;
     } else if (k_msg.buf[0] == 0xA1) {                                                                                              // Right indicator
-      if (left_dimmed) {
-        kcan_write_msg(left_drl_bright_buf);
-        left_dimmed = false;
-        serial_log("Restored left DRL brightness.");
-      }
-      kcan_write_msg(right_drl_dim_buf);
-      #if DEBUG_MODE
-        if (!right_dimmed) {
-          serial_log("Dimmed right DRL.");
+      #if DIM_DRL
+        if (left_dimmed) {
+          kcan_write_msg(left_drl_bright_buf);
+          left_dimmed = false;
+          serial_log("Restored left DRL brightness.");
         }
+        kcan_write_msg(right_drl_dim_buf);
+        #if DEBUG_MODE
+          if (!right_dimmed) {
+            serial_log("Dimmed right DRL.");
+          }
+        #endif
+        right_dimmed = true;
       #endif
-      right_dimmed = true;
     }
+    indicators_on = true;
+  #if DIM_DRL
   }
+  #endif
 }
 #endif
 
@@ -136,7 +151,7 @@ void evaluate_door_status() {
 void control_exhaust_flap_user() {
   if (engine_running) {
     if (exhaust_flap_sport) {                                                                                                       // Flap always open in sport mode.
-      if ((millis() - exhaust_flap_action_timer) >= 500) {
+      if (exhaust_flap_action_timer >= 500) {
         if (!exhaust_flap_open) {
           actuate_exhaust_solenoid(LOW);
           serial_log("Opened exhaust flap with MDrive.");
@@ -164,7 +179,7 @@ void control_exhaust_flap_user() {
 void control_exhaust_flap_rpm() {
   if (engine_running) {
     if (!exhaust_flap_sport) {
-      if ((millis() - exhaust_flap_action_timer) >= exhaust_flap_action_interval) {                                                 // Avoid vacuum drain, oscillation and apply startup delay.
+      if (exhaust_flap_action_timer >= exhaust_flap_action_interval) {                                                              // Avoid vacuum drain, oscillation and apply startup delay.
         if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
           if (!exhaust_flap_open) {
             actuate_exhaust_solenoid(LOW);
@@ -184,7 +199,7 @@ void control_exhaust_flap_rpm() {
 
 void actuate_exhaust_solenoid(bool activate) {
   digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, activate);
-  exhaust_flap_action_timer = millis();
+  exhaust_flap_action_timer = 0;
   exhaust_flap_open = !activate;                                                                                                    // Flap position is the inverse of solenoid state. When active, the flap is closed.
 }
 #endif
@@ -357,7 +372,17 @@ void evaluate_steering_angle_fog() {
       steering_angle = steering_angle - 2849;
     }
 
-    if (steering_angle > FOG_CORNER_STEERTING_ANGLE) {
+    int8_t ANGLE, HYSTERESIS;
+    if (indicators_on) {
+      ANGLE = FOG_CORNER_STEERTING_ANGLE_INDICATORS;
+      HYSTERESIS = STEERTING_ANGLE_HYSTERESIS_INDICATORS;
+    } else {
+      ANGLE = FOG_CORNER_STEERTING_ANGLE;
+      HYSTERESIS = STEERTING_ANGLE_HYSTERESIS;
+    }
+    
+
+    if (steering_angle > ANGLE) {
       if (!left_fog_on) {
         unsigned long timenow = millis();
         delayed_can_tx_msg m = {front_left_fog_on_a_buf, timenow};
@@ -381,7 +406,7 @@ void evaluate_steering_angle_fog() {
           serial_log("Steering angle below setpoint. Turned left fog light ON.");
         }
       }
-    } else if (steering_angle < (FOG_CORNER_STEERTING_ANGLE - STEERTING_ANGLE_HYSTERESIS)) {
+    } else if (steering_angle < (ANGLE - HYSTERESIS)) {
       if (left_fog_on) {
         unsigned long timenow = millis();
         delayed_can_tx_msg m = {front_left_fog_on_g_buf, timenow};
@@ -407,7 +432,7 @@ void evaluate_steering_angle_fog() {
       }
     }
 
-    if (steering_angle < -FOG_CORNER_STEERTING_ANGLE) {
+    if (steering_angle < -ANGLE) {
       if (!right_fog_on) {
         unsigned long timenow = millis();
         delayed_can_tx_msg m = {front_right_fog_on_a_buf, timenow};
@@ -431,7 +456,7 @@ void evaluate_steering_angle_fog() {
           serial_log("Steering angle above setpoint. Turned right fog light ON.");
         }
       }
-    } else if (steering_angle > (-FOG_CORNER_STEERTING_ANGLE + STEERTING_ANGLE_HYSTERESIS)) {
+    } else if (steering_angle > (-ANGLE + HYSTERESIS)) {
       if (right_fog_on) {
         unsigned long timenow = millis();
         delayed_can_tx_msg m = {front_right_fog_on_g_buf, timenow};

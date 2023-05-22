@@ -264,7 +264,7 @@ void evaluate_msa_button() {
         kcan_write_msg(msa_deactivated_cc_on_buf);
         serial_log("Sent MSA OFF CC.");
         delayed_can_tx_msg m = {msa_deactivated_cc_off_buf, millis() + 3000};
-        kcan_cc_txq.push(&m);
+        ihk_extra_buttons_cc_txq.push(&m);
       }
     }
     msa_button_pressed = true;
@@ -276,13 +276,13 @@ void evaluate_msa_button() {
 
 
 #if HDC || FAKE_MSA
-void check_kcan_cc_queue() {
-  if (!kcan_cc_txq.isEmpty()) {
+void check_ihk_buttons_cc_queue() {
+  if (!ihk_extra_buttons_cc_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
-    kcan_cc_txq.peek(&delayed_tx);
+    ihk_extra_buttons_cc_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
-      kcan_cc_txq.drop();
+      ihk_extra_buttons_cc_txq.drop();
     }
   }
 }

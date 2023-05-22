@@ -2,7 +2,7 @@
 
 
 void evaluate_ignition_status() {
-  vehicle_awake_timer = millis();
+  vehicle_awake_timer = 0;
   if (!vehicle_awake) {
     vehicle_awake = true;    
     toggle_transceiver_standby();                                                                                                   // Re-activate the transceivers.                                                                                         
@@ -235,8 +235,8 @@ void evaluate_battery_voltage() {
 
 void check_console_buttons() {
   if (!digitalRead(POWER_BUTTON_PIN)) {
-    if ((millis() - power_button_debounce_timer) >= power_debounce_time_ms) {                                                       // POWER console button should only change throttle mapping.
-      power_button_debounce_timer = millis();
+    if (power_button_debounce_timer >= power_debounce_time_ms) {                                                                    // POWER console button should only change throttle mapping.
+      power_button_debounce_timer = 0;
       if (!console_power_mode) {
         if (!mdrive_power_active) {
           console_power_mode = true;
@@ -261,20 +261,20 @@ void check_console_buttons() {
     if (dsc_program_status != 2) {
       if (!holding_dsc_off_console) {
         holding_dsc_off_console = true;
-        dsc_off_button_hold_timer = millis();
+        dsc_off_button_hold_timer = 0;
       } else {
-        if ((millis() - dsc_off_button_hold_timer) >= dsc_hold_time_ms) {                                                           // DSC OFF sequence should only be sent after user holds button for a configured time
-          if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {
+        if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                        // DSC OFF sequence should only be sent after user holds button for a configured time
+          if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
             serial_log("Console: DSC OFF button held. Sending DSC OFF.");
             send_dsc_mode(2);
-            dsc_off_button_debounce_timer = millis();
+            dsc_off_button_debounce_timer = 0;
           }
         }
       }      
     } else {
-      if ((millis() - dsc_off_button_debounce_timer) >= dsc_debounce_time_ms) {                                                     // A quick tap re-enables everything
+      if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {                                                                  // A quick tap re-enables everything
         serial_log("Console: DSC button tapped. Sending DSC ON.");
-        dsc_off_button_debounce_timer = millis();
+        dsc_off_button_debounce_timer = 0;
         send_dsc_mode(0);
       }
     }
@@ -409,7 +409,7 @@ void check_idrive_queue() {
 #if CKM || DOOR_VOLUME
 void check_idrive_alive_monitor() {
   if (terminal_r) {
-    if (millis() - idrive_alive_timer >= 4000) {                                                                                    // This message should be received every 2s.
+    if (idrive_alive_timer >= 4000) {                                                                                               // This message should be received every 2s.
       if (!idrive_died) {
         idrive_died = true;
         serial_log("iDrive booting/rebooting.");
@@ -421,7 +421,7 @@ void check_idrive_alive_monitor() {
         #endif
       }
     } else {
-      if (idrive_died) {                                                                                                              // It's back.
+      if (idrive_died) {                                                                                                            // It's back.
         idrive_died = false;
       }
     }
@@ -444,12 +444,12 @@ void check_idrive_alive_monitor() {
 
 
 void update_idrive_alive_timer() {
-  idrive_alive_timer = millis();
+  idrive_alive_timer = 0;
 
   #if DOOR_VOLUME
-  if (k_msg.buf[7] == 3) {                                                                                                      // 0x273 has been transmitted X times according to the counter.
+  if (k_msg.buf[7] == 3) {                                                                                                          // 0x273 has been transmitted X times according to the counter.
     if (!default_volume_sent) {
-      kcan_write_msg(default_vol_set_buf);                                                                                      // Run the default volume KWP job. This must run before any set volumes.
+      kcan_write_msg(default_vol_set_buf);                                                                                          // Run the default volume KWP job. This must run before any set volumes.
       serial_log("Sent default volume job to iDrive after boot/reboot.");
       default_volume_sent = true;
     }

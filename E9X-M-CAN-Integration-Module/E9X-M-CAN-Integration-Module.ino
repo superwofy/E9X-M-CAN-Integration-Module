@@ -3,27 +3,28 @@
 
 #include "E9X-M-CAN-Integration-Module.h"
 void setup() {
-  #if DEBUG_MODE
-    unsigned long setup_timer = millis();
-  #endif
   if ( F_CPU_ACTUAL > (528 * 1000000)) {
     set_arm_clock(528 * 1000000);                                                                                                   // Prevent accidental overclocks. Remove if needed.
   }
   cpu_speed_ide = F_CPU_ACTUAL;
   configure_IO();
   configure_can_controllers();
+  initialize_watchdog();
   cache_can_message_buffers();
   read_settings_from_eeprom();
   #if RTC
     check_rtc_valid();
   #endif
-  initialize_timers();
-  initialize_watchdog();
   #if UNFOLD_WITH_DOOR
     unfold_with_door_open = EEPROM.read(11) == 1 ? true : false;
   #endif
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Setup finished in %lu ms, module is ready.", millis() - setup_timer);
+    #if AUTO_MIRROR_FOLD
+      startup_time = systick_millis_count - 300;
+    #else
+      startup_time = systick_millis_count;
+    #endif
+    sprintf(serial_debug_string, "Setup finished in %lu ms, module is ready.", startup_time);
     serial_log(serial_debug_string);
   #endif
 }
@@ -74,14 +75,14 @@ void loop() {
       check_pdc_queue();
     #endif
     #if HDC || FAKE_MSA
-      check_kcan_cc_queue();
+      check_ihk_buttons_cc_queue();
     #endif
     #if EDC_CKM_FIX
       check_edc_ckm_queue();
     #endif
   } else {
     if (vehicle_awake) {
-      if ((millis() - vehicle_awake_timer) >= 2000) {
+      if (vehicle_awake_timer >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring .
         serial_log("Vehicle Sleeping.");
         toggle_transceiver_standby();
@@ -141,7 +142,7 @@ void loop() {
       }
       #endif
 
-      #if DIM_DRL
+      #if DIM_DRL || FRONT_FOG_CORNER
       else if (k_msg.id == 0x1F6) {                                                                                                 // Monitor indicator status
         evaluate_indicator_status_dim();
       }
@@ -245,7 +246,7 @@ void loop() {
     } 
     #endif
 
-    #if HDC
+    #if HDC || ANTI_THEFT_SEQ
     else if (k_msg.id == 0x2F7) {
       evaluate_speed_units();
     }
@@ -298,7 +299,7 @@ void loop() {
         evaluate_m_mfl_button_press();
       }
       #endif
-      #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
+      #if DEBUG_MODE
       else if (pt_msg.id == 0x3B4) {                                                                                                // Monitor battery voltage from DME.
         evaluate_battery_voltage();
       }
@@ -387,14 +388,14 @@ void loop() {
       else {
         disable_diag_transmit_jobs();                                                                                               // Implement a check so as to not interfere with other DCAN jobs sent to the car by an OBD tool.    
       }
-      diag_deactivate_timer = millis();
+      diag_deactivate_timer = 0;
     }
   }
   
 /**********************************************************************************************************************************************************************************************************************************************/
 
   #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2                                                                                      // Check if Dual Serial is set.
-    if (millis() - debug_print_timer >= 500) {
+    if (debug_print_timer >= 500) {
       print_current_state(SerialUSB1);                                                                                              // Print program status to the second Serial port.
     }
   #endif

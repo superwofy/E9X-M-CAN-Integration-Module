@@ -18,7 +18,7 @@ void evaluate_engine_rpm() {
     }
     #endif
     #if EXHAUST_FLAP_CONTROL
-      exhaust_flap_action_timer = millis();                                                                                         // Start tracking the exhaust flap.
+      exhaust_flap_action_timer = 0;                                                                                                // Start tracking the exhaust flap.
     #endif
     serial_log("Engine started.");
     #if ANTI_THEFT_SEQ_ALARM
@@ -35,7 +35,7 @@ void evaluate_engine_rpm() {
         alarm_active = true;
         unsigned long timenow = millis();
         delayed_can_tx_msg m;
-        for (uint8_t i = 0; i < 6; i++) {                                                                                           // Alarm test job times out after about 15s.
+        for (uint8_t i = 1; i < 8; i++) {                                                                                           // Alarm test job times out after about 15s.
           m = {alarm_siren_on_buf, timenow + 15000 * i};
           alarm_siren_txq.push(&m);
         }
@@ -98,7 +98,7 @@ void read_settings_from_eeprom() {
 
 
 void update_settings_in_eeprom() {
-  if (mdrive_settings_updated) {
+  if (mdrive_settings_save_to_eeprom) {
     EEPROM.update(1, mdrive_dsc);                                                                                                   // EEPROM lifetime approx. 100k writes. Always update, never write()!                                                                                          
     EEPROM.update(2, mdrive_power);
     EEPROM.update(3, mdrive_edc);
@@ -114,6 +114,7 @@ void update_settings_in_eeprom() {
       EEPROM.update(10, edc_ckm[2]);
     #endif                                                                                          
     serial_log("Saved M settings to EEPROM.");
+    mdrive_settings_save_to_eeprom = false;
   }
 }
 
@@ -206,7 +207,7 @@ void evaluate_m_mfl_button_press() {
         anti_theft_pressed_count++;
       } else {
         anti_theft_released = true;
-        kcan_write_msg(ekp_return_to_normal_buf);                                                                                   // KWP To EKP.
+        ptcan_write_msg(ekp_return_to_normal_buf);                                                                                  // KWP To EKP.
         serial_log("Anti-theft released. EKP control restored to DME.");
         delayed_can_tx_msg m;
         unsigned long timenow = millis();
@@ -237,9 +238,11 @@ void evaluate_m_mfl_button_press() {
           kcan_write_msg(cc_gong_buf);                                                                                              // KWP to KOMBI.
           serial_log("Sent start ready gong.");
         }
-        m = {ekp_return_to_normal_buf, timenow + 500};                                                                              // Make sure these messages are received.
-        anti_theft_txq.push(&m);
-        m = {start_cc_off_buf, timenow + 800};
+        m = {ekp_return_to_normal_buf, timenow + 500};                                                                              // KWP To EKP. Make sure these messages are received.
+        ekp_txq.push(&m);
+        m = {ekp_return_to_normal_buf, timenow + 800};                                                                              // KWP To EKP.
+        ekp_txq.push(&m);
+        m = {start_cc_off_buf, timenow + 1000};                                                                                     // CC to KCAN
         anti_theft_txq.push(&m);
       }
     }
@@ -272,13 +275,13 @@ void send_mdrive_message() {
   // Deactivated because no module actually checks this. Perhaps MDSC would?
 //  can_checksum_update(0x399, 6, mdrive_message);                                                                                  // Recalculate checksum.
   ptcan_write_msg(makeMsgBuf(0x399, 6, mdrive_message));                                                                            // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
-  mdrive_message_timer = millis();                                                                   
+  mdrive_message_timer = 0;                                                                   
 }
 
 
 void send_mdrive_alive_message(uint16_t interval) {
   if (terminal_r) {
-    if ((millis() - mdrive_message_timer) >= interval) {                                                                            // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
+    if (mdrive_message_timer >= interval) {                                                                                         // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
       if (ignition) {
         serial_log("Sending Ignition ON MDrive alive message.");
       } else {
@@ -317,7 +320,7 @@ void update_mdrive_message_settings() {
         mdrive_message[4] = 0x91;                                                                                                   // SVT sport, MDrive ON.
       }
     }
-    mdrive_settings_updated = true;
+    mdrive_settings_save_to_eeprom = true;
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
           mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
@@ -411,7 +414,7 @@ void update_dme_power_ckm() {
             k_msg.buf[0] == 0xF1 ? "Normal" : "Sport", cas_key_number);
     serial_log(serial_debug_string);
   #endif
-  mdrive_settings_updated = true;
+  mdrive_settings_save_to_eeprom = true;
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
 #endif
@@ -425,7 +428,7 @@ void update_edc_ckm() {
                                   k_msg.buf[0] == 0xF2 ? "Normal" : "Sport", cas_key_number);
     serial_log(serial_debug_string);
   #endif
-  mdrive_settings_updated = true;
+  mdrive_settings_save_to_eeprom = true;
 }
 
 
@@ -464,22 +467,44 @@ void check_edc_ckm_queue() {
 
 #if ANTI_THEFT_SEQ
 void check_anti_theft_status() {
-  if (millis() >= 5000) {                                                                                                           // Delay ensures that time passed after Teensy (re)started to receive messages, and LPFP to prime.
-    if (!anti_theft_released && !vehicle_moving && !engine_running) {                                                               // Make sure we don't cut this off while the car is in motion!!!
-      if (millis() - anti_theft_timer >= 1000) {
-        kcan_write_msg(ekp_pwm_off_buf);
-        if (terminal_r) {
-          if (!key_cc_sent) {
-            serial_log("Sending anti-theft key CC. EKP is disabled.");
-            key_cc_sent = true;
-            #if ANTI_THEFT_SEQ_ALARM
-              kcan_write_msg(alarm_led_on_buf);
-            #endif
-          }
-          kcan_write_msg(key_cc_on_buf);
-        }
-        anti_theft_timer = millis();
+  if (millis() >= 2000) {                                                                                                           // Delay ensures that time passed after Teensy (re)started to receive messages.
+    if (!anti_theft_released) {
+      uint16_t theft_max_speed;
+      if (speed_mph) {
+        theft_max_speed = 12;
+      } else {
+        theft_max_speed = 20;
       }
+
+      // This coild be bypassed if the car is started and driven very very quickly?
+      if (!vehicle_moving || vehicle_speed <= theft_max_speed) {                                                                    // Make sure we don't cut this off while the car is in (quick) motion!!!
+        if (anti_theft_timer >= anti_theft_send_interval) {
+          if (terminal_r) {
+            if (engine_running) {                                                                                                   // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
+              ptcan_write_msg(ekp_pwm_off_buf);
+              serial_log("EKP is disabled.");
+            }
+            if (!key_cc_sent) {
+              serial_log("Sending anti-theft key CC.");
+              key_cc_sent = true;
+              #if ANTI_THEFT_SEQ_ALARM
+                kcan_write_msg(alarm_led_on_buf);
+              #endif
+            }
+            kcan_write_msg(key_cc_on_buf);
+          }
+          anti_theft_timer = 0;
+          anti_theft_send_interval = 1000;
+        }
+      }
+    }
+  }
+  if (!ekp_txq.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    ekp_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      ptcan_write_msg(delayed_tx.tx_msg);
+      ekp_txq.drop();
     }
   }
   #if ANTI_THEFT_SEQ_ALARM

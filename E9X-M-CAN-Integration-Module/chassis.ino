@@ -54,7 +54,7 @@ void evaluate_clutch_status() {
 #endif
 
 
-#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
+#if LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
 void evaluate_reverse_status() {
   if (k_msg.buf[0] == 0xFE) {
     if (!reverse_status) {
@@ -90,22 +90,24 @@ void evaluate_vehicle_moving() {
     vehicle_moving = true;
     serial_log("Vehicle moving.");
   }
-  #if HDC
+  #if HDC || ANTI_THEFT_SEQ
     if (vehicle_moving) {
       if (speed_mph) {
        vehicle_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
       } else {
         vehicle_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 10;
       }
-      if (hdc_active) {
-        if (vehicle_speed > max_hdc_speed) {
-          serial_log("HDC deactivated due to high vehicle speed.");
-          hdc_active = false;
-          kcan_write_msg(hdc_cc_deactivated_on_buf);
-          delayed_can_tx_msg m = {hdc_cc_deactivated_off_buf, millis() + 2000};
-          kcan_cc_txq.push(&m);
+      #if HDC
+        if (hdc_active) {
+          if (vehicle_speed > max_hdc_speed) {
+            serial_log("HDC deactivated due to high vehicle speed.");
+            hdc_active = false;
+            kcan_write_msg(hdc_cc_deactivated_on_buf);
+            delayed_can_tx_msg m = {hdc_cc_deactivated_off_buf, millis() + 2000};
+            ihk_extra_buttons_cc_txq.push(&m);
+          }
         }
-      }
+      #endif
     }
   #endif
 }
@@ -126,7 +128,7 @@ void evaluate_hdc_button() {
         } else {
           kcan_write_msg(hdc_cc_unavailable_on_buf);
           delayed_can_tx_msg m = {hdc_cc_unavailable_off_buf, millis() + 3000};
-          kcan_cc_txq.push(&m);
+          ihk_extra_buttons_cc_txq.push(&m);
           serial_log("Conditions not right for HDC. Sent CC.");
         }
       } else {
@@ -170,17 +172,21 @@ void evaluate_cruise_control_status() {
     }
   }
 }
+#endif
 
 
+#if HDC || ANTI_THEFT_SEQ
 void evaluate_speed_units() {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
-  if (speed_mph) {
-    min_hdc_speed = 12;
-    max_hdc_speed = 22;
-  } else {
-    min_hdc_speed = 20;
-    max_hdc_speed = 35;
-  }
+  #if HDC
+    if (speed_mph) {
+      min_hdc_speed = 12;
+      max_hdc_speed = 22;
+    } else {
+      min_hdc_speed = 20;
+      max_hdc_speed = 35;
+    }
+  #endif
 }
 #endif
 

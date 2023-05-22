@@ -99,7 +99,7 @@ void configure_can_controllers() {
     filterId = 0x1B4;                                                                                                               // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R ON)
     canFilters.push(&filterId);
   #endif
-  #if DIM_DRL
+  #if DIM_DRL || FRONT_FOG_CORNER
     filterId = 0x1F6;                                                                                                               // Indicator status                                             Cycle time 1s
     canFilters.push(&filterId);
   #endif
@@ -125,7 +125,7 @@ void configure_can_controllers() {
   #endif
   filterId = 0x2CA;                                                                                                                 // Ambient temperature                                          Cycle time 1s
   canFilters.push(&filterId);                                                                                            
-  #if HDC
+  #if HDC || ANTI_THEFT_SEQ
     filterId = 0x2F7;                                                                                                               // Units from KOMBI                                             Sent 3x on Terminal R. Sent when changed.
     canFilters.push(&filterId);
   #endif
@@ -212,7 +212,7 @@ void configure_can_controllers() {
     filterId = 0x332;                                                                                                               // Variable redline position from DME                           Cycle time 1s
     canFilters.push(&filterId); 
   #endif
-  #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2
+  #if DEBUG_MODE
     filterId = 0x3B4;                                                                                                               // Battery voltage from DME.
     canFilters.push(&filterId);
   #endif
@@ -441,7 +441,7 @@ void disable_diag_transmit_jobs() {
 
 void check_diag_transmit_status() {
   if (!diag_transmit) {
-    if ((millis() - diag_deactivate_timer) >= 60000) {                                                                              // Re-activate after period of no DCAN requests.
+    if (diag_deactivate_timer >= 60000) {                                                                                           // Re-activate after period of no DCAN requests.
       diag_transmit = true;
       serial_log("Resuming diagnostic jobs after timeout.");
     }

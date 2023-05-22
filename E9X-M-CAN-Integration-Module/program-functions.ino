@@ -1,19 +1,6 @@
 // Functions related to the operation of the program and debugging go here.
 
 
-void initialize_timers() {
-  #if DEBUG_MODE
-    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer 
-      = debug_print_timer = loop_timer = millis();
-  #else
-    power_button_debounce_timer = dsc_off_button_debounce_timer = mdrive_message_timer = vehicle_awake_timer = millis();
-  #endif
-  #if ANTI_THEFT_SEQ
-    anti_theft_timer = vehicle_awake_timer;
-  #endif
-}
-
-
 void initialize_watchdog() {
   WDT_timings_t config;
   #if DEBUG_MODE
@@ -35,7 +22,7 @@ void wdt_callback() {
 
 
 #if DEBUG_MODE
-void print_current_state(usb_serial_class &status_serial) {
+void print_current_state(Stream &status_serial) {
   status_serial.println("=========== Operation ==========");
   sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "Active" : "Standby");
   status_serial.println(serial_debug_string);
@@ -51,9 +38,11 @@ void print_current_state(usb_serial_class &status_serial) {
   status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " RPM: %d", RPM / 4);
   status_serial.println(serial_debug_string);
-  #if HDC
+  #if HDC || ANTI_THEFT_SEQ
     sprintf(serial_debug_string, " Speed: %d", vehicle_speed);
     status_serial.println(serial_debug_string);
+  #endif
+  #if HDC
     sprintf(serial_debug_string, " Cruise Control: %s", cruise_control_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
   #endif
@@ -199,6 +188,10 @@ void print_current_state(usb_serial_class &status_serial) {
     sprintf(serial_debug_string, " Dipped beam: %s", dipped_beam_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
   #endif
+  #if DIM_DRL || FRONT_FOG_CORNER
+    sprintf(serial_debug_string, " Indicators: %s", indicators_on ? "ON" : "OFF");
+    status_serial.println(serial_debug_string);
+  #endif
   #if DIM_DRL
     sprintf(serial_debug_string, " DRL: %s", drl_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
@@ -223,6 +216,8 @@ void print_current_state(usb_serial_class &status_serial) {
   status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " CPU speed: %ld MHz", F_CPU_ACTUAL / 1000000);
   status_serial.println(serial_debug_string);
+  sprintf(serial_debug_string, " Complete initialization time: %lu ms", startup_time);
+  status_serial.println(serial_debug_string);
   unsigned long loop_calc = micros() - loop_timer;
   if (loop_calc > max_loop_timer) {
     max_loop_timer = loop_calc;
@@ -236,7 +231,7 @@ void print_current_state(usb_serial_class &status_serial) {
   sprintf(serial_debug_string, " KCAN errors: %ld PTCAN errors: %ld DCAN errors: %ld", kcan_error_counter, ptcan_error_counter, dcan_error_counter);
   status_serial.println(serial_debug_string);
   status_serial.println("================================");
-  debug_print_timer = millis();
+  debug_print_timer = 0;
 }
 #endif
 
@@ -277,7 +272,7 @@ void reset_runtime_variables() {                                                
     pdc_beep_sent = false;
   #endif
   #if HDC || FAKE_MSA
-    kcan_cc_txq.flush();
+    ihk_extra_buttons_cc_txq.flush();
   #endif
   #if SERVOTRONIC_SVT70
     diagnose_svt = false;
@@ -316,7 +311,7 @@ void reset_runtime_variables() {                                                
       delayed_can_tx_msg m = {front_right_fog_off_buf, millis() + 100};
       fog_corner_txq.push(&m);
     }
-    dipped_beam_status = left_fog_on = right_fog_on = false;
+    dipped_beam_status = left_fog_on = right_fog_on = indicators_on = false;
   #endif
   #if DIM_DRL
     if (left_dimmed) {                                                                                                              // Send OFF now to make sure DRLs don't stay ON.
@@ -330,8 +325,10 @@ void reset_runtime_variables() {                                                
   #if FTM_INDICATOR
     ftm_indicator_status = false;
   #endif
-  #if HDC
+  #if HDC || ANTI_THEFT_SEQ
     vehicle_speed = 0;
+  #endif
+  #if HDC
     cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
   #endif
   #if HDC || LAUNCH_CONTROL_INDICATOR
@@ -368,11 +365,14 @@ void reset_sleep_variables() {
     default_volume_sent = false;
     idrive_txq.flush();
   #endif
-  update_settings_in_eeprom();
+  #if NEEDLE_SWEEP
+    kombi_needle_txq.flush();
+  #endif
   #if AUTO_MIRROR_FOLD
     frm_status_requested = false;
     lock_button_pressed  = unlock_button_pressed = false;
     last_lock_status_can = 0;
+    mirror_fold_txq.flush();
   #endif
   #if UNFOLD_WITH_DOOR
     if (unfold_with_door_open) {                                                                                                    // Car fell asleep with doors unlocked and mirrors folded.
@@ -383,6 +383,7 @@ void reset_sleep_variables() {
     anti_theft_released = key_cc_sent = false;
     anti_theft_pressed_count = 0;
     anti_theft_txq.flush();
+    ekp_txq.flush();
   #endif
-  mdrive_settings_updated = false;
+  update_settings_in_eeprom();
 }
