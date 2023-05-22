@@ -73,7 +73,7 @@ const int8_t STEERTING_ANGLE_HYSTERESIS = 15;
   const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                   // New CAN-ID replacing 0x326 in SVT70 firmware bin. This stops it from changing modes together with EDC.
 #endif
 const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
-const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                                                                             // Degrees Celsius temperature * 2 + 80.
+const double AUTO_SEAT_HEATING_TRESHOLD = 10.0;                                                                                     // Degrees Celsius temperature.
 #if CONTROL_SHIFTLIGHTS
   const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                 // RPM setpoints (warning = desired RPM * 4).
   const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
@@ -91,13 +91,13 @@ const uint8_t AUTO_SEAT_HEATING_TRESHOLD = 10 * 2 + 80;                         
 #if CONTROL_SHIFTLIGHTS
   const int16_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                      // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
 #endif
-const float MAX_THRESHOLD = 63.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
-const float MEDIUM_THRESHOLD = 58.0;
-const float MILD_THRESHOLD = 53.0;
-const float HYSTERESIS = 3.0;
-const unsigned long MAX_UNDERCLOCK = 24 * 1000000;
-const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
-const unsigned long MILD_UNDERCLOCK = 450 * 1000000;
+const float MAX_THRESHOLD = 70.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
+const float MEDIUM_THRESHOLD = 65.0;
+const float MILD_THRESHOLD = 60.0;
+const float HYSTERESIS = 2.0;
+const unsigned long MAX_UNDERCLOCK = 24 * 1000000;                                                                                  // temperature <= 90 should be ok for more than 100,000 Power on Hours at 1.15V (freq <= 528 MHz).
+unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
+unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
@@ -246,9 +246,9 @@ CAN_message_t cc_gong_buf;
   CAN_message_t lc_cc_on_buf, lc_cc_off_buf;
   bool lc_cc_active = false, mdm_with_lc = false, clutch_pressed = false;
 #endif
+float ambient_temperature_real = 87.5;
 #if AUTO_SEAT_HEATING
   bool driver_seat_heating_status = false;
-  uint8_t ambient_temperature_can = 255;
   bool driver_sent_seat_heating_request = false;
   CAN_message_t seat_heating_button_pressed_dr_buf, seat_heating_button_released_dr_buf;
   cppQueue seat_heating_dr_txq(sizeof(delayed_can_tx_msg), 4, queue_FIFO);

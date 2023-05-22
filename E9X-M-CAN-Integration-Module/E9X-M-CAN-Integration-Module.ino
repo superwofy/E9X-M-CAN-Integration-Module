@@ -235,7 +235,6 @@ void loop() {
     }
     #endif
 
-    #if AUTO_SEAT_HEATING
     else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
       evaluate_ambient_temperature();
     }
@@ -244,7 +243,6 @@ void loop() {
     else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
       evaluate_passenger_seat_status();
     } 
-    #endif
     #endif
 
     #if HDC

@@ -123,10 +123,8 @@ void configure_can_controllers() {
     filterId = 0x273;                                                                                                               // Filter CIC status and ZBE challenge.                         Sent when CIC is idle or a button is pressed on the ZBE.
     canFilters.push(&filterId);
   #endif
-  #if AUTO_SEAT_HEATING
-    filterId = 0x2CA;                                                                                                               // Ambient temperature                                          Cycle time 1s
-    canFilters.push(&filterId);                                                                                            
-  #endif
+  filterId = 0x2CA;                                                                                                                 // Ambient temperature                                          Cycle time 1s
+  canFilters.push(&filterId);                                                                                            
   #if HDC
     filterId = 0x2F7;                                                                                                               // Units from KOMBI                                             Sent 3x on Terminal R. Sent when changed.
     canFilters.push(&filterId);
@@ -300,7 +298,7 @@ void check_teensy_cpu_temp() {                                                  
   if (ignition) {                                                                                                                   // If ignition is OFF, the processor will already be underclocked.
     float cpu_temp = tempmonGetTemp();
 
-    if (abs(cpu_temp - last_cpu_temp) > HYSTERESIS) {
+    if (+(cpu_temp - last_cpu_temp) > HYSTERESIS) {
       if (cpu_temp >= MAX_THRESHOLD) {
         if (clock_mode != 3) {
           set_arm_clock(MAX_UNDERCLOCK);

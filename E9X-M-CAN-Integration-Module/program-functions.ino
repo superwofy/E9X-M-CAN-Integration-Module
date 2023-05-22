@@ -151,17 +151,17 @@ void print_current_state(usb_serial_class &status_serial) {
             rtc_day > 9 ? "" : "0", rtc_day, rtc_month > 9 ? "" : "0", rtc_month, rtc_year);
     status_serial.println(serial_debug_string);
   #endif
-  #if AUTO_SEAT_HEATING
-    if (ambient_temperature_can != 255) {
-      sprintf(serial_debug_string, " Ambient temp: %.1f °C", (ambient_temperature_can - 80) / 2.0);
+  #if REVERSE_BEEP
+    sprintf(serial_debug_string, " Reverse gear: %s", pdc_beep_sent ? "ON" : "OFF");
+    status_serial.println(serial_debug_string);
+  #endif
+  if (ambient_temperature_real != 87.5) {
+      sprintf(serial_debug_string, " Ambient temp: %.1f °C", ambient_temperature_real);
     } else {
       sprintf(serial_debug_string, " Ambient temp: Unknown");
     }
-    status_serial.println(serial_debug_string);
-    #if REVERSE_BEEP
-      sprintf(serial_debug_string, " Reverse gear: %s", pdc_beep_sent ? "ON" : "OFF");
-      status_serial.println(serial_debug_string);
-    #endif
+  status_serial.println(serial_debug_string);
+  #if AUTO_SEAT_HEATING
     sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
     #if AUTO_SEAT_HEATING_PASS

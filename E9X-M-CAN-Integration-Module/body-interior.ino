@@ -79,7 +79,7 @@ void evaluate_ignition_status() {
 void evaluate_seat_heating_status() {
   if (k_msg.id == 0x232) {
     if (!k_msg.buf[0]) {                                                                                                            // Check if seat heating is already ON.
-      if (!driver_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) {
+      if (!driver_sent_seat_heating_request && (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD)) {
         send_seat_heating_request_dr();
       }
     } else {
@@ -101,7 +101,7 @@ void evaluate_passenger_seat_status() {
   if (ignition) {
     if (!passenger_seat_heating_status) {                                                                                           // Check if seat heating is already ON.
       //This will be ignored if already ON and cycling ignition. Press message will be ignored by IHK anyway.
-      if (!passenger_sent_seat_heating_request && (ambient_temperature_can <= AUTO_SEAT_HEATING_TRESHOLD)) { 
+      if (!passenger_sent_seat_heating_request && (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD)) { 
         if (passenger_seat_status == 9) {                                                                                           // Passenger sitting and their seatbelt is ON
           send_seat_heating_request_pas();                                                                                          // Execute heating request here so we don't have to wait 15s for the next 0x22A.
         }
@@ -112,11 +112,6 @@ void evaluate_passenger_seat_status() {
   }
 }
 #endif
-
-
-void evaluate_ambient_temperature() {
-  ambient_temperature_can = k_msg.buf[0];
-}
 
 
 void send_seat_heating_request_dr() {
@@ -131,7 +126,7 @@ void send_seat_heating_request_dr() {
   seat_heating_dr_txq.push(&m);
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
-          (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
+          ambient_temperature_real, AUTO_SEAT_HEATING_TRESHOLD);
     serial_log(serial_debug_string);
   #endif
 }
@@ -150,7 +145,7 @@ void send_seat_heating_request_pas() {
   seat_heating_pas_txq.push(&m);
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %.1fC, treshold %.1fC.", 
-          (ambient_temperature_can - 80) / 2.0, (AUTO_SEAT_HEATING_TRESHOLD - 80) / 2.0);
+          ambient_temperature_real, AUTO_SEAT_HEATING_TRESHOLD);
     serial_log(serial_debug_string);
   #endif
 }

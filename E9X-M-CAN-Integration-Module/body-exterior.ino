@@ -459,3 +459,16 @@ void evaluate_steering_angle_fog() {
   }
 }
 #endif
+
+
+void evaluate_ambient_temperature() {
+  ambient_temperature_real = (k_msg.buf[0] - 80) / 2.0 ;
+
+  if (ambient_temperature_real >= 30) {                                                                                             // Make underclock more aggressive at higher ambient temperatures.
+    MEDIUM_UNDERCLOCK = 150 * 1000000;
+    MILD_UNDERCLOCK = 396 * 1000000;
+  } else {
+    MEDIUM_UNDERCLOCK = 396 * 1000000;
+    MILD_UNDERCLOCK = 450 * 1000000;
+  }
+}

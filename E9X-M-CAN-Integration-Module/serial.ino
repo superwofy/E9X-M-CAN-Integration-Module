@@ -173,9 +173,9 @@ void serial_interpreter() {
         }
       }
     #endif
-    else {
-      serial_log("  Serial: Unknown command.");
-    }
+  else {
+    serial_log("  Serial: Unknown command.");
+  }
   #endif
 }
 
