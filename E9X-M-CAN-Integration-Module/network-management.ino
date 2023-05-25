@@ -11,7 +11,7 @@
 // KWP jobs are reflected by the JBE across buses. I.e. sending 6F1 to KCAN will be forwarded to PTCAN too.
 
 
-void cache_can_message_buffers() {                                                                                                  // Put all static the buffers in memory during setup().
+void cache_can_message_buffers(void) {                                                                                              // Put all static the buffers in memory during setup().
   uint8_t dsc_on[] = {0xCF, 0xE3}, dsc_mdm_dtc[] = {0xCF, 0xF3}, dsc_off[] = {0xCF, 0xE7};
   dsc_on_buf = makeMsgBuf(0x398, 2, dsc_on);
   dsc_mdm_dtc_buf = makeMsgBuf(0x398, 2, dsc_mdm_dtc);
@@ -305,7 +305,7 @@ void dcan_write_msg(const CAN_message_t &msg) {
 }
 
 
-void dcan_to_ptcan() {
+void dcan_to_ptcan(void) {
   ptcan_write_msg(d_msg);
   #if DEBUG_MODE
     dcan_forwarded_count++;
@@ -313,7 +313,7 @@ void dcan_to_ptcan() {
 }
 
 
-void ptcan_to_dcan() {
+void ptcan_to_dcan(void) {
   dcan_write_msg(pt_msg);
   #if DEBUG_MODE
     ptcan_forwarded_count++;

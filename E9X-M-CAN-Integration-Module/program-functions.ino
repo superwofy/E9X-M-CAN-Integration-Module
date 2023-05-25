@@ -1,12 +1,12 @@
 // Functions related to the operation of the program and debugging go here.
 
 
-void initialize_watchdog() {
+void initialize_watchdog(void) {
   WDT_timings_t config;
   #if DEBUG_MODE
     config.trigger = 10;
     config.callback = wdt_callback;
-    config.timeout = 15;
+    config.timeout = 12;
   #else
     config.timeout = 10;                                                                                                            // If the watchdog timer is not reset within 10s, re-start the program.
   #endif
@@ -16,7 +16,7 @@ void initialize_watchdog() {
 
 #if DEBUG_MODE
 void wdt_callback() {
-  serial_log("Watchdog not fed. Program will reset in 5s.");
+  serial_log("Watchdog not fed. Program will reset in 2s!");
 }
 #endif
 
@@ -216,8 +216,6 @@ void print_current_state(Stream &status_serial) {
   status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " CPU speed: %ld MHz", F_CPU_ACTUAL / 1000000);
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " Complete initialization time: %lu ms", startup_time);
-  status_serial.println(serial_debug_string);
   unsigned long loop_calc = micros() - loop_timer;
   if (loop_calc > max_loop_timer) {
     max_loop_timer = loop_calc;
@@ -243,7 +241,7 @@ void serial_log(const char message[]) {
 }
 
 
-void reset_runtime_variables() {                                                                                                    // Ignition OFF. Set variables to pre-ignition state.
+void reset_runtime_variables(void) {                                                                                                    // Ignition OFF. Set variables to pre-ignition state.
   dsc_program_status = 0;
   if (mdrive_status) {
     toggle_mdrive_message_active();
@@ -344,7 +342,7 @@ void reset_runtime_variables() {                                                
 }
 
 
-void reset_sleep_variables() {
+void reset_sleep_variables(void) {
   #if AUTO_SEAT_HEATING
     driver_sent_seat_heating_request = false;                                                                                       // Reset the seat heating request now that the car's asleep.
     driver_seat_heating_status = false;
@@ -384,6 +382,7 @@ void reset_sleep_variables() {
     anti_theft_pressed_count = 0;
     anti_theft_txq.flush();
     ekp_txq.flush();
+    EEPROM.update(12, anti_theft_released);
   #endif
   update_settings_in_eeprom();
 }

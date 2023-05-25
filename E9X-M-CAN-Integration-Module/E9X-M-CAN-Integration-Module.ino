@@ -12,20 +12,21 @@ void setup() {
   initialize_watchdog();
   cache_can_message_buffers();
   read_settings_from_eeprom();
-  #if RTC
-    check_rtc_valid();
-  #endif
   #if UNFOLD_WITH_DOOR
     unfold_with_door_open = EEPROM.read(11) == 1 ? true : false;
   #endif
+  #if ANTI_THEFT_SEQ
+    anti_theft_released = EEPROM.read(12) == 1 ? true : false;
+  #endif
+  #if RTC
+    check_rtc_valid();
+  #endif
   #if DEBUG_MODE
     #if AUTO_MIRROR_FOLD
-      startup_time = systick_millis_count - 300;
+      setup_time = micros() - 300000;
     #else
-      startup_time = systick_millis_count;
+      setup_time = micros();
     #endif
-    sprintf(serial_debug_string, "Setup finished in %lu ms, module is ready.", startup_time);
-    serial_log(serial_debug_string);
   #endif
 }
 
@@ -136,7 +137,7 @@ void loop() {
       }
       #endif
 
-      #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ
+      #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
       else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
         evaluate_vehicle_moving();
       }
@@ -246,7 +247,7 @@ void loop() {
     } 
     #endif
 
-    #if HDC || ANTI_THEFT_SEQ
+    #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
     else if (k_msg.id == 0x2F7) {
       evaluate_speed_units();
     }

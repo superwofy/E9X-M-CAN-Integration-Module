@@ -2,7 +2,7 @@
 
 
 #if DEBUG_MODE
-void serial_interpreter() {
+void serial_interpreter(void) {
   String cmd = Serial.readStringUntil('\n');
   if (cmd == "module_reboot") {
     serial_log("Serial: Rebooting.");
@@ -15,6 +15,10 @@ void serial_interpreter() {
   }
   if (cmd == "print_status") {
     print_current_state(Serial);
+  }
+  if (cmd == "print_setup_time") {
+    sprintf(serial_debug_string, "Serial: time taken to boot Teensy: %lu µs / %lu ms", setup_time, setup_time / 1000);
+    Serial.println(serial_debug_string);
   }
   if (cmd == "print_voltage") {
     if (battery_voltage > 0) {
@@ -72,43 +76,11 @@ void serial_interpreter() {
   }
   #if FRONT_FOG_CORNER
   else if (cmd == "front_right_fog_on") {
-    unsigned long timenow = millis();
-    delayed_can_tx_msg m = {front_right_fog_on_a_buf, timenow};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_b_buf, timenow + 100};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_c_buf, timenow + 200};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_d_buf, timenow + 300};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_e_buf, timenow + 400};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_f_buf, timenow + 500};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_g_buf, timenow + 600};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_h_buf, timenow + 700};
-    fog_corner_txq.push(&m);
+    right_fog_soft(true);
     serial_log("  Serial: Activated front right fog light.");
   }
   else if (cmd == "front_left_fog_on") {
-    unsigned long timenow = millis();
-    delayed_can_tx_msg m = {front_left_fog_on_a_buf, timenow};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_b_buf, timenow + 100};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_c_buf, timenow + 200};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_d_buf, timenow + 300};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_e_buf, timenow + 400};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_f_buf, timenow + 500};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_g_buf, timenow + 600};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_h_buf, timenow + 700};
-    fog_corner_txq.push(&m);
+    left_fog_soft(true);
     serial_log("  Serial: Activated front left fog light.");
   }
   else if (cmd == "front_right_fog_off") {
@@ -189,7 +161,7 @@ void serial_interpreter() {
 }
 
 
-void module_reboot() {
+void module_reboot(void) {
   wdt.reset();
 }
 #endif

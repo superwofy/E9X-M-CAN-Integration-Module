@@ -27,7 +27,7 @@ void send_dsc_mode(uint8_t mode) {
 }
 
 
-void check_dsc_queue() {
+void check_dsc_queue(void) {
   if (!dsc_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     dsc_txq.peek(&delayed_tx);
@@ -40,7 +40,7 @@ void check_dsc_queue() {
 
 
 #if LAUNCH_CONTROL_INDICATOR
-void evaluate_clutch_status() {
+void evaluate_clutch_status(void) {
   if (k_msg.buf[5] == 0xD) {
     if (!clutch_pressed) {
       clutch_pressed = true;
@@ -55,7 +55,7 @@ void evaluate_clutch_status() {
 
 
 #if LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
-void evaluate_reverse_status() {
+void evaluate_reverse_status(void) {
   if (k_msg.buf[0] == 0xFE) {
     if (!reverse_status) {
       reverse_status = true;
@@ -79,8 +79,8 @@ void evaluate_reverse_status() {
 #endif
 
 
-#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ
-void evaluate_vehicle_moving() {
+#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+void evaluate_vehicle_moving(void) {
   if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0xD0) {
     if (vehicle_moving) {
       vehicle_moving = false;
@@ -90,7 +90,7 @@ void evaluate_vehicle_moving() {
     vehicle_moving = true;
     serial_log("Vehicle moving.");
   }
-  #if HDC || ANTI_THEFT_SEQ
+  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
     if (vehicle_moving) {
       if (speed_mph) {
        vehicle_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
@@ -115,7 +115,7 @@ void evaluate_vehicle_moving() {
 
 
 #if HDC
-void evaluate_hdc_button() {
+void evaluate_hdc_button(void) {
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!hdc_button_pressed) {
       if (!hdc_active) {
@@ -144,7 +144,7 @@ void evaluate_hdc_button() {
 }
 
 
-void evaluate_cruise_control_status() {
+void evaluate_cruise_control_status(void) {
   if (k_msg.buf[5] == 0x58 || 
       (k_msg.buf[5] == 0x5A || k_msg.buf[5] == 0x5B || k_msg.buf[5] == 0x5C || k_msg.buf[5] == 0x5D)) {                            // Status is different based on ACC distance setting.
     if (!cruise_control_status) {
@@ -175,8 +175,8 @@ void evaluate_cruise_control_status() {
 #endif
 
 
-#if HDC || ANTI_THEFT_SEQ
-void evaluate_speed_units() {
+#if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+void evaluate_speed_units(void) {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   #if HDC
     if (speed_mph) {
@@ -192,7 +192,7 @@ void evaluate_speed_units() {
 
 
 #if SERVOTRONIC_SVT70
-void send_servotronic_message() {
+void send_servotronic_message(void) {
   servotronic_message[0] += 0x10;                                                                                                   // Increase alive counter.
   if (servotronic_message[0] > 0xEF) {                                                                                              // Alive(first half of byte) must be between 0..E.
     servotronic_message[0] = 0;

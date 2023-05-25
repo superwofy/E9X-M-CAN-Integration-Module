@@ -104,6 +104,18 @@ unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
 
+#if AUTO_MIRROR_FOLD
+  extern "C" void startup_middle_hook(void);
+  extern "C" volatile uint32_t systick_millis_count;
+  void startup_middle_hook(void) {
+    // Force millis() to be 300 to skip USB startup delays. The module needs to boot very quickly to revceive the unlock message.
+    // This makes receiving early boot serial messages difficult.
+    systick_millis_count = 300;
+  }
+  // In usb.c, also remove call to delay(25); in function usb_init(void)
+  // Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/usb.c
+#endif
+
 CAN_message_t pt_msg, k_msg, d_msg;
 typedef struct delayed_can_tx_msg {
 	CAN_message_t	tx_msg;
@@ -284,7 +296,7 @@ float ambient_temperature_real = 87.5;
   elapsedMillis idrive_alive_timer = 0;
   bool idrive_died = false;
 #endif
-#if HDC || ANTI_THEFT_SEQ
+#if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
   uint16_t vehicle_speed = 0;
   bool speed_mph = false;
 #endif
@@ -295,7 +307,7 @@ float ambient_temperature_real = 87.5;
   CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
   CAN_message_t hdc_cc_activated_off_buf, hdc_cc_unavailable_off_buf, hdc_cc_deactivated_off_buf;
 #endif
-#if HDC || LAUNCH_CONTROL_INDICATOR
+#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
   bool vehicle_moving = false;
 #endif
 #if FAKE_MSA
@@ -311,17 +323,8 @@ float ambient_temperature_real = 87.5;
   extern float tempmonGetTemp(void);
   char serial_debug_string[512];
   elapsedMillis debug_print_timer = 0;
-  unsigned long max_loop_timer = 0, loop_timer = 0, startup_time;
+  unsigned long max_loop_timer = 0, loop_timer = 0, setup_time;
   uint32_t kcan_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 #endif
 bool diag_transmit = true;
 elapsedMillis diag_deactivate_timer = 0;
-
-#if AUTO_MIRROR_FOLD
-extern "C" void startup_middle_hook(void);
-extern "C" volatile uint32_t systick_millis_count;
-void startup_middle_hook(void) {
-  // Force millis() to be 300 to skip USB startup delays. The module needs to boot very quickly to revceive the unlock message.
-  systick_millis_count = 300;
-}
-#endif

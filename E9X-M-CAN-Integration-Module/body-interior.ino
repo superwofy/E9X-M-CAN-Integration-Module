@@ -1,7 +1,7 @@
 // General body functions dealing with interior electronics go here.
 
 
-void evaluate_ignition_status() {
+void evaluate_ignition_status(void) {
   vehicle_awake_timer = 0;
   if (!vehicle_awake) {
     vehicle_awake = true;    
@@ -69,6 +69,11 @@ void evaluate_ignition_status() {
 
   if (terminal_r && !terminal_r_) {
     serial_log("Terminal R ON.");
+    #if RTC
+      if (!rtc_valid) {
+        kcan_write_msg(set_time_cc_buf);                                                                                            // Warn that the time needs to be updated by the user.
+      }
+    #endif
   } else if (!terminal_r && terminal_r_) {
     serial_log("Terminal R OFF.");
   }
@@ -76,7 +81,7 @@ void evaluate_ignition_status() {
 
 
 #if AUTO_SEAT_HEATING
-void evaluate_seat_heating_status() {
+void evaluate_seat_heating_status(void) {
   if (k_msg.id == 0x232) {
     if (!k_msg.buf[0]) {                                                                                                            // Check if seat heating is already ON.
       if (!driver_sent_seat_heating_request && (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD)) {
@@ -96,7 +101,7 @@ void evaluate_seat_heating_status() {
 
 
 #if AUTO_SEAT_HEATING_PASS
-void evaluate_passenger_seat_status() {
+void evaluate_passenger_seat_status(void) {
   passenger_seat_status = k_msg.buf[1];
   if (ignition) {
     if (!passenger_seat_heating_status) {                                                                                           // Check if seat heating is already ON.
@@ -114,7 +119,7 @@ void evaluate_passenger_seat_status() {
 #endif
 
 
-void send_seat_heating_request_dr() {
+void send_seat_heating_request_dr(void) {
   unsigned long timeNow = millis();
   kcan_write_msg(seat_heating_button_pressed_dr_buf);
   driver_sent_seat_heating_request = true;
@@ -133,7 +138,7 @@ void send_seat_heating_request_dr() {
 
 
 #if AUTO_SEAT_HEATING_PASS
-void send_seat_heating_request_pas() {
+void send_seat_heating_request_pas(void) {
   unsigned long timeNow = millis();
   kcan_write_msg(seat_heating_button_pressed_pas_buf);
   passenger_sent_seat_heating_request = true;
@@ -152,7 +157,7 @@ void send_seat_heating_request_pas() {
 #endif
 
 
-void check_seatheating_queue() {
+void check_seatheating_queue(void) {
   if (!seat_heating_dr_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     seat_heating_dr_txq.peek(&delayed_tx);
@@ -176,13 +181,13 @@ void check_seatheating_queue() {
 
 
 #if F_ZBE_WAKE
-void send_zbe_wakeup() {
+void send_zbe_wakeup(void) {
   kcan_write_msg(f_wakeup_buf);
   serial_log("Sent F-ZBE wake-up message.");
 }
 
 
-void send_zbe_acknowledge() {
+void send_zbe_acknowledge(void) {
   zbe_response[2] = k_msg.buf[7];
   kcan_write_msg(makeMsgBuf(0x277, 4, zbe_response));
   #if DEBUG_MODE
@@ -194,7 +199,7 @@ void send_zbe_acknowledge() {
 
 
 #if REVERSE_BEEP
-void evaluate_pdc_beep() {
+void evaluate_pdc_beep(void) {
   if (k_msg.buf[0] == 0xFE) {
     if (!pdc_beep_sent) {
       unsigned long timeNow = millis();
@@ -213,7 +218,7 @@ void evaluate_pdc_beep() {
 }
 
 
-void check_pdc_queue()  {
+void check_pdc_queue(void)  {
   if (!pdc_beep_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     pdc_beep_txq.peek(&delayed_tx);
@@ -227,13 +232,13 @@ void check_pdc_queue()  {
 
 
 #if DEBUG_MODE
-void evaluate_battery_voltage() {
+void evaluate_battery_voltage(void) {
   battery_voltage = (((pt_msg.buf[1] - 240 ) * 256.0) + pt_msg.buf[0]) / 68.0;
 }
 #endif
 
 
-void check_console_buttons() {
+void check_console_buttons(void) {
   if (!digitalRead(POWER_BUTTON_PIN)) {
     if (power_button_debounce_timer >= power_debounce_time_ms) {                                                                    // POWER console button should only change throttle mapping.
       power_button_debounce_timer = 0;
@@ -258,34 +263,38 @@ void check_console_buttons() {
   } 
   
   if (!digitalRead(DSC_BUTTON_PIN)) {
-    if (dsc_program_status != 2) {
-      if (!holding_dsc_off_console) {
-        holding_dsc_off_console = true;
-        dsc_off_button_hold_timer = 0;
-      } else {
-        if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                        // DSC OFF sequence should only be sent after user holds button for a configured time
-          if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
-            serial_log("Console: DSC OFF button held. Sending DSC OFF.");
+    if (!holding_dsc_off_console) {
+      holding_dsc_off_console = true;
+      dsc_off_button_hold_timer = 0;
+    } else {
+      if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                          // DSC OFF sequence should only be sent after user holds button for a configured time
+        if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
+          if (dsc_program_status != 2) {
+            serial_log("Console: DSC OFF button held.");
             send_dsc_mode(2);
             dsc_off_button_debounce_timer = 0;
+            holding_dsc_off_console = false;
           }
         }
-      }      
-    } else {
-      if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {                                                                  // A quick tap re-enables everything
-        serial_log("Console: DSC button tapped. Sending DSC ON.");
-        dsc_off_button_debounce_timer = 0;
-        send_dsc_mode(0);
       }
+    }      
+  } else {                                                                                                                          // A quick tap re-enables everything
+    if (holding_dsc_off_console) {
+      if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
+        if (dsc_program_status != 0) {
+          serial_log("Console: DSC button tapped.");
+          dsc_off_button_debounce_timer = 0;
+          send_dsc_mode(0);
+        }
+      }
+      holding_dsc_off_console = false;
     }
-  } else {
-    holding_dsc_off_console = false;
-  }
+  } 
 }
 
 
 #if RTC
-void update_car_time_from_rtc() {
+void update_car_time_from_rtc(void) {
   if (rtc_valid) {                                                                                                                  // Make sure time in RTC is actually valid before forcing it.
     serial_log("Vehicle date/time not set. Setting from RTC.");
     time_t t = now();
@@ -306,7 +315,7 @@ void update_car_time_from_rtc() {
 
 
 #if DOOR_VOLUME
-void send_volume_request() {
+void send_volume_request(void) {
   if (!volume_requested && diag_transmit) {
     delayed_can_tx_msg m = {vol_request_buf, millis() + 100};
     idrive_txq.push(&m);
@@ -316,7 +325,7 @@ void send_volume_request() {
 }
 
 
-void evaluate_audio_volume() {
+void evaluate_audio_volume(void) {
   if (volume_requested) {                                                                                                           // Make sure that the module is the one that requested this result.
     if (k_msg.buf[0] == 0xF1 && k_msg.buf[3] == 0x24) {                                                                             // status_volumeaudio response.
       uint8_t audio_volume = k_msg.buf[4];
@@ -388,7 +397,7 @@ void evaluate_audio_volume() {
 }
 
 
-void check_idrive_queue() {
+void check_idrive_queue(void) {
   if (!idrive_txq.isEmpty() && diag_transmit) {
     delayed_can_tx_msg delayed_tx;
     idrive_txq.peek(&delayed_tx);
@@ -407,7 +416,7 @@ void check_idrive_queue() {
 
 
 #if CKM || DOOR_VOLUME
-void check_idrive_alive_monitor() {
+void check_idrive_alive_monitor(void) {
   if (terminal_r) {
     if (idrive_alive_timer >= 4000) {                                                                                               // This message should be received every 2s.
       if (!idrive_died) {
@@ -443,7 +452,7 @@ void check_idrive_alive_monitor() {
 }
 
 
-void update_idrive_alive_timer() {
+void update_idrive_alive_timer(void) {
   idrive_alive_timer = 0;
 
   #if DOOR_VOLUME

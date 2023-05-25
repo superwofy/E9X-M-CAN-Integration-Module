@@ -1,21 +1,15 @@
 // Engine/driveline functions go here.
 
 
-void evaluate_engine_rpm() {
+void evaluate_engine_rpm(void) {
   RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
   if (!engine_running && (RPM > 2000)) {
     engine_running = true;
-    #if ANTI_THEFT_SEQ
-    if (anti_theft_released) {
-    #endif
     #if CONTROL_SHIFTLIGHTS
       shiftlight_startup_animation();                                                                                               // Show off shift light segments during engine startup (>500rpm).
     #endif
     #if NEEDLE_SWEEP
       needle_sweep_animation();
-    #endif
-    #if ANTI_THEFT_SEQ
-    }
     #endif
     #if EXHAUST_FLAP_CONTROL
       exhaust_flap_action_timer = 0;                                                                                                // Start tracking the exhaust flap.
@@ -45,7 +39,7 @@ void evaluate_engine_rpm() {
 }
 
 
-void read_settings_from_eeprom() {
+void read_settings_from_eeprom(void) {
   mdrive_dsc = EEPROM.read(1);
   mdrive_power = EEPROM.read(2);
   mdrive_edc = EEPROM.read(3);
@@ -97,7 +91,7 @@ void read_settings_from_eeprom() {
 }
 
 
-void update_settings_in_eeprom() {
+void update_settings_in_eeprom(void) {
   if (mdrive_settings_save_to_eeprom) {
     EEPROM.update(1, mdrive_dsc);                                                                                                   // EEPROM lifetime approx. 100k writes. Always update, never write()!                                                                                          
     EEPROM.update(2, mdrive_power);
@@ -119,7 +113,7 @@ void update_settings_in_eeprom() {
 }
 
 
-void toggle_mdrive_message_active() {
+void toggle_mdrive_message_active(void) {
   if (mdrive_status) {                                                                                                              // Turn OFF MDrive.
     serial_log("Status MDrive OFF.");
     mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
@@ -153,7 +147,7 @@ void toggle_mdrive_message_active() {
 }
 
 
-void toggle_mdrive_dsc_mode() {
+void toggle_mdrive_dsc_mode(void) {
   if (mdrive_status) {
     if (mdrive_dsc == 7) {                                                                                                          // DSC OFF requested.
       send_dsc_mode(2);
@@ -172,7 +166,7 @@ void toggle_mdrive_dsc_mode() {
 }
 
 
-void evaluate_m_mfl_button_press() {
+void evaluate_m_mfl_button_press(void) {
   if (pt_msg.buf[1] == 0x4C) {                                                                                                      // M button is pressed.
     if (!ignore_m_press) {
       ignore_m_press = true;                                                                                                        // Ignore further pressed messages until the button is released.
@@ -207,6 +201,7 @@ void evaluate_m_mfl_button_press() {
         anti_theft_pressed_count++;
       } else {
         anti_theft_released = true;
+        EEPROM.update(12, anti_theft_released);                                                                                     // Save to EEPROM in case program crashes.
         ptcan_write_msg(ekp_return_to_normal_buf);                                                                                  // KWP To EKP.
         serial_log("Anti-theft released. EKP control restored to DME.");
         delayed_can_tx_msg m;
@@ -251,7 +246,7 @@ void evaluate_m_mfl_button_press() {
 }
 
 
-void show_idrive_mdrive_settings_screen() {
+void show_idrive_mdrive_settings_screen(void) {
   if (diag_transmit) {
     #if ANTI_THEFT_SEQ
     if (anti_theft_released) {
@@ -267,7 +262,7 @@ void show_idrive_mdrive_settings_screen() {
 }
 
 
-void send_mdrive_message() {
+void send_mdrive_message(void) {
   mdrive_message[0] += 10;
   if (mdrive_message[0] > 0xEF) {                                                                                                   // Alive(first half of byte) must be between 0..E.
     mdrive_message[0] = 0;
@@ -293,7 +288,7 @@ void send_mdrive_alive_message(uint16_t interval) {
 }
 
 
-void update_mdrive_message_settings() {
+void update_mdrive_message_settings(void) {
   if (k_msg.buf[4] == 0xEC || k_msg.buf[4] == 0xF4 || k_msg.buf[4] == 0xE4) {                                                       // Reset requested.
     reset_mdrive_settings();
   } else if ((k_msg.buf[4] == 0xE0 || k_msg.buf[4] == 0xE1)) {                                                                      // Ignore E0/E1 (Invalid).
@@ -331,7 +326,7 @@ void update_mdrive_message_settings() {
 }
 
 
-void reset_mdrive_settings() {
+void reset_mdrive_settings(void) {
   mdrive_dsc = 3;                                                                                                                   // Unchanged
   mdrive_message[1] = 1;
   mdrive_power = 0;                                                                                                                 // Unchanged
@@ -368,7 +363,7 @@ void can_checksum_update(uint16_t canid, uint8_t len,  uint8_t *message) {
 }
 
 
-void send_power_mode() {
+void send_power_mode(void) {
   power_mode_only_dme_veh_mode[0] += 0x10;                                                                                          // Increase alive counter.
   if (power_mode_only_dme_veh_mode[0] > 0xEF) {                                                                                     // Alive(first half of byte) must be between 0..E.
     power_mode_only_dme_veh_mode[0] = 0;
@@ -388,14 +383,14 @@ void send_power_mode() {
 
 
 #if CKM
-void send_dme_power_ckm() {
+void send_dme_power_ckm(void) {
   kcan_write_msg(makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                    // This is sent by the DME to populate the M Key iDrive section
   serial_log("Sent DME POWER CKM.");
   dme_ckm_sent = true;
 }
 
 
-void check_ckm_queue() {
+void check_ckm_queue(void) {
   if (!dme_ckm_tx_queue.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     dme_ckm_tx_queue.peek(&delayed_tx);
@@ -407,7 +402,7 @@ void check_ckm_queue() {
 }
 
 
-void update_dme_power_ckm() {
+void update_dme_power_ckm(void) {
   dme_ckm[cas_key_number][0] = k_msg.buf[0];
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Received new POWER CKM setting: %s for key number %d", 
@@ -421,7 +416,7 @@ void update_dme_power_ckm() {
 
 
 #if EDC_CKM_FIX
-void update_edc_ckm() {
+void update_edc_ckm(void) {
   edc_ckm[cas_key_number] = k_msg.buf[0];
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Received new EDC CKM setting: %s for key %d.", k_msg.buf[0] == 0xF1 ? "Comfort" : 
@@ -432,7 +427,7 @@ void update_edc_ckm() {
 }
 
 
-void evaluate_edc_ckm_mismatch() {
+void evaluate_edc_ckm_mismatch(void) {
   if (edc_mismatch_check_counter < 2) {
     if (pt_msg.buf[1] != edc_ckm[cas_key_number]) {
       serial_log("EDC EEPROM CKM setting match the current value. Correcting.");
@@ -452,7 +447,7 @@ void evaluate_edc_ckm_mismatch() {
 }
 
 
-void check_edc_ckm_queue() {
+void check_edc_ckm_queue(void) {
   if (!edc_ckm_txq.isEmpty()) {
     delayed_can_tx_msg delayed_tx;
     edc_ckm_txq.peek(&delayed_tx);
@@ -466,17 +461,16 @@ void check_edc_ckm_queue() {
 
 
 #if ANTI_THEFT_SEQ
-void check_anti_theft_status() {
+void check_anti_theft_status(void) {
   if (millis() >= 2000) {                                                                                                           // Delay ensures that time passed after Teensy (re)started to receive messages.
     if (!anti_theft_released) {
-      uint16_t theft_max_speed;
+      uint16_t theft_max_speed = 20;
       if (speed_mph) {
         theft_max_speed = 12;
-      } else {
-        theft_max_speed = 20;
       }
 
-      // This coild be bypassed if the car is started and driven very very quickly?
+      // This coild be temporarily bypassed if the car is started and driven very very quickly?
+      // It will reactivate once vehicle_speed <= theft_max_speed. Think Speed (1994)...
       if (!vehicle_moving || vehicle_speed <= theft_max_speed) {                                                                    // Make sure we don't cut this off while the car is in (quick) motion!!!
         if (anti_theft_timer >= anti_theft_send_interval) {
           if (terminal_r) {
@@ -520,7 +514,7 @@ void check_anti_theft_status() {
 }
 
 
-void reset_key_cc() {
+void reset_key_cc(void) {
   if (key_cc_sent) {
     kcan_write_msg(key_cc_off_buf);
     key_cc_sent = false;
