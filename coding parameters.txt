@@ -1,27 +1,27 @@
 # CIC
 
-CIC_MDRIVE
+CIC_MDRIVE													// Enables M3 MDrive
 	aktiv
-M_KEY_SETTINGS
+M_KEY_SETTINGS												// Enables M3 key profile settings
 	aktiv
-EDC_CIC
+EDC_CIC														// EDC, if retrofitted.
 	aktiv
-DSC_OFF_CIC
+DSC_OFF_CIC													// Allows disabling DSC from MDrive menu,
 	aktiv
 
 
 # KOMBI
 
-MMI_ENA_SHIFTLIGHTS
+MMI_ENA_SHIFTLIGHTS											// Enable shiftlights
 	aktiv
 DSC_VARIANTE
-	wert_02
+	wert_02													// Changes DSC symbol when disabled, disables DTC mode kombi screen warning
 
 
 # IHKA
 
 MSA
-	aktiv
+	aktiv 													// Activates the Auto-Start-Stop button.
 
 
 # SVT 70
@@ -51,18 +51,18 @@ BETRIEBSWERTE
 
 # JBBF3R
 
-PIA_EDC
+PIA_EDC														// Enables EDC M3 key profile setting.
 	mit_mmi
-EDC_LED_SWITCH
+EDC_LED_SWITCH												// Enables EDC button instead of Servotronic PWM from JBE.
 	aktiv
-DSC_SWITCH
+DSC_SWITCH													// Disabled for M3 hazards cluster.
 	nicht_aktiv
-RPA_SWITCH
+RPA_SWITCH													// Enables the Flat tyre monitor reset button.
 	aktiv
 
 
 
 # FRM
 
-ASP_KOMFORT_EINKLAPP
+ASP_KOMFORT_EINKLAPP										// Disable the original comfort fold mirror behavior.
 	nicht_aktiv

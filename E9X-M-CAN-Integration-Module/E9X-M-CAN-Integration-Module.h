@@ -5,18 +5,21 @@
 #include <EEPROM.h>
 #include "src/wdt4/Watchdog_t4.h"
 #include "src/queue/cppQueue.h"
+#include "usb_dev.h" 
 extern "C" uint32_t set_arm_clock(uint32_t frequency);
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> DCAN;
 WDT_T4<WDT1> wdt;
+const uint8_t wdt_timeout_sec = 10;
 
 /***********************************************************************************************************************************************************************************************************************************************
   Board configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#define PTCAN_STBY_PIN 15
+#define PTCAN_STBY_PIN 15                                                                                                           // These are optional but recommended to save power when the car prepares to deep sleep.
 #define DCAN_STBY_PIN 14
+
 #define EXHAUST_FLAP_SOLENOID_PIN 17
 #define DSC_BUTTON_PIN 16
 #define POWER_BUTTON_PIN 2
@@ -28,14 +31,30 @@ WDT_T4<WDT1> wdt;
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
+#if !DEBUG_MODE
+  #define USB_DISABLE 1                                                                                                             // USB can be disabled if not using serial for security reasons. Use caution when enabling this.
+    #if USB_DISABLE                                                                                                                 // USB can be activated by holding POWER while turning on ignition.
+      // To make this work, the following changes need to be made to startup.c 
+      // (Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/startup.c)
+      // Comment these lines:
+      // usb_pll_start();
+      // while (millis() < TEENSY_INIT_USB_DELAY_BEFORE) ;
+      // usb_init();
+      // while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
+    #endif
+#endif
 
 #define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive.
-#define EDC_CKM_FIX 1                                                                                                               // Sometimes the M Key setting for EDC is not recalled correctly - especially with CA.
-#define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open.
+#define EDC_CKM_FIX 0                                                                                                               // Sometimes the M Key setting for EDC is not recalled correctly - especially with CA.
+#define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Also disables the door open with ignition warning CC.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
 #define HDC 1                                                                                                                       // Gives a function to the HDC console button in non 4WD cars.
 #define FAKE_MSA 1                                                                                                                  // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
+#if !FAKE_MSA
+#define MSA_RVC 0                                                                                                                   // Turn on the OEM rear view camera (TRSVC) when pressing MSA button. Use E70 button from 61319202037.
+#endif                                                                                                                              // RVC can be controlled independently of PDC with this button.
+
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Un-fold mirrors when locking. Can be done with coding but this integrates nicer.
 #if AUTO_MIRROR_FOLD
 #define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
@@ -44,6 +63,9 @@ WDT_T4<WDT1> wdt;
 #if ANTI_THEFT_SEQ                                                                                                                  // If this is not deactivated before start, DME will store errors!
 const uint8_t ANTI_THEFT_SEQ_NUMBER = 3;                                                                                            // Number of times to press the button for the EKP to be re-activated.
 #define ANTI_THEFT_SEQ_ALARM 1                                                                                                      // Sound the alarm if engine is started without disabling anti-theft.
+#endif
+#if ANTI_THEFT_SEQ_ALARM
+const uint8_t ANTI_THEFT_SEQ_ALARM_NUMBER = 5;                                                                                      // Number of times to press the button for the alarm to be silenced and EKP re-activated.
 #endif
 #define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack this indicator.
@@ -81,39 +103,39 @@ const double AUTO_SEAT_HEATING_TRESHOLD = 10.0;                                 
   const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
   const uint16_t MAX_UPSHIFT_WARN_RPM = 6500 * 4;
   const uint16_t GONG_UPSHIFT_WARN_RPM = 7000 * 4;
+  const int16_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                      // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
 #endif
 #if EXHAUST_FLAP_CONTROL
   const uint16_t EXHAUST_FLAP_QUIET_RPM = 3000 * 4;                                                                                 // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
 #endif
 #if LAUNCH_CONTROL_INDICATOR
   const uint16_t LC_RPM = 4000 * 4;                                                                                                 // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
-  const uint16_t LC_RPM_MIN = LC_RPM - (250 * 4);
+  const uint16_t LC_RPM_MIN = LC_RPM - (250 * 4);                                                                                   // RPM hysteresis when bouncing off the limiter.
   const uint16_t LC_RPM_MAX = LC_RPM + (250 * 4);
 #endif
-#if CONTROL_SHIFTLIGHTS
-  const int16_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                      // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
-#endif
-const float MAX_THRESHOLD = 70.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
-const float MEDIUM_THRESHOLD = 65.0;
+const float MAX_THRESHOLD = 72.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
+const float HIGH_THRESHOLD = 68.0;
+const float MEDIUM_THRESHOLD = 64.0;
 const float MILD_THRESHOLD = 60.0;
 const float HYSTERESIS = 2.0;
-const unsigned long MAX_UNDERCLOCK = 24 * 1000000;                                                                                  // temperature <= 90 should be ok for more than 100,000 Power on Hours at 1.15V (freq <= 528 MHz).
+const unsigned long MAX_UNDERCLOCK = 24 * 1000000;                                                                                  // temperature <= 90 (Tj) should be ok for more than 100,000 Power on Hours at 1.15V (freq <= 528 MHz).
+unsigned long HIGH_UNDERCLOCK = 150 * 1000000;
 unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
 unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#if AUTO_MIRROR_FOLD
-  extern "C" void startup_middle_hook(void);
-  extern "C" volatile uint32_t systick_millis_count;
-  void startup_middle_hook(void) {
-    // Force millis() to be 300 to skip USB startup delays. The module needs to boot very quickly to revceive the unlock message.
-    // This makes receiving early boot serial messages difficult.
-    systick_millis_count = 300;
-  }
-  // In usb.c, also remove call to delay(25); in function usb_init(void)
-  // Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/usb.c
+#if !USB_DISABLE                                                                                                                    // Not needed if startup.c is modified.
+  #if AUTO_MIRROR_FOLD
+    extern "C" void startup_middle_hook(void);
+    extern "C" volatile uint32_t systick_millis_count;
+    void startup_middle_hook(void) {
+      // Force millis() to be 300 to skip USB startup delays. The module needs to boot very quickly to revceive the unlock message.
+      // This makes receiving early boot serial messages difficult.
+      systick_millis_count = 300;
+    }
+  #endif
 #endif
 
 CAN_message_t pt_msg, k_msg, d_msg;
@@ -125,7 +147,7 @@ typedef struct delayed_can_tx_msg {
 uint32_t cpu_speed_ide;
 bool terminal_r = false, ignition = false,  vehicle_awake = false;
 bool engine_cranking = false, engine_running = false;
-elapsedMillis vehicle_awake_timer = 0;
+elapsedMillis vehicle_awake_timer = 0, vehicle_awakened_time = 0;
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint16_t RPM = 0;
@@ -226,7 +248,7 @@ CAN_message_t cc_gong_buf;
   bool unfold_with_door_open = false;
 #endif
 #if ANTI_THEFT_SEQ
-  bool anti_theft_released = false, key_cc_sent = false;
+  bool anti_theft_released = false;
   unsigned long anti_theft_send_interval = 0;                                                                                       // Skip the first interval delay.
   elapsedMillis anti_theft_timer = 0;
   uint8_t anti_theft_pressed_count = 0;
@@ -237,7 +259,8 @@ CAN_message_t cc_gong_buf;
   cppQueue ekp_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if ANTI_THEFT_SEQ_ALARM
-  bool alarm_after_engine_stall = false, alarm_active = false;
+  bool alarm_after_engine_stall = false, alarm_active = false, alarm_led = false, lock_led = false;
+  uint8_t led_message_counter = 60;
   CAN_message_t alarm_led_on_buf, alarm_led_off_buf;
   CAN_message_t alarm_siren_on_buf, alarm_siren_off_buf;
   cppQueue alarm_siren_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -247,8 +270,8 @@ CAN_message_t cc_gong_buf;
   bool pdc_beep_sent = false;
   cppQueue pdc_beep_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
-#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
-  bool reverse_status = false;
+#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
+  bool reverse_gear_status = false;
 #endif
 #if F_ZBE_WAKE
   CAN_message_t f_wakeup_buf;
@@ -283,16 +306,16 @@ float ambient_temperature_real = 87.5;
   bool rtc_valid = true;
 #endif
 #if DOOR_VOLUME
-  bool volume_reduced = false, volume_requested = false;
+  bool volume_reduced = false;
   bool default_volume_sent = false;
   uint8_t volume_restore_offset = 0, volume_changed_to;
-  CAN_message_t vol_request_buf, default_vol_set_buf;
+  CAN_message_t vol_request_buf, default_vol_set_buf, door_open_cc_off_buf;
   cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
-#if DOOR_VOLUME || AUTO_MIRROR_FOLD
+#if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
   bool left_door_open = false, right_door_open = false;
 #endif
-#if CKM || DOOR_VOLUME
+#if CKM || DOOR_VOLUME || REVERSE_BEEP
   elapsedMillis idrive_alive_timer = 0;
   bool idrive_died = false;
 #endif
@@ -311,9 +334,17 @@ float ambient_temperature_real = 87.5;
   bool vehicle_moving = false;
 #endif
 #if FAKE_MSA
+  CAN_message_t msa_deactivated_cc_on_buf, msa_deactivated_cc_off_buf;
+#endif
+#if MSA_RVC
+  uint8_t pdc_status = 0x80;
+  bool pdc_button_pressed = false, pdc_with_rvc_requested = false;
+  CAN_message_t camera_off_buf, camera_on_buf, pdc_off_camera_on_buf, pdc_on_camera_on_buf, pdc_off_camera_off_buf;
+#endif
+#if FAKE_MSA || MSA_RVC
   bool msa_button_pressed = false;
   uint8_t msa_fake_status_counter = 0;
-  CAN_message_t msa_deactivated_cc_on_buf, msa_deactivated_cc_off_buf, msa_fake_status_buf;
+  CAN_message_t msa_fake_status_buf;
 #endif
 #if HDC || FAKE_MSA
   cppQueue ihk_extra_buttons_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -325,6 +356,10 @@ float ambient_temperature_real = 87.5;
   elapsedMillis debug_print_timer = 0;
   unsigned long max_loop_timer = 0, loop_timer = 0, setup_time;
   uint32_t kcan_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
+  bool serial_commands_unlocked = false;
+#endif
+#if DEBUG_MODE || ANTI_THEFT_SEQ
+  #include "secrets.h"
 #endif
 bool diag_transmit = true;
 elapsedMillis diag_deactivate_timer = 0;

@@ -4,11 +4,11 @@
 void initialize_watchdog(void) {
   WDT_timings_t config;
   #if DEBUG_MODE
-    config.trigger = 10;
+    config.trigger = wdt_timeout_sec;
     config.callback = wdt_callback;
-    config.timeout = 12;
+    config.timeout = wdt_timeout_sec + 2;
   #else
-    config.timeout = 10;                                                                                                            // If the watchdog timer is not reset within 10s, re-start the program.
+    config.timeout = wdt_timeout_sec;                                                                                               // If the watchdog timer is not reset within 10s, re-start the program.
   #endif
   wdt.begin(config);
 }
@@ -78,44 +78,40 @@ void print_current_state(Stream &status_serial) {
     status_serial.println(" Inactive");
   }
   status_serial.print(" Settings: DSC-");
-  switch (mdrive_dsc) {
-    case 3:
-      status_serial.print("Unchanged"); break;
-    case 7:
-      status_serial.print("OFF"); break;
-    case 0x13:
-      status_serial.print("DTC/MDM"); break;
-    case 0xB:
-      status_serial.print("ON"); break;
+  if (mdrive_dsc == 3) {
+    status_serial.print("Unchanged");
+  } else if (mdrive_dsc == 7) {
+    status_serial.print("OFF");
+  } else if (mdrive_dsc == 0x13) {
+    status_serial.print("DTC/MDM");
+  } else if (mdrive_dsc == 0xB) {
+    status_serial.print("ON");
   }
   status_serial.print("  POWER-");
-  switch (mdrive_power) {
-    case 0:
-      status_serial.print("Unchanged"); break;
-    case 0x10:
-      status_serial.print("Normal"); break;
-    case 0x20:
-      status_serial.print("Sport"); break;
-    case 0x30:
-      status_serial.print("Sport+"); break;
+  if (mdrive_power == 0) {
+    status_serial.print("Unchanged");
+  } else if (mdrive_power == 0x10) {
+    status_serial.print("Normal");
+  } else if (mdrive_power == 0x20) {
+    status_serial.print("Sport");
+  } else if (mdrive_power == 0x30) {
+    status_serial.print("Sport+");
   }
   status_serial.print("  EDC-");
-  switch (mdrive_edc) {
-    case 0x20:
-      status_serial.print("Unchanged"); break;
-    case 0x21:
-      status_serial.print("Comfort"); break;
-    case 0x22:
-      status_serial.print("Normal"); break;
-    case 0x2A:
-      status_serial.print("Sport"); break;
+  if (mdrive_edc == 0x20) {
+    status_serial.print("Unchanged");
+  } else if (mdrive_edc == 0x21) {
+    status_serial.print("Comfort");
+  } else if (mdrive_edc == 0x22) {
+    status_serial.print("Normal");
+  } else if (mdrive_edc == 0x2A) {
+    status_serial.print("Sport");
   }
   status_serial.print("  SVT-");
-  switch (mdrive_svt) {
-    case 0xE9:
-      status_serial.print("Normal"); break;
-    case 0xF1:
-      status_serial.print("Sport"); break;
+  if (mdrive_svt == 0xE9) {
+    status_serial.print("Normal");
+  } else if (mdrive_svt == 0xF1) {
+    status_serial.print("Sport");
   }
   status_serial.println();
   sprintf(serial_debug_string, " Console POWER: %s", console_power_mode ? "ON" : "OFF");
@@ -140,8 +136,12 @@ void print_current_state(Stream &status_serial) {
             rtc_day > 9 ? "" : "0", rtc_day, rtc_month > 9 ? "" : "0", rtc_month, rtc_year);
     status_serial.println(serial_debug_string);
   #endif
-  #if REVERSE_BEEP
-    sprintf(serial_debug_string, " Reverse gear: %s", pdc_beep_sent ? "ON" : "OFF");
+  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
+    sprintf(serial_debug_string, " Reverse gear: %s", reverse_gear_status ? "ON" : "OFF");
+    status_serial.println(serial_debug_string);
+  #endif
+  #if MSA_RVC
+    sprintf(serial_debug_string, " PDC: %s", pdc_status > 0x80 ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
   #endif
   if (ambient_temperature_real != 87.5) {
@@ -336,8 +336,15 @@ void reset_runtime_variables(void) {                                            
     msa_button_pressed = false;
     msa_fake_status_counter = 0;
   #endif
+  #if MSA_RVC
+    pdc_status = 0x80;
+    pdc_button_pressed = pdc_with_rvc_requested = false;
+  #endif
   #if ANTI_THEFT_SEQ
     reset_key_cc();
+  #endif
+  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
+    reverse_gear_status = false;
   #endif
 }
 
@@ -358,7 +365,6 @@ void reset_sleep_variables(void) {
   #endif
   #if DOOR_VOLUME
     volume_reduced = false;                                                                                                         // In case the car falls asleep with the door open.
-    volume_requested = false;
     volume_restore_offset = 0;
     default_volume_sent = false;
     idrive_txq.flush();
@@ -378,11 +384,7 @@ void reset_sleep_variables(void) {
     }
   #endif
   #if ANTI_THEFT_SEQ
-    anti_theft_released = key_cc_sent = false;
-    anti_theft_pressed_count = 0;
-    anti_theft_txq.flush();
-    ekp_txq.flush();
-    EEPROM.update(12, anti_theft_released);
+    activate_anti_theft();
   #endif
   update_settings_in_eeprom();
 }

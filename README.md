@@ -38,9 +38,11 @@ I use it to:
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 	-> If engine is started without releasing this immobilizer, alarm will sound once engine stalls.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
-* Audibly warn when reverse is engaged.
+* Audibly warn when reverse gear is engaged.
 * Create a HDC function similar to the one in xDrive cars.
 * Display a CC when pressing the Auto Start-stop button instead of a blank button.
+  OR
+* Switch on the reversing camera when pressing the Auto Start-stop button.
 * Enable FXX KCAN1 CIC controllers.
 * Enable full diagnosis and coding of SVT70 modules.
 * Turn on heated seats below a set temperature.

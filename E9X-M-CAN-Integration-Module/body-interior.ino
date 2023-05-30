@@ -7,6 +7,7 @@ void evaluate_ignition_status(void) {
     vehicle_awake = true;    
     toggle_transceiver_standby();                                                                                                   // Re-activate the transceivers.                                                                                         
     serial_log("Vehicle Awake.");
+    vehicle_awakened_time = 0;
   }  
 
   bool ignition_ = ignition;
@@ -42,7 +43,7 @@ void evaluate_ignition_status(void) {
       break;
   }
 
-  #if FAKE_MSA
+  #if FAKE_MSA || MSA_RVC
     if (ignition) {
       if (msa_fake_status_counter == 5){
         kcan_write_msg(msa_fake_status_buf);                                                                                        // Send this message every 500ms to keep the IHKA module happy.
@@ -56,6 +57,9 @@ void evaluate_ignition_status(void) {
     scale_mcu_speed();
     #if SERVOTRONIC_SVT70
       indicate_svt_diagnosis_on();
+    #endif
+    #if USB_DISABLE
+      activate_usb();                                                                                                               // If this fails to run, the program button will need to be pressed to recover.
     #endif
     serial_log("Ignition ON.");    
   } else if (!ignition && ignition_) {
@@ -198,39 +202,6 @@ void send_zbe_acknowledge(void) {
 #endif
 
 
-#if REVERSE_BEEP
-void evaluate_pdc_beep(void) {
-  if (k_msg.buf[0] == 0xFE) {
-    if (!pdc_beep_sent) {
-      unsigned long timeNow = millis();
-      delayed_can_tx_msg m = {pdc_beep_buf, timeNow};
-      pdc_beep_txq.push(&m);
-      m = {pdc_quiet_buf, timeNow + 150};
-      pdc_beep_txq.push(&m);
-      pdc_beep_sent = true;
-      serial_log("Sending PDC beep.");
-    }
-  } else {
-    if (pdc_beep_sent) {
-      pdc_beep_sent = false;
-    }
-  }
-}
-
-
-void check_pdc_queue(void)  {
-  if (!pdc_beep_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
-    pdc_beep_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      pdc_beep_txq.drop();
-    }
-  }
-}
-#endif
-
-
 #if DEBUG_MODE
 void evaluate_battery_voltage(void) {
   battery_voltage = (((pt_msg.buf[1] - 240 ) * 256.0) + pt_msg.buf[0]) / 68.0;
@@ -316,83 +287,86 @@ void update_car_time_from_rtc(void) {
 
 #if DOOR_VOLUME
 void send_volume_request(void) {
-  if (!volume_requested && diag_transmit) {
-    delayed_can_tx_msg m = {vol_request_buf, millis() + 100};
+  if (diag_transmit) {
+    delayed_can_tx_msg m = {vol_request_buf, millis() + 10};
     idrive_txq.push(&m);
-    volume_requested = true;
     serial_log("Requesting volume from iDrive.");
   }
 }
 
 
 void evaluate_audio_volume(void) {
-  if (volume_requested) {                                                                                                           // Make sure that the module is the one that requested this result.
-    if (k_msg.buf[0] == 0xF1 && k_msg.buf[3] == 0x24) {                                                                             // status_volumeaudio response.
-      uint8_t audio_volume = k_msg.buf[4];
-      if (audio_volume > 0) {
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "Received audio volume: 0x%X", audio_volume);
-          serial_log(serial_debug_string);
-        #endif
-        uint8_t volume_change[] = {0x63, 4, 0x31, 0x23, 0, 0, 0, 0};
-        if (!volume_reduced) {
-          if (left_door_open || right_door_open) {
-            volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
-            volume_change[4] = floor(audio_volume / 2);                                                                             // Reduce volume to 50%.
-            if ((volume_change[4] + volume_restore_offset) > 0x20) {                                                                // Don't blow the speakers out if something went wrong...
-              volume_change[4] = 0x20;
-              volume_restore_offset = 0;
-            }
-            kcan_write_msg(makeMsgBuf(0x6F1, 8, volume_change));
-            volume_reduced = true;
-            volume_changed_to = volume_change[4];                                                                                   // Save this value to compare when door is closed back.
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X", volume_changed_to);
-              serial_log(serial_debug_string);
-            #endif
+  if (k_msg.buf[0] == 0xF1 && k_msg.buf[3] == 0x24) {                                                                               // status_volumeaudio response.
+    uint8_t audio_volume = k_msg.buf[4];
+    if (audio_volume > 0) {
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Received audio volume: 0x%X", audio_volume);
+        serial_log(serial_debug_string);
+      #endif
+      uint8_t volume_change[] = {0x63, 4, 0x31, 0x23, 0, 0, 0, 0};
+      if (!volume_reduced) {
+        if (left_door_open || right_door_open) {
+          volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
+          volume_change[4] = floor(audio_volume / 2);                                                                               // Reduce volume to 50%.
+          if ((volume_change[4] + volume_restore_offset) > 0x20) {                                                                  // Don't blow the speakers out if something went wrong...
+            volume_change[4] = 0x20;
+            volume_restore_offset = 0;
           }
-        } else {
-          if (!left_door_open && !right_door_open) {
-            if (volume_reduced) {
-              if (audio_volume == volume_changed_to) {
-                volume_change[4] = audio_volume * 2 + volume_restore_offset;
-                if (volume_change[4] > 0x33) {
-                  volume_change[4] = 0x33;                                                                                          // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
-                }
-                delayed_can_tx_msg m;
-                unsigned long timeNow = millis();
-                if (ignition && !engine_running) {
-                  m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 500};                                                         // Need this delay when Ignition is ON and the warning gong is ON.
-                  idrive_txq.push(&m);
-                  m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 1000};                                                        // Send more in case we get lucky and the gong shuts up early...
-                  idrive_txq.push(&m);
-                  m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 1700};
-                  idrive_txq.push(&m);
-                } else {
-                  m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 200};
-                  idrive_txq.push(&m);
-                  m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 500};
-                  idrive_txq.push(&m);
-                }
-                #if DEBUG_MODE
-                  sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X", volume_change[4]);
-                  serial_log(serial_debug_string);
-                #endif
-              }
-              volume_reduced = false;
-            }
-          }
+          delayed_can_tx_msg m;
+          unsigned long timeNow = millis();
+          m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 200};
+          idrive_txq.push(&m);
+          m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 700};
+          idrive_txq.push(&m);
+          volume_reduced = true;
+          volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
+          #if DEBUG_MODE
+            sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X", volume_changed_to);
+            serial_log(serial_debug_string);
+          #endif
         }
       } else {
-        serial_log("Received volume 0 from iDrive");
-        if (!default_volume_sent) {
-          kcan_write_msg(default_vol_set_buf);
-          default_volume_sent = true;
-          serial_log("Sent default volume job to iDrive after receiving volume 0.");
+        if (!left_door_open && !right_door_open) {
+          if (volume_reduced) {
+            if (audio_volume == volume_changed_to) {
+              volume_change[4] = floor(audio_volume * 1.5);                                                                         // Softer increase.
+              if (volume_change[4] > 0x33) {
+                volume_change[4] = 0x33;                                                                                            // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
+              }
+              delayed_can_tx_msg m;
+              unsigned long timeNow = millis();
+              m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 200};
+              idrive_txq.push(&m);
+              volume_change[4] = audio_volume * 2 + volume_restore_offset;
+              if (volume_change[4] > 0x33) {
+                volume_change[4] = 0x33;
+              }
+              m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 600};
+              idrive_txq.push(&m);
+              m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 900};                                                             // Make sure the restore is received.
+              idrive_txq.push(&m);
+              #if DEBUG_MODE
+                sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X", volume_change[4]);
+                serial_log(serial_debug_string);
+              #endif
+            }
+            volume_reduced = false;
+          }
         }
       }
-      volume_requested = false;
+    } else {
+      serial_log("Received volume 0 from iDrive");                                                                                  // 0 means that the vol knob wasn't used / default volume job was not sent since start.
+      kcan_write_msg(default_vol_set_buf);                                                                                          // This could disrupt user experience?
+      default_volume_sent = true;
+      serial_log("Sent default volume job to iDrive after receiving volume 0.");
     }
+  }
+}
+
+
+void disable_door_ignition_cc() {
+  if (k_msg.buf[1] == 0x4F && k_msg.buf[2] == 1 && k_msg.buf[3] == 0x29) {
+    kcan_write_msg(door_open_cc_off_buf);
   }
 }
 
@@ -415,7 +389,7 @@ void check_idrive_queue(void) {
 #endif
 
 
-#if CKM || DOOR_VOLUME
+#if CKM || DOOR_VOLUME || REVERSE_BEEP
 void check_idrive_alive_monitor(void) {
   if (terminal_r) {
     if (idrive_alive_timer >= 4000) {                                                                                               // This message should be received every 2s.

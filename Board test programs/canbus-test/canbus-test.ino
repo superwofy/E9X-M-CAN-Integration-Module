@@ -1,4 +1,5 @@
 #include <FlexCAN_T4.h>
+#include "usb_dev.h" 
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
@@ -40,6 +41,11 @@ void setup()
 	digitalWrite(PTCAN_STBY_PIN, LOW);
 	digitalWrite(DCAN_STBY_PIN, LOW);
 
+  if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){
+    usb_pll_start();
+    usb_init();
+  }
+
   while(!Serial);
   Serial.println("Program configured, CAN data should follow.");
 }
@@ -52,9 +58,6 @@ void loop()
 		Serial.print(" KCAN: ");
 		Serial.print(" ID: "); Serial.print(k_msg.id, HEX);
 		Serial.print(" Buffer: ");
-    if (k_msg.flags.remote) {
-        Serial.print(" Remote ");
-    }
 		for ( uint8_t i = 0; i < k_msg.len; i++ ) {
 		  Serial.print(k_msg.buf[i], HEX); Serial.print(" ");
 		}
@@ -65,9 +68,6 @@ void loop()
 		Serial.print(" PTCAN: ");
 		Serial.print(" ID: "); Serial.print(pt_msg.id, HEX);
 		Serial.print(" Buffer: ");
-    if (pt_msg.flags.remote) {
-        Serial.print(" Remote ");
-    }
 		for ( uint8_t i = 0; i < pt_msg.len; i++ ) {
 		  Serial.print(pt_msg.buf[i], HEX); Serial.print(" ");
 		}
@@ -78,9 +78,6 @@ void loop()
 		Serial.print(" DCAN: ");
 		Serial.print(" ID: "); Serial.print(d_msg.id, HEX);
 		Serial.print(" Buffer: ");
-    if (d_msg.flags.remote) {
-        Serial.print(" Remote ");
-    }
 		for ( uint8_t i = 0; i < d_msg.len; i++ ) {
 		  Serial.print(d_msg.buf[i], HEX); Serial.print(" ");
 		}
@@ -99,4 +96,41 @@ CAN_message_t makeMsgBuf(uint16_t txID, uint8_t txLen, uint8_t* txBuf)
       tx_msg.buf[i] = txBuf[i];
   }
   return tx_msg;
+}
+
+
+void usb_pll_start() {                                                                                                              // From startup.c
+	while (1) {
+		uint32_t n = CCM_ANALOG_PLL_USB1; // pg 759
+		if (n & CCM_ANALOG_PLL_USB1_DIV_SELECT) {
+			CCM_ANALOG_PLL_USB1_CLR = 0xC000;			// bypass 24 MHz
+			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_BYPASS;	// bypass
+			CCM_ANALOG_PLL_USB1_CLR = CCM_ANALOG_PLL_USB1_POWER |	// power down
+				CCM_ANALOG_PLL_USB1_DIV_SELECT |		// use 480 MHz
+				CCM_ANALOG_PLL_USB1_ENABLE |			// disable
+				CCM_ANALOG_PLL_USB1_EN_USB_CLKS;		// disable usb
+			continue;
+		}
+		if (!(n & CCM_ANALOG_PLL_USB1_ENABLE)) {
+			// TODO: should this be done so early, or later??
+			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_ENABLE;
+			continue;
+		}
+		if (!(n & CCM_ANALOG_PLL_USB1_POWER)) {
+			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_POWER;
+			continue;
+		}
+		if (!(n & CCM_ANALOG_PLL_USB1_LOCK)) {
+			continue;
+		}
+		if (n & CCM_ANALOG_PLL_USB1_BYPASS) {
+			CCM_ANALOG_PLL_USB1_CLR = CCM_ANALOG_PLL_USB1_BYPASS;
+			continue;
+		}
+		if (!(n & CCM_ANALOG_PLL_USB1_EN_USB_CLKS)) {
+			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_EN_USB_CLKS;
+			continue;
+		}
+		return; // everything is as it should be  :-)
+	}
 }

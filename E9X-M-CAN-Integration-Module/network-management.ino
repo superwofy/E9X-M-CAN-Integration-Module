@@ -203,8 +203,10 @@ void cache_can_message_buffers(void) {                                          
   #if DOOR_VOLUME
     uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
     uint8_t default_vol_set[] = {0x63, 2, 0x31, 0x25, 0, 0, 0, 0};
+    uint8_t door_open_cc_off[] = {0x40, 0x4F, 1, 0x28, 0xFF, 0xFF, 0xFF, 0xFF};
     vol_request_buf = makeMsgBuf(0x6F1, 8, vol_request);
     default_vol_set_buf = makeMsgBuf(0x6F1, 8, default_vol_set);
+    door_open_cc_off_buf = makeMsgBuf(0x5C0, 8, door_open_cc_off);
   #endif
   #if HDC
     uint8_t set_hdc_cruise_control[] = {0, 0xFB, 8, 0xFC};
@@ -227,9 +229,23 @@ void cache_can_message_buffers(void) {                                          
   #if FAKE_MSA
     uint8_t msa_deactivated_cc_on[] = {0x40, 0xC2, 1, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
     uint8_t msa_deactivated_cc_off[] = {0x40, 0xC2, 1, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
-    uint8_t msa_fake_status[] = {0xFF, 0xFF};
     msa_deactivated_cc_on_buf = makeMsgBuf(0x592, 8, msa_deactivated_cc_on);
     msa_deactivated_cc_off_buf = makeMsgBuf(0x592, 8, msa_deactivated_cc_off);
+  #endif
+  #if MSA_RVC
+    uint8_t camera_off[] = {0xA1, 0xFF};
+    uint8_t camera_on[] = {0xA5, 0xFF};
+    uint8_t pdc_off_camera_on[] = {0x64, 4, 0x30, 9, 7, 4, 0, 0};
+    uint8_t pdc_on_camera_on[] = {0x64, 4, 0x30, 9, 7, 5, 0, 0};
+    uint8_t pdc_off_camera_off[] = {0x64, 4, 0x30, 9, 7, 0, 0, 0};
+    camera_off_buf = makeMsgBuf(0x3AE, 2, camera_off);
+    camera_on_buf = makeMsgBuf(0x3AE, 2, camera_on);
+    pdc_off_camera_on_buf = makeMsgBuf(0x6F1, 8, pdc_off_camera_on);
+    pdc_on_camera_on_buf = makeMsgBuf(0x6F1, 8, pdc_on_camera_on);
+    pdc_off_camera_off_buf = makeMsgBuf(0x6F1, 8, pdc_off_camera_off);
+  #endif
+  #if FAKE_MSA || MSA_RVC
+    uint8_t msa_fake_status[] = {0xFF, 0xFF};
     msa_fake_status_buf = makeMsgBuf(0x308, 2, msa_fake_status);
   #endif
 }

@@ -1,4 +1,4 @@
-// Functions configuring Teensy and its transceivers go here.
+// Functions configuring Teensy, peripherals and its transceivers go here.
 
 
 void configure_IO(void) {
@@ -76,7 +76,7 @@ void configure_can_controllers(void) {
   #endif
     KCAN.setFIFOFilter(filter_count, 0xAA, STD);                                                                                     // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
     filter_count++;
-  #if DOOR_VOLUME
+  #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
     KCAN.setFIFOFilter(filter_count, 0xE2, STD);                                                                                     // Left door status
     filter_count++;
     KCAN.setFIFOFilter(filter_count, 0xEA, STD);                                                                                     // Right door status
@@ -88,8 +88,8 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x193, STD);                                                                                    // Kombi cruise control status
     filter_count++;
   #endif
-  #if FAKE_MSA
-    KCAN.setFIFOFilter(filter_count, 0x195, STD);                                                                                    // HDC button status sent by IHKA.
+  #if FAKE_MSA || MSA_RVC
+    KCAN.setFIFOFilter(filter_count, 0x195, STD);                                                                                    // MSA button status sent by IHKA.
     filter_count++;
   #endif
   #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
@@ -113,10 +113,10 @@ void configure_can_controllers(void) {
     filter_count++;
   #endif
   #if AUTO_MIRROR_FOLD || CKM
-    KCAN.setFIFOFilter(filter_count, 0x23A, STD),                                                                                    // Remote button and number sent by CAS                         Sent 3x when changed.
+    KCAN.setFIFOFilter(filter_count, 0x23A, STD);                                                                                    // Remote button and number sent by CAS                         Sent 3x when changed.
     filter_count++;
   #endif
-  #if F_ZBE_WAKE || CKM || DOOR_VOLUME
+  #if F_ZBE_WAKE || CKM || DOOR_VOLUME || REVERSE_BEEP
     KCAN.setFIFOFilter(filter_count, 0x273, STD);                                                                                    // Filter CIC status and ZBE challenge.                         Sent when CIC is idle or a button is pressed on the ZBE.
     filter_count++;
   #endif
@@ -134,6 +134,10 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x2FA, STD);                                                                                    // Seat occupancy and belt status                               Cycle time 5s
     filter_count++;
   #endif
+  #if MSA_RVC
+    KCAN.setFIFOFilter(filter_count, 0x317, STD);                                                                                    // Monitor PDC button status.                                   Sent when changed.
+    filter_count++;
+  #endif
   #if HDC
     KCAN.setFIFOFilter(filter_count, 0x31A, STD);                                                                                    // HDC button status sent by IHKA.
     filter_count++;
@@ -148,7 +152,11 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x3AB, STD);                                                                                    // Filter Shiftligths car key memory.
     filter_count++;
   #endif
-  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
+  #if MSA_RVC
+    KCAN.setFIFOFilter(filter_count, 0x3AF, STD);                                                                                    // PDC bus status.                                              Cycle time 2s (idle). Sent when changed.
+    filter_count++;
+  #endif
+  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || MSA_RVC
     KCAN.setFIFOFilter(filter_count, 0x3B0, STD);                                                                                    // Reverse gear status.                                         Cycle time 1s (idle).
     filter_count++;
   #endif
@@ -163,6 +171,8 @@ void configure_can_controllers(void) {
     filter_count++;
   #endif
   #if DOOR_VOLUME
+    KCAN.setFIFOFilter(filter_count, 0x5C0, STD);                                                                                    // CAS CC notifications.
+    filter_count++;
     KCAN.setFIFOFilter(filter_count, 0x663, STD);                                                                                    // iDrive diagnostic responses.                                 Sent when response is requested.
     filter_count++;
   #endif
@@ -233,9 +243,15 @@ void check_teensy_cpu_temp(void) {                                              
 
     if (+(cpu_temp - last_cpu_temp) > HYSTERESIS) {
       if (cpu_temp >= MAX_THRESHOLD) {
-        if (clock_mode != 3) {
+        if (clock_mode != 4) {
           set_arm_clock(MAX_UNDERCLOCK);
           serial_log("Processor temperature above max overheat threshold. Underclocking.");
+          clock_mode = 4;
+        }
+      } else if (cpu_temp >= HIGH_THRESHOLD) {
+        if (clock_mode != 3) {
+          set_arm_clock(HIGH_UNDERCLOCK);
+          serial_log("Processor temperature above high overheat threshold. Underclocking.");
           clock_mode = 3;
         }
       } else if (cpu_temp >= MEDIUM_THRESHOLD) {
@@ -360,10 +376,10 @@ void disable_diag_transmit_jobs(void) {
     serial_log("Detected OBD port diagnosis request. Pausing all diagnostic jobs.");
     diag_transmit = false;
     #if DOOR_VOLUME
-      volume_requested = false;
       volume_changed_to = 0;
       volume_restore_offset = 0;
     #endif
+    digitalWrite(DCAN_STBY_PIN, HIGH);                                                                                              // Also deactivate the DCAN transceiver as it will not be used.
   }
 }
 
@@ -373,6 +389,55 @@ void check_diag_transmit_status(void) {
     if (diag_deactivate_timer >= 60000) {                                                                                           // Re-activate after period of no DCAN requests.
       diag_transmit = true;
       serial_log("Resuming diagnostic jobs after timeout.");
+      digitalWrite(DCAN_STBY_PIN, LOW);
     }
   }
 }
+
+
+void usb_pll_start() {                                                                                                              // From startup.c
+	while (1) {
+		uint32_t n = CCM_ANALOG_PLL_USB1; // pg 759
+		if (n & CCM_ANALOG_PLL_USB1_DIV_SELECT) {
+			CCM_ANALOG_PLL_USB1_CLR = 0xC000;			// bypass 24 MHz
+			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_BYPASS;	// bypass
+			CCM_ANALOG_PLL_USB1_CLR = CCM_ANALOG_PLL_USB1_POWER |	// power down
+				CCM_ANALOG_PLL_USB1_DIV_SELECT |		// use 480 MHz
+				CCM_ANALOG_PLL_USB1_ENABLE |			// disable
+				CCM_ANALOG_PLL_USB1_EN_USB_CLKS;		// disable usb
+			continue;
+		}
+		if (!(n & CCM_ANALOG_PLL_USB1_ENABLE)) {
+			// TODO: should this be done so early, or later??
+			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_ENABLE;
+			continue;
+		}
+		if (!(n & CCM_ANALOG_PLL_USB1_POWER)) {
+			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_POWER;
+			continue;
+		}
+		if (!(n & CCM_ANALOG_PLL_USB1_LOCK)) {
+			continue;
+		}
+		if (n & CCM_ANALOG_PLL_USB1_BYPASS) {
+			CCM_ANALOG_PLL_USB1_CLR = CCM_ANALOG_PLL_USB1_BYPASS;
+			continue;
+		}
+		if (!(n & CCM_ANALOG_PLL_USB1_EN_USB_CLKS)) {
+			CCM_ANALOG_PLL_USB1_SET = CCM_ANALOG_PLL_USB1_EN_USB_CLKS;
+			continue;
+		}
+		return; // everything is as it should be  :-)
+	}
+}
+
+
+#if USB_DISABLE
+void activate_usb() {
+  if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){
+    usb_pll_start();
+    delay(100);
+    usb_init();
+  }
+}
+#endif

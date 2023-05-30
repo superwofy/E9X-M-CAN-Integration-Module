@@ -153,7 +153,7 @@ void needle_sweep_animation(void) {
 void evaluate_lc_display(void) {
   if (LC_RPM_MIN <= RPM && RPM <= LC_RPM_MAX) {
     if (clutch_pressed && !vehicle_moving) {
-      if (!reverse_status) {
+      if (!reverse_gear_status) {
         kcan_write_msg(lc_cc_on_buf);
         lc_cc_active = true;
         if (dsc_program_status == 0) {
@@ -241,6 +241,43 @@ void evaluate_fog_status(void) {
 #endif
 
 
+#if REVERSE_BEEP
+void evaluate_pdc_beep(void) {
+  if (k_msg.buf[0] == 0xFE) {
+    if (!pdc_beep_sent) {
+      serial_log("Sending PDC beep.");
+      if (idrive_died) {                                                                                                            // Send this message if iDrive is not fully ready.
+        unsigned long timeNow = millis();
+        delayed_can_tx_msg m = {pdc_beep_buf, timeNow};
+        pdc_beep_txq.push(&m);
+        m = {pdc_quiet_buf, timeNow + 150};
+        pdc_beep_txq.push(&m);        
+      } else {
+        kcan_write_msg(cc_gong_buf);
+      }
+      pdc_beep_sent = true;
+    }
+  } else {
+    if (pdc_beep_sent) {
+      pdc_beep_sent = false;
+    }
+  }
+}
+
+
+void check_reverse_beep_queue(void)  {
+  if (!pdc_beep_txq.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    pdc_beep_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      pdc_beep_txq.drop();
+    }
+  }
+}
+#endif
+
+
 #if FTM_INDICATOR
 void evaluate_indicate_ftm_status(void) {
   if (pt_msg.buf[0] == 3 && !ftm_indicator_status) {
@@ -256,16 +293,38 @@ void evaluate_indicate_ftm_status(void) {
 #endif
 
 
-#if FAKE_MSA
+#if FAKE_MSA || MSA_RVC
 void evaluate_msa_button(void) {
   if (k_msg.buf[0] == 0xF5 || k_msg.buf[0] == 0xF1) {                                                                               // Button pressed.
     if (!msa_button_pressed) {
-      if (engine_running) {
-        kcan_write_msg(msa_deactivated_cc_on_buf);
-        serial_log("Sent MSA OFF CC.");
-        delayed_can_tx_msg m = {msa_deactivated_cc_off_buf, millis() + 3000};
-        ihk_extra_buttons_cc_txq.push(&m);
-      }
+      #if FAKE_MSA
+        if (engine_running) {
+          kcan_write_msg(msa_deactivated_cc_on_buf);
+          serial_log("Sent MSA OFF CC.");
+          delayed_can_tx_msg m = {msa_deactivated_cc_off_buf, millis() + 3000};
+          ihk_extra_buttons_cc_txq.push(&m);
+        }
+      #endif
+      #if MSA_RVC
+        sprintf(serial_debug_string, "%X", pdc_status);
+        Serial.println(serial_debug_string);
+        if (pdc_status == 0xA5) {
+          kcan_write_msg(camera_off_buf);
+          serial_log("Deactivated RVC with PDC ON.");
+        } else if (pdc_status == 0xA4) {
+          kcan_write_msg(pdc_off_camera_off_buf);
+          serial_log("Deactivated RVC.");
+        } else if (pdc_status == 0xA1) {
+          kcan_write_msg(camera_on_buf);
+          serial_log("Activated RVC with PDC displayed.");
+        } else if (pdc_status == 0x81) {
+          kcan_write_msg(pdc_on_camera_on_buf);
+          serial_log("Activated RVC from PDC ON, not displayed.");
+        } else if (pdc_status == 0x80) {
+          kcan_write_msg(pdc_off_camera_on_buf);
+          serial_log("Activated RVC from PDC OFF.");
+        }
+      #endif
     }
     msa_button_pressed = true;
   } else {                                                                                                                          // Now receiving released (0xF4 or 0xF0) messages from IHKA.
@@ -284,6 +343,44 @@ void check_ihk_buttons_cc_queue(void) {
       kcan_write_msg(delayed_tx.tx_msg);
       ihk_extra_buttons_cc_txq.drop();
     }
+  }
+}
+#endif
+
+
+#if MSA_RVC
+void evaluate_pdc_button(void) {
+  if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
+    if (!pdc_button_pressed) {
+      if (pdc_status == 0xA4) {
+        pdc_with_rvc_requested = true;
+      }
+      pdc_button_pressed = true;
+    }
+  } else {                                                                                                                          // Now receiving released (0xFC or 0xF4) messages from IHKA.
+    pdc_button_pressed = false;
+  }
+}
+
+
+void evaluate_pdc_bus_status(void) {
+  Serial.print(" Buffer: ");
+		for ( uint8_t i = 0; i < k_msg.len; i++ ) {
+		  Serial.print(k_msg.buf[i], HEX); Serial.print(" ");
+		}
+  Serial.println();
+  if (pdc_status != k_msg.buf[2]) {
+    if (pdc_status == 0xA4 && k_msg.buf[2] == 0x81) {
+      kcan_write_msg(pdc_off_camera_off_buf);                                                                                       // Fix for PDC coming on when navingating away from RVC only.
+    } else if (pdc_status == 0xA4 && k_msg.buf[2] == 0xA1) {
+      kcan_write_msg(pdc_off_camera_off_buf);                                                                                       // Fix for PDC coming on when turning off RVC from iDrive UI.
+    }
+    if (pdc_with_rvc_requested && k_msg.buf[2] == 0x80) {
+      kcan_write_msg(pdc_on_camera_on_buf);
+      serial_log("Activated PDC with RVC ON.");
+      pdc_with_rvc_requested = false;
+    }
+    pdc_status = k_msg.buf[2];
   }
 }
 #endif

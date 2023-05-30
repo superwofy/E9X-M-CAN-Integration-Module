@@ -54,11 +54,11 @@ void evaluate_clutch_status(void) {
 #endif
 
 
-#if LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
-void evaluate_reverse_status(void) {
+#if LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
+void evaluate_reverse_gear_status(void) {
   if (k_msg.buf[0] == 0xFE) {
-    if (!reverse_status) {
-      reverse_status = true;
+    if (!reverse_gear_status) {
+      reverse_gear_status = true;
       serial_log("Reverse gear ON.");
       #if FRONT_FOG_CORNER
         if (left_fog_on || right_fog_on) {
@@ -68,10 +68,16 @@ void evaluate_reverse_status(void) {
           left_fog_on = right_fog_on = false;
         }
       #endif
+      #if MSA_RVC
+        if (pdc_status == 0xA4) {
+          kcan_write_msg(pdc_on_camera_on_buf);
+          serial_log("Activated full PDC and camera with reverse gear.");
+        }
+      #endif
     }
   } else {
-    if (reverse_status) {
-      reverse_status = false;
+    if (reverse_gear_status) {
+      reverse_gear_status = false;
       serial_log("Reverse gear OFF.");
     }
   }
@@ -146,7 +152,7 @@ void evaluate_hdc_button(void) {
 
 void evaluate_cruise_control_status(void) {
   if (k_msg.buf[5] == 0x58 || 
-      (k_msg.buf[5] == 0x5A || k_msg.buf[5] == 0x5B || k_msg.buf[5] == 0x5C || k_msg.buf[5] == 0x5D)) {                            // Status is different based on ACC distance setting.
+      (k_msg.buf[5] == 0x5A || k_msg.buf[5] == 0x5B || k_msg.buf[5] == 0x5C || k_msg.buf[5] == 0x5D)) {                             // Status is different based on ACC distance setting.
     if (!cruise_control_status) {
       cruise_control_status = true;
       if (hdc_requested) {

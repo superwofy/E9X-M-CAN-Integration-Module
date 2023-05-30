@@ -23,17 +23,7 @@ void evaluate_engine_rpm(void) {
     engine_running = false;
     serial_log("Engine stopped.");
     #if ANTI_THEFT_SEQ_ALARM
-      if (alarm_after_engine_stall) {
-        kcan_write_msg(alarm_siren_on_buf);
-        serial_log("Alarm ON.");
-        alarm_active = true;
-        unsigned long timenow = millis();
-        delayed_can_tx_msg m;
-        for (uint8_t i = 1; i < 8; i++) {                                                                                           // Alarm test job times out after about 15s.
-          m = {alarm_siren_on_buf, timenow + 15000 * i};
-          alarm_siren_txq.push(&m);
-        }
-      }
+      trip_alarm_after_stall();
     #endif
   }
 }
@@ -197,48 +187,12 @@ void evaluate_m_mfl_button_press(void) {
 
     #if ANTI_THEFT_SEQ
     if (!anti_theft_released) {
-      if (anti_theft_pressed_count < ANTI_THEFT_SEQ_NUMBER - 1) {
+      uint8_t release_counter = alarm_active ? ANTI_THEFT_SEQ_ALARM_NUMBER - 1 : ANTI_THEFT_SEQ_NUMBER - 1;
+
+      if (anti_theft_pressed_count < release_counter) {
         anti_theft_pressed_count++;
       } else {
-        anti_theft_released = true;
-        EEPROM.update(12, anti_theft_released);                                                                                     // Save to EEPROM in case program crashes.
-        ptcan_write_msg(ekp_return_to_normal_buf);                                                                                  // KWP To EKP.
-        serial_log("Anti-theft released. EKP control restored to DME.");
-        delayed_can_tx_msg m;
-        unsigned long timenow = millis();
-        #if ANTI_THEFT_SEQ_ALARM
-          if (alarm_active) {
-            m = {alarm_siren_off_buf, timenow};                                                                                     // KWP to DWA.
-            anti_theft_txq.push(&m);
-            alarm_after_engine_stall = alarm_active = false;
-            alarm_siren_txq.flush();
-            serial_log("Deactivated alarm.");
-          }
-        #endif
-        if (key_cc_sent) {
-          m = {key_cc_off_buf, timenow + 50};                                                                                       // CC to KCAN.
-          anti_theft_txq.push(&m);
-          key_cc_sent = false;
-          #if ANTI_THEFT_SEQ_ALARM
-            m = {alarm_led_off_buf, timenow + 100};                                                                                 // KWP to DWA.
-            anti_theft_txq.push(&m);
-          #endif
-          if (terminal_r) {
-            m = {start_cc_on_buf, timenow + 400};                                                                                   // CC to KCAN.
-            anti_theft_txq.push(&m);
-            serial_log("Sent start ready CC.");
-          }
-        }
-        if (!terminal_r) {
-          kcan_write_msg(cc_gong_buf);                                                                                              // KWP to KOMBI.
-          serial_log("Sent start ready gong.");
-        }
-        m = {ekp_return_to_normal_buf, timenow + 500};                                                                              // KWP To EKP. Make sure these messages are received.
-        ekp_txq.push(&m);
-        m = {ekp_return_to_normal_buf, timenow + 800};                                                                              // KWP To EKP.
-        ekp_txq.push(&m);
-        m = {start_cc_off_buf, timenow + 1000};                                                                                     // CC to KCAN
-        anti_theft_txq.push(&m);
+        release_anti_theft();
       }
     }
     #endif
@@ -462,33 +416,48 @@ void check_edc_ckm_queue(void) {
 
 #if ANTI_THEFT_SEQ
 void check_anti_theft_status(void) {
-  if (millis() >= 2000) {                                                                                                           // Delay ensures that time passed after Teensy (re)started to receive messages.
+  if (vehicle_awakened_time >= 2000) {                                                                                              // Delay ensures that time passed after Teensy (re)started to receive messages.
     if (!anti_theft_released) {
       uint16_t theft_max_speed = 20;
       if (speed_mph) {
         theft_max_speed = 12;
       }
 
-      // This coild be temporarily bypassed if the car is started and driven very very quickly?
+      #if ANTI_THEFT_SEQ_ALARM
+        if (vehicle_awakened_time >= 5000) {                                                                                        // Delay so we don't interfere with the default DWA behavior indicating an alarm fault.
+          if (!terminal_r && !alarm_led && !lock_led) {
+            kcan_write_msg(alarm_led_on_buf);                                                                                       // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
+            alarm_led = true;                                                                                                       // Sending this multiple times keeps the car awake.
+            serial_log("Sent DWA LED ON with Terminal R off.");
+            led_message_counter = 60;                                                                                               // Make sure we're ready once Terminal R cycles.
+          }
+        }
+      #endif
+
+      // This could be temporarily bypassed if the car is started and driven very very quickly?
       // It will reactivate once vehicle_speed <= theft_max_speed. Think Speed (1994)...
-      if (!vehicle_moving || vehicle_speed <= theft_max_speed) {                                                                    // Make sure we don't cut this off while the car is in (quick) motion!!!
+      if (!vehicle_moving || vehicle_speed <= theft_max_speed) {                                                                    // Make sure we don't cut this OFF while the car is in (quick) motion!!!
         if (anti_theft_timer >= anti_theft_send_interval) {
           if (terminal_r) {
             if (engine_running) {                                                                                                   // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
               ptcan_write_msg(ekp_pwm_off_buf);
               serial_log("EKP is disabled.");
             }
-            if (!key_cc_sent) {
-              serial_log("Sending anti-theft key CC.");
-              key_cc_sent = true;
-              #if ANTI_THEFT_SEQ_ALARM
+
+            // Visual indicators with Terminal R, 15.
+            kcan_write_msg(key_cc_on_buf);                                                                                          // Keep sending this message so that CC is ON until disabled.
+            #if ANTI_THEFT_SEQ_ALARM
+              if (led_message_counter > 58) {                                                                                       // Send LED message every 118s to keep it ON.
                 kcan_write_msg(alarm_led_on_buf);
-              #endif
-            }
-            kcan_write_msg(key_cc_on_buf);
+                alarm_led = true;
+                led_message_counter = 0;
+              } else {
+                led_message_counter++;
+              }
+            #endif
           }
           anti_theft_timer = 0;
-          anti_theft_send_interval = 1000;
+          anti_theft_send_interval = 2000;
         }
       }
     }
@@ -515,12 +484,77 @@ void check_anti_theft_status(void) {
 
 
 void reset_key_cc(void) {
-  if (key_cc_sent) {
-    kcan_write_msg(key_cc_off_buf);
-    key_cc_sent = false;
-    #if ANTI_THEFT_SEQ_ALARM
-      kcan_write_msg(alarm_led_off_buf);
-    #endif
+  kcan_write_msg(key_cc_off_buf);
+}
+
+
+void activate_anti_theft(void) {
+  anti_theft_released = false;
+  anti_theft_pressed_count = 0;
+  anti_theft_txq.flush();
+  ekp_txq.flush();
+  EEPROM.update(12, anti_theft_released);
+  #if ANTI_THEFT_SEQ_ALARM
+    alarm_led = lock_led = false;
+  #endif
+}
+
+
+void release_anti_theft(void) {
+  anti_theft_released = true;
+  EEPROM.update(12, anti_theft_released);                                                                                           // Save to EEPROM in case program crashes.
+  ptcan_write_msg(ekp_return_to_normal_buf);                                                                                        // KWP To EKP.
+  serial_log("Anti-theft released. EKP control restored to DME.");
+  delayed_can_tx_msg m;
+  unsigned long timenow = millis();
+  #if ANTI_THEFT_SEQ_ALARM
+    if (alarm_active) {
+      m = {alarm_siren_off_buf, timenow};                                                                                           // KWP to DWA.
+      anti_theft_txq.push(&m);
+      alarm_after_engine_stall = alarm_active = false;
+      alarm_siren_txq.flush();
+      serial_log("Deactivated alarm.");
+    }
+  #endif
+  m = {key_cc_off_buf, timenow + 50};                                                                                               // CC to KCAN.
+  anti_theft_txq.push(&m);
+  #if ANTI_THEFT_SEQ_ALARM
+    if (alarm_led) {
+      m = {alarm_led_off_buf, timenow + 100};                                                                                       // KWP to DWA.
+      anti_theft_txq.push(&m);
+      alarm_led = false;
+    }
+  #endif
+  if (terminal_r) {
+    m = {start_cc_on_buf, timenow + 400};                                                                                           // CC to KCAN.
+    anti_theft_txq.push(&m);
+    serial_log("Sent start ready CC.");
+  }
+  if (!terminal_r) {
+    kcan_write_msg(cc_gong_buf);                                                                                                    // KWP to KOMBI.
+    serial_log("Sent start ready gong.");
+  }
+  m = {ekp_return_to_normal_buf, timenow + 500};                                                                                    // KWP To EKP. Make sure these messages are received.
+  ekp_txq.push(&m);
+  m = {ekp_return_to_normal_buf, timenow + 800};                                                                                    // KWP To EKP.
+  ekp_txq.push(&m);
+  m = {start_cc_off_buf, timenow + 1000};                                                                                           // CC to KCAN
+  anti_theft_txq.push(&m);
+}
+
+
+#if ANTI_THEFT_SEQ_ALARM
+void trip_alarm_after_stall(void) {
+  if (alarm_after_engine_stall) {
+    serial_log("Alarm siren and hazards ON.");
+    alarm_active = true;
+    delayed_can_tx_msg m;
+    unsigned long timenow = millis();
+    for (uint8_t i = 0; i < 10; i++) {                                                                                              // Alarm test job times out after 30s. Make it blast for 5 min.
+      m = {alarm_siren_on_buf, timenow + 30000 * i};
+      alarm_siren_txq.push(&m);
+    }
   }
 }
+#endif
 #endif

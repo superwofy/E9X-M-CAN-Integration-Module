@@ -76,7 +76,7 @@ void evaluate_indicator_status_dim(void) {
 #endif
 
 
-#if DOOR_VOLUME || AUTO_MIRROR_FOLD
+#if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
 void evaluate_door_status(void) {
   if (k_msg.id == 0xE2) {
     if (k_msg.buf[3] == 0xFD) {
@@ -241,12 +241,26 @@ void evaluate_remote_button(void) {
           #if UNFOLD_WITH_DOOR
             unfold_with_door_open = false;
           #endif
+          #if ANTI_THEFT_SEQ_ALARM
+            if (!left_door_open && !right_door_open) {
+              if (alarm_led) {
+                kcan_write_msg(alarm_led_off_buf);
+                alarm_led = false;
+                lock_led = true;
+                led_message_counter = 60;                                                                                           // Make sure we're ready once Terminal R cycles.
+                serial_log("Deactivated DWA LED when door locked.");
+              }
+            }
+          #endif
         } else if (k_msg.buf[2] == 1) {
           unlock_button_pressed = true;
           serial_log("Remote unlock button pressed. Checking mirror status.");
           delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 200};
           mirror_fold_txq.push(&m);
           frm_status_requested = true;
+          #if ANTI_THEFT_SEQ_ALARM
+            lock_led = false;
+          #endif
         } else if (k_msg.buf[2] == 0) {
           serial_log("Remote buttons released.");
         }
@@ -364,7 +378,7 @@ void evaluate_dipped_beam_status(void) {
 
 
 void evaluate_steering_angle_fog(void) {
-  if (!front_fog_status && !reverse_status && dipped_beam_status) {
+  if (!front_fog_status && !reverse_gear_status && dipped_beam_status) {
     steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
 
     // Max left angle is 1005 / 23

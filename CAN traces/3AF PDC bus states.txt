@@ -1,0 +1,23 @@
+00:11:39.031 ->  KCAN:  ID: 3AF Buffer: 31 C2 80 E5 					// All OFF.
+00:11:41.091 ->  KCAN:  ID: 3AF Buffer: BE C3 80 E5 
+00:11:43.118 ->  KCAN:  ID: 3AF Buffer: D C4 A1 E5 						// PDC ON.
+00:11:43.118 ->  KCAN:  ID: 3AF Buffer: 82 C5 A1 E5 
+00:11:43.279 ->  KCAN:  ID: 3AF Buffer: E C6 A1 E5 
+00:11:43.441 ->  KCAN:  ID: 3AF Buffer: 81 C7 A1 E5 
+00:11:45.186 ->  KCAN:  ID: 3AF Buffer: 7 C8 A1 E5 
+00:11:47.233 ->  KCAN:  ID: 3AF Buffer: 88 C9 A1 E5 
+00:11:47.749 ->  KCAN:  ID: 3AF Buffer: 29 CA A5 E5 					// PDC and camera ON.
+00:11:47.909 ->  KCAN:  ID: 3AF Buffer: A6 CB A5 E5 
+00:11:48.103 ->  KCAN:  ID: 3AF Buffer: 2C CC A5 E5 
+00:11:49.262 ->  KCAN:  ID: 3AF Buffer: A3 CD A5 E5 
+00:11:51.320 ->  KCAN:  ID: 3AF Buffer: 2F CE A5 E5 
+00:11:51.610 ->  KCAN:  ID: 3AF Buffer: 7E C0 81 E5 					// PDC ON but no longer displaying camera and visual PDC.
+00:11:51.771 ->  KCAN:  ID: 3AF Buffer: F1 C1 81 E5 
+00:11:51.933 ->  KCAN:  ID: 3AF Buffer: 7D C2 81 E5 
+00:11:53.381 ->  KCAN:  ID: 3AF Buffer: F2 C3 81 E5 
+00:11:55.407 ->  KCAN:  ID: 3AF Buffer: 78 C4 81 E5 
+00:11:57.273 ->  KCAN:  ID: 3AF Buffer: D2 C5 80 E0 					// Ignition OFF.
+00:11:57.434 ->  KCAN:  ID: 3AF Buffer: 5E C6 80 E0 
+00:11:57.594 ->  KCAN:  ID: 3AF Buffer: D1 C7 80 E0 
+
+											  A4						// Camera ON, PDC OFF.

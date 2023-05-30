@@ -21,8 +21,15 @@ void setup() {
   #if RTC
     check_rtc_valid();
   #endif
+  #if !USB_DISABLE
+    // This code allows compatibility with unmodified Teensy cores. Do not enable USB_DISABLE without modifying startup.c!
+    if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){                                                                              // Check if USB is already ON.
+      usb_pll_start();
+      usb_init();
+    }
+  #endif
   #if DEBUG_MODE
-    #if AUTO_MIRROR_FOLD
+    #if AUTO_MIRROR_FOLD && !USB_DISABLE
       setup_time = micros() - 300000;
     #else
       setup_time = micros();
@@ -59,7 +66,7 @@ void loop() {
     #if FRONT_FOG_CORNER
       check_fog_corner_queue();
     #endif
-    #if CKM || DOOR_VOLUME
+    #if CKM || DOOR_VOLUME || REVERSE_BEEP
       check_idrive_alive_monitor();
     #endif
   }
@@ -73,7 +80,7 @@ void loop() {
       check_seatheating_queue();
     #endif
     #if REVERSE_BEEP
-      check_pdc_queue();
+      check_reverse_beep_queue();
     #endif
     #if HDC || FAKE_MSA
       check_ihk_buttons_cc_queue();
@@ -131,7 +138,7 @@ void loop() {
       }
       #endif
 
-      #if FAKE_MSA
+      #if FAKE_MSA || MSA_RVC
       else if (k_msg.id == 0x195) {                                                                                                 // Monitor state of MSA button
         evaluate_msa_button();
       }
@@ -173,15 +180,27 @@ void loop() {
       }
       #endif
 
+      #if MSA_RVC
+      else if (k_msg.id == 0x317) {                                                                                                 // Received PDC button press from IHKA.
+        evaluate_pdc_button();
+      }
+      #endif
+
       #if CKM
       else if (k_msg.id == 0x3A8) {                                                                                                 // Received POWER M Key settings from iDrive.
         update_dme_power_ckm();
       }
       #endif
 
-      #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
+      #if MSA_RVC
+      else if (k_msg.id == 0x3AF) {                                                                                                 // Monitor PDC bus status.
+        evaluate_pdc_bus_status();
+      }
+      #endif
+
+      #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
-        evaluate_reverse_status();
+        evaluate_reverse_gear_status();
         #if REVERSE_BEEP
           evaluate_pdc_beep();
         #endif
@@ -199,15 +218,9 @@ void loop() {
       }
     }
 
-    #if DOOR_VOLUME || AUTO_MIRROR_FOLD
+    #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
     if (k_msg.id == 0xE2 || k_msg.id == 0xEA) {
       evaluate_door_status();
-    }
-    #endif
-
-    #if DOOR_VOLUME
-    else if (k_msg.id == 0x663) {
-      evaluate_audio_volume();
     }
     #endif
 
@@ -226,12 +239,12 @@ void loop() {
     }
     #endif
 
-    #if F_ZBE_WAKE || CKM || DOOR_VOLUME
+    #if F_ZBE_WAKE || CKM || DOOR_VOLUME || REVERSE_BEEP
     else if (k_msg.id == 0x273) {
       #if F_ZBE_WAKE
         send_zbe_acknowledge();
       #endif
-      #if CKM || DOOR_VOLUME
+      #if CKM || DOOR_VOLUME || REVERSE_BEEP
         update_idrive_alive_timer();
       #endif
     }
@@ -276,6 +289,16 @@ void loop() {
       #if F_ZBE_WAKE
         send_zbe_wakeup();
       #endif
+    }
+    #endif
+
+    #if DOOR_VOLUME
+    else if (k_msg.id == 0x5C0) {
+      disable_door_ignition_cc();
+    }
+
+    else if (k_msg.id == 0x663) {
+      evaluate_audio_volume();
     }
     #endif
 

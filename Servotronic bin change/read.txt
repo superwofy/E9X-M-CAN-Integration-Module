@@ -3,7 +3,7 @@ Read/Write as MC9S12XD256 (XPROG 5.51) - chip is unsecured.
 Chip model is MC9S12XDG128MAA - 2M42E
 
 The module must be powered by car or 12v pins. Programmers are too weak.
-(Pins 2,3 +12), (Pin 1 GND).
+(Pins 2,3 +12V), (Pin 1 GND).
 
 To decouple SVT from 0x326 (when fitted with EDC), SVT must be made to ignore 0x326 and instead listen to an arbitrary CANID that we control.
 To find the CANID in the SVT module binary shift CANID to the left 5 times. 
