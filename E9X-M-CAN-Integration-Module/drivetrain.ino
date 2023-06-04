@@ -109,6 +109,10 @@ void toggle_mdrive_message_active(void) {
     mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
     mdrive_message[4] -= 0x10;
     mdrive_status = mdrive_power_active = false;
+    #if FRM_HEADLIGHT_MODE
+      kcan_write_msg(frm_ckm_komfort_buf);
+      serial_log("Set AHL back to comfort mode.");
+    #endif
     if (mdrive_power == 0x30) {
       #if EXHAUST_FLAP_CONTROL
         exhaust_flap_sport = false;
@@ -133,6 +137,11 @@ void toggle_mdrive_message_active(void) {
     mdrive_message[1] += 1;
     mdrive_message[4] += 0x10;
     mdrive_status = true;
+
+    #if FRM_HEADLIGHT_MODE
+      kcan_write_msg(frm_ckm_sport_buf);
+      serial_log("Set AHL to sport mode.");
+    #endif
   }
 }
 
@@ -340,19 +349,6 @@ void send_power_mode(void) {
 void send_dme_power_ckm(void) {
   kcan_write_msg(makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                    // This is sent by the DME to populate the M Key iDrive section
   serial_log("Sent DME POWER CKM.");
-  dme_ckm_sent = true;
-}
-
-
-void check_ckm_queue(void) {
-  if (!dme_ckm_tx_queue.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
-    dme_ckm_tx_queue.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      dme_ckm_tx_queue.drop();
-    }
-  }
 }
 
 
@@ -424,7 +420,7 @@ void check_anti_theft_status(void) {
       }
 
       #if ANTI_THEFT_SEQ_ALARM
-        if (vehicle_awakened_time >= 5000) {                                                                                        // Delay so we don't interfere with the default DWA behavior indicating an alarm fault.
+        if (vehicle_awakened_time >= 6000) {                                                                                        // Delay so we don't interfere with the default DWA behavior indicating an alarm fault.
           if (!terminal_r && !alarm_led && !lock_led) {
             kcan_write_msg(alarm_led_on_buf);                                                                                       // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
             alarm_led = true;                                                                                                       // Sending this multiple times keeps the car awake.
@@ -495,7 +491,7 @@ void activate_anti_theft(void) {
   ekp_txq.flush();
   EEPROM.update(12, anti_theft_released);
   #if ANTI_THEFT_SEQ_ALARM
-    alarm_led = lock_led = false;
+    alarm_led = false;
   #endif
 }
 

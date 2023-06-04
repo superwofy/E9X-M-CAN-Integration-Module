@@ -54,14 +54,14 @@ void loop() {
     #if NEEDLE_SWEEP
       check_kombi_needle_queue();
     #endif
+    #if WIPE_AFTER_WASH
+      check_wiper_queue();
+    #endif
     #if AUTO_MIRROR_FOLD
       check_mirror_fold_queue();
     #endif
     #if ANTI_THEFT_SEQ
       check_anti_theft_status();
-    #endif
-    #if CKM
-      check_ckm_queue();
     #endif
     #if FRONT_FOG_CORNER
       check_fog_corner_queue();
@@ -144,7 +144,7 @@ void loop() {
       }
       #endif
 
-      #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+      #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
       else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
         evaluate_vehicle_moving();
       }
@@ -218,15 +218,15 @@ void loop() {
       }
     }
 
-    #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
-    if (k_msg.id == 0xE2 || k_msg.id == 0xEA) {
-      evaluate_door_status();
-    }
-    #endif
-
-    else if (k_msg.id == 0x130) {                                                                                                   // Monitor ignition status
+    if (k_msg.id == 0x130) {                                                                                                        // Monitor ignition status
       evaluate_ignition_status();
     }
+
+    #if CKM
+    else if (k_msg.id == 0x1AA) {                                                                                                   // Time POWER CKM message with iDrive ErgoCommander.
+      send_dme_power_ckm();
+    }
+    #endif
 
     #if AUTO_MIRROR_FOLD || CKM
     else if (k_msg.id == 0x23A) {                                                                                                   // Monitor remote function status
@@ -273,14 +273,14 @@ void loop() {
       }
     }
 
-    else if (k_msg.id == 0x39E) {                                                                                                   // Received new date/time from CIC.
-      update_rtc_from_idrive();
+    #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ || HOOD_OPEN_GONG
+    if (k_msg.id == 0x2FC) {
+      evaluate_door_status();
     }
     #endif
 
-    #if CKM
-    else if (k_msg.id == 0x3AB) {                                                                                                   // Time POWER CKM message with Shiftlight CKM.
-      send_dme_power_ckm();
+    else if (k_msg.id == 0x39E) {                                                                                                   // Received new date/time from CIC.
+      update_rtc_from_idrive();
     }
     #endif
 
@@ -323,6 +323,13 @@ void loop() {
         evaluate_m_mfl_button_press();
       }
       #endif
+
+      #if WIPE_AFTER_WASH
+      else if (pt_msg.id == 0x2A6) {
+        evaluate_wiping_request();
+      }
+      #endif
+
       #if DEBUG_MODE
       else if (pt_msg.id == 0x3B4) {                                                                                                // Monitor battery voltage from DME.
         evaluate_battery_voltage();

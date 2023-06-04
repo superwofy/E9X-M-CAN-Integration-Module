@@ -49,12 +49,14 @@ const uint8_t wdt_timeout_sec = 10;
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Also disables the door open with ignition warning CC.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
+#define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood.
+#define FRM_HEADLIGHT_MODE 1                                                                                                        // Switches FRM AHL mode from Komfort and Sport.
 #define HDC 1                                                                                                                       // Gives a function to the HDC console button in non 4WD cars.
 #define FAKE_MSA 1                                                                                                                  // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
 #if !FAKE_MSA
-#define MSA_RVC 0                                                                                                                   // Turn on the OEM rear view camera (TRSVC) when pressing MSA button. Use E70 button from 61319202037.
+#define MSA_RVC 0                                                                                                                   // Turn on the OEM rear view camera (TRSVC, E84 PDC) when pressing MSA button. E70 button from 61319202037.
 #endif                                                                                                                              // RVC can be controlled independently of PDC with this button.
-
+#define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Un-fold mirrors when locking. Can be done with coding but this integrates nicer.
 #if AUTO_MIRROR_FOLD
 #define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
@@ -153,8 +155,6 @@ cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint16_t RPM = 0;
 #if CKM
   uint8_t dme_ckm[4][2] = {{0, 0xFF}, {0, 0xFF}, {0, 0xFF}, {0xF1, 0xFF}};
-  cppQueue dme_ckm_tx_queue(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-  bool dme_ckm_sent = false;
 #endif
 #if EDC_CKM_FIX
   uint8_t edc_ckm[] = {0, 0, 0, 0xF1};
@@ -236,6 +236,18 @@ CAN_message_t cc_gong_buf;
   bool ftm_indicator_status = false;
   CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf;
 #endif
+#if HOOD_OPEN_GONG
+  uint8_t last_hood_status = 0;
+#endif
+#if FRM_HEADLIGHT_MODE
+  CAN_message_t frm_ckm_komfort_buf, frm_ckm_sport_buf;
+#endif
+#if WIPE_AFTER_WASH
+  bool wipe_scheduled = false;
+  uint8_t wash_message_counter = 0;
+  CAN_message_t wipe_single_buf;
+  cppQueue wiper_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+#endif
 #if AUTO_MIRROR_FOLD
   bool mirrors_folded, frm_status_requested = false;
   bool lock_button_pressed  = false, unlock_button_pressed = false;
@@ -314,6 +326,7 @@ float ambient_temperature_real = 87.5;
 #endif
 #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
   bool left_door_open = false, right_door_open = false;
+  uint8_t last_door_status = 0;
 #endif
 #if CKM || DOOR_VOLUME || REVERSE_BEEP
   elapsedMillis idrive_alive_timer = 0;
@@ -330,7 +343,7 @@ float ambient_temperature_real = 87.5;
   CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
   CAN_message_t hdc_cc_activated_off_buf, hdc_cc_unavailable_off_buf, hdc_cc_deactivated_off_buf;
 #endif
-#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
   bool vehicle_moving = false;
 #endif
 #if FAKE_MSA

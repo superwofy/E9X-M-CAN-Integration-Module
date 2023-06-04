@@ -76,42 +76,10 @@ void evaluate_indicator_status_dim(void) {
 #endif
 
 
-#if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
+#if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ || HOOD_OPEN_GONG
 void evaluate_door_status(void) {
-  if (k_msg.id == 0xE2) {
-    if (k_msg.buf[3] == 0xFD) {
-      if (!left_door_open) {
-        left_door_open = true;
-        #if RHD
-          serial_log("Passenger's door open.");
-        #else
-          serial_log("Driver's door open.");
-          #if UNFOLD_WITH_DOOR
-            if (unfold_with_door_open) {
-              toggle_mirror_fold();
-              unfold_with_door_open = false;
-            }
-          #endif
-        #endif
-        #if DOOR_VOLUME
-          send_volume_request();
-        #endif
-      }
-    } else if (k_msg.buf[3] == 0xFC) {
-      if (left_door_open) {
-        left_door_open = false;
-        #if RHD
-          serial_log("Passenger's door closed.");
-        #else
-          serial_log("Driver's door closed.");
-        #endif
-        #if DOOR_VOLUME
-          send_volume_request();
-        #endif
-      }
-    }
-  } else if (k_msg.id == 0xEA) {
-    if (k_msg.buf[3] == 0xFD) {
+  if (k_msg.buf[1] != last_door_status) {
+    if (k_msg.buf[1] == 1) {
       if (!right_door_open) {
         right_door_open = true;
         #if RHD
@@ -129,7 +97,36 @@ void evaluate_door_status(void) {
           send_volume_request();
         #endif
       }
-    } else if (k_msg.buf[3] == 0xFC) {
+    } else if (k_msg.buf[1] == 4) {
+      if (!left_door_open) {
+        left_door_open = true;
+        #if RHD
+          serial_log("Passenger's door open.");
+        #else
+          serial_log("Driver's door open.");
+          #if UNFOLD_WITH_DOOR
+            if (unfold_with_door_open) {
+              toggle_mirror_fold();
+              unfold_with_door_open = false;
+            }
+          #endif
+        #endif
+        #if DOOR_VOLUME
+          send_volume_request();
+        #endif
+      }
+    } else if (k_msg.buf[1] == 0) {
+      if (left_door_open) {
+        left_door_open = false;
+        #if RHD
+          serial_log("Passenger's door closed.");
+        #else
+          serial_log("Driver's door closed.");
+        #endif
+        #if DOOR_VOLUME
+          send_volume_request();
+        #endif
+      }
       if (right_door_open) {
         right_door_open = false;
         #if RHD
@@ -141,8 +138,25 @@ void evaluate_door_status(void) {
           send_volume_request();
         #endif
       }
-    }
+    } 
+    last_door_status = k_msg.buf[1];
   }
+
+  #if HOOD_OPEN_GONG
+  if (k_msg.buf[2] != last_hood_status) {
+    if (k_msg.buf[2] == 4) {
+      serial_log("Hood opened.");
+      if (!vehicle_moving && terminal_r) {
+        kcan_write_msg(cc_gong_buf); 
+      }
+      last_hood_status = k_msg.buf[2];
+    } else if (k_msg.buf[2] == 0) {
+      serial_log("Hood closed.");
+      last_hood_status = k_msg.buf[2];
+    }
+    // Ignore other statuses such as boot open.
+  }
+  #endif
 }
 #endif
 
@@ -531,6 +545,50 @@ void right_fog_soft(bool on) {
     fog_corner_txq.push(&m);
     m = {front_fogs_all_off_buf, timenow + 700};
     fog_corner_txq.push(&m);
+  }
+}
+#endif
+
+
+#if WIPE_AFTER_WASH
+void evaluate_wiping_request(void) {
+  if (terminal_r) {
+    if (pt_msg.buf[0] == 0x10) {
+      if (wash_message_counter >= 2 || wipe_scheduled) {
+        serial_log("Washing cycle started.");
+        wiper_txq.flush();
+        delayed_can_tx_msg m = {wipe_single_buf, millis() + 8000};
+        wiper_txq.push(&m);
+        wipe_scheduled = true;                                                                                                      // If a quick pull is detected after the main one, re-schedule the wipe.
+      } else {
+        wash_message_counter++;
+      }
+    } else {
+      if (pt_msg.buf[0] == 1 || pt_msg.buf[0] == 2 || pt_msg.buf[0] == 3 || pt_msg.buf[0] == 8) {                                   // Abort if wipers are used in the meantime.
+        if (!wiper_txq.isEmpty()) {
+          serial_log("Wipe after wash aborted.");
+          wiper_txq.flush();
+          wipe_scheduled = false;
+        }
+      }
+      wash_message_counter = 0;
+    }
+  }
+}
+
+
+void check_wiper_queue(void) {
+  if (terminal_r) {
+    if (!wiper_txq.isEmpty()) {
+      delayed_can_tx_msg delayed_tx;
+      wiper_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        serial_log("Wiping windscreen after washing.");
+        ptcan_write_msg(delayed_tx.tx_msg);
+        wiper_txq.drop();
+        wipe_scheduled = false;
+      }
+    }
   }
 }
 #endif

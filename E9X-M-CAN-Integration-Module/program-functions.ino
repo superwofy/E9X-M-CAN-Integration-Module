@@ -63,7 +63,7 @@ void print_current_state(Stream &status_serial) {
   } else {
     status_serial.println(" DSC: Asleep");
   }
-  #if LAUNCH_CONTROL_INDICATOR
+  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
     sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
@@ -323,13 +323,16 @@ void reset_runtime_variables(void) {                                            
   #if FTM_INDICATOR
     ftm_indicator_status = false;
   #endif
+  #if FRM_HEADLIGHT_MODE
+    kcan_write_msg(frm_ckm_komfort_buf);
+  #endif
   #if HDC || ANTI_THEFT_SEQ
     vehicle_speed = 0;
   #endif
   #if HDC
     cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
   #endif
-  #if HDC || LAUNCH_CONTROL_INDICATOR
+  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
     vehicle_moving = false;
   #endif
   #if FAKE_MSA
@@ -359,10 +362,6 @@ void reset_sleep_variables(void) {
       passenger_seat_heating_status = false;
     #endif
   #endif
-  #if CKM
-    dme_ckm_sent = false;
-    dme_ckm_tx_queue.flush();
-  #endif
   #if DOOR_VOLUME
     volume_reduced = false;                                                                                                         // In case the car falls asleep with the door open.
     volume_restore_offset = 0;
@@ -371,6 +370,11 @@ void reset_sleep_variables(void) {
   #endif
   #if NEEDLE_SWEEP
     kombi_needle_txq.flush();
+  #endif
+  #if WIPE_AFTER_WASH
+    wiper_txq.flush();
+    wash_message_counter = 0;
+    wipe_scheduled = false;
   #endif
   #if AUTO_MIRROR_FOLD
     frm_status_requested = false;

@@ -85,7 +85,7 @@ void evaluate_reverse_gear_status(void) {
 #endif
 
 
-#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
 void evaluate_vehicle_moving(void) {
   if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0xD0) {
     if (vehicle_moving) {

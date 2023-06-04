@@ -23,7 +23,7 @@ void cache_can_message_buffers(void) {                                          
   uint8_t cc_gong[] = {0x60, 3, 0x31, 0x22, 2, 0, 0, 0};
   cc_gong_buf = makeMsgBuf(0x6F1, 8, cc_gong);
   #if SERVOTRONIC_SVT70
-    uint8_t servotronic_cc_on[] = {0x40, 0x46, 0x00, 0x29, 0xFF, 0xFF, 0xFF, 0xFF};
+    uint8_t servotronic_cc_on[] = {0x40, 0x46, 0, 0x29, 0xFF, 0xFF, 0xFF, 0xFF};
     servotronic_cc_on_buf = makeMsgBuf(0x58E, 8, servotronic_cc_on);
   #endif
   #if EDC_CKM_FIX
@@ -35,6 +35,16 @@ void cache_can_message_buffers(void) {                                          
     uint8_t ftm_indicator_off[] = {0x40, 0x50, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
     ftm_indicator_flash_buf = makeMsgBuf(0x5A0, 8, ftm_indicator_flash);
     ftm_indicator_off_buf = makeMsgBuf(0x5A0, 8, ftm_indicator_off);
+  #endif
+  #if FRM_HEADLIGHT_MODE
+    uint8_t frm_ckm_komfort[] = {0, 4};
+    uint8_t frm_ckm_sport[] = {0, 0xA};
+    frm_ckm_komfort_buf = makeMsgBuf(0x3F0, 2, frm_ckm_komfort);
+    frm_ckm_sport_buf = makeMsgBuf(0x3F0, 2, frm_ckm_sport);
+  #endif
+  #if WIPE_AFTER_WASH
+    uint8_t wipe_single[] = {8, 0xF8};
+    wipe_single_buf = makeMsgBuf(0x2A6, 2, wipe_single);
   #endif
   #if AUTO_MIRROR_FOLD
     uint8_t frm_toggle_fold_mirror_a[] = {0x72, 0x10, 7, 0x30, 0x10, 7, 1, 5};
@@ -286,7 +296,7 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 void ptcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
-    if (diagnose_svt && msg.buf[0] == 0xE){                                                                                         // Exception for SVT diagnosis.
+    if ((diagnose_svt && msg.buf[0] == 0xE) || (msg.buf[2] == 0x30 && msg.buf[3] == 6 && msg.buf[4] == 4)){                         // Exception for SVT diagnosis and EKP disable.
     } else {
       return;
     }

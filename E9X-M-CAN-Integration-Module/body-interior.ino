@@ -306,17 +306,23 @@ void evaluate_audio_volume(void) {
       uint8_t volume_change[] = {0x63, 4, 0x31, 0x23, 0, 0, 0, 0};
       if (!volume_reduced) {
         if (left_door_open || right_door_open) {
-          volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
-          volume_change[4] = floor(audio_volume / 2);                                                                               // Reduce volume to 50%.
-          if ((volume_change[4] + volume_restore_offset) > 0x20) {                                                                  // Don't blow the speakers out if something went wrong...
-            volume_change[4] = 0x20;
-            volume_restore_offset = 0;
+          volume_change[4] = floor(audio_volume * 0.75);                                                                            // Softer decrease.
+          if (volume_change[4] > 0x33) {
+            volume_change[4] = 0x33;
           }
           delayed_can_tx_msg m;
           unsigned long timeNow = millis();
           m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 200};
           idrive_txq.push(&m);
-          m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 700};
+          volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
+          volume_change[4] = floor(audio_volume / 2);                                                                               // Reduce volume to 50%.
+          if ((volume_change[4] + volume_restore_offset) > 0x33) {                                                                  // Don't blow the speakers out if something went wrong...
+            volume_change[4] = 0x33;
+            volume_restore_offset = 0;
+          }
+          m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 600};
+          idrive_txq.push(&m);
+          m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 900};
           idrive_txq.push(&m);
           volume_reduced = true;
           volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
@@ -331,7 +337,7 @@ void evaluate_audio_volume(void) {
             if (audio_volume == volume_changed_to) {
               volume_change[4] = floor(audio_volume * 1.5);                                                                         // Softer increase.
               if (volume_change[4] > 0x33) {
-                volume_change[4] = 0x33;                                                                                            // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
+                volume_change[4] = 0x33;
               }
               delayed_can_tx_msg m;
               unsigned long timeNow = millis();
@@ -339,7 +345,7 @@ void evaluate_audio_volume(void) {
               idrive_txq.push(&m);
               volume_change[4] = audio_volume * 2 + volume_restore_offset;
               if (volume_change[4] > 0x33) {
-                volume_change[4] = 0x33;
+                volume_change[4] = 0x33;                                                                                            // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
               }
               m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 600};
               idrive_txq.push(&m);
@@ -399,29 +405,12 @@ void check_idrive_alive_monitor(void) {
         #if DOOR_VOLUME
           default_volume_sent = false;
         #endif
-        #if CKM
-          dme_ckm_sent = false;
-        #endif
       }
     } else {
       if (idrive_died) {                                                                                                            // It's back.
         idrive_died = false;
       }
     }
-
-    #if CKM
-      if (!dme_ckm_sent) {
-        serial_log("Queueing POWER CKM after iDrive boot/reboot.");
-        CAN_message_t ckm_buf = makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]);
-        unsigned long timeNow = millis();
-        kcan_write_msg(ckm_buf);
-        delayed_can_tx_msg m = {ckm_buf, timeNow + 200};
-        dme_ckm_tx_queue.push(&m);
-        m = {ckm_buf, timeNow + 400};
-        dme_ckm_tx_queue.push(&m);
-        dme_ckm_sent = true;
-      }
-    #endif
   }
 }
 

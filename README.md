@@ -39,10 +39,12 @@ I use it to:
 	-> If engine is started without releasing this immobilizer, alarm will sound once engine stalls.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Audibly warn when reverse gear is engaged.
+* Audibly warn when the hood is opened.
 * Create a HDC function similar to the one in xDrive cars.
 * Display a CC when pressing the Auto Start-stop button instead of a blank button.
   OR
 * Switch on the reversing camera when pressing the Auto Start-stop button.
+* Carry out one more wipe cycle after washing the windscreen.
 * Enable FXX KCAN1 CIC controllers.
 * Enable full diagnosis and coding of SVT70 modules.
 * Turn on heated seats below a set temperature.
