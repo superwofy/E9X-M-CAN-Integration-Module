@@ -33,15 +33,14 @@ const uint8_t wdt_timeout_sec = 10;
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 #if !DEBUG_MODE
   #define USB_DISABLE 1                                                                                                             // USB can be disabled if not using serial for security reasons. Use caution when enabling this.
-    #if USB_DISABLE                                                                                                                 // USB can be activated by holding POWER while turning on ignition.
-      // To make this work, the following changes need to be made to startup.c 
-      // (Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/startup.c)
-      // Comment these lines:
-      // usb_pll_start();
-      // while (millis() < TEENSY_INIT_USB_DELAY_BEFORE) ;
-      // usb_init();
-      // while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
-    #endif
+    // USB can be activated by holding POWER while turning on ignition.
+    // To make this work, the following changes need to be made to startup.c 
+    // (Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/startup.c)
+    // Comment these lines:
+    // usb_pll_start();
+    // while (millis() < TEENSY_INIT_USB_DELAY_BEFORE) ;
+    // usb_init();
+    // while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
 #endif
 
 #define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive.

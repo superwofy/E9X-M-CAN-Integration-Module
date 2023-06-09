@@ -104,10 +104,10 @@ void configure_can_controllers(void) {
   #endif
   #if AUTO_SEAT_HEATING
     #if AUTO_SEAT_HEATING_PASS
-      KCAN.setFIFOFilter(filter_count, 0x22A, STD);                                                                                 // Passenger's seat heating status
+      KCAN.setFIFOFilter(filter_count, 0x22A, STD);                                                                                 // Passenger's seat heating status                              Cycle time 10s (idle), 150ms (change).
       filter_count++;
     #endif
-    KCAN.setFIFOFilter(filter_count, 0x232, STD);                                                                                   // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change)
+    KCAN.setFIFOFilter(filter_count, 0x232, STD);                                                                                   // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change).
     filter_count++;
   #endif
   #if AUTO_MIRROR_FOLD || CKM

@@ -87,18 +87,23 @@ void evaluate_ignition_status(void) {
 #if AUTO_SEAT_HEATING
 void evaluate_seat_heating_status(void) {
   if (k_msg.id == 0x232) {
-    if (!k_msg.buf[0]) {                                                                                                            // Check if seat heating is already ON.
+    driver_seat_heating_status = !k_msg.buf[0] ? false : true;
+    if (!driver_seat_heating_status) {                                                                                              // Check if seat heating is already ON.
       if (!driver_sent_seat_heating_request && (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD)) {
         send_seat_heating_request_dr();
       }
     } else {
       driver_sent_seat_heating_request = true;                                                                                      // Seat heating already ON. No need to request anymore.
     }
-    driver_seat_heating_status = !k_msg.buf[0] ? false : true;
   } 
   #if AUTO_SEAT_HEATING_PASS
   else {                                                                                                                            // Passenger's seat heating status message is only sent with ignition ON.
     passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
+    if (!passenger_sent_seat_heating_request && (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD)) {
+      if (passenger_seat_status == 9) {
+        send_seat_heating_request_pas();
+      }
+    }
   }
   #endif
 }

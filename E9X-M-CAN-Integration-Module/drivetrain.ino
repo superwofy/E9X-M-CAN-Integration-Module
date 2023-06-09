@@ -16,8 +16,10 @@ void evaluate_engine_rpm(void) {
     #endif
     serial_log("Engine started.");
     #if ANTI_THEFT_SEQ_ALARM
-      alarm_after_engine_stall = true;
-      serial_log("Anti-theft active. Alarm will sound after stall.");      
+      if (!anti_theft_released) {
+        alarm_after_engine_stall = true;
+        serial_log("Anti-theft active. Alarm will sound after stall.");      
+      }
     #endif
   } else if (engine_running && (RPM < 200)) {                                                                                       // Less than 50 RPM. Engine stalled or was stopped.
     engine_running = false;
@@ -466,13 +468,21 @@ void check_anti_theft_status(void) {
       ekp_txq.drop();
     }
   }
+  if (!anti_theft_txq.isEmpty()) {
+    delayed_can_tx_msg delayed_tx;
+    anti_theft_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      anti_theft_txq.drop();
+    }
+  }
   #if ANTI_THEFT_SEQ_ALARM
-    if (!anti_theft_txq.isEmpty()) {
+    if (!alarm_siren_txq.isEmpty()) {
       delayed_can_tx_msg delayed_tx;
-      anti_theft_txq.peek(&delayed_tx);
+      alarm_siren_txq.peek(&delayed_tx);
       if (millis() >= delayed_tx.transmit_time) {
         kcan_write_msg(delayed_tx.tx_msg);
-        anti_theft_txq.drop();
+        alarm_siren_txq.drop();
       }
     }
   #endif
