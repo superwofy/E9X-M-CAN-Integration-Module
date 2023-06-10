@@ -3,104 +3,36 @@
 
 void evaluate_engine_rpm(void) {
   RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
-  if (!engine_running && (RPM > 2000)) {
-    engine_running = true;
-    #if CONTROL_SHIFTLIGHTS
-      shiftlight_startup_animation();                                                                                               // Show off shift light segments during engine startup (>500rpm).
-    #endif
-    #if NEEDLE_SWEEP
-      needle_sweep_animation();
-    #endif
-    #if EXHAUST_FLAP_CONTROL
-      exhaust_flap_action_timer = 0;                                                                                                // Start tracking the exhaust flap.
-    #endif
-    serial_log("Engine started.");
-    #if ANTI_THEFT_SEQ_ALARM
-      if (!anti_theft_released) {
-        alarm_after_engine_stall = true;
-        serial_log("Anti-theft active. Alarm will sound after stall.");      
-      }
-    #endif
-  } else if (engine_running && (RPM < 200)) {                                                                                       // Less than 50 RPM. Engine stalled or was stopped.
-    engine_running = false;
-    serial_log("Engine stopped.");
-    #if ANTI_THEFT_SEQ_ALARM
-      trip_alarm_after_stall();
-    #endif
-  }
-}
-
-
-void read_settings_from_eeprom(void) {
-  mdrive_dsc = EEPROM.read(1);
-  mdrive_power = EEPROM.read(2);
-  mdrive_edc = EEPROM.read(3);
-  mdrive_svt = EEPROM.read(4);
-
-  // Defaults for when EEPROM is not initialized  
-  if (mdrive_dsc == 0xFF || mdrive_power == 0xFF || mdrive_edc == 0xFF || mdrive_svt == 0xFF) {
-    mdrive_dsc = 0x13;
-    mdrive_power = 0x30;
-    mdrive_edc = 0x2A;
-    mdrive_svt = 0xF1;
-  }
-
-  #if CKM
-    dme_ckm[0][0] = EEPROM.read(5);
-    dme_ckm[1][0] = EEPROM.read(6);
-    dme_ckm[2][0] = EEPROM.read(7);
-
-    // Defaults for when EEPROM is not initialized  
-    if (dme_ckm[0][0] == 0xFF || dme_ckm[1][0] == 0xFF || dme_ckm[2][0] == 0xFF) {
-      dme_ckm[0][0] = 0xF1;
-      dme_ckm[1][0] = 0xF1;
-      dme_ckm[2][0] = 0xF1;
+  if (RPM > 2000) {
+    engine_runtime = millis();
+    if (!engine_running) {
+      engine_running = true;
+      #if CONTROL_SHIFTLIGHTS
+        shiftlight_startup_animation();                                                                                             // Show off shift light segments during engine startup (>500rpm).
+      #endif
+      #if NEEDLE_SWEEP
+        needle_sweep_animation();
+      #endif
+      #if EXHAUST_FLAP_CONTROL
+        exhaust_flap_action_timer = 0;                                                                                              // Start tracking the exhaust flap.
+      #endif
+      serial_log("Engine started.");
+      #if ANTI_THEFT_SEQ_ALARM
+        if (!anti_theft_released) {
+          alarm_after_engine_stall = true;
+          serial_log("Anti-theft active. Alarm will sound after stall.");      
+        }
+      #endif
     }
-  #endif
-  #if EDC_CKM_FIX
-    edc_ckm[0] = EEPROM.read(8);
-    edc_ckm[1] = EEPROM.read(9);
-    edc_ckm[2] = EEPROM.read(10);
-
-    // Defaults for when EEPROM is not initialized  
-    if (edc_ckm[0] == 0xFF || edc_ckm[1] == 0xFF || edc_ckm[2] == 0xFF) {
-      edc_ckm[0] = 0xF1;
-      edc_ckm[1] = 0xF1;
-      edc_ckm[2] = 0xF1;
+  } else if (RPM < 200) {                                                                                                           // Less than 50 RPM. Engine stalled or was stopped.
+    if (engine_running) {
+      engine_running = false;
+      engine_runtime = 0;
+      serial_log("Engine stopped.");
+      #if ANTI_THEFT_SEQ_ALARM
+        trip_alarm_after_stall();
+      #endif
     }
-  #endif
-
-  serial_log("Loaded MDrive settings from EEPROM.");
-  mdrive_message[1] = mdrive_dsc - 2;                                                                                               // Difference between iDrive settting and MDrive CAN message (OFF) is always 2.
-                                                                                                                                    // 1 unchanged, 5 OFF, 0x11 MDM, 9 On
-  mdrive_message[2] = mdrive_power;                                                                                                 // Copy POWER as is.
-  mdrive_message[3] = mdrive_edc;                                                                                                   // Copy EDC as is.
-  if (mdrive_svt == 0xE9) {
-      mdrive_message[4] = 0x41;                                                                                                     // SVT normal, MDrive OFF.
-  } else if (mdrive_svt == 0xF1) {
-      mdrive_message[4] = 0x81;                                                                                                     // SVT sport, MDrive OFF.
-  } 
-}
-
-
-void update_settings_in_eeprom(void) {
-  if (mdrive_settings_save_to_eeprom) {
-    EEPROM.update(1, mdrive_dsc);                                                                                                   // EEPROM lifetime approx. 100k writes. Always update, never write()!                                                                                          
-    EEPROM.update(2, mdrive_power);
-    EEPROM.update(3, mdrive_edc);
-    EEPROM.update(4, mdrive_svt);
-    #if CKM
-      EEPROM.update(5, dme_ckm[0][0]);
-      EEPROM.update(6, dme_ckm[1][0]);
-      EEPROM.update(7, dme_ckm[2][0]);
-    #endif 
-    #if EDC_CKM_FIX
-      EEPROM.update(8, edc_ckm[0]);
-      EEPROM.update(9, edc_ckm[1]);
-      EEPROM.update(10, edc_ckm[2]);
-    #endif                                                                                          
-    serial_log("Saved M settings to EEPROM.");
-    mdrive_settings_save_to_eeprom = false;
   }
 }
 
@@ -185,7 +117,7 @@ void evaluate_m_mfl_button_press(void) {
       #if ANTI_THEFT_SEQ
       if (anti_theft_released && ignition) {
       #endif
-      show_idrive_mdrive_settings_screen();
+      show_mdrive_settings_screen();
       #if ANTI_THEFT_SEQ
       }
       #endif
@@ -211,7 +143,7 @@ void evaluate_m_mfl_button_press(void) {
 }
 
 
-void show_idrive_mdrive_settings_screen(void) {
+void show_mdrive_settings_screen(void) {
   if (diag_transmit) {
     #if ANTI_THEFT_SEQ
     if (anti_theft_released) {
@@ -234,7 +166,7 @@ void send_mdrive_message(void) {
   }
   // Deactivated because no module actually checks this. Perhaps MDSC would?
 //  can_checksum_update(0x399, 6, mdrive_message);                                                                                  // Recalculate checksum.
-  ptcan_write_msg(makeMsgBuf(0x399, 6, mdrive_message));                                                                            // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
+  ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message));                                                                          // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
   mdrive_message_timer = 0;                                                                   
 }
 
@@ -280,7 +212,6 @@ void update_mdrive_message_settings(void) {
         mdrive_message[4] = 0x91;                                                                                                   // SVT sport, MDrive ON.
       }
     }
-    mdrive_settings_save_to_eeprom = true;
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
           mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
@@ -343,13 +274,13 @@ void send_power_mode(void) {
   }
 
   can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-  ptcan_write_msg(makeMsgBuf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode));
+  ptcan_write_msg(make_msg_buf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode));
 }
 
 
 #if CKM
 void send_dme_power_ckm(void) {
-  kcan_write_msg(makeMsgBuf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                    // This is sent by the DME to populate the M Key iDrive section
+  kcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                  // This is sent by the DME to populate the M Key iDrive section
   serial_log("Sent DME POWER CKM.");
 }
 
@@ -361,7 +292,6 @@ void update_dme_power_ckm(void) {
             k_msg.buf[0] == 0xF1 ? "Normal" : "Sport", cas_key_number);
     serial_log(serial_debug_string);
   #endif
-  mdrive_settings_save_to_eeprom = true;
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
 #endif
@@ -375,7 +305,6 @@ void update_edc_ckm(void) {
                                   k_msg.buf[0] == 0xF2 ? "Normal" : "Sport", cas_key_number);
     serial_log(serial_debug_string);
   #endif
-  mdrive_settings_save_to_eeprom = true;
 }
 
 
@@ -386,9 +315,9 @@ void evaluate_edc_ckm_mismatch(void) {
       uint8_t edc_state = pt_msg.buf[1] == 0xFA ? 3 : pt_msg.buf[1] - 0xF0;                                                           // Normalize these values for easier comparison.
       uint8_t edc_memory = edc_ckm[cas_key_number] == 0xFA ? 3 : edc_ckm[cas_key_number] - 0xF0;
       if ((edc_memory == 1 && edc_state == 2) || (edc_memory == 2 && edc_state == 3) || (edc_memory == 3 && edc_state == 1)) {
-        unsigned long timeNow = millis();
+        time_now = millis();
         kcan_write_msg(edc_button_press_buf);
-        delayed_can_tx_msg m = {edc_button_press_buf, timeNow + 1200};
+        m = {edc_button_press_buf, time_now + 1200};
         edc_ckm_txq.push(&m);
       } else {
         kcan_write_msg(edc_button_press_buf);
@@ -401,7 +330,6 @@ void evaluate_edc_ckm_mismatch(void) {
 
 void check_edc_ckm_queue(void) {
   if (!edc_ckm_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     edc_ckm_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
@@ -461,7 +389,6 @@ void check_anti_theft_status(void) {
     }
   }
   if (!ekp_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     ekp_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       ptcan_write_msg(delayed_tx.tx_msg);
@@ -469,7 +396,6 @@ void check_anti_theft_status(void) {
     }
   }
   if (!anti_theft_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     anti_theft_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
@@ -478,7 +404,6 @@ void check_anti_theft_status(void) {
   }
   #if ANTI_THEFT_SEQ_ALARM
     if (!alarm_siren_txq.isEmpty()) {
-      delayed_can_tx_msg delayed_tx;
       alarm_siren_txq.peek(&delayed_tx);
       if (millis() >= delayed_tx.transmit_time) {
         kcan_write_msg(delayed_tx.tx_msg);
@@ -499,7 +424,8 @@ void activate_anti_theft(void) {
   anti_theft_pressed_count = 0;
   anti_theft_txq.flush();
   ekp_txq.flush();
-  EEPROM.update(12, anti_theft_released);
+  EEPROM.update(13, anti_theft_released);
+  update_eeprom_checksum();                                                                                                         // Update now in case we lose power before sleep.
   #if ANTI_THEFT_SEQ_ALARM
     alarm_led = false;
   #endif
@@ -508,31 +434,31 @@ void activate_anti_theft(void) {
 
 void release_anti_theft(void) {
   anti_theft_released = true;
-  EEPROM.update(12, anti_theft_released);                                                                                           // Save to EEPROM in case program crashes.
+  EEPROM.update(13, anti_theft_released);                                                                                           // Save to EEPROM directly in case program crashes.
+  update_eeprom_checksum();
   ptcan_write_msg(ekp_return_to_normal_buf);                                                                                        // KWP To EKP.
   serial_log("Anti-theft released. EKP control restored to DME.");
-  delayed_can_tx_msg m;
-  unsigned long timenow = millis();
+  time_now = millis();
   #if ANTI_THEFT_SEQ_ALARM
     if (alarm_active) {
-      m = {alarm_siren_off_buf, timenow};                                                                                           // KWP to DWA.
+      m = {alarm_siren_off_buf, time_now};                                                                                          // KWP to DWA.
       anti_theft_txq.push(&m);
       alarm_after_engine_stall = alarm_active = false;
       alarm_siren_txq.flush();
       serial_log("Deactivated alarm.");
     }
   #endif
-  m = {key_cc_off_buf, timenow + 50};                                                                                               // CC to KCAN.
+  m = {key_cc_off_buf, time_now + 50};                                                                                              // CC to KCAN.
   anti_theft_txq.push(&m);
   #if ANTI_THEFT_SEQ_ALARM
     if (alarm_led) {
-      m = {alarm_led_off_buf, timenow + 100};                                                                                       // KWP to DWA.
+      m = {alarm_led_off_buf, time_now + 100};                                                                                      // KWP to DWA.
       anti_theft_txq.push(&m);
       alarm_led = false;
     }
   #endif
   if (terminal_r) {
-    m = {start_cc_on_buf, timenow + 400};                                                                                           // CC to KCAN.
+    m = {start_cc_on_buf, time_now + 400};                                                                                          // CC to KCAN.
     anti_theft_txq.push(&m);
     serial_log("Sent start ready CC.");
   }
@@ -540,11 +466,11 @@ void release_anti_theft(void) {
     kcan_write_msg(cc_gong_buf);                                                                                                    // KWP to KOMBI.
     serial_log("Sent start ready gong.");
   }
-  m = {ekp_return_to_normal_buf, timenow + 500};                                                                                    // KWP To EKP. Make sure these messages are received.
+  m = {ekp_return_to_normal_buf, time_now + 500};                                                                                   // KWP To EKP. Make sure these messages are received.
   ekp_txq.push(&m);
-  m = {ekp_return_to_normal_buf, timenow + 800};                                                                                    // KWP To EKP.
+  m = {ekp_return_to_normal_buf, time_now + 800};                                                                                   // KWP To EKP.
   ekp_txq.push(&m);
-  m = {start_cc_off_buf, timenow + 1000};                                                                                           // CC to KCAN
+  m = {start_cc_off_buf, time_now + 1000};                                                                                          // CC to KCAN
   anti_theft_txq.push(&m);
 }
 
@@ -554,10 +480,9 @@ void trip_alarm_after_stall(void) {
   if (alarm_after_engine_stall) {
     serial_log("Alarm siren and hazards ON.");
     alarm_active = true;
-    delayed_can_tx_msg m;
-    unsigned long timenow = millis();
+    time_now = millis();
     for (uint8_t i = 0; i < 10; i++) {                                                                                              // Alarm test job times out after 30s. Make it blast for 5 min.
-      m = {alarm_siren_on_buf, timenow + 30000 * i};
+      m = {alarm_siren_on_buf, time_now + 30000 * i};
       alarm_siren_txq.push(&m);
     }
   }

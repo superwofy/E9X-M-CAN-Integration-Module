@@ -2,24 +2,23 @@
 
 
 void send_dsc_mode(uint8_t mode) {
-  unsigned long timeNow = millis();
-  delayed_can_tx_msg m;
+  time_now = millis();
   if (mode == 0) {
-    m = {dsc_on_buf, timeNow};
+    m = {dsc_on_buf, time_now};
     dsc_txq.push(&m);
-    m = {dsc_on_buf, timeNow + 20};
+    m = {dsc_on_buf, time_now + 20};
     dsc_txq.push(&m);
     serial_log("Sending DSC ON.");
   } else if (mode == 1) {
-    m = {dsc_mdm_dtc_buf, timeNow};
+    m = {dsc_mdm_dtc_buf, time_now};
     dsc_txq.push(&m);
-    m = {dsc_mdm_dtc_buf, timeNow + 20};
+    m = {dsc_mdm_dtc_buf, time_now + 20};
     dsc_txq.push(&m);
     serial_log("Sending DTC/MDM.");
   } else {
-    m = {dsc_off_buf, timeNow};
+    m = {dsc_off_buf, time_now};
     dsc_txq.push(&m);
-    m = {dsc_off_buf, timeNow + 20};
+    m = {dsc_off_buf, time_now + 20};
     dsc_txq.push(&m);
     serial_log("Sending DSC OFF.");
   }
@@ -29,7 +28,6 @@ void send_dsc_mode(uint8_t mode) {
 
 void check_dsc_queue(void) {
   if (!dsc_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     dsc_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       ptcan_write_msg(delayed_tx.tx_msg);
@@ -37,21 +35,6 @@ void check_dsc_queue(void) {
     }
   }
 }
-
-
-#if LAUNCH_CONTROL_INDICATOR
-void evaluate_clutch_status(void) {
-  if (k_msg.buf[5] == 0xD) {
-    if (!clutch_pressed) {
-      clutch_pressed = true;
-      serial_log("Clutch pedal pressed.");
-    }
-  } else if (clutch_pressed) {
-    clutch_pressed = false;
-    serial_log("Clutch pedal released.");
-  }
-}
-#endif
 
 
 #if LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
@@ -63,7 +46,7 @@ void evaluate_reverse_gear_status(void) {
       #if FRONT_FOG_CORNER
         if (left_fog_on || right_fog_on) {
           serial_log("Deactivating corner fogs with reverse ON.");
-          delayed_can_tx_msg m = {front_fogs_all_off_buf, millis() + 100};
+          m = {front_fogs_all_off_buf, millis() + 100};
           fog_corner_txq.push(&m);
           left_fog_on = right_fog_on = false;
         }
@@ -109,7 +92,7 @@ void evaluate_vehicle_moving(void) {
             serial_log("HDC deactivated due to high vehicle speed.");
             hdc_active = false;
             kcan_write_msg(hdc_cc_deactivated_on_buf);
-            delayed_can_tx_msg m = {hdc_cc_deactivated_off_buf, millis() + 2000};
+            m = {hdc_cc_deactivated_off_buf, millis() + 2000};
             ihk_extra_buttons_cc_txq.push(&m);
           }
         }
@@ -133,7 +116,7 @@ void evaluate_hdc_button(void) {
           serial_log("Car must be moving for HDC.");
         } else {
           kcan_write_msg(hdc_cc_unavailable_on_buf);
-          delayed_can_tx_msg m = {hdc_cc_unavailable_off_buf, millis() + 3000};
+          m = {hdc_cc_unavailable_off_buf, millis() + 3000};
           ihk_extra_buttons_cc_txq.push(&m);
           serial_log("Conditions not right for HDC. Sent CC.");
         }
@@ -210,6 +193,6 @@ void send_servotronic_message(void) {
   } else {
     servotronic_message[0] += 8;
   }
-  ptcan_write_msg(makeMsgBuf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
+  ptcan_write_msg(make_msg_buf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
 }
 #endif

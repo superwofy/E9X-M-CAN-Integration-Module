@@ -1,23 +1,31 @@
 Black connector
 
-6 - gnd - brown
-7 - power - black/red
-8 - KCAN-H
-2 - KCAN-L
-9 - PTCAN-H
-4 - PTCAN-L
-11 - DCAN-H
-10 - DCAN-L
-12 - gnd - black/brown
+6  - GND - 			brown
+7  - 30G Power - 	black/red
+8  - KCAN-H - 		orange/green
+2  - KCAN-L - 		green
+9  - PTCAN-H - 		blue/red
+4  - PTCAN-L - 		red
+11 - DCAN-H - 		white/yellow
+10 - DCAN-L - 		white/blue
+12 - Extra GND - 	black/brown
+	-> To cope with solenoid draw 
 
 
 
 White connector
 
-18 - DSC switch (D16) - white/brown
-17 - POWER switch (D2) - white/red
-16 - POWER LED (D3) - black/white
-15 - FOG LED (D4) - blue/yellow
-13 - Exhaust flap solenoid (D17) - gray
+13 - Exhaust flap solenoid (D17) - 		gray
 	-> Use flyback diode between +/-
 	-> Disconnect DME X60001 pin 5
+14 - Steering heater switch (D5) - 		black
+15 - Front FOG button LED (D4) -		blue/yellow
+16 - POWER console LED (D3) - 			black/white
+17 - POWER console switch (D2) - 		white/red
+18 - DSC console switch (D16) - 		white/brown
+
+
+
+
+** With the exception of bus wires, harness colors were chosen randomly.
+

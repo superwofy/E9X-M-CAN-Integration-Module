@@ -15,35 +15,52 @@ void evaluate_drl_status(void) {
     }
   }
 }
+
+
+void check_drl_queue(void) {
+  if (!dim_drl_txq.isEmpty()) {
+    dim_drl_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      dim_drl_txq.drop();
+      last_drl_action_timer = millis();
+    }
+  }
+}
 #endif
 
 
 #if DIM_DRL || FRONT_FOG_CORNER
 void evaluate_indicator_status_dim(void) {
   #if DIM_DRL
+  time_now = millis();
   if (drl_status && diag_transmit) {
   #endif
     if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                              // Off or Hazards
       #if DIM_DRL
         if (right_dimmed) {
-          kcan_write_msg(right_drl_bright_buf);
+          m = {right_drl_bright_buf, time_now + 100};
+          dim_drl_txq.push(&m);
           right_dimmed = false;
           serial_log("Restored right DRL brightness.");
         } else if (left_dimmed) {
-          kcan_write_msg(left_drl_bright_buf);
+          m = {left_drl_bright_buf, time_now + 100};
+          dim_drl_txq.push(&m);
           left_dimmed = false;
           serial_log("Restored left DRL brightness.");
         }
-        indicators_on = false;
       #endif
+      indicators_on = false;
     } else if (k_msg.buf[0] == 0x91) {                                                                                              // Left indicator
       #if DIM_DRL
         if (right_dimmed) {
-          kcan_write_msg(right_drl_bright_buf);
+          m = {right_drl_bright_buf, time_now + 100};
+          dim_drl_txq.push(&m);
           right_dimmed = false;
           serial_log("Restored right DRL brightness.");
         }
-        kcan_write_msg(left_drl_dim_buf);
+        m = {left_drl_dim_buf, time_now + 100};
+        dim_drl_txq.push(&m);
         #if DEBUG_MODE
           if (!left_dimmed) {
             serial_log("Dimmed left DRL.");
@@ -55,11 +72,13 @@ void evaluate_indicator_status_dim(void) {
     } else if (k_msg.buf[0] == 0xA1) {                                                                                              // Right indicator
       #if DIM_DRL
         if (left_dimmed) {
-          kcan_write_msg(left_drl_bright_buf);
+          m = {left_drl_bright_buf, time_now + 100};
+          dim_drl_txq.push(&m);
           left_dimmed = false;
           serial_log("Restored left DRL brightness.");
         }
-        kcan_write_msg(right_drl_dim_buf);
+        m = {right_drl_dim_buf, time_now + 100};
+        dim_drl_txq.push(&m);
         #if DEBUG_MODE
           if (!right_dimmed) {
             serial_log("Dimmed right DRL.");
@@ -115,6 +134,15 @@ void evaluate_door_status(void) {
           send_volume_request();
         #endif
       }
+    } else if (k_msg.buf[1] == 5) {
+      left_door_open = right_door_open = true;
+      serial_log("Both front doors open.");
+      #if UNFOLD_WITH_DOOR
+        if (unfold_with_door_open) {
+          toggle_mirror_fold();
+          unfold_with_door_open = false;
+        }
+      #endif
     } else if (k_msg.buf[1] == 0) {
       if (left_door_open) {
         left_door_open = false;
@@ -174,7 +202,7 @@ void control_exhaust_flap_user(void) {
     }
   } else {
     #if QUIET_START
-      if (ignition || terminal_r || engine_cranking) {
+      if (ignition || terminal_r || terminal_50) {
         if (exhaust_flap_open) {
           actuate_exhaust_solenoid(HIGH);                                                                                           // Close the flap (if vacuum still available)
           serial_log("Quiet start enabled. Exhaust flap closed.");
@@ -220,22 +248,42 @@ void actuate_exhaust_solenoid(bool activate) {
 
 
 #if CKM || EDC_CKM_FIX
-void evaluate_key_number(void) {
+void evaluate_key_number_remote(void) {
   if (k_msg.buf[0] / 11 != cas_key_number) {
     cas_key_number = k_msg.buf[0] / 11;                                                                                             // Key 1 = 0, Key 2 = 11, Key 3 = 22...
     if (cas_key_number > 2) {
       serial_log("Received wrong key personalisation number. Assuming default");
-      cas_key_number = 3;                                                                                                           // Default.
+      cas_key_number = 3;                                                                                                           // Default / Key "4".
     }
     #if DEBUG_MODE
     else {
-      sprintf(serial_debug_string, "Received key number: %d.", cas_key_number + 1);
+      sprintf(serial_debug_string, "Received remote key number: %d.", cas_key_number + 1);
       serial_log(serial_debug_string);
     }
     #endif
     #if CKM
       console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
     #endif
+  }
+}
+
+
+void check_key_changed(void) {
+  uint8_t cas_key_number_can = k_msg.buf[1] & 0b1111;
+  if (cas_key_number_can != cas_key_number) {
+    if (cas_key_number_can > 2) {
+      // Ignore. This should only happen if the key is lost by the PGS. We should still have the number from when the car was unlocked.
+    } else {
+      cas_key_number = cas_key_number_can;
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Received new key number after unlock: %d.", cas_key_number + 1);
+        serial_log(serial_debug_string);
+      #endif
+      #if CKM
+        console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
+        send_dme_power_ckm();                                                                                                       // Update iDrive in case key remote changed
+      #endif
+    }
   }
 }
 #endif
@@ -246,36 +294,46 @@ void evaluate_remote_button(void) {
   if (!engine_running) {                                                                                                            // Ignore if locking car while running.
     if (k_msg.buf[2] != last_lock_status_can) {                                                                                     // Lock/Unlock messages are sent many times. Should only react to the first.
       if (k_msg.buf[1] == 0x30 || k_msg.buf[1] == 0x33) {
+        time_now = millis();
         if (k_msg.buf[2] == 4) {
-          lock_button_pressed = true;
-          serial_log("Remote lock button pressed. Checking mirror status.");
-          delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 200};
-          mirror_fold_txq.push(&m);
-          frm_status_requested = true;
-          #if UNFOLD_WITH_DOOR
-            unfold_with_door_open = false;
-          #endif
-          #if ANTI_THEFT_SEQ_ALARM
-            if (!left_door_open && !right_door_open) {
-              if (alarm_led) {
-                kcan_write_msg(alarm_led_off_buf);
-                alarm_led = false;
-                lock_led = true;
-                led_message_counter = 60;                                                                                           // Make sure we're ready once Terminal R cycles.
-                serial_log("Deactivated DWA LED when door locked.");
-              }
-            }
-          #endif
-        } else if (k_msg.buf[2] == 1) {
+          if (!left_door_open && !right_door_open) {
+            #if AUTO_MIRROR_FOLD
+              lock_button_pressed = true;
+              serial_log("Remote lock button pressed. Checking mirror status.");
+              m = {frm_status_request_a_buf, time_now + 200};
+              mirror_fold_txq.push(&m);
+              frm_status_requested = true;
+              #if UNFOLD_WITH_DOOR
+                unfold_with_door_open = false;
+              #endif
+              #if ANTI_THEFT_SEQ_ALARM
+                if (alarm_led) {
+                  m = {alarm_led_off_buf, time_now + 100};                                                                          // Release control of the LED so that alarm can control it.
+                  anti_theft_txq.push(&m);
+                  alarm_led = false;
+                  lock_led = true;
+                  led_message_counter = 60;                                                                                         // Make sure we're ready once Terminal R cycles.
+                  serial_log("Deactivated DWA LED when door locked.");
+                }
+              #endif
+            #endif
+          }
+        } 
+        
+        #if AUTO_MIRROR_FOLD
+        else if (k_msg.buf[2] == 1) {
           unlock_button_pressed = true;
           serial_log("Remote unlock button pressed. Checking mirror status.");
-          delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 200};
+          m = {frm_status_request_a_buf, time_now + 200};
           mirror_fold_txq.push(&m);
           frm_status_requested = true;
           #if ANTI_THEFT_SEQ_ALARM
             lock_led = false;
           #endif
-        } else if (k_msg.buf[2] == 0) {
+        } 
+        #endif
+
+        else if (k_msg.buf[2] == 0) {
           serial_log("Remote buttons released.");
         }
       }
@@ -322,7 +380,7 @@ void evaluate_mirror_fold_status(void) {
       // Ignore {F1 21 80 3 22 0 6C 41}.
     } else {                                                                                                                        // Try again.
       serial_log("Did not receive the mirror status. Re-trying.");
-      delayed_can_tx_msg m = {frm_status_request_a_buf, millis() + 200};
+      m = {frm_status_request_a_buf, millis() + 200};
       mirror_fold_txq.push(&m);
     }
   }
@@ -334,11 +392,10 @@ void toggle_mirror_fold(void) {
   if (millis() < 2000) {
     delay = 500;
   }
-  delayed_can_tx_msg m;
-  unsigned long timeNow = millis();
-  m = {frm_toggle_fold_mirror_a_buf, timeNow + delay};
+  time_now = millis();
+  m = {frm_toggle_fold_mirror_a_buf, time_now + delay};
   mirror_fold_txq.push(&m);
-  m = {frm_toggle_fold_mirror_b_buf, timeNow + delay + 10};
+  m = {frm_toggle_fold_mirror_b_buf, time_now + delay + 10};
   mirror_fold_txq.push(&m);
   mirrors_folded = !mirrors_folded;
 }
@@ -346,7 +403,6 @@ void toggle_mirror_fold(void) {
 
 void check_mirror_fold_queue(void) {
   if (!mirror_fold_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     mirror_fold_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
@@ -360,11 +416,11 @@ void check_mirror_fold_queue(void) {
 #if FRONT_FOG_CORNER
 void check_fog_corner_queue(void) {
   if (!fog_corner_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     fog_corner_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
       fog_corner_txq.drop();
+      last_fog_action_timer = millis();
     }
   }
 }
@@ -382,7 +438,7 @@ void evaluate_dipped_beam_status(void) {
       serial_log("Dipped beam OFF");
 
       if (left_fog_on || right_fog_on) {
-        delayed_can_tx_msg m = {front_fogs_all_off_buf, millis() + 100};
+        m = {front_fogs_all_off_buf, millis() + 100};
         fog_corner_txq.push(&m);
         left_fog_on = right_fog_on = false;
       }
@@ -470,80 +526,80 @@ void evaluate_steering_angle_fog(void) {
 
 
 void left_fog_soft(bool on) {
-  unsigned long timenow = millis();
+  time_now = millis();
   if (on) {
-    delayed_can_tx_msg m = {front_left_fog_on_a_buf, timenow};
+    m = {front_left_fog_on_a_buf, time_now};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_b_buf, timenow + 100};
+    m = {front_left_fog_on_b_buf, time_now + 100};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_c_buf, timenow + 200};
+    m = {front_left_fog_on_c_buf, time_now + 200};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_d_buf, timenow + 300};
+    m = {front_left_fog_on_d_buf, time_now + 300};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_e_buf, timenow + 400};
+    m = {front_left_fog_on_e_buf, time_now + 400};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_f_buf, timenow + 500};
+    m = {front_left_fog_on_f_buf, time_now + 500};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_g_buf, timenow + 600};
+    m = {front_left_fog_on_g_buf, time_now + 600};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_h_buf, timenow + 700};
+    m = {front_left_fog_on_h_buf, time_now + 700};
     fog_corner_txq.push(&m);
   } else {
-    delayed_can_tx_msg m = {front_left_fog_on_g_buf, timenow};
+    m = {front_left_fog_on_g_buf, time_now};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_f_buf, timenow + 100};
+    m = {front_left_fog_on_f_buf, time_now + 100};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_e_buf, timenow + 200};
+    m = {front_left_fog_on_e_buf, time_now + 200};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_d_buf, timenow + 300};
+    m = {front_left_fog_on_d_buf, time_now + 300};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_c_buf, timenow + 400};
+    m = {front_left_fog_on_c_buf, time_now + 400};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_b_buf, timenow + 500};
+    m = {front_left_fog_on_b_buf, time_now + 500};
     fog_corner_txq.push(&m);
-    m = {front_left_fog_on_a_buf, timenow + 600};
+    m = {front_left_fog_on_a_buf, time_now + 600};
     fog_corner_txq.push(&m);
-    m = {front_fogs_all_off_buf, timenow + 700};
+    m = {front_fogs_all_off_buf, time_now + 700};
     fog_corner_txq.push(&m);
   }
 }
 
 
 void right_fog_soft(bool on) {
-  unsigned long timenow = millis();
+  time_now = millis();
   if (on) {
-    delayed_can_tx_msg m = {front_right_fog_on_a_buf, timenow};
+    m = {front_right_fog_on_a_buf, time_now};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_b_buf, timenow + 100};
+    m = {front_right_fog_on_b_buf, time_now + 100};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_c_buf, timenow + 200};
+    m = {front_right_fog_on_c_buf, time_now + 200};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_d_buf, timenow + 300};
+    m = {front_right_fog_on_d_buf, time_now + 300};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_e_buf, timenow + 400};
+    m = {front_right_fog_on_e_buf, time_now + 400};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_f_buf, timenow + 500};
+    m = {front_right_fog_on_f_buf, time_now + 500};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_g_buf, timenow + 600};
+    m = {front_right_fog_on_g_buf, time_now + 600};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_h_buf, timenow + 700};
+    m = {front_right_fog_on_h_buf, time_now + 700};
     fog_corner_txq.push(&m);
   } else {
-    delayed_can_tx_msg m = {front_right_fog_on_g_buf, timenow};
+    m = {front_right_fog_on_g_buf, time_now};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_f_buf, timenow + 100};
+    m = {front_right_fog_on_f_buf, time_now + 100};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_e_buf, timenow + 200};
+    m = {front_right_fog_on_e_buf, time_now + 200};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_d_buf, timenow + 300};
+    m = {front_right_fog_on_d_buf, time_now + 300};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_c_buf, timenow + 400};
+    m = {front_right_fog_on_c_buf, time_now + 400};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_b_buf, timenow + 500};
+    m = {front_right_fog_on_b_buf, time_now + 500};
     fog_corner_txq.push(&m);
-    m = {front_right_fog_on_a_buf, timenow + 600};
+    m = {front_right_fog_on_a_buf, time_now + 600};
     fog_corner_txq.push(&m);
-    m = {front_fogs_all_off_buf, timenow + 700};
+    m = {front_fogs_all_off_buf, time_now + 700};
     fog_corner_txq.push(&m);
   }
 }
@@ -557,7 +613,7 @@ void evaluate_wiping_request(void) {
       if (wash_message_counter >= 2 || wipe_scheduled) {
         serial_log("Washing cycle started.");
         wiper_txq.flush();
-        delayed_can_tx_msg m = {wipe_single_buf, millis() + 8000};
+        m = {wipe_single_buf, millis() + 6000};
         wiper_txq.push(&m);
         wipe_scheduled = true;                                                                                                      // If a quick pull is detected after the main one, re-schedule the wipe.
       } else {
@@ -580,7 +636,6 @@ void evaluate_wiping_request(void) {
 void check_wiper_queue(void) {
   if (terminal_r) {
     if (!wiper_txq.isEmpty()) {
-      delayed_can_tx_msg delayed_tx;
       wiper_txq.peek(&delayed_tx);
       if (millis() >= delayed_tx.transmit_time) {
         serial_log("Wiping windscreen after washing.");

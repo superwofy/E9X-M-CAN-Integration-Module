@@ -37,10 +37,11 @@ General section
      DME throttle map
      Servotronic via SVT70 module
 14. Check seat heating transmission queues.
-15. Check Reverse beep transmission queue.
-16. Check MSA and HDC Check Control queue.
-17. Check the EDC CKM queue.
-18. Monitor sleep state timeout. Reset runtime variables if the car falls asleep.
+15. Check if steering heater should be enabled.
+16. Check Reverse beep transmission queue.
+17. Check MSA and HDC Check Control queue.
+18. Check the EDC CKM queue.
+19. Monitor sleep state timeout. Reset runtime variables if the car falls asleep.
 
 
 

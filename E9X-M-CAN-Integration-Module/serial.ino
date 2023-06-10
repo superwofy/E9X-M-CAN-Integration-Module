@@ -7,11 +7,15 @@ void serial_interpreter(void) {
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
     if (cmd == "module_reboot") {
       serial_log("Serial: Rebooting.");
-      delay(200);
+      Serial.print("  Serial: ");
+      update_data_in_eeprom();
+      delay(1000);
       module_reboot();
     }
     if (cmd == "test_watchdog") {
       serial_log("Serial: Will reboot after watchdog timeout.");
+      update_data_in_eeprom();
+      delay(1000);
       while(1);
     }
     if (cmd == "print_status") {
@@ -47,12 +51,19 @@ void serial_interpreter(void) {
       toggle_mdrive_message_active();
       send_mdrive_message();
       toggle_mdrive_dsc_mode(); 
-    } 
+    }
+    else if (cmd == "reset_max_temp") {
+      max_cpu_temp = 0;
+      EEPROM.update(15, max_cpu_temp);
+      update_eeprom_checksum();
+      serial_log("  Serial: Reset max recorded CPU temp.");
+    }
     else if (cmd == "reset_eeprom") {
-      for (uint8_t i = 0; i < 16; i++) {
+      for (uint8_t i = 0; i < 1024; i++) {
         EEPROM.update(i, 0xFF);
       }
       serial_log("  Serial: Reset EEPROM values. Rebooting");
+      delay(1000);
       module_reboot();
     } 
     else if (cmd == "reset_mdrive") {
@@ -75,6 +86,14 @@ void serial_interpreter(void) {
       digitalWrite(DCAN_STBY_PIN, HIGH);
       serial_log("  Serial: Activated D-CAN transceiver.");
     }
+    #if AUTO_STEERING_HEATER
+    else if (cmd == "toggle_steering_heater") {
+      digitalWrite(STEERING_HEATER_SWITCH_PIN, HIGH);
+      delay(100);
+      digitalWrite(STEERING_HEATER_SWITCH_PIN, LOW);
+      serial_log("  Serial: Operated steering heater switch.");
+    }
+    #endif
     #if FRONT_FOG_CORNER
     else if (cmd == "front_right_fog_on") {
       right_fog_soft(true);
@@ -111,6 +130,8 @@ void serial_interpreter(void) {
         if (ignition) {
           Serial.print("  Serial: ");
           needle_sweep_animation();
+        } else {
+          serial_log("  Serial: Activate ignition first.");
         }
       #endif
     }
@@ -158,24 +179,57 @@ void serial_interpreter(void) {
         }
       #endif
     #endif
+    #if RTC
+      else if (cmd == "reset_rtc") {
+        Teensy3Clock.set(1546300800);
+        serial_log("  Serial: RTC reset to initial value (1/1/19 0:0:0).");
+      }
+    #endif
     #if MSA_RVC
       else if (cmd == "activate_rvc") {
         if (ignition) {
           kcan_write_msg(pdc_off_camera_on_buf);
-          serial_log("  Serial: Activated RVC display.");
+          serial_log("  Serial: Activated RVC on display.");
         } else {
           serial_log("  Serial: Activate ignition first.");
         }
       }
     #endif
-  } else {
-    String serial_password = "coldboot";                                                                                            // Default password.
-    #if SECRETS
-      serial_password = secret_serial_password;
+    #if F_VSW01
+      else if (cmd == "vsw_0") {
+        Serial.print("  Serial: ");
+        vsw_switch_input(0);
+      }
+      else if (cmd == "vsw_1") {
+        Serial.print("  Serial: ");
+        vsw_switch_input(1);
+      }
+      else if (cmd == "vsw_2") {
+        Serial.print("  Serial: ");
+        vsw_switch_input(2);
+      }
+      else if (cmd == "vsw_3") {
+        Serial.print("  Serial: ");
+        vsw_switch_input(3);
+      }
+      else if (cmd == "vsw_4") {
+        Serial.print("  Serial: ");
+        vsw_switch_input(4);
+      }
+      else if (cmd == "vsw_5") {
+        Serial.print("  Serial: ");
+        vsw_switch_input(5);
+      }
     #endif
+    else if (cmd == "help") {
+      print_help();
+    }
+  } else {
     if (cmd == serial_password) {
       serial_commands_unlocked = true;
       serial_log("  Serial: Commands unlocked.");
+    } else {
+      serial_log("  Serial: Locked.");
     }
   }
 }
@@ -183,5 +237,70 @@ void serial_interpreter(void) {
 
 void module_reboot(void) {
   wdt.reset();
+}
+
+
+void print_help(void) {
+  serial_log("========================== Help ==========================");
+  serial_log("  Commands:");
+  serial_log("  module_reboot - Saves EEPROM data and restarts the program.");
+  serial_log("  test_watchdog - Create an infinite loop to test the watchdog reset.");
+  serial_log("  print_status - Prints a set of current runtime variables.");
+  serial_log("  print_setup_time - Prints the time it took for the program to complete setup().");
+  serial_log("  print_voltage - Prints the battery voltage.");
+  serial_log("  cc_gong - Create an audible check-control gong.");
+  #if EXHAUST_FLAP_CONTROL
+    serial_log("  open_exhaust_flap - Energize the exhaust solenoid to open the flap.");
+    serial_log("  close_exhaust_flap - Release the exhaust solenoid to close the flap.");
+  #endif
+  serial_log("  toggle_mdrive - Change MDrive state ON-OFF.");
+  serial_log("  reset_max_temp - Sets max recorded CPU temperature to 0 in RAM and EEPROM.");
+  serial_log("  reset_eeprom - Sets EEPROM bytes to 0xFF and reboots. EEPROM will be rebuilt on reboot.");
+  serial_log("  reset_mdrive - Reset MDrive settings to defaults.");
+  serial_log("  sleep_ptcan - Deactivates the PT-CAN transceiver.");
+  serial_log("  sleep_dcan - Deactivates the D-CAN transceiver.");
+  serial_log("  wake_ptcan - Activates the PT-CAN transceiver.");
+  serial_log("  wake_dcan - Activates the D-CAN transceiver.");
+  #if AUTO_STEERING_HEATER
+    serial_log("  toggle_steering_heater - Operates the steering wheel heater switch.");
+  #endif
+  #if FRONT_FOG_CORNER
+    serial_log("  front_right_fog_on - Activates the front right fog light.");
+    serial_log("  front_left_fog_on - Activates the front left fog light.");
+    serial_log("  front_right_fog_off - Deactivates the front right fog light.");
+    serial_log("  front_left_fog_off - Deactivates the front left fog light.");
+    serial_log("  front_fogs_off - Deactivates both front fog lights.");
+  #endif
+  #if NEEDLE_SWEEP || CONTROL_SHIFTLIGHTS
+    serial_log("  startup_animation - Displays the KOMBI startup animation(s).");
+  #endif
+  #if AUTO_MIRROR_FOLD
+    serial_log("  toggle_mirror_fold - Change mirror fold state ON-OFF.");
+    serial_log("  mirror_fold_status - Prints the mirror fold state.");
+  #endif
+  #if ANTI_THEFT_SEQ
+    serial_log("  release_anti_theft - Deactivates the EKP immobilizer.");
+    serial_log("  lock_anti_theft - Activates the EKP immobilizer.");
+    #if ANTI_THEFT_SEQ_ALARM
+      serial_log("  alarm_siren_on - Activates the Alarm siren.");
+      serial_log("  alarm_siren_off - Deactivates the Alarm siren.");
+      serial_log("  test_trip_stall_alarm - Simulates tripping the EKP immobilizer without disabling it first.");
+    #endif
+  #endif
+  #if RTC
+    serial_log("  reset_rtc - Sets teensy's RTC to 01/01/2019 00:00:00 UTC.");
+  #endif
+  #if MSA_RVC
+    serial_log("  activate_rvc - Activates the reversing camera and displays the feed on the CID.");
+  #endif
+  #if F_VSW01
+    serial_log("  vsw_0 - Sets the VideoSwitch to input 0 - disabled.");
+    serial_log("  vsw_1 - Sets the VideoSwitch to input 1 (A40*1B Pins: 1 FBAS+, 19 FBAS-, 37 Shield).");
+    serial_log("  vsw_2 - Sets the VideoSwitch to input 2 (A40*1B Pins: 2 FBAS+, 20 FBAS-, 38 Shield).");
+    serial_log("  vsw_3 - Sets the VideoSwitch to input 3 (A40*1B Pins: 3 FBAS+, 21 FBAS-, 39 Shield).");
+    serial_log("  vsw_4 - Sets the VideoSwitch to input 4 (A40*1B Pins: 4 FBAS+, 22 FBAS-, 40 Shield).");
+    serial_log("  vsw_5 - Sets the VideoSwitch to input 5 (A40*1B Pins: 5 FBAS+, 23 FBAS-, 41 Shield).");
+  #endif
+  serial_log("==========================================================");
 }
 #endif

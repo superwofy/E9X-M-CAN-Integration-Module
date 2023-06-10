@@ -9,14 +9,16 @@ Hardware used:
 * Skpang Triple CAN board https://copperhilltech.com/teensy-4-0-triple-can-bus-board-with-two-can-2-0b-and-one-can-fd-port/ (Teensy 4.0, MCP2562s).
 * Small copper heatsink.
 * N-channel MOSFET that can be driven with 3V3. I had some FQP50N06Ls.
+* S8050 NPN transistor or similar (Steering heater switch).
 * 1N4007 diode (exhaust solenoid flyback).
-* 10K Ohm (pull-down), 600 Ohm (R-gate), 390 Ohm (POWER LED) and 10 Ohm (Fog LED) resistor.
+* 2x 10K Ohm (CAN STBY pull-up), 10K Ohm (FET pull-down), 600 Ohm (FET R-gate), 10K Ohm (NPN pull-down), 600 Ohm (NPN R-base), 390 Ohm SMT (POWER LED), and 10 Ohm (Fog LED) resistor.
 * OSRAM LO M676-Q2S1 FOG button illumination LED.
 * KINGBRIGHT KM2520ZGC-G03 FOG indicator LED.
 * Micro USB right-angle cable.
 * CR2450 620mAh battery. With a ~0.024 mA draw, the RTC should last around 3 years unpowered (terminal 30G OFF).
 	-> https://www.nxp.com/docs/en/nxp/data-sheets/IMXRT1060CEC.pdf P.28 (SNVSS) + P.34 (RTC-OSC).
 * Old PDC module PCB and housing. It has nice automotive connectors.
+* SVT70 module P/N 6795802.
 
 
 
@@ -37,17 +39,20 @@ I use it to:
 * Fold/Un-fold mirrors when locking/unlocking.
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 	-> If engine is started without releasing this immobilizer, alarm will sound once engine stalls.
+	-> Can be disabled persistently by first deactivating then, holding the POWER and DSC OFF buttons for 10s.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Audibly warn when reverse gear is engaged.
 * Audibly warn when the hood is opened.
 * Create a HDC function similar to the one in xDrive cars.
-* Display a CC when pressing the Auto Start-stop button instead of a blank button.
+* Display a CC error when pressing the Auto Start-stop button instead of a blank button.
   OR
 * Switch on the reversing camera when pressing the Auto Start-stop button.
 * Carry out one more wipe cycle after washing the windscreen.
-* Enable FXX KCAN1 CIC controllers.
+* Enable use of FXX KCAN1 CIC controllers.
+* Enable use of FXX VSW01 (VideoSWitch) module.
 * Enable full diagnosis and coding of SVT70 modules.
 * Turn on heated seats below a set temperature.
+* Turn on heated steering below a set temperature.
 * Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding, etc.).
 	-> After uploading to Teensy, set the time manually/with ISTA to initialize the RTC to the same time.
 * Close the exhaust flap before engine start to reduce start noise.

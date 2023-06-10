@@ -17,10 +17,13 @@ void configure_IO(void) {
   #if FRONT_FOG_LED_INDICATOR
     pinMode(FOG_LED_PIN, OUTPUT);
   #endif
-  
   #if EXHAUST_FLAP_CONTROL
     pinMode(EXHAUST_FLAP_SOLENOID_PIN, OUTPUT);
     actuate_exhaust_solenoid(LOW);                                                                                                  // Keep the solenoid de-energised (flap open)
+  #endif
+  #if AUTO_STEERING_HEATER
+    pinMode(STEERING_HEATER_SWITCH_PIN, OUTPUT);
+    digitalWrite(STEERING_HEATER_SWITCH_PIN, LOW);
   #endif
   #if RTC
     setSyncProvider(get_teensy_time);
@@ -70,14 +73,10 @@ void configure_can_controllers(void) {
   uint8_t filter_count = 0;
 
   // KCAN
-  #if LAUNCH_CONTROL_INDICATOR
-    KCAN.setFIFOFilter(filter_count, 0xA8, STD);                                                                                    // Clutch status                                                Cycle time 100ms (KCAN)
-    filter_count++;
-  #endif
-    KCAN.setFIFOFilter(filter_count, 0xAA, STD);                                                                                    // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
-    filter_count++;
-    KCAN.setFIFOFilter(filter_count, 0x130, STD);                                                                                   // Key/ignition status                                          Cycle time 100ms
-    filter_count++;
+  KCAN.setFIFOFilter(filter_count, 0xAA, STD);                                                                                      // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
+  filter_count++;
+  KCAN.setFIFOFilter(filter_count, 0x130, STD);                                                                                     // Key/ignition status                                          Cycle time 100ms
+  filter_count++;
   #if HDC
     KCAN.setFIFOFilter(filter_count, 0x193, STD);                                                                                   // Kombi cruise control status
     filter_count++;
@@ -114,7 +113,7 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x23A, STD);                                                                                   // Remote button and number sent by CAS                         Sent 3x when changed.
     filter_count++;
   #endif
-  #if F_ZBE_WAKE || CKM || DOOR_VOLUME || REVERSE_BEEP
+  #if F_ZBE_WAKE || CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
     KCAN.setFIFOFilter(filter_count, 0x273, STD);                                                                                   // CIC status and ZBE challenge.                                Sent when CIC is idle or a button is pressed on the ZBE.
     filter_count++;
   #endif
@@ -161,18 +160,24 @@ void configure_can_controllers(void) {
     filter_count++;
   #endif
   #if EDC_CKM_FIX
-    KCAN.setFIFOFilter(filter_count, 0x3C5, STD);                                                                                   // M Key EDC setting from iDrive.                               Sent when changed.
+    KCAN.setFIFOFilter(filter_count, 0x3C5, STD);                                                                                   // M Key EDC CKM setting from iDrive.                           Sent when changed.
     filter_count++;
   #endif
   KCAN.setFIFOFilter(filter_count, 0x3CA, STD);                                                                                     // CIC MDrive settings                                          Sent when changed.
   filter_count++;
-  #if F_ZBE_WAKE
+  #if F_ZBE_WAKE || F_VSW01 || F_NIVI
     KCAN.setFIFOFilter(filter_count, 0x4E2, STD);                                                                                   // CIC Network management.                                      Sent when CIC is ON, cycle time 1.5s.
     filter_count++;
   #endif
   #if DOOR_VOLUME
     KCAN.setFIFOFilter(filter_count, 0x5C0, STD);                                                                                   // CAS CC notifications.
     filter_count++;
+  #endif
+  #if F_VSW01
+    KCAN.setFIFOFilter(filter_count, 0x648, STD);                                                                                   // VSW diagnostic responses.                                    Sent when response is requested.
+    filter_count++;
+  #endif
+  #if DOOR_VOLUME || F_VSW01
     KCAN.setFIFOFilter(filter_count, 0x663, STD);                                                                                   // iDrive diagnostic responses.                                 Sent when response is requested.
     filter_count++;
   #endif
@@ -236,6 +241,10 @@ void toggle_transceiver_standby(void) {
 void check_teensy_cpu_temp(void) {                                                                                                  // Underclock the processor if it starts to heat up.
   if (ignition) {                                                                                                                   // If ignition is OFF, the processor will already be underclocked.
     float cpu_temp = tempmonGetTemp();
+
+    if (cpu_temp > max_cpu_temp) {
+      max_cpu_temp = cpu_temp;
+    }
 
     if (+(cpu_temp - last_cpu_temp) > HYSTERESIS) {
       if (cpu_temp >= MAX_THRESHOLD) {
@@ -359,7 +368,8 @@ time_t get_teensy_time(void) {
 
 void check_rtc_valid(void) {
   time_t t = now();
-  if (1546300800 >= t && t <= 1546301100) {                                                                                         // See startup.c (1546300800). Will only warn for the first 5 min after failure.
+  // 2019-01-01 00:00:00 UTC to 2019-02-01 00:00:00 UTC (yyy-mm-dd hh:mm:ss)
+  if (t >= 1546300800 && t <= 1548979200) {                                                                                         // See startup.c (1546300800). Will warn for the first month after failure if not fixed.
     serial_log("Teensy RTC invalid. Check RTC battery.");
     rtc_valid = false;
   }

@@ -95,7 +95,6 @@ void evaluate_update_shiftlight_sync(void) {
 #if NEEDLE_SWEEP
 void check_kombi_needle_queue(void) {
   if (!kombi_needle_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     kombi_needle_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
@@ -107,41 +106,40 @@ void check_kombi_needle_queue(void) {
 
 void needle_sweep_animation(void) {
   if (diag_transmit) {
-    delayed_can_tx_msg m;
-    unsigned long timeNow = millis();
-    m = {speedo_needle_max_buf, timeNow + 100};
+    time_now = millis();
+    m = {speedo_needle_max_buf, time_now + 100};
     kombi_needle_txq.push(&m);
-    m = {tacho_needle_max_buf, timeNow + 200};
+    m = {tacho_needle_max_buf, time_now + 200};
     kombi_needle_txq.push(&m);
-    m = {fuel_needle_max_buf, timeNow + 300};
+    m = {fuel_needle_max_buf, time_now + 300};
     kombi_needle_txq.push(&m);
-    m = {oil_needle_max_buf, timeNow + 400};
-    kombi_needle_txq.push(&m);
-
-    m = {tacho_needle_min_buf, timeNow + 1000};
-    kombi_needle_txq.push(&m);
-    m = {speedo_needle_min_buf, timeNow + 1100};
-    kombi_needle_txq.push(&m);
-    m = {oil_needle_min_buf, timeNow + 1200};
-    kombi_needle_txq.push(&m);
-    m = {fuel_needle_min_buf, timeNow + 1300};
+    m = {oil_needle_max_buf, time_now + 400};
     kombi_needle_txq.push(&m);
 
-    m = {speedo_needle_release_buf, timeNow + 1900};
+    m = {tacho_needle_min_buf, time_now + 1000};
     kombi_needle_txq.push(&m);
-    m = {tacho_needle_release_buf, timeNow + 2000};
+    m = {speedo_needle_min_buf, time_now + 1100};
     kombi_needle_txq.push(&m);
-    m = {fuel_needle_release_buf, timeNow + 2100};
+    m = {oil_needle_min_buf, time_now + 1200};
     kombi_needle_txq.push(&m);
-    m = {oil_needle_release_buf, timeNow + 2200};
+    m = {fuel_needle_min_buf, time_now + 1300};
     kombi_needle_txq.push(&m);
-    m = {tacho_needle_release_buf, timeNow + 2700};                                                                                 // Send the release twice to make sure needles now work.
+
+    m = {speedo_needle_release_buf, time_now + 1900};
     kombi_needle_txq.push(&m);
-    m = {speedo_needle_release_buf, timeNow + 2800};
+    m = {tacho_needle_release_buf, time_now + 2000};
     kombi_needle_txq.push(&m);
-    m = {oil_needle_release_buf, timeNow + 2900};
+    m = {fuel_needle_release_buf, time_now + 2100};
     kombi_needle_txq.push(&m);
-    m = {fuel_needle_release_buf, timeNow + 3000};
+    m = {oil_needle_release_buf, time_now + 2200};
+    kombi_needle_txq.push(&m);
+    m = {tacho_needle_release_buf, time_now + 2700};                                                                                // Send the release twice to make sure needles now work.
+    kombi_needle_txq.push(&m);
+    m = {speedo_needle_release_buf, time_now + 2800};
+    kombi_needle_txq.push(&m);
+    m = {oil_needle_release_buf, time_now + 2900};
+    kombi_needle_txq.push(&m);
+    m = {fuel_needle_release_buf, time_now + 3000};
     kombi_needle_txq.push(&m);
     serial_log("Sending needle sweep animation.");
   }
@@ -247,10 +245,10 @@ void evaluate_pdc_beep(void) {
     if (!pdc_beep_sent) {
       serial_log("Sending PDC beep.");
       if (idrive_died) {                                                                                                            // Send this message if iDrive is not fully ready.
-        unsigned long timeNow = millis();
-        delayed_can_tx_msg m = {pdc_beep_buf, timeNow};
+        time_now = millis();
+        m = {pdc_beep_buf, time_now};
         pdc_beep_txq.push(&m);
-        m = {pdc_quiet_buf, timeNow + 150};
+        m = {pdc_quiet_buf, time_now + 150};
         pdc_beep_txq.push(&m);        
       } else {
         kcan_write_msg(cc_gong_buf);
@@ -267,7 +265,6 @@ void evaluate_pdc_beep(void) {
 
 void check_reverse_beep_queue(void)  {
   if (!pdc_beep_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     pdc_beep_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
@@ -301,7 +298,7 @@ void evaluate_msa_button(void) {
         if (engine_running) {
           kcan_write_msg(msa_deactivated_cc_on_buf);
           serial_log("Sent MSA OFF CC.");
-          delayed_can_tx_msg m = {msa_deactivated_cc_off_buf, millis() + 3000};
+          m = {msa_deactivated_cc_off_buf, millis() + 3000};
           ihk_extra_buttons_cc_txq.push(&m);
         }
       #endif
@@ -337,7 +334,6 @@ void evaluate_msa_button(void) {
 #if HDC || FAKE_MSA
 void check_ihk_buttons_cc_queue(void) {
   if (!ihk_extra_buttons_cc_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
     ihk_extra_buttons_cc_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);

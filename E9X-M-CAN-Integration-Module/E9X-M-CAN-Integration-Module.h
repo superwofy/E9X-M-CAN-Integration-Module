@@ -3,28 +3,33 @@
 
 #include <FlexCAN_T4.h>
 #include <EEPROM.h>
+#include <CRC8.h>                                                                                                                   // https://github.com/RobTillaart/CRC
+#include <CRC16.h>
 #include "src/wdt4/Watchdog_t4.h"
 #include "src/queue/cppQueue.h"
-#include "usb_dev.h" 
+#include "usb_dev.h"
 extern "C" uint32_t set_arm_clock(uint32_t frequency);
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> DCAN;
 WDT_T4<WDT1> wdt;
 const uint8_t wdt_timeout_sec = 10;
+CRC8 f_terminal_status_crc(0x1D, 0, 0xB1, false, false);                                                                            // j1850 POLY, 0 init and custom XOR. 0xB1 for ARB-ID 0x12F.
+CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                                                                                   // XMODEM
+
 
 /***********************************************************************************************************************************************************************************************************************************************
   Board configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#define PTCAN_STBY_PIN 15                                                                                                           // These are optional but recommended to save power when the car prepares to deep sleep.
-#define DCAN_STBY_PIN 14
-
-#define EXHAUST_FLAP_SOLENOID_PIN 17
-#define DSC_BUTTON_PIN 16
 #define POWER_BUTTON_PIN 2
 #define POWER_LED_PIN 3
 #define FOG_LED_PIN 4
+#define STEERING_HEATER_SWITCH_PIN 5
+#define DCAN_STBY_PIN 14
+#define PTCAN_STBY_PIN 15                                                                                                           // STBY pins are optional but recommended to save power when the car prepares to deep sleep.
+#define DSC_BUTTON_PIN 16
+#define EXHAUST_FLAP_SOLENOID_PIN 17
 
 /***********************************************************************************************************************************************************************************************************************************************
   Program configuration section.
@@ -44,31 +49,35 @@ const uint8_t wdt_timeout_sec = 10;
 #endif
 
 #define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive.
-#define EDC_CKM_FIX 0                                                                                                               // Sometimes the M Key setting for EDC is not recalled correctly - especially with CA.
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Also disables the door open with ignition warning CC.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
 #define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood.
 #define FRM_HEADLIGHT_MODE 1                                                                                                        // Switches FRM AHL mode from Komfort and Sport.
-#define HDC 1                                                                                                                       // Gives a function to the HDC console button in non 4WD cars.
-#define FAKE_MSA 1                                                                                                                  // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
-#if !FAKE_MSA
-#define MSA_RVC 0                                                                                                                   // Turn on the OEM rear view camera (TRSVC, E84 PDC) when pressing MSA button. E70 button from 61319202037.
-#endif                                                                                                                              // RVC can be controlled independently of PDC with this button.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Un-fold mirrors when locking. Can be done with coding but this integrates nicer.
 #if AUTO_MIRROR_FOLD
 #define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
 #endif
 #define ANTI_THEFT_SEQ 1                                                                                                            // Disable fuel pump until the steering wheel M button is pressed a number of times.
+#if __has_include ("secrets.h")                                                                                                     // Optionally, create this file to store sensitive settings.
+  #include "secrets.h"
+#endif
 #if ANTI_THEFT_SEQ                                                                                                                  // If this is not deactivated before start, DME will store errors!
-const uint8_t ANTI_THEFT_SEQ_NUMBER = 3;                                                                                            // Number of times to press the button for the EKP to be re-activated.
+#if SECRETS
+  uint8_t ANTI_THEFT_SEQ_NUMBER = SECRET_ANTI_THEFT_SEQ;
+#else
+  uint8_t ANTI_THEFT_SEQ_NUMBER = 3;                                                                                                // Number of times to press the button for the EKP to be re-activated.
+#endif
 #define ANTI_THEFT_SEQ_ALARM 1                                                                                                      // Sound the alarm if engine is started without disabling anti-theft.
 #endif
 #if ANTI_THEFT_SEQ_ALARM
-const uint8_t ANTI_THEFT_SEQ_ALARM_NUMBER = 5;                                                                                      // Number of times to press the button for the alarm to be silenced and EKP re-activated.
+#if SECRETS
+  uint8_t ANTI_THEFT_SEQ_ALARM_NUMBER = SECRET_ANTI_THEFT_SEQ_ALARM_NUMBER;
+#else
+  const uint8_t ANTI_THEFT_SEQ_ALARM_NUMBER = 5;                                                                                    // Number of times to press the button for the alarm to be silenced and EKP re-activated.
 #endif
-#define REVERSE_BEEP 1                                                                                                              // Play a beep throught he speaker closest to the driver when engaging reverse.
+#endif
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack this indicator.
 #define FRONT_FOG_CORNER 1                                                                                                          // Turn ON/OFF corresponding fog light when turning.
 #if FRONT_FOG_CORNER
@@ -86,12 +95,11 @@ const int8_t STEERTING_ANGLE_HYSTERESIS_INDICATORS = 10;
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline of M3 KOMBI.
 #define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine ON. Calibrated for M3 speedo with 335i tacho.
-#define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver in low temperatures.
+#define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver at low temperatures.
 #if AUTO_SEAT_HEATING
-#define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger in low temperatures.
+#define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
 #endif
 #define RTC 1                                                                                                                       // Set the time/date if power is lost. Requires external battery.
-#define F_ZBE_WAKE 0                                                                                                                // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an EXX ZBE.
 
 
 #if SERVOTRONIC_SVT70
@@ -99,6 +107,8 @@ const int8_t STEERTING_ANGLE_HYSTERESIS_INDICATORS = 10;
 #endif
 const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
 const double AUTO_SEAT_HEATING_TRESHOLD = 10.0;                                                                                     // Degrees Celsius temperature.
+const uint16_t AUTO_HEATING_START_DELAY = 5 * 1000;                                                                                 // Time to wait for battery voltage to catch up after starting (time in seconds * 1000)
+
 #if CONTROL_SHIFTLIGHTS
   const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                 // RPM setpoints (warning = desired RPM * 4).
   const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
@@ -124,6 +134,43 @@ unsigned long HIGH_UNDERCLOCK = 150 * 1000000;
 unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
 unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 
+
+/***********************************************************************************************************************************************************************************************************************************************
+  These features are *very* implementation specific - usually requiring fabrication. As such they are disabled by default since they're unlikely to be used by anyone except me.
+***********************************************************************************************************************************************************************************************************************************************/
+
+#if __has_include ("custom-settings.h")
+  #include "custom-settings.h"
+#endif
+
+#ifndef EDC_CKM_FIX
+  #define EDC_CKM_FIX 0                                                                                                             // Sometimes the M Key setting for EDC is not recalled correctly - especially with CA.
+#endif
+#ifndef HDC
+  #define HDC 0                                                                                                                     // Gives a function to the HDC console button in non 4WD cars.
+#endif
+#ifndef FAKE_MSA
+  #define FAKE_MSA 0                                                                                                                // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
+  #if !FAKE_MSA
+    #define MSA_RVC 0                                                                                                               // Turn on the OEM rear view camera (TRSVC, E84 PDC) when pressing MSA button. E70 button from 61319202037.
+  #endif                                                                                                                            // RVC can be controlled independently of PDC with this button.
+#endif
+#ifndef REVERSE_BEEP
+  #define REVERSE_BEEP 0                                                                                                            // Play a beep throught the speaker closest to the driver when engaging reverse.
+#endif
+#ifndef AUTO_STEERING_HEATER
+  #define AUTO_STEERING_HEATER 0                                                                                                    // Enable automatic heated steering wheel at low temperatures.
+#endif
+#ifndef F_ZBE_WAKE
+  #define F_ZBE_WAKE 0                                                                                                              // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an EXX ZBE.
+#endif
+#ifndef F_VSW01
+  #define F_VSW01 0                                                                                                                 // Enable/disable F01 Video Switch diagnosis and wakeup.
+#endif
+#ifndef F_NIVI
+  #define F_NIVI 0                                                                                                                  // Enable/disable FXX NiVi diagnosis and wakeup.
+#endif
+
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
 
@@ -132,7 +179,7 @@ unsigned long MILD_UNDERCLOCK = 450 * 1000000;
     extern "C" void startup_middle_hook(void);
     extern "C" volatile uint32_t systick_millis_count;
     void startup_middle_hook(void) {
-      // Force millis() to be 300 to skip USB startup delays. The module needs to boot very quickly to revceive the unlock message.
+      // Force millis() to be 300 to skip USB startup delays. The module needs to boot very quickly to receive the unlock message.
       // This makes receiving early boot serial messages difficult.
       systick_millis_count = 300;
     }
@@ -144,10 +191,13 @@ typedef struct delayed_can_tx_msg {
 	CAN_message_t	tx_msg;
 	unsigned long	transmit_time;
 } delayed_can_tx_msg;
-
+uint16_t stored_eeprom_checksum, calculated_eeprom_checksum;
+delayed_can_tx_msg delayed_tx, m;
+unsigned long time_now;
 uint32_t cpu_speed_ide;
-bool terminal_r = false, ignition = false,  vehicle_awake = false;
-bool engine_cranking = false, engine_running = false;
+bool key_valid = false, terminal_r = false, ignition = false,  vehicle_awake = false;
+bool terminal_50 = false, engine_running = false;
+unsigned long engine_runtime = 0;
 elapsedMillis vehicle_awake_timer = 0, vehicle_awakened_time = 0;
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -165,7 +215,7 @@ uint16_t RPM = 0;
   uint8_t cas_key_number = 0;                                                                                                       // 0 = Key 1, 1 = Key 2...
 #endif
 uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
-bool mdrive_status = false, mdrive_settings_save_to_eeprom = false, mdrive_power_active = false;
+bool mdrive_status = false, mdrive_power_active = false;
 bool console_power_mode, restore_console_power_mode = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DTC, 2 = DSC OFF
@@ -177,16 +227,13 @@ elapsedMillis power_button_debounce_timer = 0, dsc_off_button_debounce_timer = 0
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 bool ignore_m_press = false, ignore_m_hold = false;
 uint8_t clock_mode = 0;
-float last_cpu_temp = 0;
+float last_cpu_temp = 0, max_cpu_temp = 0;
 CAN_message_t cc_gong_buf;
 
 #if SERVOTRONIC_SVT70
   uint8_t servotronic_message[] = {0, 0xFF};
   CAN_message_t servotronic_cc_on_buf;
   bool diagnose_svt = false;
-  #if DEBUG_MODE
-    uint16_t dcan_forwarded_count = 0, ptcan_forwarded_count = 0;
-  #endif
 #endif
 #if CONTROL_SHIFTLIGHTS
   CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf;
@@ -217,6 +264,9 @@ CAN_message_t cc_gong_buf;
 #endif
 #if FRONT_FOG_CORNER
   bool indicators_on = false;
+#endif
+#if FRONT_FOG_CORNER
+  unsigned long last_fog_action_timer = 0;
   bool dipped_beam_status = false, left_fog_on = false, right_fog_on = false;
   int16_t steering_angle = 0;
   CAN_message_t front_left_fog_on_a_buf, front_left_fog_on_b_buf, front_left_fog_on_c_buf, front_left_fog_on_d_buf;
@@ -227,9 +277,11 @@ CAN_message_t cc_gong_buf;
   cppQueue fog_corner_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
 #endif
 #if DIM_DRL
+  unsigned long last_drl_action_timer = 0;
   bool drl_status = false, left_dimmed = false, right_dimmed = false;
   CAN_message_t left_drl_dim_off, left_drl_dim_buf, left_drl_bright_buf;
   CAN_message_t right_drl_dim_off, right_drl_dim_buf, right_drl_bright_buf;
+  cppQueue dim_drl_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if FTM_INDICATOR
   bool ftm_indicator_status = false;
@@ -259,9 +311,9 @@ CAN_message_t cc_gong_buf;
   bool unfold_with_door_open = false;
 #endif
 #if ANTI_THEFT_SEQ
-  bool anti_theft_released = false;
+  bool anti_theft_released = false, anti_theft_persist = true, holding_both_console = false;
   unsigned long anti_theft_send_interval = 0;                                                                                       // Skip the first interval delay.
-  elapsedMillis anti_theft_timer = 0;
+  elapsedMillis anti_theft_timer = 0, both_console_buttons_timer;
   uint8_t anti_theft_pressed_count = 0;
   CAN_message_t key_cc_on_buf, key_cc_off_buf;
   CAN_message_t start_cc_on_buf, start_cc_off_buf;
@@ -284,8 +336,18 @@ CAN_message_t cc_gong_buf;
 #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
   bool reverse_gear_status = false;
 #endif
+#if F_ZBE_WAKE || F_VSW01 || F_NIVI
+  uint8_t f_terminal_status_alive_counter = 0;
+  uint8_t f_terminal_status[] = {0, 0, 0, 0xFF, 0, 0, 0x3F, 0xFF};
+  CAN_message_t f_kombi_network_mgmt_buf, f_terminal_status_buf;
+#endif
+#if F_VSW01
+  bool vsw_initialized = false;
+  uint16_t idrive_current_menu;
+  CAN_message_t vsw_switch_buf[6]; 
+  // CAN_message_t idrive_menu_request_buf;
+#endif
 #if F_ZBE_WAKE
-  CAN_message_t f_wakeup_buf;
   uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
 #endif
 #if EXHAUST_FLAP_CONTROL
@@ -311,6 +373,10 @@ float ambient_temperature_real = 87.5;
   CAN_message_t seat_heating_button_pressed_pas_buf, seat_heating_button_released_pas_buf;
   cppQueue seat_heating_pas_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
+#if AUTO_STEERING_HEATER
+  bool sent_steering_heating_request = false, transistor_active = false;
+  elapsedMillis transistor_active_timer;
+#endif
 #if RTC
   #include <TimeLib.h>
   CAN_message_t set_time_cc_buf;
@@ -327,7 +393,7 @@ float ambient_temperature_real = 87.5;
   bool left_door_open = false, right_door_open = false;
   uint8_t last_door_status = 0;
 #endif
-#if CKM || DOOR_VOLUME || REVERSE_BEEP
+#if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
   elapsedMillis idrive_alive_timer = 0;
   bool idrive_died = false;
 #endif
@@ -369,9 +435,11 @@ float ambient_temperature_real = 87.5;
   unsigned long max_loop_timer = 0, loop_timer = 0, setup_time;
   uint32_t kcan_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
   bool serial_commands_unlocked = false;
-#endif
-#if DEBUG_MODE || ANTI_THEFT_SEQ
-  #include "secrets.h"
+  #if SECRETS
+    String serial_password = secret_serial_password;
+  #else
+    String serial_password = "coldboot";                                                                                            // Default password.
+  #endif
 #endif
 bool diag_transmit = true;
 elapsedMillis diag_deactivate_timer = 0;

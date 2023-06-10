@@ -11,13 +11,7 @@ void setup() {
   configure_can_controllers();
   initialize_watchdog();
   cache_can_message_buffers();
-  read_settings_from_eeprom();
-  #if UNFOLD_WITH_DOOR
-    unfold_with_door_open = EEPROM.read(11) == 1 ? true : false;
-  #endif
-  #if ANTI_THEFT_SEQ
-    anti_theft_released = EEPROM.read(12) == 1 ? true : false;
-  #endif
+  read_initialize_eeprom();
   #if RTC
     check_rtc_valid();
   #endif
@@ -42,7 +36,7 @@ void loop() {
 /***********************************************************************************************************************************************************************************************************************************************
   General section.
 ***********************************************************************************************************************************************************************************************************************************************/
-  
+  time_now = millis();
   if (vehicle_awake) {
     #if EXHAUST_FLAP_CONTROL
       control_exhaust_flap_user();
@@ -63,10 +57,13 @@ void loop() {
     #if ANTI_THEFT_SEQ
       check_anti_theft_status();
     #endif
+    #if DIM_DRL
+      check_drl_queue();
+    #endif
     #if FRONT_FOG_CORNER
       check_fog_corner_queue();
     #endif
-    #if CKM || DOOR_VOLUME || REVERSE_BEEP
+    #if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
       check_idrive_alive_monitor();
     #endif
   }
@@ -78,6 +75,9 @@ void loop() {
     send_mdrive_alive_message(10000);
     #if AUTO_SEAT_HEATING
       check_seatheating_queue();
+    #endif
+    #if AUTO_STEERING_HEATER
+      evaluate_steering_heating_request();
     #endif
     #if REVERSE_BEEP
       check_reverse_beep_queue();
@@ -122,12 +122,6 @@ void loop() {
           control_exhaust_flap_rpm();
         #endif
       }
-
-      #if LAUNCH_CONTROL_INDICATOR
-      else if (k_msg.id == 0xA8) {                                                                                                  // Monitor clutch pedal status
-        evaluate_clutch_status();
-      }
-      #endif
 
       #if HDC
       else if (k_msg.id == 0x193) {                                                                                                 // Monitor state of cruise control
@@ -218,8 +212,8 @@ void loop() {
       }
     }
 
-    if (k_msg.id == 0x130) {                                                                                                        // Monitor ignition status
-      evaluate_ignition_status();
+    if (k_msg.id == 0x130) {                                                                                                        // Monitor terminal, clutch and key number.
+      evaluate_terminal_clutch_keyno_status();
     }
 
     #if CKM
@@ -234,17 +228,17 @@ void loop() {
         evaluate_remote_button();
       #endif
       #if CKM
-        evaluate_key_number();
+        evaluate_key_number_remote();
       #endif
     }
     #endif
 
-    #if F_ZBE_WAKE || CKM || DOOR_VOLUME || REVERSE_BEEP
+    #if F_ZBE_WAKE || CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
     else if (k_msg.id == 0x273) {
       #if F_ZBE_WAKE
         send_zbe_acknowledge();
       #endif
-      #if CKM || DOOR_VOLUME || REVERSE_BEEP
+      #if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
         update_idrive_alive_timer();
       #endif
     }
@@ -284,11 +278,12 @@ void loop() {
     }
     #endif
 
-    #if F_ZBE_WAKE
+    #if F_ZBE_WAKE || F_VSW01
     else if (k_msg.id == 0x4E2) {
-      #if F_ZBE_WAKE
-        send_zbe_wakeup();
-      #endif
+      send_f_wakeup();
+      // #if F_VSW01
+      //   request_idrive_menu();                                                                                                      // Check the current iDrive menu to determine correct switch position.
+      // #endif
     }
     #endif
 
@@ -296,9 +291,22 @@ void loop() {
     else if (k_msg.id == 0x5C0) {
       disable_door_ignition_cc();
     }
+    #endif
 
+    #if DOOR_VOLUME || F_VSW01
     else if (k_msg.id == 0x663) {
-      evaluate_audio_volume();
+      #if DOOR_VOLUME 
+        evaluate_audio_volume();
+      #endif
+      // #if F_VSW01
+      //   evaluate_idrive_menu();
+      // #endif
+    }
+    #endif
+
+    #if F_VSW01
+    else if (k_msg.id == 0x648) {
+      forward_kcan_to_dcan();
     }
     #endif
 
@@ -377,7 +385,7 @@ void loop() {
         }
         else if (pt_msg.id == 0x60E) {                                                                                              // Forward Diagnostic responses from SVT module to DCAN
           if (diagnose_svt) {
-            ptcan_to_dcan();
+            forward_ptcan_to_dcan();
           }
         }
         #endif
@@ -405,9 +413,15 @@ void loop() {
       #if SERVOTRONIC_SVT70
       else if (d_msg.buf[0] == 0xE) {                                                                                               // SVT_70 address is 0xE
         if (diagnose_svt) {
-          dcan_to_ptcan();                                                                                                          // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
+          forward_dcan_to_ptcan();                                                                                                  // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
         }
       } 
+      #endif
+
+      #if F_VSW01
+      else if (d_msg.buf[0] == 0x48) {                                                                                              // F_VSW01 address is 0x48
+        forward_dcan_to_kcan();
+      }
       #endif
       
       #if RTC

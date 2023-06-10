@@ -1,47 +1,73 @@
 // General body functions dealing with interior electronics go here.
 
 
-void evaluate_ignition_status(void) {
+void evaluate_terminal_clutch_keyno_status(void) {
   vehicle_awake_timer = 0;
   if (!vehicle_awake) {
     vehicle_awake = true;    
     toggle_transceiver_standby();                                                                                                   // Re-activate the transceivers.                                                                                         
     serial_log("Vehicle Awake.");
     vehicle_awakened_time = 0;
-  }  
-
-  bool ignition_ = ignition;
-  bool terminal_r_ = terminal_r;
-  switch(k_msg.buf[0]) {
-    case 0:
-      ignition = terminal_r = engine_cranking = false;
-      #if ANTI_THEFT_SEQ
-        reset_key_cc();
-      #endif
-      break;
-    case 1:
-      terminal_r = true;
-      ignition = engine_cranking = false;
-      break;
-    case 5:
-      if (!ignition) {                                                                                                              // If ignition is OFF and this status is declared, terminal R will be turned OFF by the car.
-        terminal_r = engine_cranking = false;
-      }
-      break;                                                                                                                        // 5 is sent in CA cars when the key is not detected, ignore.
-    case 0x27:                                                                                                                      // Sent when PGS is resetting. Ignore.
-      break;
-    case 0x41:
-      terminal_r = true;
-      ignition = engine_cranking = false;
-      break;
-    case 0x45:
-      ignition = terminal_r = true;
-      engine_cranking = false;
-      break;
-    case 0x55:
-      ignition = terminal_r = engine_cranking = true;
-      break;
   }
+
+  bool ignition_ = ignition, terminal_r_ = terminal_r;
+
+  // These must be checked since error states such as 2 or 3 can be set. E.g when PGS is being reset (Byte0 = 0x27).
+  terminal_r = (k_msg.buf[0] & 0b11) == 1 ? true : false;                                                                           // 0 OFF, 1 ON, 3 INVALID_SIGNAL ??
+  ignition = ((k_msg.buf[0] & 0b1100) >> 2) == 1 ? true : false;                                                                    // 0 IGK_OFF, 1 IGK_ON, 2 INVALID_SIGNAL
+  terminal_50 = ((k_msg.buf[0] & 0b110000) >> 4) == 1 ? true : false;
+  key_valid = ((k_msg.buf[0] & 0b11000000) >> 6) == 1 ? true : false;                                                               // Set to 0 when PGS module loses key.
+
+  #if LAUNCH_CONTROL_INDICATOR
+  if (ignition) {
+    bool clutch_pressed_can = (k_msg.buf[2] & 0b11000000) >> 6;
+    if (clutch_pressed != clutch_pressed_can) {
+      if (clutch_pressed_can) {
+        clutch_pressed = true;
+        serial_log("Clutch pedal pressed.");
+      } else {
+        clutch_pressed = false;
+        serial_log("Clutch pedal released.");
+      }
+    }
+  }
+  #endif
+
+  check_key_changed();
+
+  #if F_ZBE_WAKE || F_VSW01 || F_NIVI                                                                                               // Translate 0x130 to 0x12F for F-series modules.
+    f_terminal_status[2] = 0xF << 4;                                                                                                // Set ST_KL
+    if (terminal_50) {
+      f_terminal_status[1] = 0xB;
+      f_terminal_status[2] |= 0xD;
+    } else if (ignition) {
+      f_terminal_status[1] = 5;
+      f_terminal_status[2] |= 0xA;
+    } else if (terminal_r) {
+      f_terminal_status[1] = 2;
+      f_terminal_status[2] |= 8;
+    } else {
+      f_terminal_status[1] = 1;
+      f_terminal_status[2] |= 1;
+    }
+    f_terminal_status[1] = f_terminal_status[1] << 4 | f_terminal_status_alive_counter;                                             // Combine ST_VEH_CON and ALIV_COU_KL
+    f_terminal_status_alive_counter == 0xF ? f_terminal_status_alive_counter = 0 : f_terminal_status_alive_counter++;
+    f_terminal_status[4] = 0xF << 4 | key_valid ? 3 : 1;                                                                            // Set ST_KL_KEY_VLD
+
+    f_terminal_status_crc.restart();
+    for (uint8_t i = 1; i < 8; i++) {
+      f_terminal_status_crc.add(f_terminal_status[i]);
+    }
+    f_terminal_status[0] = f_terminal_status_crc.calc();
+
+    f_terminal_status_buf = make_msg_buf(0x12F, 8, f_terminal_status);
+    #if F_ZBE_WAKE || F_VSW01
+      kcan_write_msg(f_terminal_status_buf);
+    #endif
+    #if F_NIVI
+      ptcan_write_msg(f_terminal_status_buf);
+    #endif
+  #endif
 
   #if FAKE_MSA || MSA_RVC
     if (ignition) {
@@ -61,13 +87,25 @@ void evaluate_ignition_status(void) {
     #if USB_DISABLE
       activate_usb();                                                                                                               // If this fails to run, the program button will need to be pressed to recover.
     #endif
-    serial_log("Ignition ON.");    
+    serial_log("Ignition ON.");
+
+    #if DIM_DRL                                                                                                                     // These resets are required if quickly (less than 15s) switching igniton 
+      if (((millis() - last_drl_action_timer) < 15000)) {
+        // RESET - TODO
+        last_drl_action_timer = 0;
+      }
+    #endif
+    #if FRONT_FOG_CORNER
+      if (((millis() - last_fog_action_timer) < 15000)) {
+        // RESET - TODO
+        last_fog_action_timer = 0;
+      }
+    #endif
   } else if (!ignition && ignition_) {
     reset_runtime_variables();
     scale_mcu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "(%X) Ignition OFF. Reset values.", k_msg.buf[0]);
-      serial_log(serial_debug_string);
+      serial_log("Ignition OFF. Reset values.");
     #endif
   }
 
@@ -109,6 +147,45 @@ void evaluate_seat_heating_status(void) {
 }
 
 
+void send_seat_heating_request_dr(void) {
+  time_now = millis();
+  kcan_write_msg(seat_heating_button_pressed_dr_buf);
+  driver_sent_seat_heating_request = true;
+  m = {seat_heating_button_released_dr_buf, time_now + 100};
+  seat_heating_dr_txq.push(&m);
+  m = {seat_heating_button_released_dr_buf, time_now + 250};
+  seat_heating_dr_txq.push(&m);
+  m = {seat_heating_button_released_dr_buf, time_now + 400};
+  seat_heating_dr_txq.push(&m);
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
+          ambient_temperature_real, AUTO_SEAT_HEATING_TRESHOLD);
+    serial_log(serial_debug_string);
+  #endif
+}
+
+
+void check_seatheating_queue(void) {
+  if (!seat_heating_dr_txq.isEmpty()) {
+    seat_heating_dr_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      seat_heating_dr_txq.drop();
+    }
+  }
+  #if AUTO_SEAT_HEATING_PASS
+    if (!seat_heating_pas_txq.isEmpty()) {
+      seat_heating_pas_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        kcan_write_msg(delayed_tx.tx_msg);
+        seat_heating_pas_txq.drop();
+      }
+    }
+  #endif
+}
+#endif
+
+
 #if AUTO_SEAT_HEATING_PASS
 void evaluate_passenger_seat_status(void) {
   passenger_seat_status = k_msg.buf[1];
@@ -125,37 +202,17 @@ void evaluate_passenger_seat_status(void) {
     }
   }
 }
-#endif
 
 
-void send_seat_heating_request_dr(void) {
-  unsigned long timeNow = millis();
-  kcan_write_msg(seat_heating_button_pressed_dr_buf);
-  driver_sent_seat_heating_request = true;
-  delayed_can_tx_msg m = {seat_heating_button_released_dr_buf, timeNow + 100};
-  seat_heating_dr_txq.push(&m);
-  m = {seat_heating_button_released_dr_buf, timeNow + 250};
-  seat_heating_dr_txq.push(&m);
-  m = {seat_heating_button_released_dr_buf, timeNow + 400};
-  seat_heating_dr_txq.push(&m);
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
-          ambient_temperature_real, AUTO_SEAT_HEATING_TRESHOLD);
-    serial_log(serial_debug_string);
-  #endif
-}
-
-
-#if AUTO_SEAT_HEATING_PASS
 void send_seat_heating_request_pas(void) {
-  unsigned long timeNow = millis();
+  time_now = millis();
   kcan_write_msg(seat_heating_button_pressed_pas_buf);
   passenger_sent_seat_heating_request = true;
-  delayed_can_tx_msg m = {seat_heating_button_released_pas_buf, timeNow + 100};
+  m = {seat_heating_button_released_pas_buf, time_now + 100};
   seat_heating_pas_txq.push(&m);
-  m = {seat_heating_button_released_pas_buf, timeNow + 250};
+  m = {seat_heating_button_released_pas_buf, time_now + 250};
   seat_heating_pas_txq.push(&m);
-  m = {seat_heating_button_released_pas_buf, timeNow + 400};
+  m = {seat_heating_button_released_pas_buf, time_now + 400};
   seat_heating_pas_txq.push(&m);
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %.1fC, treshold %.1fC.", 
@@ -166,39 +223,47 @@ void send_seat_heating_request_pas(void) {
 #endif
 
 
-void check_seatheating_queue(void) {
-  if (!seat_heating_dr_txq.isEmpty()) {
-    delayed_can_tx_msg delayed_tx;
-    seat_heating_dr_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      seat_heating_dr_txq.drop();
-    }
-  }
-  #if AUTO_SEAT_HEATING_PASS
-    if (!seat_heating_pas_txq.isEmpty()) {
-      delayed_can_tx_msg delayed_tx;
-      seat_heating_pas_txq.peek(&delayed_tx);
-      if (millis() >= delayed_tx.transmit_time) {
-        kcan_write_msg(delayed_tx.tx_msg);
-        seat_heating_pas_txq.drop();
+#if AUTO_STEERING_HEATER
+void evaluate_steering_heating_request(void) {
+  if (engine_running && engine_runtime >= AUTO_HEATING_START_DELAY) {                                                               // Wait for supply voltage to stabilize.
+    if (!sent_steering_heating_request) {
+      if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD) {
+        digitalWrite(STEERING_HEATER_SWITCH_PIN, HIGH);
+        serial_log("Activated steering wheel heating.");
+        sent_steering_heating_request = transistor_active = true;
+        transistor_active_timer = 0;
+      }
+    } else {
+      if (transistor_active) {
+        if (transistor_active_timer >= 200) {
+          digitalWrite(STEERING_HEATER_SWITCH_PIN, LOW);                                                                            // Release control of the switch so that the driver can now operate it.
+          transistor_active = false;
+        }
       }
     }
+  }
+}
+#endif
+
+
+#if F_ZBE_WAKE || F_VSW01 || F_NIVI
+void send_f_wakeup(void) {
+  #if F_ZBE_WAKE || F_VSW01
+    kcan_write_msg(f_kombi_network_mgmt_buf);
   #endif
+  #if F_NIVI
+    ptcan_write_msg(f_kombi_network_mgmt_buf);
+  #endif
+    //serial_log("Sent FXX wake-up message.");
+
 }
 #endif
 
 
 #if F_ZBE_WAKE
-void send_zbe_wakeup(void) {
-  kcan_write_msg(f_wakeup_buf);
-  serial_log("Sent F-ZBE wake-up message.");
-}
-
-
 void send_zbe_acknowledge(void) {
   zbe_response[2] = k_msg.buf[7];
-  kcan_write_msg(makeMsgBuf(0x277, 4, zbe_response));
+  kcan_write_msg(make_msg_buf(0x277, 4, zbe_response));
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent ZBE response to CIC with counter: 0x%X", k_msg.buf[7]);
     serial_log(serial_debug_string);
@@ -215,6 +280,32 @@ void evaluate_battery_voltage(void) {
 
 
 void check_console_buttons(void) {
+  #if ANTI_THEFT_SEQ
+  if (anti_theft_released) {
+    if (!digitalRead(POWER_BUTTON_PIN) && !digitalRead(DSC_BUTTON_PIN)) {
+      if (!holding_both_console) {
+        both_console_buttons_timer = 0;
+        holding_both_console = true;
+      } else {
+        if (both_console_buttons_timer >= 10000) {                                                                                  // Hold both buttons for more than 10s.
+          kcan_write_msg(cc_gong_buf);                                                                                              // Acknowledge anti-theft persist ON-OFF
+          anti_theft_persist = !anti_theft_persist;
+          EEPROM.update(15, anti_theft_persist);
+          update_eeprom_checksum();
+          #if DEBUG_MODE
+            sprintf(serial_debug_string, "Anti theft persistently: %s.", anti_theft_persist ? "ON" : "OFF");
+            serial_log(serial_debug_string);
+          #endif
+          both_console_buttons_timer = 0;                                                                                           // Reset to prevent multiple activations.
+        }
+      }
+      return;
+    } else {
+      holding_both_console = false;
+    }
+  }
+  #endif
+
   if (!digitalRead(POWER_BUTTON_PIN)) {
     if (power_button_debounce_timer >= power_debounce_time_ms) {                                                                    // POWER console button should only change throttle mapping.
       power_button_debounce_timer = 0;
@@ -265,7 +356,7 @@ void check_console_buttons(void) {
       }
       holding_dsc_off_console = false;
     }
-  } 
+  }
 }
 
 
@@ -282,7 +373,7 @@ void update_car_time_from_rtc(void) {
     uint16_t rtc_year = year(t);
     uint8_t date_time_can[] = {rtc_hours, rtc_minutes, rtc_seconds, 
                               rtc_day, uint8_t((rtc_month << 4) | 0xF), uint8_t(rtc_year & 0xFF), uint8_t(rtc_year >> 8), 0xF2};
-    kcan_write_msg(makeMsgBuf(0x39E, 8, date_time_can));
+    kcan_write_msg(make_msg_buf(0x39E, 8, date_time_can));
   } else {
     serial_log("Teensy RTC invalid. Cannot set car's clock.");
   }
@@ -293,7 +384,7 @@ void update_car_time_from_rtc(void) {
 #if DOOR_VOLUME
 void send_volume_request(void) {
   if (diag_transmit) {
-    delayed_can_tx_msg m = {vol_request_buf, millis() + 10};
+    m = {vol_request_buf, millis() + 10};
     idrive_txq.push(&m);
     serial_log("Requesting volume from iDrive.");
   }
@@ -315,9 +406,8 @@ void evaluate_audio_volume(void) {
           if (volume_change[4] > 0x33) {
             volume_change[4] = 0x33;
           }
-          delayed_can_tx_msg m;
-          unsigned long timeNow = millis();
-          m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 200};
+          time_now = millis();
+          m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 200};
           idrive_txq.push(&m);
           volume_restore_offset = (audio_volume % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
           volume_change[4] = floor(audio_volume / 2);                                                                               // Reduce volume to 50%.
@@ -325,9 +415,9 @@ void evaluate_audio_volume(void) {
             volume_change[4] = 0x33;
             volume_restore_offset = 0;
           }
-          m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 600};
+          m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 600};
           idrive_txq.push(&m);
-          m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 900};
+          m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 900};
           idrive_txq.push(&m);
           volume_reduced = true;
           volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
@@ -344,17 +434,16 @@ void evaluate_audio_volume(void) {
               if (volume_change[4] > 0x33) {
                 volume_change[4] = 0x33;
               }
-              delayed_can_tx_msg m;
-              unsigned long timeNow = millis();
-              m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 200};
+              time_now = millis();
+              m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 200};
               idrive_txq.push(&m);
               volume_change[4] = audio_volume * 2 + volume_restore_offset;
               if (volume_change[4] > 0x33) {
                 volume_change[4] = 0x33;                                                                                            // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
               }
-              m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 600};
+              m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 600};
               idrive_txq.push(&m);
-              m = {makeMsgBuf(0x6F1, 8, volume_change), timeNow + 900};                                                             // Make sure the restore is received.
+              m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 900};                                                          // Make sure the restore is received.
               idrive_txq.push(&m);
               #if DEBUG_MODE
                 sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X", volume_change[4]);
@@ -384,7 +473,6 @@ void disable_door_ignition_cc() {
 
 void check_idrive_queue(void) {
   if (!idrive_txq.isEmpty() && diag_transmit) {
-    delayed_can_tx_msg delayed_tx;
     idrive_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       if (vehicle_awake) {
@@ -400,7 +488,7 @@ void check_idrive_queue(void) {
 #endif
 
 
-#if CKM || DOOR_VOLUME || REVERSE_BEEP
+#if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
 void check_idrive_alive_monitor(void) {
   if (terminal_r) {
     if (idrive_alive_timer >= 4000) {                                                                                               // This message should be received every 2s.
@@ -410,10 +498,17 @@ void check_idrive_alive_monitor(void) {
         #if DOOR_VOLUME
           default_volume_sent = false;
         #endif
+        #if F_VSW01
+          vsw_initialized = false;
+        #endif
       }
     } else {
       if (idrive_died) {                                                                                                            // It's back.
         idrive_died = false;
+        #if F_VSW01
+          vsw_switch_input(1);                                                                                                      // Initialize Video Switch to input one.
+          vsw_initialized = true;
+        #endif
       }
     }
   }
@@ -432,5 +527,33 @@ void update_idrive_alive_timer(void) {
     }
   }
   #endif
+
+  #if F_VSW01
+    if (!vsw_initialized) {
+      vsw_switch_input(1);
+      vsw_initialized = true;
+    }
+  #endif
 }
+#endif
+
+
+#if F_VSW01
+void vsw_switch_input(uint8_t input) {
+  kcan_write_msg(vsw_switch_buf[input]);
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "Sent VSW/%d request.", input);
+    serial_log(serial_debug_string);
+  #endif
+}
+
+
+// void request_idrive_menu() {
+//   kcan_write_msg(idrive_menu_request_buf);
+// }
+
+
+// void evaluate_idrive_menu() {
+  
+// }
 #endif
