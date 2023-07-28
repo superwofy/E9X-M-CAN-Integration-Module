@@ -303,8 +303,6 @@ void evaluate_msa_button(void) {
         }
       #endif
       #if MSA_RVC
-        sprintf(serial_debug_string, "%X", pdc_status);
-        Serial.println(serial_debug_string);
         if (pdc_status == 0xA5) {
           kcan_write_msg(camera_off_buf);
           serial_log("Deactivated RVC with PDC ON.");
@@ -360,11 +358,6 @@ void evaluate_pdc_button(void) {
 
 
 void evaluate_pdc_bus_status(void) {
-  Serial.print(" Buffer: ");
-		for ( uint8_t i = 0; i < k_msg.len; i++ ) {
-		  Serial.print(k_msg.buf[i], HEX); Serial.print(" ");
-		}
-  Serial.println();
   if (pdc_status != k_msg.buf[2]) {
     if (pdc_status == 0xA4 && k_msg.buf[2] == 0x81) {
       kcan_write_msg(pdc_off_camera_off_buf);                                                                                       // Fix for PDC coming on when navingating away from RVC only.

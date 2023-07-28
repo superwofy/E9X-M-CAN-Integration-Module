@@ -48,9 +48,10 @@ I use it to:
   OR
 * Switch on the reversing camera when pressing the Auto Start-stop button.
 * Carry out one more wipe cycle after washing the windscreen.
-* Enable use of FXX KCAN1 CIC controllers.
+* Enable use of FXX KCAN1 CIC controller.
 * Enable use of FXX VSW01 (VideoSWitch) module.
-* Enable full diagnosis and coding of SVT70 modules.
+* Enable use of FXX NIVI2/3 module.
+* Enable full diagnosis and coding of SVT70 module.
 * Turn on heated seats below a set temperature.
 * Turn on heated steering below a set temperature.
 * Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding, etc.).
@@ -59,7 +60,6 @@ I use it to:
 * Reduce audio volume when opening doors. Restore when closing.
 * Dim corresponding front DRL when indicator is on.
 * Turn on corresponding front fog light when steering angle threshold is exceeded.
-See program notes: [here](program-notes.txt)
 
 
 ![settings](img/idrive-settings.jpg "idrive-settings")
@@ -80,3 +80,40 @@ See program notes: [here](program-notes.txt)
 
 ![board](img/board/board-anotated.jpg "board")
 
+
+
+
+Program:
+
+Message transmission is optimized to reach the receiver module on the shortest route. I.e. messages that need to reach KOMBI are sent on KCAN even if the BMW implementation would have sent it over PTCAN. This is done to minimize any gateway (JBE) delay.
+Functions that make use of CANID 0x6F1 (iDrive volume, SVT_70 gateway, etc.) are deactivated if communication on the DCAN from an OBD tool is detected.
+Wherever pausing is required (dtc/dsc off for example), FiFo queues are implemented to ensure reading and processing of messages is unaffected.
+To diagnose/code/etc. the SVT module, hold POWER when turning on ignition. Transmitting to DCAN corrupts UIF reads for other modules hence why this function is disabled otherwise.
+A serial module is implemented to allow basic manipulation during runtime. Default password to unlock is "coldboot". "help" prints the available commands.
+
+
+Arduino IDE settings
+
+Board: Teensy 4.0
+Optimize: Fastest with LTO
+CPU Speed: 528 MHz
+USB Type: Dual Serial for debugging, Single for normal operation.
+
+
+
+MSD81 IKM0S binary modification
+
+[PROGRAM]
+
+0x83738   and  0x83739  -> 1F 03      CAN message table
+0x1F3AD4  and  0x1F3AD5 -> 1F 03      CAN filters
+
+Replace 15 03 (0x315 represented in Little Endian) to stop MSD81 from reacting to Vehicle Mode changes (triggered by JBBF through EDC button)
+This also allows state_spt (throttle map) to be controlled independently from the main "MDrive" with the console switch.
+Re-calculate checksum at 0x80304 using csprogram-windows.exe
+
+
+[MAP]
+
+lc_var_spt_swi at 0x4CD1D set to 00. This disables the DME 1M MDrive logic. 0x399, 0x1D9 etc.
+By default the DME hard-codes the MDrive values for Servotronic, EDC etc. In order to replace them, these functions need to be disabled.

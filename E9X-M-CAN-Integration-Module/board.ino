@@ -89,8 +89,8 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x1AA, STD);                                                                                   // iDrive ErgoCommander (rear entertainment?)                   Sent at boot time and when cycling Terminal R.
     filter_count++;
   #endif
-  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
-    KCAN.setFIFOFilter(filter_count, 0x1B4, STD);                                                                                   // Kombi status (speed, handbrake)                              Cycle time 100ms (terminal R ON)
+  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
+    KCAN.setFIFOFilter(filter_count, 0x1B4, STD);                                                                                   // Kombi status (corrected speed)                               Cycle time 100ms (terminal R ON)
     filter_count++;
   #endif
   #if DIM_DRL || FRONT_FOG_CORNER
@@ -119,7 +119,7 @@ void configure_can_controllers(void) {
   #endif
   KCAN.setFIFOFilter(filter_count, 0x2CA, STD);                                                                                     // Ambient temperature                                          Cycle time 1s.
   filter_count++;                                                                         
-  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
     KCAN.setFIFOFilter(filter_count, 0x2F7, STD);                                                                                   // Units from KOMBI                                             Sent 3x on Terminal R. Sent when changed.
     filter_count++;
   #endif
@@ -155,7 +155,7 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x3AF, STD);                                                                                   // PDC bus status.                                              Cycle time 2s (idle). Sent when changed.
     filter_count++;
   #endif
-  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || MSA_RVC
+  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
     KCAN.setFIFOFilter(filter_count, 0x3B0, STD);                                                                                   // Reverse gear status.                                         Cycle time 1s (idle).
     filter_count++;
   #endif
@@ -177,6 +177,10 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x648, STD);                                                                                   // VSW diagnostic responses.                                    Sent when response is requested.
     filter_count++;
   #endif
+  #if F_NIVI
+    KCAN.setFIFOFilter(filter_count, 0x650, STD);                                                                                   // SINE diagnostic responses.                                   Sent when response is requested.
+    filter_count++;
+  #endif
   #if DOOR_VOLUME || F_VSW01
     KCAN.setFIFOFilter(filter_count, 0x663, STD);                                                                                   // iDrive diagnostic responses.                                 Sent when response is requested.
     filter_count++;
@@ -190,6 +194,10 @@ void configure_can_controllers(void) {
   // PTCAN
   #if FRONT_FOG_CORNER
     PTCAN.setFIFOFilter(filter_count, 0xC8, STD);                                                                                   // Steering angle.                                              Cycle time 200ms.
+    filter_count++;
+  #endif
+  #if F_NIVI
+    PTCAN.setFIFOFilter(filter_count, 0x1A0, STD);                                                                                  // Speed.                                                       Cycle time 20ms.
     filter_count++;
   #endif
   PTCAN.setFIFOFilter(filter_count, 0x1D6, STD);                                                                                    // MFL button status.                                           Cycle time 1s (idle), 100ms (pressed)
@@ -208,10 +216,8 @@ void configure_can_controllers(void) {
     PTCAN.setFIFOFilter(filter_count, 0x332, STD);                                                                                  // Variable redline position from DME                           Cycle time 1s
     filter_count++;
   #endif
-  #if DEBUG_MODE
-    PTCAN.setFIFOFilter(filter_count, 0x3B4, STD);                                                                                  // Battery voltage from DME.
-    filter_count++;
-  #endif
+  PTCAN.setFIFOFilter(filter_count, 0x3B4, STD);                                                                                    // Battery voltage from DME.
+  filter_count++;
   #if SERVOTRONIC_SVT70
     PTCAN.setFIFOFilter(filter_count, 0x58E, STD);                                                                                  // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
     filter_count++;

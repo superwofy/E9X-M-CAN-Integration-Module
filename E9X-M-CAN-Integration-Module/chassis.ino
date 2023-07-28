@@ -1,4 +1,4 @@
-// Functions related to chassis (stability control, edc, steeting etc.) go here.
+// Functions related to chassis (stability control, edc, steering etc.) go here.
 
 
 void send_dsc_mode(uint8_t mode) {
@@ -37,7 +37,7 @@ void check_dsc_queue(void) {
 }
 
 
-#if LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
+#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
 void evaluate_reverse_gear_status(void) {
   if (k_msg.buf[0] == 0xFE) {
     if (!reverse_gear_status) {
@@ -68,7 +68,7 @@ void evaluate_reverse_gear_status(void) {
 #endif
 
 
-#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
+#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
 void evaluate_vehicle_moving(void) {
   if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0xD0) {
     if (vehicle_moving) {
@@ -79,16 +79,16 @@ void evaluate_vehicle_moving(void) {
     vehicle_moving = true;
     serial_log("Vehicle moving.");
   }
-  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
     if (vehicle_moving) {
       if (speed_mph) {
-       vehicle_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
+       indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
       } else {
-        vehicle_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 10;
+        indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 10;
       }
       #if HDC
         if (hdc_active) {
-          if (vehicle_speed > max_hdc_speed) {
+          if (indicated_speed > max_hdc_speed) {
             serial_log("HDC deactivated due to high vehicle speed.");
             hdc_active = false;
             kcan_write_msg(hdc_cc_deactivated_on_buf);
@@ -103,12 +103,76 @@ void evaluate_vehicle_moving(void) {
 #endif
 
 
+#if F_NIVI
+void send_f_road_inclination(void) {
+  f_road_inclination[2] = f_vehicle_angle;
+  f_road_inclination_buf = make_msg_buf(0x163, 8, f_road_inclination);
+  ptcan_write_msg(f_road_inclination_buf);
+}
+
+
+void send_f_longitudinal_acceleration(void) {
+  f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
+  f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
+                                                   : f_longitudinal_acceleration_alive_counter++;
+  f_longitudinal_acceleration[2] = longitudinal_acceleration;
+  f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
+  ptcan_write_msg(f_longitudinal_acceleration_buf);
+}
+
+
+void send_f_yaw_rate(void) {
+  f_yaw_rate[1] = 0xF << 4 | f_yaw_alive_counter;
+  f_yaw_alive_counter == 0xE ? f_yaw_alive_counter = 0 : f_yaw_alive_counter++;
+  f_yaw_rate[2] = yaw_rate;
+  f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
+  ptcan_write_msg(f_yaw_rate_buf);
+}
+
+
+void send_f_speed_status(void) {
+  uint8_t speed_multiplier = pt_msg.buf[1] & 0xF;
+  real_speed = ceil((pt_msg.buf[0] + speed_multiplier * 0xFF) * 0.1);                                                               // KM/h
+
+  vehicle_direction = pt_msg.buf[1] >> 4;
+  if (vehicle_direction == 8) {                                                                                                     // Not moving.
+    f_speed[4] = 0x81;
+  } else if (vehicle_direction == 9) {                                                                                              // Moving forward.
+    f_speed[4] = 0x91;
+  } else if (vehicle_direction == 0xA) {                                                                                            // Moving backwards.
+    f_speed[4] = 0xA1;
+  }                                                                                                                                 // QU_V_VEH_COG hardcoded to 1 (Signal valid).
+
+  f_speed[1] = 0xC << 4 | f_speed_alive_counter;
+  f_speed_alive_counter == 0xE ? f_speed_alive_counter = 0 : f_speed_alive_counter += 2;                                            // This message increments the alive counter by 2.
+  if (vehicle_direction == 9 || vehicle_direction == 0xA) {
+    uint16_t f_temp_speed = real_speed / 0.015625;
+    if (speed_mph) {
+      f_temp_speed = floor(f_temp_speed * 1.6);
+    }
+    f_speed[2] = f_temp_speed & 0xFF;
+    f_speed[3] = f_temp_speed >> 8;
+  } else {
+    f_speed[2] = f_speed[3] = 0;
+  }
+
+  f_speed_crc.restart();
+  for (uint8_t i = 1; i < 5; i++) {
+    f_speed_crc.add(f_speed[i]);
+  }
+  f_speed[0] = f_speed_crc.calc();
+  f_speed_buf = make_msg_buf(0x1A1, 5, f_speed);
+  ptcan_write_msg(f_speed_buf);
+}
+#endif
+
+
 #if HDC
 void evaluate_hdc_button(void) {
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!hdc_button_pressed) {
       if (!hdc_active) {
-        if (!cruise_control_status && vehicle_speed >= min_hdc_speed && vehicle_speed <= max_hdc_speed) {
+        if (!cruise_control_status && indicated_speed >= min_hdc_speed && indicated_speed <= max_hdc_speed) {
           ptcan_write_msg(set_hdc_cruise_control_buf);
           hdc_requested = true;                                                                                                     // Send request. "HDC" will only activate if cruise control conditions permit.
           serial_log("Sent HDC cruise control ON message.");
@@ -164,7 +228,7 @@ void evaluate_cruise_control_status(void) {
 #endif
 
 
-#if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+#if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
 void evaluate_speed_units(void) {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   #if HDC

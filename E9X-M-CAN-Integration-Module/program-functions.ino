@@ -154,8 +154,8 @@ void print_current_state(Stream &status_serial) {
   status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " RPM: %d", RPM / 4);
   status_serial.println(serial_debug_string);
-  #if HDC || ANTI_THEFT_SEQ
-    sprintf(serial_debug_string, " Speed: %d", vehicle_speed);
+  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
+    sprintf(serial_debug_string, " Indicated speed: %d %s", indicated_speed, speed_mph ? "MPH" : "KPH");
     status_serial.println(serial_debug_string);
   #endif
   #if HDC
@@ -179,10 +179,27 @@ void print_current_state(Stream &status_serial) {
   } else {
     status_serial.println(" DSC: Asleep");
   }
-  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
+  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
     sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
+    status_serial.println(serial_debug_string);
+  #endif
+  #if F_NIVI
+    if (vehicle_direction == 8) {
+      status_serial.println(" Direction: None");
+    } else if (vehicle_direction == 9) {
+      status_serial.println(" Direction: Forward");
+    } else if (vehicle_direction == 0xA) {
+      status_serial.println(" Direction: Backward");
+    } else {
+      status_serial.println(" Direction: Unknown");
+    }
+    sprintf(serial_debug_string, " Sine Tilt: %.1f Converted: %.1f deg", sine_tilt_angle, (f_vehicle_angle - 64.0) * 0.05);
+    status_serial.println(serial_debug_string);
+    sprintf(serial_debug_string, " Longitudinal acceleration: %.2f m/s^2", (longitudinal_acceleration - 65.0) * 0.002);
+    status_serial.println(serial_debug_string);
+    sprintf(serial_debug_string, " Yaw rate: %.2f deg/s", (yaw_rate - 163.84) * 0.005);
     status_serial.println(serial_debug_string);
   #endif
   #if ANTI_THEFT_SEQ
@@ -463,13 +480,10 @@ void reset_runtime_variables(void) {                                            
   #if FRM_HEADLIGHT_MODE
     kcan_write_msg(frm_ckm_komfort_buf);
   #endif
-  #if HDC || ANTI_THEFT_SEQ
-    vehicle_speed = 0;
-  #endif
   #if HDC
     cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
   #endif
-  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
+  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
     vehicle_moving = false;
   #endif
   #if FAKE_MSA
@@ -483,8 +497,11 @@ void reset_runtime_variables(void) {                                            
   #if ANTI_THEFT_SEQ
     reset_key_cc();
   #endif
-  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
+  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
     reverse_gear_status = false;
+  #endif
+  #if F_NIVI
+    sine_angle_requested = false;
   #endif
 }
 

@@ -52,7 +52,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     }
     f_terminal_status[1] = f_terminal_status[1] << 4 | f_terminal_status_alive_counter;                                             // Combine ST_VEH_CON and ALIV_COU_KL
     f_terminal_status_alive_counter == 0xF ? f_terminal_status_alive_counter = 0 : f_terminal_status_alive_counter++;
-    f_terminal_status[4] = 0xF << 4 | key_valid ? 3 : 1;                                                                            // Set ST_KL_KEY_VLD
+    f_terminal_status[4] = (0xF << 4) | key_valid ? 3 : 1;                                                                          // Set ST_KL_KEY_VLD
 
     f_terminal_status_crc.restart();
     for (uint8_t i = 1; i < 8; i++) {
@@ -255,7 +255,30 @@ void send_f_wakeup(void) {
     ptcan_write_msg(f_kombi_network_mgmt_buf);
   #endif
     //serial_log("Sent FXX wake-up message.");
+}
 
+
+void send_f_vehicle_mode(void) {
+  if (f_vehicle_mode_timer >= 5000) {
+    if (battery_voltage < 12.00 && battery_voltage > 11.60) {
+      f_vehicle_mode[2] = 0xF1;                                                                                                     // Energy OK.
+    } else if (battery_voltage < 11.60 && battery_voltage > 11.20) {
+      f_vehicle_mode[2] = 0xF2;                                                                                                     // Energy shortage.
+    } else if (battery_voltage < 11.20) {
+      f_vehicle_mode[2] = 0xF3;                                                                                                     // Energy severe shortage.
+    } else {
+      f_vehicle_mode[2] = 0xF0;                                                                                                     // Energy good.
+    }
+    f_vehicle_mode_buf = make_msg_buf(0x3A0, 8, f_vehicle_mode);
+    #if F_ZBE_WAKE || F_VSW01
+      kcan_write_msg(f_vehicle_mode_buf);
+    #endif
+    #if F_NIVI
+      ptcan_write_msg(f_vehicle_mode_buf);
+    #endif
+
+    f_vehicle_mode_timer = 0;
+  }
 }
 #endif
 
@@ -272,11 +295,21 @@ void send_zbe_acknowledge(void) {
 #endif
 
 
-#if DEBUG_MODE
+#if F_NIVI
+void send_f_brightness_status(void) {
+  if (f_outside_brightness_timer >= 200) {
+
+    f_outside_brightness_buf = make_msg_buf(0x2A5, 2, f_outside_brightness);
+    ptcan_write_msg(f_outside_brightness_buf);
+    f_outside_brightness_timer = 0;
+  }
+}
+#endif
+
+
 void evaluate_battery_voltage(void) {
   battery_voltage = (((pt_msg.buf[1] - 240 ) * 256.0) + pt_msg.buf[0]) / 68.0;
 }
-#endif
 
 
 void check_console_buttons(void) {

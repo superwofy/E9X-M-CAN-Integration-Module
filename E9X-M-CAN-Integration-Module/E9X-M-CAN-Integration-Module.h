@@ -3,10 +3,10 @@
 
 #include <FlexCAN_T4.h>
 #include <EEPROM.h>
-#include <CRC8.h>                                                                                                                   // https://github.com/RobTillaart/CRC
-#include <CRC16.h>
-#include "src/wdt4/Watchdog_t4.h"
-#include "src/queue/cppQueue.h"
+#include "src/CRC/src/CRC8.h"                                                                                                       // https://github.com/RobTillaart/CRC
+#include "src/CRC/src/CRC16.h"
+#include "src/wdt4/Watchdog_t4.h"                                                                                                   // https://github.com/tonton81/WDT_T4
+#include "src/queue/cppQueue.h"                                                                                                     // https://github.com/SMFSW/Queue
 #include "usb_dev.h"
 extern "C" uint32_t set_arm_clock(uint32_t frequency);
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;
@@ -14,7 +14,6 @@ FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> DCAN;
 WDT_T4<WDT1> wdt;
 const uint8_t wdt_timeout_sec = 10;
-CRC8 f_terminal_status_crc(0x1D, 0, 0xB1, false, false);                                                                            // j1850 POLY, 0 init and custom XOR. 0xB1 for ARB-ID 0x12F.
 CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                                                                                   // XMODEM
 
 
@@ -198,6 +197,7 @@ uint32_t cpu_speed_ide;
 bool key_valid = false, terminal_r = false, ignition = false,  vehicle_awake = false;
 bool terminal_50 = false, engine_running = false;
 unsigned long engine_runtime = 0;
+float battery_voltage = 0;
 elapsedMillis vehicle_awake_timer = 0, vehicle_awakened_time = 0;
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -333,13 +333,19 @@ CAN_message_t cc_gong_buf;
   bool pdc_beep_sent = false;
   cppQueue pdc_beep_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
-#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
+#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
   bool reverse_gear_status = false;
 #endif
 #if F_ZBE_WAKE || F_VSW01 || F_NIVI
   uint8_t f_terminal_status_alive_counter = 0;
-  uint8_t f_terminal_status[] = {0, 0, 0, 0xFF, 0, 0, 0x3F, 0xFF};
-  CAN_message_t f_kombi_network_mgmt_buf, f_terminal_status_buf;
+  uint8_t f_terminal_status[] = {0, 0, 0, 0xFF, 0, 0, 0x3F, 0xFF};                                                                  // These messages do not exist in BN2000.
+  uint8_t f_vehicle_mode[] = {0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0};
+  elapsedMillis f_vehicle_mode_timer = 5000;
+  CAN_message_t f_kombi_network_mgmt_buf, f_terminal_status_buf, f_vehicle_mode_buf;
+  CRC8 f_terminal_status_crc(0x1D, 0, 0xB1, false, false);                                                                          // SAE J1850 POLY, 0 init and XOR-OUT 0xB1 for ARB-ID 0x12F.
+#endif
+#if F_ZBE_WAKE
+  uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
 #endif
 #if F_VSW01
   bool vsw_initialized = false;
@@ -347,8 +353,30 @@ CAN_message_t cc_gong_buf;
   CAN_message_t vsw_switch_buf[6]; 
   // CAN_message_t idrive_menu_request_buf;
 #endif
-#if F_ZBE_WAKE
-  uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
+#if F_NIVI
+  float sine_tilt_angle = 0;
+  bool sine_angle_requested = false;
+  int f_vehicle_angle = 0x40;                                                                                                       // 0 deg.
+  uint8_t f_road_inclination[] = {0xFF, 0xFF, 0, 0x25, 0xFF, 0xFF, 0xFF, 0xFF};                                                     // Angle formula simlar to 56.1.2. Byte3 fixed to QU_AVL_LOGR_RW-Signal value is valid, permanent.
+  int longitudinal_acceleration = 0x41;                                                                                             // 0 m/s^2.
+  uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0x7D, 0xFF, 0xBF};                                                        // Similar to 55.0.2
+  uint8_t f_longitudinal_acceleration_alive_counter = 0;
+  int yaw_rate = 0xA4;                                                                                                              // Nearly 0 deg/s.
+  uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0x7F, 0xFF, 0x2F};                                                                         // M4 (VYAW_VEH) 56.0.2. Byte5 fixed 0x2F - Signal value is valid QU_VYAW_VEH
+  uint8_t f_yaw_alive_counter = 0;
+  uint16_t real_speed = 0;
+  uint8_t vehicle_direction = 0;
+  uint8_t f_speed[] = {0, 0, 0, 0, 0};                                                                                              // Message is the same format as Flexray 55.3.4.
+  uint8_t f_speed_alive_counter = 0;
+  uint8_t f_outside_brightness[] = {0xFE, 0xFE};                                                                                    // Daytime?
+  uint8_t f_data_powertrain_2_alive_counter = 0;
+  uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                      // Byte7 max rpm: 50 * 8C = 7000.
+  elapsedMillis sine_angle_request_timer = 500, f_outside_brightness_timer = 200, f_data_powertrain_2_timer = 1000;
+  CAN_message_t sine_angle_request_a_buf, sine_angle_request_b_buf;
+  CAN_message_t f_road_inclination_buf, f_longitudinal_acceleration_buf, f_yaw_rate_buf;
+  CAN_message_t f_speed_buf, f_outside_brightness_buf, f_data_powertrain_2_buf;
+  CRC8 f_speed_crc(0x1D, 0, 0xF, false, false);                                                                                     // SAE J1850 POLY, 0 init and XOR-OUT 0xF for ARB-ID 0x1A1.
+  CRC8 f_data_powertrain_2_crc(0x1D, 0, 4, false, false);                                                                           // SAE J1850 POLY, 0 init and XOR-OUT 4 for ARB-ID 0x3F9.
 #endif
 #if EXHAUST_FLAP_CONTROL
   bool exhaust_flap_sport = false, exhaust_flap_open = true;
@@ -397,8 +425,8 @@ float ambient_temperature_real = 87.5;
   elapsedMillis idrive_alive_timer = 0;
   bool idrive_died = false;
 #endif
-#if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
-  uint16_t vehicle_speed = 0;
+#if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
+  uint16_t indicated_speed = 0;
   bool speed_mph = false;
 #endif
 #if HDC
@@ -408,7 +436,7 @@ float ambient_temperature_real = 87.5;
   CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
   CAN_message_t hdc_cc_activated_off_buf, hdc_cc_unavailable_off_buf, hdc_cc_deactivated_off_buf;
 #endif
-#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
+#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
   bool vehicle_moving = false;
 #endif
 #if FAKE_MSA
@@ -428,7 +456,6 @@ float ambient_temperature_real = 87.5;
   cppQueue ihk_extra_buttons_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if DEBUG_MODE
-  float battery_voltage = 0;
   extern float tempmonGetTemp(void);
   char serial_debug_string[512];
   elapsedMillis debug_print_timer = 0;

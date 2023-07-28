@@ -157,6 +157,12 @@ void cache_can_message_buffers(void) {                                          
     // uint8_t idrive_menu_request[] = {};
     // idrive_menu_request_buf = make_msg_buf(0x6F1, 8, idrive_menu_request);
   #endif
+  #if F_NIVI
+    uint8_t sine_angle_request_a[] = {0x50, 2, 0x21, 5};
+    uint8_t sine_angle_request_b[] = {0x50, 0x30, 0, 2, 0xFF, 0xFF, 0xFF, 0xFF};
+    sine_angle_request_a_buf = make_msg_buf(0x6F1, 4, sine_angle_request_a);
+    sine_angle_request_b_buf = make_msg_buf(0x6F1, 8, sine_angle_request_b);
+  #endif
   #if LAUNCH_CONTROL_INDICATOR
     uint8_t lc_cc_on[] = {0x40, 0xBE, 1, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
     uint8_t lc_cc_off[] = {0x40, 0xBE, 1, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};

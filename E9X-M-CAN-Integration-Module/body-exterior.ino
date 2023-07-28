@@ -481,7 +481,7 @@ void evaluate_steering_angle_fog(void) {
     }
 
 
-    if (vehicle_speed >= (FOG_MAX_SPEED + FOG_MAX_SPEED_HYSTERESIS)) {
+    if (indicated_speed >= (FOG_MAX_SPEED + FOG_MAX_SPEED_HYSTERESIS)) {
       if (left_fog_on) {
         left_fog_soft(false);
         left_fog_on = false;
@@ -613,7 +613,7 @@ void evaluate_wiping_request(void) {
       if (wash_message_counter >= 2 || wipe_scheduled) {
         serial_log("Washing cycle started.");
         wiper_txq.flush();
-        m = {wipe_single_buf, millis() + 6000};
+        m = {wipe_single_buf, millis() + 7000};
         wiper_txq.push(&m);
         wipe_scheduled = true;                                                                                                      // If a quick pull is detected after the main one, re-schedule the wipe.
       } else {
@@ -660,3 +660,31 @@ void evaluate_ambient_temperature(void) {
     MILD_UNDERCLOCK = 450 * 1000000;
   }
 }
+
+
+#if F_NIVI
+void request_vehicle_tilt_angle() {
+  if (sine_angle_request_timer >= 500) {
+    kcan_write_msg(sine_angle_request_a_buf);
+    sine_angle_requested = true;
+    sine_angle_request_timer = 0;
+  }
+}
+
+
+void evaluate_vehicle_tilt_angle(void) {                                                                                            // Check with sine_65.prg JOB status_inclination_y_axis.
+  if (sine_angle_requested) {
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
+      sine_tilt_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
+      if (sine_tilt_angle > 64.0) {                                                                                                 // Boundary check since F message has resolution -64..64.
+        sine_tilt_angle = 64.0;
+      } else if (sine_tilt_angle < -64.0) {
+        sine_tilt_angle = -64.0;
+      }
+      f_vehicle_angle = floor((sine_tilt_angle / 0.05) + 64);
+      sine_angle_requested = false;
+      kcan_write_msg(sine_angle_request_b_buf);                                                                                     // Send this to complete the transaction.
+    }
+  }
+}
+#endif

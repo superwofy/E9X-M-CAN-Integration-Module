@@ -1,7 +1,6 @@
-// See program-notes.txt for details on how this sketch works.
-
-
 #include "E9X-M-CAN-Integration-Module.h"
+
+
 void setup() {
   if ( F_CPU_ACTUAL > (528 * 1000000)) {
     set_arm_clock(528 * 1000000);                                                                                                   // Prevent accidental overclocks. Remove if needed.
@@ -66,6 +65,13 @@ void loop() {
     #if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
       check_idrive_alive_monitor();
     #endif
+    #if F_ZBE_WAKE || F_VSW01 || F_NIVI
+      send_f_vehicle_mode();
+    #endif
+    #if F_NIVI
+      send_f_brightness_status();
+      send_f_powertrain_2_status();
+    #endif
   }
 
   if (ignition) {
@@ -87,6 +93,9 @@ void loop() {
     #endif
     #if EDC_CKM_FIX
       check_edc_ckm_queue();
+    #endif
+    #if F_NIVI
+      request_vehicle_tilt_angle();
     #endif
   } else {
     if (vehicle_awake) {
@@ -138,7 +147,7 @@ void loop() {
       }
       #endif
 
-      #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG
+      #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
       else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
         evaluate_vehicle_moving();
       }
@@ -192,7 +201,7 @@ void loop() {
       }
       #endif
 
-      #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC
+      #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
         evaluate_reverse_gear_status();
         #if REVERSE_BEEP
@@ -210,6 +219,12 @@ void loop() {
       else if (k_msg.id == 0x3CA) {                                                                                                 // Receive settings from iDrive.      
         update_mdrive_message_settings();
       }
+
+      #if F_NIVI
+      else if (k_msg.id == 0x650) {                                                                                                 // SINE is at address 0x50.
+        evaluate_vehicle_tilt_angle();
+      }
+      #endif
     }
 
     if (k_msg.id == 0x130) {                                                                                                        // Monitor terminal, clutch and key number.
@@ -254,7 +269,7 @@ void loop() {
     } 
     #endif
 
-    #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER
+    #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
     else if (k_msg.id == 0x2F7) {
       evaluate_speed_units();
     }
@@ -326,8 +341,21 @@ void loop() {
   
   if (vehicle_awake) {
     if (PTCAN.read(pt_msg)) {                                                                                                       // Read data.
+      if (pt_msg.id == 0x3B4) {                                                                                                     // Monitor battery voltage from DME.
+        evaluate_battery_voltage();
+      }
+
+      #if F_NIVI
+      else if (pt_msg.id == 0x1A0) {
+        send_f_road_inclination();
+        send_f_longitudinal_acceleration();
+        send_f_yaw_rate();
+        send_f_speed_status();
+      }
+      #endif
+
       #if ANTI_THEFT_SEQ                                                                                                            // We need this button data with ignition off too
-      if (pt_msg.id == 0x1D6) {                                                                                                     // A button was pressed on the steering wheel.
+      else if (pt_msg.id == 0x1D6) {                                                                                                // A button was pressed on the steering wheel.
         evaluate_m_mfl_button_press();
       }
       #endif
@@ -337,13 +365,7 @@ void loop() {
         evaluate_wiping_request();
       }
       #endif
-
-      #if DEBUG_MODE
-      else if (pt_msg.id == 0x3B4) {                                                                                                // Monitor battery voltage from DME.
-        evaluate_battery_voltage();
-      }
-      #endif
-      
+     
       if (ignition) {              
         if (pt_msg.id == 0x315) {                                                                                                   // Monitor EDC status message from the JBE.
           #if EDC_CKM_FIX
@@ -441,7 +463,9 @@ void loop() {
 
   #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2                                                                                      // Check if Dual Serial is set.
     if (debug_print_timer >= 500) {
-      print_current_state(SerialUSB1);                                                                                              // Print program status to the second Serial port.
+      if (millis() >= 7000) {                                                                                                       // Make sure the main serial port gets recognized first.
+        print_current_state(SerialUSB1);                                                                                            // Print program status to the second Serial port.
+      }
     }
   #endif
   #if DEBUG_MODE

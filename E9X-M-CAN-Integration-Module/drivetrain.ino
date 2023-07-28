@@ -164,8 +164,7 @@ void send_mdrive_message(void) {
   if (mdrive_message[0] > 0xEF) {                                                                                                   // Alive(first half of byte) must be between 0..E.
     mdrive_message[0] = 0;
   }
-  // Deactivated because no module actually checks this. Perhaps MDSC would?
-//  can_checksum_update(0x399, 6, mdrive_message);                                                                                  // Recalculate checksum.
+  can_checksum_update(0x399, 6, mdrive_message);                                                                                    // Recalculate checksum. No module seems to check this - MDSC?
   ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message));                                                                          // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
   mdrive_message_timer = 0;                                                                   
 }
@@ -361,8 +360,8 @@ void check_anti_theft_status(void) {
       #endif
 
       // This could be temporarily bypassed if the car is started and driven very very quickly?
-      // It will reactivate once vehicle_speed <= theft_max_speed. Think Speed (1994)...
-      if (!vehicle_moving || vehicle_speed <= theft_max_speed) {                                                                    // Make sure we don't cut this OFF while the car is in (quick) motion!!!
+      // It will reactivate once indicated_speed <= theft_max_speed. Think Speed (1994)...
+      if (!vehicle_moving || indicated_speed <= theft_max_speed) {                                                                  // Make sure we don't cut this OFF while the car is in (quick) motion!!!
         if (anti_theft_timer >= anti_theft_send_interval) {
           if (terminal_r) {
             if (engine_running) {                                                                                                   // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
@@ -488,4 +487,57 @@ void trip_alarm_after_stall(void) {
   }
 }
 #endif
+#endif
+
+
+#if F_NIVI
+void send_f_powertrain_2_status(void) {
+  if (f_data_powertrain_2_timer >= 1000) {
+
+    f_data_powertrain_2[1] = 1 << 4 | f_data_powertrain_2_alive_counter;                                                            // Combine ST_ECU_DT_PT_2 (0001 - State of normal operation) and ALIV_DT_PT_2.
+    f_data_powertrain_2_alive_counter == 0xE ? f_data_powertrain_2_alive_counter = 0 
+                                             : f_data_powertrain_2_alive_counter++;
+    if (engine_running) {
+      f_data_powertrain_2[2] = 2;
+      if (RPM > 4800) {
+        f_data_powertrain_2[3] = 0;                                                                                                 // Engine is idling.
+      } else {
+        f_data_powertrain_2[3] = 1 << 6;                                                                                            // Not idling.
+      }
+    } else {
+      f_data_powertrain_2[2] = 0x83;
+      f_data_powertrain_2[3] = 1 << 6;                                                                                              // Not idling.
+    }
+
+    f_data_powertrain_2[3] |= 1 << 4;                                                                                               // Engine start allowed.
+    if (clutch_pressed) {
+      f_data_powertrain_2[3] |= 1 << 2;
+    }
+    if (engine_running) {
+      f_data_powertrain_2[3] |= 1;
+    }
+    if (engine_coolant_warmed_up) {
+      f_data_powertrain_2[4] = 0x80;                                                                                                // Engine coolant temperature (C): temperature in hex - 48.
+      f_data_powertrain_2[5] = 0x80;                                                                                                // Engine oil temperature (C): temperature in hex - 48.
+    } else {
+      f_data_powertrain_2[4] = 0x3A;                                                                                                // 10 degrees.
+      f_data_powertrain_2[5] = 0x3A;
+    }
+    f_data_powertrain_2[6] = 0 | 2 << 4;                                                                                            // Engine start allowed.
+    if (reverse_gear_status) {
+      f_data_powertrain_2[6] |= 2;                                                                                                  // Gearbox in R.
+    } else {
+      f_data_powertrain_2[6] |= 1;                                                                                                  // Gearbox in N.
+    }
+
+    f_data_powertrain_2_crc.restart();
+    for (uint8_t i = 1; i < 8; i++) {
+      f_data_powertrain_2_crc.add(f_data_powertrain_2[i]);
+    }
+    f_data_powertrain_2[0] = f_data_powertrain_2_crc.calc();
+    f_data_powertrain_2_buf = make_msg_buf(0x3F9, 8, f_data_powertrain_2);
+    ptcan_write_msg(f_data_powertrain_2_buf);
+    f_data_powertrain_2_timer = 0;
+  }
+}
 #endif
