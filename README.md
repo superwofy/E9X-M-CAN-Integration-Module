@@ -37,9 +37,10 @@ I use it to:
 * Display Launch Control flag.
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
 * Fold/Un-fold mirrors when locking/unlocking.
+* Indicate when the trunk is opened by remote.
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
-	-> If engine is started without releasing this immobilizer, alarm will sound once engine stalls.
-	-> Can be disabled persistently by first deactivating then, holding the POWER and DSC OFF buttons for 10s.
+	* If engine is started without releasing this immobilizer, alarm will sound once engine stalls.
+	* Can be disabled persistently by first deactivating then, holding the POWER and DSC OFF buttons for 10s.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Audibly warn when reverse gear is engaged.
 * Audibly warn when the hood is opened.
@@ -55,7 +56,7 @@ I use it to:
 * Turn on heated seats below a set temperature.
 * Turn on heated steering below a set temperature.
 * Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding, etc.).
-	-> After uploading to Teensy, set the time manually/with ISTA to initialize the RTC to the same time.
+	* After uploading to Teensy, set the time in iDrive/ISTA to synchronize the RTC to the same time.
 * Close the exhaust flap before engine start to reduce start noise.
 * Reduce audio volume when opening doors. Restore when closing.
 * Dim corresponding front DRL when indicator is on.
@@ -110,7 +111,9 @@ MSD81 IKM0S binary modification
 
 Replace 15 03 (0x315 represented in Little Endian) to stop MSD81 from reacting to Vehicle Mode changes (triggered by JBBF through EDC button)
 This also allows state_spt (throttle map) to be controlled independently from the main "MDrive" with the console switch.
-Re-calculate checksum at 0x80304 using csprogram-windows.exe
+Re-calculate checksum at 0x80304 using csprogram-windows.exe. Alternatively, this XDF contains definitions for the CAN IDs: https://github.com/superwofy/Superwofy-IKM0S-XDF.
+
+
 
 
 [MAP]

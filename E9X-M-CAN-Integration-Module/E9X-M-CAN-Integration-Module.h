@@ -58,6 +58,7 @@ CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                               
 #if AUTO_MIRROR_FOLD
 #define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
 #endif
+#define INDICATE_TRUNK_OPENED 1                                                                                                     // Flash hazards when remote opens trunk.
 #define ANTI_THEFT_SEQ 1                                                                                                            // Disable fuel pump until the steering wheel M button is pressed a number of times.
 #if __has_include ("secrets.h")                                                                                                     // Optionally, create this file to store sensitive settings.
   #include "secrets.h"
@@ -80,10 +81,10 @@ CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                               
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack this indicator.
 #define FRONT_FOG_CORNER 1                                                                                                          // Turn ON/OFF corresponding fog light when turning.
 #if FRONT_FOG_CORNER
-const int8_t FOG_CORNER_STEERTING_ANGLE = 80;                                                                                       // Steering angle at which to activate fog corner function.
-const int8_t STEERTING_ANGLE_HYSTERESIS = 15;
+const int8_t FOG_CORNER_STEERTING_ANGLE = 87;                                                                                       // Steering angle at which to activate fog corner function.
+const int8_t STEERTING_ANGLE_HYSTERESIS = 48;
 const int8_t FOG_CORNER_STEERTING_ANGLE_INDICATORS = 45;
-const int8_t STEERTING_ANGLE_HYSTERESIS_INDICATORS = 10;
+const int8_t STEERTING_ANGLE_HYSTERESIS_INDICATORS = 15;
 #endif
 #define DIM_DRL 1                                                                                                                   // Dims DLR ON the side that the indicator is ON.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
@@ -162,19 +163,24 @@ unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 #endif
 #ifndef F_ZBE_WAKE
   #define F_ZBE_WAKE 0                                                                                                              // Enable/disable FXX CIC ZBE wakeup functions. Do not use with an EXX ZBE.
+  // *Should* work with:
+  // 6582 9267955 - 4-pin MEDIA button. **Tested - controller build date 19.04.13
+  // 6131 9253944 - 4-pin CD button
+  // 6582 9206444 - 10-pin CD button
+  // 6582 9212449 - 10-pin CD button
 #endif
 #ifndef F_VSW01
-  #define F_VSW01 0                                                                                                                 // Enable/disable F01 Video Switch diagnosis and wakeup.
+  #define F_VSW01 0                                                                                                                 // Enable/disable F01 Video Switch diagnosis and wakeup. Tested with 9201542.
 #endif
 #ifndef F_NIVI
-  #define F_NIVI 0                                                                                                                  // Enable/disable FXX NiVi diagnosis and wakeup.
+  #define F_NIVI 0                                                                                                                  // Enable/disable FXX NiVi diagnosis, wakeup and message BN2000->BN2010 translation.
 #endif
 
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #if !USB_DISABLE                                                                                                                    // Not needed if startup.c is modified.
-  #if AUTO_MIRROR_FOLD
+  #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
     extern "C" void startup_middle_hook(void);
     extern "C" volatile uint32_t systick_millis_count;
     void startup_middle_hook(void) {
@@ -195,7 +201,7 @@ delayed_can_tx_msg delayed_tx, m;
 unsigned long time_now;
 uint32_t cpu_speed_ide;
 bool key_valid = false, terminal_r = false, ignition = false,  vehicle_awake = false;
-bool terminal_50 = false, engine_running = false;
+bool terminal_50 = false, engine_running = false, clutch_pressed = false;
 unsigned long engine_runtime = 0;
 float battery_voltage = 0;
 elapsedMillis vehicle_awake_timer = 0, vehicle_awakened_time = 0;
@@ -223,8 +229,9 @@ bool holding_dsc_off_console = false;
 elapsedMillis mdrive_message_timer = 0;
 uint8_t mfl_pressed_count = 0;
 CAN_message_t idrive_mdrive_settings_a_buf, idrive_mdrive_settings_b_buf;
-elapsedMillis power_button_debounce_timer = 0, dsc_off_button_debounce_timer = 0, dsc_off_button_hold_timer = 0;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
+elapsedMillis power_button_debounce_timer = power_debounce_time_ms;
+elapsedMillis dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
 bool ignore_m_press = false, ignore_m_hold = false;
 uint8_t clock_mode = 0;
 float last_cpu_temp = 0, max_cpu_temp = 0;
@@ -249,7 +256,7 @@ CAN_message_t cc_gong_buf;
   uint8_t last_var_rpm_can = 0;
   uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // byte 5: shiftlights always on
 #else
-  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // byte 5: shiftlights always on
+  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // byte 5: shiftlights always off
 #endif
 #if NEEDLE_SWEEP
   CAN_message_t speedo_needle_max_buf, speedo_needle_min_buf, speedo_needle_release_buf;
@@ -270,11 +277,16 @@ CAN_message_t cc_gong_buf;
   bool dipped_beam_status = false, left_fog_on = false, right_fog_on = false;
   int16_t steering_angle = 0;
   CAN_message_t front_left_fog_on_a_buf, front_left_fog_on_b_buf, front_left_fog_on_c_buf, front_left_fog_on_d_buf;
-  CAN_message_t front_left_fog_on_e_buf, front_left_fog_on_f_buf, front_left_fog_on_g_buf, front_left_fog_on_h_buf;
-  CAN_message_t front_right_fog_on_a_buf, front_right_fog_on_b_buf, front_right_fog_on_c_buf, front_right_fog_on_d_buf;
-  CAN_message_t front_right_fog_on_e_buf, front_right_fog_on_f_buf, front_right_fog_on_g_buf, front_right_fog_on_h_buf;
+  CAN_message_t front_left_fog_on_a_softer_buf, front_left_fog_on_b_softer_buf, front_left_fog_on_c_softer_buf;
+  CAN_message_t front_left_fog_on_d_softer_buf, front_left_fog_on_e_softer_buf, front_left_fog_on_f_softer_buf;
+  CAN_message_t front_left_fog_on_g_softer_buf, front_left_fog_on_h_softer_buf;
+  CAN_message_t front_right_fog_on_a_softer_buf, front_right_fog_on_b_softer_buf, front_right_fog_on_c_softer_buf;
+  CAN_message_t front_right_fog_on_d_softer_buf, front_right_fog_on_e_softer_buf, front_right_fog_on_f_softer_buf;
+  CAN_message_t front_right_fog_on_g_softer_buf, front_right_fog_on_h_softer_buf;
+  CAN_message_t front_right_fog_on_a_buf, front_right_fog_on_b_buf, front_right_fog_on_c_buf, front_right_fog_on_d_buf;  
   CAN_message_t front_left_fog_off_buf, front_right_fog_off_buf, front_fogs_all_off_buf;
-  cppQueue fog_corner_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
+  cppQueue fog_corner_left_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+  cppQueue fog_corner_right_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if DIM_DRL
   unsigned long last_drl_action_timer = 0;
@@ -302,13 +314,18 @@ CAN_message_t cc_gong_buf;
 #if AUTO_MIRROR_FOLD
   bool mirrors_folded, frm_status_requested = false;
   bool lock_button_pressed  = false, unlock_button_pressed = false;
-  uint8_t last_lock_status_can = 0;
   CAN_message_t frm_status_request_a_buf, frm_status_request_b_buf;
   CAN_message_t frm_toggle_fold_mirror_a_buf, frm_toggle_fold_mirror_b_buf;
   cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
+#if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
+  uint8_t last_lock_status_can = 0;
+#endif
 #if UNFOLD_WITH_DOOR
   bool unfold_with_door_open = false;
+#endif
+#if INDICATE_TRUNK_OPENED
+  CAN_message_t flash_hazards_buf;
 #endif
 #if ANTI_THEFT_SEQ
   bool anti_theft_released = false, anti_theft_persist = true, holding_both_console = false;
@@ -335,6 +352,9 @@ CAN_message_t cc_gong_buf;
 #endif
 #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
   bool reverse_gear_status = false;
+#endif
+#if FRONT_FOG_CORNER || F_NIVI
+  bool rls_headlights_requested = false;
 #endif
 #if F_ZBE_WAKE || F_VSW01 || F_NIVI
   uint8_t f_terminal_status_alive_counter = 0;
@@ -368,7 +388,8 @@ CAN_message_t cc_gong_buf;
   uint8_t vehicle_direction = 0;
   uint8_t f_speed[] = {0, 0, 0, 0, 0};                                                                                              // Message is the same format as Flexray 55.3.4.
   uint8_t f_speed_alive_counter = 0;
-  uint8_t f_outside_brightness[] = {0xFE, 0xFE};                                                                                    // Daytime?
+  uint8_t rls_brightness = 0xFE, rls_time_of_day = 0;
+  uint8_t f_outside_brightness[] = {0xFE, 0xFE};                                                                                    // Daytime?. The two bytes may represent the two photosensors (driver's/passenger's side in FXX).
   uint8_t f_data_powertrain_2_alive_counter = 0;
   uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                      // Byte7 max rpm: 50 * 8C = 7000.
   elapsedMillis sine_angle_request_timer = 500, f_outside_brightness_timer = 200, f_data_powertrain_2_timer = 1000;
@@ -385,7 +406,7 @@ CAN_message_t cc_gong_buf;
 #endif
 #if LAUNCH_CONTROL_INDICATOR
   CAN_message_t lc_cc_on_buf, lc_cc_off_buf;
-  bool lc_cc_active = false, mdm_with_lc = false, clutch_pressed = false;
+  bool lc_cc_active = false, mdm_with_lc = false;
 #endif
 float ambient_temperature_real = 87.5;
 #if AUTO_SEAT_HEATING
@@ -407,14 +428,14 @@ float ambient_temperature_real = 87.5;
 #endif
 #if RTC
   #include <TimeLib.h>
-  CAN_message_t set_time_cc_buf;
-  bool rtc_valid = true;
+  CAN_message_t set_time_cc_buf, set_time_cc_off_buf;
+  bool rtc_valid = true, pc_time_incoming = false;
 #endif
 #if DOOR_VOLUME
-  bool volume_reduced = false;
-  bool default_volume_sent = false;
-  uint8_t volume_restore_offset = 0, volume_changed_to;
-  CAN_message_t vol_request_buf, default_vol_set_buf, door_open_cc_off_buf;
+  bool volume_reduced = false, initial_volume_set = false;
+  uint8_t volume_restore_offset = 0, volume_changed_to, peristent_volume = 0;
+  elapsedMillis volume_request_timer = 5000;
+  CAN_message_t vol_request_buf, door_open_cc_off_buf;
   cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
@@ -458,7 +479,7 @@ float ambient_temperature_real = 87.5;
 #if DEBUG_MODE
   extern float tempmonGetTemp(void);
   char serial_debug_string[512];
-  elapsedMillis debug_print_timer = 0;
+  elapsedMillis debug_print_timer = 500;
   unsigned long max_loop_timer = 0, loop_timer = 0, setup_time;
   uint32_t kcan_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
   bool serial_commands_unlocked = false;
@@ -469,4 +490,4 @@ float ambient_temperature_real = 87.5;
   #endif
 #endif
 bool diag_transmit = true;
-elapsedMillis diag_deactivate_timer = 0;
+elapsedMillis diag_deactivate_timer;

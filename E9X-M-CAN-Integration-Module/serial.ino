@@ -60,7 +60,7 @@ void serial_interpreter(void) {
     }
     else if (cmd == "reset_eeprom") {
       for (uint8_t i = 0; i < 1024; i++) {
-        EEPROM.update(i, 0xFF);
+        EEPROM.update(i, 0);
       }
       serial_log("  Serial: Reset EEPROM values. Rebooting");
       delay(1000);

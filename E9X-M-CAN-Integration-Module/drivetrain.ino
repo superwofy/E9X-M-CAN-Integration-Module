@@ -130,7 +130,11 @@ void evaluate_m_mfl_button_press(void) {
 
     #if ANTI_THEFT_SEQ
     if (!anti_theft_released) {
-      uint8_t release_counter = alarm_active ? ANTI_THEFT_SEQ_ALARM_NUMBER - 1 : ANTI_THEFT_SEQ_NUMBER - 1;
+      #if ANTI_THEFT_SEQ_ALARM
+        uint8_t release_counter = alarm_active ? ANTI_THEFT_SEQ_ALARM_NUMBER - 1 : ANTI_THEFT_SEQ_NUMBER - 1;
+      #else
+        uint8_t release_counter = ANTI_THEFT_SEQ_NUMBER - 1;
+      #endif
 
       if (anti_theft_pressed_count < release_counter) {
         anti_theft_pressed_count++;
@@ -372,7 +376,7 @@ void check_anti_theft_status(void) {
             // Visual indicators with Terminal R, 15.
             kcan_write_msg(key_cc_on_buf);                                                                                          // Keep sending this message so that CC is ON until disabled.
             #if ANTI_THEFT_SEQ_ALARM
-              if (led_message_counter > 58) {                                                                                       // Send LED message every 118s to keep it ON.
+              if (led_message_counter > 56) {                                                                                       // Send LED message every 112s to keep it ON.
                 kcan_write_msg(alarm_led_on_buf);
                 alarm_led = true;
                 led_message_counter = 0;
@@ -453,6 +457,8 @@ void release_anti_theft(void) {
     if (alarm_led) {
       m = {alarm_led_off_buf, time_now + 100};                                                                                      // KWP to DWA.
       anti_theft_txq.push(&m);
+      m = {alarm_led_off_buf, time_now + 300};
+      anti_theft_txq.push(&m);
       alarm_led = false;
     }
   #endif
@@ -516,13 +522,20 @@ void send_f_powertrain_2_status(void) {
     if (engine_running) {
       f_data_powertrain_2[3] |= 1;
     }
-    if (engine_coolant_warmed_up) {
-      f_data_powertrain_2[4] = 0x80;                                                                                                // Engine coolant temperature (C): temperature in hex - 48.
-      f_data_powertrain_2[5] = 0x80;                                                                                                // Engine oil temperature (C): temperature in hex - 48.
-    } else {
-      f_data_powertrain_2[4] = 0x3A;                                                                                                // 10 degrees.
-      f_data_powertrain_2[5] = 0x3A;
-    }
+
+    #if CONTROL_SHIFTLIGHTS
+      if (engine_coolant_warmed_up) {
+        f_data_powertrain_2[4] = 0x80;                                                                                              // Engine coolant temperature (C): temperature in hex - 48.
+        f_data_powertrain_2[5] = 0x80;                                                                                              // Engine oil temperature (C): temperature in hex - 48.
+      } else {
+        f_data_powertrain_2[4] = 0x3A;                                                                                              // 10 degrees.
+        f_data_powertrain_2[5] = 0x3A;
+      }
+    #else
+      f_data_powertrain_2[4] = 0x80;                                                                                                // Hardcode if this status is not available.
+      f_data_powertrain_2[5] = 0x80;
+    #endif
+
     f_data_powertrain_2[6] = 0 | 2 << 4;                                                                                            // Engine start allowed.
     if (reverse_gear_status) {
       f_data_powertrain_2[6] |= 2;                                                                                                  // Gearbox in R.

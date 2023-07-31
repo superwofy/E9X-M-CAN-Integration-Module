@@ -2,11 +2,6 @@
 
 
 void configure_IO(void) {
-  #if DEBUG_MODE
-    #if !AUTO_MIRROR_FOLD                                                                                                           // This delay causes the mirrors to unfold slower on init.
-      while (!Serial && millis() <= 5000);
-    #endif
-  #endif
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
   digitalWrite(PTCAN_STBY_PIN, HIGH);
   pinMode(DCAN_STBY_PIN, OUTPUT);
@@ -109,7 +104,7 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x232, STD);                                                                                   // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change).
     filter_count++;
   #endif
-  #if AUTO_MIRROR_FOLD || CKM
+  #if AUTO_MIRROR_FOLD || CKM || INDICATE_TRUNK_OPENED
     KCAN.setFIFOFilter(filter_count, 0x23A, STD);                                                                                   // Remote button and number sent by CAS                         Sent 3x when changed.
     filter_count++;
   #endif
@@ -133,6 +128,10 @@ void configure_can_controllers(void) {
   #endif
   #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ || HOOD_OPEN_GONG
     KCAN.setFIFOFilter(filter_count, 0x2FC, STD);                                                                                   // Door, hood status sent by CAS.                               Cycle time 5s. Sent when changed.
+    filter_count++;
+  #endif
+  #if FRONT_FOG_CORNER || F_NIVI
+    KCAN.setFIFOFilter(filter_count, 0x314, STD);                                                                                   // RLS light status.                                            Cycle time 3s. Sent when changed.
     filter_count++;
   #endif
   #if MSA_RVC
@@ -391,7 +390,6 @@ void disable_diag_transmit_jobs(void) {
       volume_changed_to = 0;
       volume_restore_offset = 0;
     #endif
-    digitalWrite(DCAN_STBY_PIN, HIGH);                                                                                              // Also deactivate the DCAN transceiver as it will not be used.
   }
 }
 
@@ -401,7 +399,6 @@ void check_diag_transmit_status(void) {
     if (diag_deactivate_timer >= 60000) {                                                                                           // Re-activate after period of no DCAN requests.
       diag_transmit = true;
       serial_log("Resuming diagnostic jobs after timeout.");
-      digitalWrite(DCAN_STBY_PIN, LOW);
     }
   }
 }

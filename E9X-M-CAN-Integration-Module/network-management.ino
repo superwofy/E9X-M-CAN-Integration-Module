@@ -56,6 +56,10 @@ void cache_can_message_buffers(void) {                                          
     frm_status_request_a_buf = make_msg_buf(0x6F1, 8, frm_status_request_a);
     frm_status_request_b_buf = make_msg_buf(0x6F1, 8, frm_status_request_b);
   #endif
+  #if INDICATE_TRUNK_OPENED
+    uint8_t flash_hazards[] = {0, 0xF1};
+    flash_hazards_buf = make_msg_buf(0x2B4, 2, flash_hazards);
+  #endif
   #if ANTI_THEFT_SEQ
     #if ANTI_THEFT_SEQ_ALARM
       uint8_t alarm_siren_on[] = {0x41, 3, 0x31, 4, 2, 0, 0, 0};
@@ -93,40 +97,56 @@ void cache_can_message_buffers(void) {                                          
   #if FRONT_FOG_CORNER
     uint8_t front_left_fog_on_a[] = {0x72, 6, 0x30, 3, 7, 6, 0, 8};                                                                 // Soft on/off buffers.
     uint8_t front_left_fog_on_b[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x16};
-    uint8_t front_left_fog_on_c[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x24};
-    uint8_t front_left_fog_on_d[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x32};
-    uint8_t front_left_fog_on_e[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x40};
-    uint8_t front_left_fog_on_f[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x48};
-    uint8_t front_left_fog_on_g[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x56};
-    uint8_t front_left_fog_on_h[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x64};
+    uint8_t front_left_fog_on_c[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x32};
+    uint8_t front_left_fog_on_d[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x64};
+    uint8_t front_left_fog_on_a_softer[] = {0x72, 6, 0x30, 3, 7, 6, 0, 8};
+    uint8_t front_left_fog_on_b_softer[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x16};
+    uint8_t front_left_fog_on_c_softer[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x24};
+    uint8_t front_left_fog_on_d_softer[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x32};
+    uint8_t front_left_fog_on_e_softer[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x40};
+    uint8_t front_left_fog_on_f_softer[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x48};
+    uint8_t front_left_fog_on_g_softer[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x56};
+    uint8_t front_left_fog_on_h_softer[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x64};
     uint8_t front_left_fog_off[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0};
     uint8_t front_right_fog_on_a[] = {0x72, 6, 0x30, 3, 7, 7, 0, 8};
     uint8_t front_right_fog_on_b[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x16};
-    uint8_t front_right_fog_on_c[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x24};
-    uint8_t front_right_fog_on_d[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x32};
-    uint8_t front_right_fog_on_e[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x40};
-    uint8_t front_right_fog_on_f[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x48};
-    uint8_t front_right_fog_on_g[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x56};
-    uint8_t front_right_fog_on_h[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x64};
+    uint8_t front_right_fog_on_c[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x32};
+    uint8_t front_right_fog_on_d[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x64};
+    uint8_t front_right_fog_on_a_softer[] = {0x72, 6, 0x30, 3, 7, 7, 0, 8};
+    uint8_t front_right_fog_on_b_softer[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x16};
+    uint8_t front_right_fog_on_c_softer[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x24};
+    uint8_t front_right_fog_on_d_softer[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x32};
+    uint8_t front_right_fog_on_e_softer[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x40};
+    uint8_t front_right_fog_on_f_softer[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x48};
+    uint8_t front_right_fog_on_g_softer[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x56};
+    uint8_t front_right_fog_on_h_softer[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0x64};
     uint8_t front_right_fog_off[] = {0x72, 6, 0x30, 3, 7, 7, 0, 0};
     uint8_t front_fogs_all_off[] = {0x72, 6, 0x30, 0x29, 7, 0, 1, 2};
     front_left_fog_on_a_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_a);
     front_left_fog_on_b_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_b);
     front_left_fog_on_c_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_c);
     front_left_fog_on_d_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_d);
-    front_left_fog_on_e_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_e);
-    front_left_fog_on_f_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_f);
-    front_left_fog_on_g_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_g);
-    front_left_fog_on_h_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_h);
+    front_left_fog_on_a_softer_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_a_softer);
+    front_left_fog_on_b_softer_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_b_softer);
+    front_left_fog_on_c_softer_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_c_softer);
+    front_left_fog_on_d_softer_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_d_softer);
+    front_left_fog_on_e_softer_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_e_softer);
+    front_left_fog_on_f_softer_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_f_softer);
+    front_left_fog_on_g_softer_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_g_softer);
+    front_left_fog_on_h_softer_buf = make_msg_buf(0x6F1, 8, front_left_fog_on_h_softer);
     front_left_fog_off_buf = make_msg_buf(0x6F1, 8, front_left_fog_off);
     front_right_fog_on_a_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_a);
     front_right_fog_on_b_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_b);
     front_right_fog_on_c_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_c);
     front_right_fog_on_d_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_d);
-    front_right_fog_on_e_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_e);
-    front_right_fog_on_f_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_f);
-    front_right_fog_on_g_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_g);
-    front_right_fog_on_h_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_h);
+    front_right_fog_on_a_softer_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_a_softer);
+    front_right_fog_on_b_softer_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_b_softer);
+    front_right_fog_on_c_softer_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_c_softer);
+    front_right_fog_on_d_softer_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_d_softer);
+    front_right_fog_on_e_softer_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_e_softer);
+    front_right_fog_on_f_softer_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_f_softer);
+    front_right_fog_on_g_softer_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_g_softer);
+    front_right_fog_on_h_softer_buf = make_msg_buf(0x6F1, 8, front_right_fog_on_h_softer);
     front_right_fog_off_buf = make_msg_buf(0x6F1, 8, front_right_fog_off);
     front_fogs_all_off_buf = make_msg_buf(0x6F1, 8, front_fogs_all_off);                                                            // This job only works with ignition ON.
   #endif
@@ -150,7 +170,7 @@ void cache_can_message_buffers(void) {                                          
   #endif
   #if F_VSW01
     uint8_t vsw_switch[] = {0, 0, 0, 0, 0, 0, 0, 0xF1};
-    for (uint8_t i = 0; i < 6; i++) {
+    for (uint8_t i = 0; i < 6; i++) {                                                                                               // Typical VSWs have 5 outputs. The PCB could have 7 inputs if components were soldered.
       vsw_switch[0] = i;
       vsw_switch_buf[i] = make_msg_buf(0x2FB, 8, vsw_switch);
     }
@@ -181,7 +201,9 @@ void cache_can_message_buffers(void) {                                          
   #endif
   #if RTC
     uint8_t set_time_cc[] = {0x40, 0xA7, 0, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
-    set_time_cc_buf = make_msg_buf(0x5E0, 8, set_time_cc);;
+    uint8_t set_time_cc_off[] = {0x40, 0xA7, 0, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
+    set_time_cc_buf = make_msg_buf(0x5E0, 8, set_time_cc);
+    set_time_cc_off_buf = make_msg_buf(0x5E0, 8, set_time_cc_off);
   #endif
   #if CONTROL_SHIFTLIGHTS
     uint8_t shiftlights_start[] = {0x86, 0x3E};
@@ -227,10 +249,8 @@ void cache_can_message_buffers(void) {                                          
   #endif
   #if DOOR_VOLUME
     uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}; 
-    uint8_t default_vol_set[] = {0x63, 2, 0x31, 0x25, 0, 0, 0, 0};
     uint8_t door_open_cc_off[] = {0x40, 0x4F, 1, 0x28, 0xFF, 0xFF, 0xFF, 0xFF};
     vol_request_buf = make_msg_buf(0x6F1, 8, vol_request);
-    default_vol_set_buf = make_msg_buf(0x6F1, 8, default_vol_set);
     door_open_cc_off_buf = make_msg_buf(0x5C0, 8, door_open_cc_off);
   #endif
   #if HDC
@@ -311,10 +331,14 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 void ptcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
-    if ((diagnose_svt && msg.buf[0] == 0xE) || (msg.buf[2] == 0x30 && msg.buf[3] == 6 && msg.buf[4] == 4)){                         // Exception for SVT diagnosis and EKP disable.
-    } else {
+    #if ANTI_THEFT_SEQ
+      if (msg.buf[2] == 0x30 && msg.buf[3] == 6 && msg.buf[4] == 4) {                                                                  // Exception for EKP disable.
+      } else {
+        return;
+      }
+    #else
       return;
-    }
+    #endif
   }
   #if DEBUG_MODE
     uint8_t result;
@@ -330,7 +354,6 @@ void ptcan_write_msg(const CAN_message_t &msg) {
 }
 
 
-#if SERVOTRONIC_SVT70
 void dcan_write_msg(const CAN_message_t &msg) {
   #if DEBUG_MODE
     uint8_t result;
@@ -354,17 +377,13 @@ void forward_dcan_to_ptcan(void) {
 void forward_ptcan_to_dcan(void) {
   dcan_write_msg(pt_msg);
 }
-#endif
 
 
-#if F_VSW01
-void forward_kcan_to_dcan() {
+void forward_kcan_to_dcan(void) {
   dcan_write_msg(k_msg);
 }
 
 
-void forward_dcan_to_kcan() {
+void forward_dcan_to_kcan(void) {
   kcan_write_msg(d_msg);
 }
-#endif
-

@@ -45,9 +45,8 @@ void evaluate_reverse_gear_status(void) {
       serial_log("Reverse gear ON.");
       #if FRONT_FOG_CORNER
         if (left_fog_on || right_fog_on) {
-          serial_log("Deactivating corner fogs with reverse ON.");
-          m = {front_fogs_all_off_buf, millis() + 100};
-          fog_corner_txq.push(&m);
+          serial_log("Resetting corner fogs with reverse ON.");
+          kcan_write_msg(front_fogs_all_off_buf);
           left_fog_on = right_fog_on = false;
         }
       #endif
@@ -62,6 +61,11 @@ void evaluate_reverse_gear_status(void) {
     if (reverse_gear_status) {
       reverse_gear_status = false;
       serial_log("Reverse gear OFF.");
+      if (left_fog_on || right_fog_on) {
+        serial_log("Resetting corner fogs with reverse OFF.");
+        kcan_write_msg(front_fogs_all_off_buf);
+        left_fog_on = right_fog_on = false;
+      }
     }
   }
 }

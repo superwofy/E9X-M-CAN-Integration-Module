@@ -113,7 +113,7 @@ void evaluate_door_status(void) {
           serial_log("Passenger's door open.");
         #endif
         #if DOOR_VOLUME
-          send_volume_request();
+          send_volume_request_door();
         #endif
       }
     } else if (k_msg.buf[1] == 4) {
@@ -131,7 +131,7 @@ void evaluate_door_status(void) {
           #endif
         #endif
         #if DOOR_VOLUME
-          send_volume_request();
+          send_volume_request_door();
         #endif
       }
     } else if (k_msg.buf[1] == 5) {
@@ -152,7 +152,7 @@ void evaluate_door_status(void) {
           serial_log("Driver's door closed.");
         #endif
         #if DOOR_VOLUME
-          send_volume_request();
+          send_volume_request_door();
         #endif
       }
       if (right_door_open) {
@@ -163,7 +163,7 @@ void evaluate_door_status(void) {
           serial_log("Passenger's door closed.");
         #endif
         #if DOOR_VOLUME
-          send_volume_request();
+          send_volume_request_door();
         #endif
       }
     } 
@@ -289,7 +289,7 @@ void check_key_changed(void) {
 #endif
 
 
-#if AUTO_MIRROR_FOLD
+#if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
 void evaluate_remote_button(void) {
   if (!engine_running) {                                                                                                            // Ignore if locking car while running.
     if (k_msg.buf[2] != last_lock_status_can) {                                                                                     // Lock/Unlock messages are sent many times. Should only react to the first.
@@ -310,6 +310,8 @@ void evaluate_remote_button(void) {
                 if (alarm_led) {
                   m = {alarm_led_off_buf, time_now + 100};                                                                          // Release control of the LED so that alarm can control it.
                   anti_theft_txq.push(&m);
+                  m = {alarm_led_off_buf, time_now + 300};
+                  anti_theft_txq.push(&m);
                   alarm_led = false;
                   lock_led = true;
                   led_message_counter = 60;                                                                                         // Make sure we're ready once Terminal R cycles.
@@ -318,7 +320,7 @@ void evaluate_remote_button(void) {
               #endif
             #endif
           }
-        } 
+        }
         
         #if AUTO_MIRROR_FOLD
         else if (k_msg.buf[2] == 1) {
@@ -333,6 +335,15 @@ void evaluate_remote_button(void) {
         } 
         #endif
 
+        #if INDICATE_TRUNK_OPENED
+        else if (k_msg.buf[2] == 0x10) {
+          if (!terminal_r) {                                                                                                        // Driver not in the car.
+            serial_log("Remote trunl button pressed. Flashing hazards.");
+            kcan_write_msg(flash_hazards_buf);
+          }
+        }
+        #endif
+
         else if (k_msg.buf[2] == 0) {
           serial_log("Remote buttons released.");
         }
@@ -341,8 +352,10 @@ void evaluate_remote_button(void) {
     }
   }
 }
+#endif
 
 
+#if AUTO_MIRROR_FOLD
 void evaluate_mirror_fold_status(void) {
   if (frm_status_requested) {                                                                                                       // Make sure the request came from this module.
     if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {
@@ -415,11 +428,19 @@ void check_mirror_fold_queue(void) {
 
 #if FRONT_FOG_CORNER
 void check_fog_corner_queue(void) {
-  if (!fog_corner_txq.isEmpty()) {
-    fog_corner_txq.peek(&delayed_tx);
+  if (!fog_corner_left_txq.isEmpty()) {
+    fog_corner_left_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
-      fog_corner_txq.drop();
+      fog_corner_left_txq.drop();
+      last_fog_action_timer = millis();
+    }
+  }
+  if (!fog_corner_right_txq.isEmpty()) {
+    fog_corner_right_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      fog_corner_right_txq.drop();
       last_fog_action_timer = millis();
     }
   }
@@ -439,7 +460,7 @@ void evaluate_dipped_beam_status(void) {
 
       if (left_fog_on || right_fog_on) {
         m = {front_fogs_all_off_buf, millis() + 100};
-        fog_corner_txq.push(&m);
+        fog_corner_left_txq.push(&m);
         left_fog_on = right_fog_on = false;
       }
     }
@@ -448,7 +469,7 @@ void evaluate_dipped_beam_status(void) {
 
 
 void evaluate_steering_angle_fog(void) {
-  if (!front_fog_status && !reverse_gear_status && dipped_beam_status) {
+  if (!front_fog_status && dipped_beam_status && rls_headlights_requested) {                                                        // Cannot tell if Auto-lights are on via CAN. This is the closest without using KWP jobs.
     steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
 
     // Max left angle is 1005 / 23
@@ -494,30 +515,62 @@ void evaluate_steering_angle_fog(void) {
       }
     } else {
       if (steering_angle > ANGLE) {
-        if (!left_fog_on) {
-          left_fog_soft(true);
-          left_fog_on = true;
-          serial_log("Steering angle below setpoint. Turned left fog light ON.");
+        if (!reverse_gear_status) {
+          if (!left_fog_on) {
+            left_fog_soft(true);
+            left_fog_on = true;
+            serial_log("Steering angle below setpoint. Turned left fog light ON.");
+          }
+        } else {
+            if (!right_fog_on) {
+            right_fog_soft(true);
+            right_fog_on = true;
+            serial_log("Reverse: Steering angle above setpoint. Turned right fog light ON.");
+          }
         }
       } else if (steering_angle < (ANGLE - HYSTERESIS)) {
-        if (left_fog_on) {
-          left_fog_soft(false);
-          left_fog_on = false;
-          serial_log("Steering angle returned. Turned left fog light OFF.");
+        if (!reverse_gear_status) {
+          if (left_fog_on) {
+            left_fog_soft(false);
+            left_fog_on = false;
+            serial_log("Steering angle returned. Turned left fog light OFF.");
+          }
+        } else {
+          if (right_fog_on) {
+            right_fog_soft(false);
+            right_fog_on = false;
+            serial_log("Reverse: Steering angle returned. Turned right fog light OFF.");
+          }
         }
       }
 
       if (steering_angle < -ANGLE) {
-        if (!right_fog_on) {
-          right_fog_soft(true);
-          right_fog_on = true;
-          serial_log("Steering angle above setpoint. Turned right fog light ON.");
+        if (!reverse_gear_status) {
+          if (!right_fog_on) {
+            right_fog_soft(true);
+            right_fog_on = true;
+            serial_log("Steering angle above setpoint. Turned right fog light ON.");
+          }
+        } else {
+          if (!left_fog_on) {
+            left_fog_soft(true);
+            left_fog_on = true;
+            serial_log("Reverse: Steering angle below setpoint. Turned left fog light ON.");
+          }
         }
       } else if (steering_angle > (-ANGLE + HYSTERESIS)) {
-        if (right_fog_on) {
-          right_fog_soft(false);
-          right_fog_on = false;
-          serial_log("Steering angle returned. Turned right fog light OFF.");
+        if (!reverse_gear_status) {
+          if (right_fog_on) {
+            right_fog_soft(false);
+            right_fog_on = false;
+            serial_log("Steering angle returned. Turned right fog light OFF.");
+          }
+        } else {
+          if (left_fog_on) {
+            left_fog_soft(false);
+            left_fog_on = false;
+            serial_log("Reverse: Steering angle returned. Turned left fog light OFF.");
+          }
         }
       }
     }
@@ -526,81 +579,75 @@ void evaluate_steering_angle_fog(void) {
 
 
 void left_fog_soft(bool on) {
+  fog_corner_left_txq.flush();
   time_now = millis();
   if (on) {
     m = {front_left_fog_on_a_buf, time_now};
-    fog_corner_txq.push(&m);
+    fog_corner_left_txq.push(&m);
     m = {front_left_fog_on_b_buf, time_now + 100};
-    fog_corner_txq.push(&m);
+    fog_corner_left_txq.push(&m);
     m = {front_left_fog_on_c_buf, time_now + 200};
-    fog_corner_txq.push(&m);
+    fog_corner_left_txq.push(&m);
     m = {front_left_fog_on_d_buf, time_now + 300};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_e_buf, time_now + 400};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_f_buf, time_now + 500};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_g_buf, time_now + 600};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_h_buf, time_now + 700};
-    fog_corner_txq.push(&m);
+    fog_corner_left_txq.push(&m);
+    m = {front_left_fog_on_d_buf, time_now + 15000};                                                                                // Extend the maximum ON duration.
+    fog_corner_left_txq.push(&m);
+    m = {front_left_fog_on_d_buf, time_now + 25000};
+    fog_corner_left_txq.push(&m);
   } else {
-    m = {front_left_fog_on_g_buf, time_now};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_f_buf, time_now + 100};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_e_buf, time_now + 200};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_d_buf, time_now + 300};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_c_buf, time_now + 400};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_b_buf, time_now + 500};
-    fog_corner_txq.push(&m);
-    m = {front_left_fog_on_a_buf, time_now + 600};
-    fog_corner_txq.push(&m);
+    m = {front_left_fog_on_g_softer_buf, time_now};
+    fog_corner_left_txq.push(&m);
+    m = {front_left_fog_on_f_softer_buf, time_now + 100};
+    fog_corner_left_txq.push(&m);
+    m = {front_left_fog_on_e_softer_buf, time_now + 200};
+    fog_corner_left_txq.push(&m);
+    m = {front_left_fog_on_d_softer_buf, time_now + 300};
+    fog_corner_left_txq.push(&m);
+    m = {front_left_fog_on_c_softer_buf, time_now + 400};
+    fog_corner_left_txq.push(&m);
+    m = {front_left_fog_on_b_softer_buf, time_now + 500};
+    fog_corner_left_txq.push(&m);
+    m = {front_left_fog_on_a_softer_buf, time_now + 600};
+    fog_corner_left_txq.push(&m);
     m = {front_fogs_all_off_buf, time_now + 700};
-    fog_corner_txq.push(&m);
+    fog_corner_left_txq.push(&m);
   }
 }
 
 
 void right_fog_soft(bool on) {
+  fog_corner_right_txq.flush();
   time_now = millis();
   if (on) {
     m = {front_right_fog_on_a_buf, time_now};
-    fog_corner_txq.push(&m);
+    fog_corner_right_txq.push(&m);
     m = {front_right_fog_on_b_buf, time_now + 100};
-    fog_corner_txq.push(&m);
+    fog_corner_right_txq.push(&m);
     m = {front_right_fog_on_c_buf, time_now + 200};
-    fog_corner_txq.push(&m);
+    fog_corner_right_txq.push(&m);
     m = {front_right_fog_on_d_buf, time_now + 300};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_e_buf, time_now + 400};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_f_buf, time_now + 500};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_g_buf, time_now + 600};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_h_buf, time_now + 700};
-    fog_corner_txq.push(&m);
+    fog_corner_right_txq.push(&m);
+    m = {front_right_fog_on_d_buf, time_now + 15000};                                                                               // Extend the maximum ON duration.
+    fog_corner_right_txq.push(&m);
+    m = {front_right_fog_on_d_buf, time_now + 25000};
+    fog_corner_right_txq.push(&m);
   } else {
-    m = {front_right_fog_on_g_buf, time_now};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_f_buf, time_now + 100};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_e_buf, time_now + 200};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_d_buf, time_now + 300};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_c_buf, time_now + 400};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_b_buf, time_now + 500};
-    fog_corner_txq.push(&m);
-    m = {front_right_fog_on_a_buf, time_now + 600};
-    fog_corner_txq.push(&m);
+    m = {front_right_fog_on_g_softer_buf, time_now};
+    fog_corner_right_txq.push(&m);
+    m = {front_right_fog_on_f_softer_buf, time_now + 100};
+    fog_corner_right_txq.push(&m);
+    m = {front_right_fog_on_e_softer_buf, time_now + 200};
+    fog_corner_right_txq.push(&m);
+    m = {front_right_fog_on_d_softer_buf, time_now + 300};
+    fog_corner_right_txq.push(&m);
+    m = {front_right_fog_on_c_softer_buf, time_now + 400};
+    fog_corner_right_txq.push(&m);
+    m = {front_right_fog_on_b_softer_buf, time_now + 500};
+    fog_corner_right_txq.push(&m);
+    m = {front_right_fog_on_a_softer_buf, time_now + 600};
+    fog_corner_right_txq.push(&m);
     m = {front_fogs_all_off_buf, time_now + 700};
-    fog_corner_txq.push(&m);
+    fog_corner_right_txq.push(&m);
   }
 }
 #endif
@@ -662,8 +709,29 @@ void evaluate_ambient_temperature(void) {
 }
 
 
+#if FRONT_FOG_CORNER || F_NIVI
+void evaluate_rls_light_status(void) {
+  if (k_msg.buf[1] == 2) {                                                                                                          // 1 = Twilight mode, 2 = Darkness.
+    if (!rls_headlights_requested) {
+      rls_headlights_requested = true;
+      serial_log("RLS ambient light low enough for auto-headlights.");
+    }
+  } else {
+    if (rls_headlights_requested) {
+      rls_headlights_requested = false;
+      serial_log("RLS ambient light bright enough to disable auto-headlights.");
+    }
+  }
+  #if F_NIVI
+    rls_time_of_day = k_msg.buf[1];
+    rls_brightness = k_msg.buf[0];
+  #endif
+}
+#endif
+
+
 #if F_NIVI
-void request_vehicle_tilt_angle() {
+void request_vehicle_tilt_angle(void) {
   if (sine_angle_request_timer >= 500) {
     kcan_write_msg(sine_angle_request_a_buf);
     sine_angle_requested = true;
@@ -685,6 +753,20 @@ void evaluate_vehicle_tilt_angle(void) {                                        
       sine_angle_requested = false;
       kcan_write_msg(sine_angle_request_b_buf);                                                                                     // Send this to complete the transaction.
     }
+  }
+}
+
+
+void send_f_brightness_status(void) {
+  if (f_outside_brightness_timer >= 200) {
+    if (rls_brightness == 0xFF) {
+      f_outside_brightness[0] = f_outside_brightness[1] = 0xFE;
+    } else {
+      f_outside_brightness[0] = f_outside_brightness[1] = rls_brightness;
+    }
+    f_outside_brightness_buf = make_msg_buf(0x2A5, 2, f_outside_brightness);
+    ptcan_write_msg(f_outside_brightness_buf);
+    f_outside_brightness_timer = 0;
   }
 }
 #endif

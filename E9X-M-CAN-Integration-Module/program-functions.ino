@@ -38,6 +38,7 @@ void read_initialize_eeprom(void) {
     EEPROM.update(13, 1);
     EEPROM.update(14, 1);
     EEPROM.update(15, 0);
+    EEPROM.update(16, 0x10);
     update_eeprom_checksum();
   } else {
     mdrive_dsc = EEPROM.read(2);
@@ -78,6 +79,14 @@ void read_initialize_eeprom(void) {
     if (max_cpu_temp == 0xFF) {
       max_cpu_temp = 0;
     }
+    #if DOOR_VOLUME
+      peristent_volume = EEPROM.read(16);
+      if (peristent_volume > 0x33) {
+        peristent_volume = 0x15;
+      } else if (peristent_volume == 0) {
+        peristent_volume = 0x10;
+      }
+    #endif
     serial_log("Loaded data from EEPROM.");
   }
 }
@@ -85,7 +94,7 @@ void read_initialize_eeprom(void) {
 
 uint16_t eeprom_crc(void) {
   teensy_eep_crc.restart();
-  for (uint8_t i = 2; i < 16; i++) {
+  for (uint8_t i = 2; i < 17; i++) {
     teensy_eep_crc.add(EEPROM.read(i));
   }
   return teensy_eep_crc.calc();
@@ -107,8 +116,13 @@ void update_data_in_eeprom(void) {
     EEPROM.update(10, edc_ckm[1]);
     EEPROM.update(11, edc_ckm[2]);
   #endif
-  EEPROM.update(12, unfold_with_door_open);
+  #if AUTO_MIRROR_FOLD
+    EEPROM.update(12, unfold_with_door_open);
+  #endif
   EEPROM.update(15, floor(max_cpu_temp));
+  #if DOOR_VOLUME
+    EEPROM.update(16, peristent_volume);
+  #endif
   update_eeprom_checksum();
   serial_log("Saved data to EEPROM.");
 }
@@ -135,7 +149,7 @@ void initialize_watchdog(void) {
 
 
 #if DEBUG_MODE
-void wdt_callback() {
+void wdt_callback(void) {
   serial_log("Watchdog not fed. Program will reset in 2s!");
 }
 #endif
@@ -179,9 +193,10 @@ void print_current_state(Stream &status_serial) {
   } else {
     status_serial.println(" DSC: Asleep");
   }
+  
+  sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
+  status_serial.println(serial_debug_string);
   #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
-    sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
-    status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
     status_serial.println(serial_debug_string);
   #endif
@@ -196,6 +211,9 @@ void print_current_state(Stream &status_serial) {
       status_serial.println(" Direction: Unknown");
     }
     sprintf(serial_debug_string, " Sine Tilt: %.1f Converted: %.1f deg", sine_tilt_angle, (f_vehicle_angle - 64.0) * 0.05);
+    status_serial.println(serial_debug_string);
+    sprintf(serial_debug_string, " Outside brightness: 0x%X %s.", rls_brightness, 
+            rls_time_of_day == 0 ? "Daytime" : rls_time_of_day == 1 ? "Twilight" : "Darkness");
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Longitudinal acceleration: %.2f m/s^2", (longitudinal_acceleration - 65.0) * 0.002);
     status_serial.println(serial_debug_string);
@@ -319,6 +337,8 @@ void print_current_state(Stream &status_serial) {
       sprintf(serial_debug_string, " Passenger's door: %s", right_door_open ? "Open" : "Closed");
     #endif
     status_serial.println(serial_debug_string);
+    sprintf(serial_debug_string, " iDrive volume: 0x%X", peristent_volume);
+    status_serial.println(serial_debug_string);
   #endif
   #if EXHAUST_FLAP_CONTROL
     sprintf(serial_debug_string, " Exhaust flap: %s", exhaust_flap_open ? "Open" : "Closed");
@@ -430,7 +450,7 @@ void reset_runtime_variables(void) {                                            
     #endif
   #endif
   #if LAUNCH_CONTROL_INDICATOR
-    lc_cc_active = mdm_with_lc = clutch_pressed = false;
+    lc_cc_active = mdm_with_lc = false;
   #endif
   #if CONTROL_SHIFTLIGHTS
     shiftlights_segments_active = engine_coolant_warmed_up = false;
@@ -455,12 +475,13 @@ void reset_runtime_variables(void) {                                            
     front_fog_status = false;
   #endif
   #if FRONT_FOG_CORNER
-    fog_corner_txq.flush();
+    fog_corner_left_txq.flush();
+    fog_corner_right_txq.flush();
     if (((millis() - last_fog_action_timer) < 15000) || (left_fog_on || right_fog_on)) {                                            // This is a limitation of controlling lights via 6F1. Whatever state is set with
       m = {front_left_fog_off_buf, millis()};                                                                                       // job STEUERN_LAMPEN_PWM persists for 15s.
-      fog_corner_txq.push(&m);
+      fog_corner_left_txq.push(&m);
       m = {front_right_fog_off_buf, millis() + 100};
-      fog_corner_txq.push(&m);
+      fog_corner_right_txq.push(&m);
     }
     dipped_beam_status = left_fog_on = right_fog_on = indicators_on = false;
   #endif
@@ -482,9 +503,6 @@ void reset_runtime_variables(void) {                                            
   #endif
   #if HDC
     cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
-  #endif
-  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
-    vehicle_moving = false;
   #endif
   #if FAKE_MSA
     msa_button_pressed = false;
@@ -522,11 +540,14 @@ void reset_sleep_variables(void) {
   #if DOOR_VOLUME
     volume_reduced = false;                                                                                                         // In case the car falls asleep with the door open.
     volume_restore_offset = 0;
-    default_volume_sent = false;
+    initial_volume_set = false;
     idrive_txq.flush();
   #endif
   #if NEEDLE_SWEEP
     kombi_needle_txq.flush();
+  #endif
+  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
+    vehicle_moving = false;
   #endif
   #if WIPE_AFTER_WASH
     wiper_txq.flush();
@@ -536,8 +557,10 @@ void reset_sleep_variables(void) {
   #if AUTO_MIRROR_FOLD
     frm_status_requested = false;
     lock_button_pressed  = unlock_button_pressed = false;
-    last_lock_status_can = 0;
     mirror_fold_txq.flush();
+  #endif
+  #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
+    last_lock_status_can = 0;
   #endif
   #if F_VSW01
     vsw_initialized = false;

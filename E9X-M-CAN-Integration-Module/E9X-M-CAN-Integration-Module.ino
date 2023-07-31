@@ -22,7 +22,7 @@ void setup() {
     }
   #endif
   #if DEBUG_MODE
-    #if AUTO_MIRROR_FOLD && !USB_DISABLE
+    #if (AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED) && !USB_DISABLE
       setup_time = micros() - 300000;
     #else
       setup_time = micros();
@@ -43,6 +43,7 @@ void loop() {
     check_diag_transmit_status();
     #if DOOR_VOLUME
       check_idrive_queue();
+      send_volume_request_periodic();
     #endif
     #if NEEDLE_SWEEP
       check_kombi_needle_queue();
@@ -183,6 +184,12 @@ void loop() {
       }
       #endif
 
+      #if FRONT_FOG_CORNER || F_NIVI
+      else if (k_msg.id == 0x314) {                                                                                                 // RLS light status.
+        evaluate_rls_light_status();
+      }
+      #endif
+
       #if MSA_RVC
       else if (k_msg.id == 0x317) {                                                                                                 // Received PDC button press from IHKA.
         evaluate_pdc_button();
@@ -237,9 +244,9 @@ void loop() {
     }
     #endif
 
-    #if AUTO_MIRROR_FOLD || CKM
+    #if AUTO_MIRROR_FOLD || CKM || INDICATE_TRUNK_OPENED
     else if (k_msg.id == 0x23A) {                                                                                                   // Monitor remote function status
-      #if AUTO_MIRROR_FOLD
+      #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
         evaluate_remote_button();
       #endif
       #if CKM
@@ -310,7 +317,7 @@ void loop() {
 
     #if DOOR_VOLUME || F_VSW01
     else if (k_msg.id == 0x663) {
-      #if DOOR_VOLUME 
+      #if DOOR_VOLUME
         evaluate_audio_volume();
       #endif
       // #if F_VSW01
@@ -447,8 +454,22 @@ void loop() {
       #endif
       
       #if RTC
-      else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x10 || d_msg.buf[1] == 0x21)) {                                            // KOMBI is at address 0x60. ISTA sets time by sending it to KOMBI.
+      else if (d_msg.buf[0] == 0x60 && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x21 && d_msg.buf[3] == 0x20) {                         // KWP job to set time used by BMW PC software.
+        pc_time_incoming = true;
+        disable_diag_transmit_jobs();
+      }
+
+      else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x30) {                                                  // KOMBI is at address 0x60. BMW PC software sets time by sending it to KOMBI.
+        // Ignore the continue message.
+      }
+
+      else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x10) {                                                  // Time.
         update_rtc_from_dcan();
+      }
+
+      else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x21) {                                                  // Date.
+        update_rtc_from_dcan();
+        pc_time_incoming = false;
       }
       #endif
 
