@@ -6,14 +6,14 @@ void serial_interpreter(void) {
   String cmd = Serial.readStringUntil('\n');
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
     if (cmd == "module_reboot") {
-      serial_log("Serial: Rebooting.");
-      Serial.print("  Serial: ");
+      serial_log("  Serial: Rebooting.");
+      Serial.print("   Serial: ");
       update_data_in_eeprom();
       delay(1000);
       module_reboot();
     }
     if (cmd == "test_watchdog") {
-      serial_log("Serial: Will reboot after watchdog timeout.");
+      serial_log("  Serial: Will reboot after watchdog timeout.");
       update_data_in_eeprom();
       delay(1000);
       while(1);
@@ -22,19 +22,49 @@ void serial_interpreter(void) {
       print_current_state(Serial);
     }
     if (cmd == "print_setup_time") {
-      sprintf(serial_debug_string, "Serial: time taken to boot Teensy: %lu µs / %lu ms", setup_time, setup_time / 1000);
-      Serial.println(serial_debug_string);
+      sprintf(serial_debug_string, "  Serial: %.2f ms", setup_time / 1000.0);
+      serial_log(serial_debug_string);
     }
     if (cmd == "print_voltage") {
       if (battery_voltage > 0) {
         sprintf(serial_debug_string, " Serial: %.2f V", battery_voltage);
-        Serial.println(serial_debug_string);
+        serial_log(serial_debug_string);
       } else {
-        Serial.println(" Serial: voltage unavailable.");
+        serial_log("  Serial: voltage unavailable.");
+      }
+    }
+    if (cmd == "clear_all_dtcs") {                                                                                                  // Should take around 6s to complete.
+      if (ignition) {
+        if (diag_transmit) {
+          serial_log("  Serial: Clearing error and shadow memories.");
+          time_now = millis();
+          uint8_t clear_fs_job[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0}, i;
+          for (i = 0; i < 0x8C; i++) {
+            clear_fs_job[0] = i;
+            m = {make_msg_buf(0x6F1, 8, clear_fs_job), time_now + i * 20};
+            serial_diag_txq.push(&m);
+          }
+          time_now += 20;
+          uint8_t clear_is_job[] = {0, 3, 0x31, 6, 0, 0, 0, 0}, j;
+          for (uint8_t j = 0; j < 0x8C; j++) {
+            clear_fs_job[0] = j;
+            m = {make_msg_buf(0x6F1, 8, clear_is_job), time_now + (i + j) * 20};
+            serial_diag_txq.push(&m);
+          }
+          time_now += 20;
+          uint8_t clear_dme_hs_job[] = {0x12, 2, 0x31, 3, 0, 0, 0, 0};
+          m = {make_msg_buf(0x6F1, 8, clear_dme_hs_job), time_now + (i + j) * 20};
+          serial_diag_txq.push(&m);
+          clearing_dtcs = true;
+        } else {
+          serial_log("  Serial: Function unavailable due to OBD tool presence.");
+        }
+      } else {
+        serial_log("  Serial: Activate ignition first.");
       }
     }
     if (cmd == "cc_gong") {
-      serial_log("Serial: Sending CC gong.");
+      serial_log("  Serial: Sending CC gong.");
       kcan_write_msg(cc_gong_buf);
     } 
     #if EXHAUST_FLAP_CONTROL
@@ -96,25 +126,43 @@ void serial_interpreter(void) {
     #endif
     #if FRONT_FOG_CORNER
     else if (cmd == "front_right_fog_on") {
-      right_fog_soft(true);
-      serial_log("  Serial: Activated front right fog light.");
+      if (diag_transmit) {
+        right_fog_soft(true);
+        serial_log("  Serial: Activated front right fog light.");
+      }
     }
     else if (cmd == "front_left_fog_on") {
-      left_fog_soft(true);
-      serial_log("  Serial: Activated front left fog light.");
+      if (diag_transmit) {
+        left_fog_soft(true);
+        serial_log("  Serial: Activated front left fog light.");
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.");
+      }
     }
     else if (cmd == "front_right_fog_off") {
-      kcan_write_msg(front_right_fog_off_buf);
-      serial_log("  Serial: Deactivated front right fog light.");
+      if (diag_transmit) {
+        kcan_write_msg(front_right_fog_off_buf);
+        serial_log("  Serial: Deactivated front right fog light.");
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.");
+      }
     }
     else if (cmd == "front_left_fog_off") {
-      kcan_write_msg(front_left_fog_off_buf);
-      serial_log("  Serial: Deactivated front left fog light.");
+      if (diag_transmit) {
+        kcan_write_msg(front_left_fog_off_buf);
+        serial_log("  Serial: Deactivated front left fog light.");
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.");
+      }
     }
     else if (cmd == "front_fogs_off") {
       if (ignition) {
-        kcan_write_msg(front_fogs_all_off_buf);
-        serial_log("  Serial: Deactivated front fog lights.");
+        if (diag_transmit) {
+          kcan_write_msg(front_fogs_all_off_buf);
+          serial_log("  Serial: Deactivated front fog lights.");
+        } else {
+          serial_log("  Serial: Function unavailable due to OBD tool presence.");
+        }
       } else {
         serial_log("  Serial: Activate ignition first.");
       }
@@ -128,8 +176,12 @@ void serial_interpreter(void) {
       #endif
       #if NEEDLE_SWEEP
         if (ignition) {
-          Serial.print("  Serial: ");
-          needle_sweep_animation();
+          if (diag_transmit) {
+            Serial.print("  Serial: ");
+            needle_sweep_animation();
+          } else {
+            serial_log("  Serial: Function unavailable due to OBD tool presence.");
+          }
         } else {
           serial_log("  Serial: Activate ignition first.");
         }
@@ -138,14 +190,22 @@ void serial_interpreter(void) {
     #endif
     #if AUTO_MIRROR_FOLD
       else if (cmd == "toggle_mirror_fold") {
-        toggle_mirror_fold();
-        serial_log("  Serial: Sent mirror fold request.");
+        if (diag_transmit) {
+          toggle_mirror_fold();
+          serial_log("  Serial: Sent mirror fold request.");
+        } else {
+          serial_log("  Serial: Function unavailable due to OBD tool presence.");
+        }
       }
       else if (cmd == "mirror_fold_status") {
-        lock_button_pressed = unlock_button_pressed = false;
-        frm_status_requested = true;
-        kcan_write_msg(frm_status_request_a_buf);
-        Serial.print("  Serial: ");
+        if (diag_transmit) {
+          lock_button_pressed = unlock_button_pressed = false;
+          frm_status_requested = true;
+          kcan_write_msg(frm_status_request_a_buf);
+          Serial.print("  Serial: ");
+        } else {
+          serial_log("  Serial: Function unavailable due to OBD tool presence.");
+        }
       }
     #endif
     #if ANTI_THEFT_SEQ
@@ -248,6 +308,7 @@ void print_help(void) {
   serial_log("  print_status - Prints a set of current runtime variables.");
   serial_log("  print_setup_time - Prints the time it took for the program to complete setup().");
   serial_log("  print_voltage - Prints the battery voltage.");
+  serial_log("  clear_all_dtcs - Clear the error memories of every module on the bus.");
   serial_log("  cc_gong - Create an audible check-control gong.");
   #if EXHAUST_FLAP_CONTROL
     serial_log("  open_exhaust_flap - Energize the exhaust solenoid to open the flap.");
@@ -302,5 +363,21 @@ void print_help(void) {
     serial_log("  vsw_5 - Sets the VideoSwitch to input 5 (A40*1B Pins: 5 FBAS+, 23 FBAS-, 41 Shield).");
   #endif
   serial_log("==========================================================");
+}
+
+
+void check_serial_diag_queue(void) {
+if (!serial_diag_txq.isEmpty()) {
+    serial_diag_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      dcan_write_msg(delayed_tx.tx_msg);
+      serial_diag_txq.drop();
+    }
+  } else {
+    if (clearing_dtcs) {
+      clearing_dtcs = false;
+      diag_transmit = true;
+    }
+  }
 }
 #endif

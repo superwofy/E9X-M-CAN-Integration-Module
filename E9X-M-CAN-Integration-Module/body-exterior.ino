@@ -19,18 +19,22 @@ void evaluate_drl_status(void) {
 
 void check_drl_queue(void) {
   if (!dim_drl_txq.isEmpty()) {
-    dim_drl_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      dim_drl_txq.drop();
-      last_drl_action_timer = millis();
+    if (diag_transmit) {
+      dim_drl_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        kcan_write_msg(delayed_tx.tx_msg);
+        dim_drl_txq.drop();
+        last_drl_action_timer = millis();
+      }
+    } else {
+      dim_drl_txq.flush();
     }
   }
 }
 #endif
 
 
-#if DIM_DRL || FRONT_FOG_CORNER
+#if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
 void evaluate_indicator_status_dim(void) {
   #if DIM_DRL
   time_now = millis();
@@ -48,6 +52,13 @@ void evaluate_indicator_status_dim(void) {
           dim_drl_txq.push(&m);
           left_dimmed = false;
           serial_log("Restored left DRL brightness.");
+        }
+      #endif
+      #if INDICATE_TRUNK_OPENED
+        if (k_msg.buf[0] == 0xB1) {
+          hazards_on = true;
+        } else {
+          hazards_on = false;
         }
       #endif
       indicators_on = false;
@@ -174,8 +185,10 @@ void evaluate_door_status(void) {
   if (k_msg.buf[2] != last_hood_status) {
     if (k_msg.buf[2] == 4) {
       serial_log("Hood opened.");
-      if (!vehicle_moving && terminal_r) {
-        kcan_write_msg(cc_gong_buf); 
+      if (diag_transmit) {
+        if (!vehicle_moving && terminal_r) {
+          kcan_write_msg(cc_gong_buf); 
+        }
       }
       last_hood_status = k_msg.buf[2];
     } else if (k_msg.buf[2] == 0) {
@@ -298,11 +311,13 @@ void evaluate_remote_button(void) {
         if (k_msg.buf[2] == 4) {
           if (!left_door_open && !right_door_open) {
             #if AUTO_MIRROR_FOLD
-              lock_button_pressed = true;
-              serial_log("Remote lock button pressed. Checking mirror status.");
-              m = {frm_status_request_a_buf, time_now + 200};
-              mirror_fold_txq.push(&m);
-              frm_status_requested = true;
+              if (diag_transmit) {
+                lock_button_pressed = true;
+                serial_log("Remote lock button pressed. Checking mirror status.");
+                m = {frm_status_request_a_buf, time_now + 200};
+                mirror_fold_txq.push(&m);
+                frm_status_requested = true;
+              }
               #if UNFOLD_WITH_DOOR
                 unfold_with_door_open = false;
               #endif
@@ -324,11 +339,13 @@ void evaluate_remote_button(void) {
         
         #if AUTO_MIRROR_FOLD
         else if (k_msg.buf[2] == 1) {
-          unlock_button_pressed = true;
-          serial_log("Remote unlock button pressed. Checking mirror status.");
-          m = {frm_status_request_a_buf, time_now + 200};
-          mirror_fold_txq.push(&m);
-          frm_status_requested = true;
+          if (diag_transmit) {
+            unlock_button_pressed = true;
+            serial_log("Remote unlock button pressed. Checking mirror status.");
+            m = {frm_status_request_a_buf, time_now + 200};
+            mirror_fold_txq.push(&m);
+            frm_status_requested = true;
+          }
           #if ANTI_THEFT_SEQ_ALARM
             lock_led = false;
           #endif
@@ -337,8 +354,8 @@ void evaluate_remote_button(void) {
 
         #if INDICATE_TRUNK_OPENED
         else if (k_msg.buf[2] == 0x10) {
-          if (!terminal_r) {                                                                                                        // Driver not in the car.
-            serial_log("Remote trunl button pressed. Flashing hazards.");
+          if (visual_signal_ckm && !engine_running && !hazards_on && !indicators_on) {
+            serial_log("Remote trunk button pressed. Flashing hazards.");
             kcan_write_msg(flash_hazards_buf);
           }
         }
@@ -393,7 +410,7 @@ void evaluate_mirror_fold_status(void) {
       // Ignore {F1 21 80 3 22 0 6C 41}.
     } else {                                                                                                                        // Try again.
       serial_log("Did not receive the mirror status. Re-trying.");
-      m = {frm_status_request_a_buf, millis() + 200};
+      m = {frm_status_request_a_buf, millis() + 100};
       mirror_fold_txq.push(&m);
     }
   }
@@ -416,10 +433,14 @@ void toggle_mirror_fold(void) {
 
 void check_mirror_fold_queue(void) {
   if (!mirror_fold_txq.isEmpty()) {
-    mirror_fold_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      mirror_fold_txq.drop();
+    if (diag_transmit) {
+      mirror_fold_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        kcan_write_msg(delayed_tx.tx_msg);
+        mirror_fold_txq.drop();
+      }
+    } else {
+      mirror_fold_txq.flush();
     }
   }
 }
@@ -429,19 +450,27 @@ void check_mirror_fold_queue(void) {
 #if FRONT_FOG_CORNER
 void check_fog_corner_queue(void) {
   if (!fog_corner_left_txq.isEmpty()) {
-    fog_corner_left_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      fog_corner_left_txq.drop();
-      last_fog_action_timer = millis();
+    if (diag_transmit) {
+      fog_corner_left_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        kcan_write_msg(delayed_tx.tx_msg);
+        fog_corner_left_txq.drop();
+        last_fog_action_timer = millis();
+      }
+    } else {
+      fog_corner_left_txq.flush();
     }
   }
   if (!fog_corner_right_txq.isEmpty()) {
-    fog_corner_right_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      fog_corner_right_txq.drop();
-      last_fog_action_timer = millis();
+    if (diag_transmit) {
+      fog_corner_right_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        kcan_write_msg(delayed_tx.tx_msg);
+        fog_corner_right_txq.drop();
+        last_fog_action_timer = millis();
+      }
+    } else {
+      fog_corner_right_txq.flush();
     }
   }
 }
@@ -469,7 +498,7 @@ void evaluate_dipped_beam_status(void) {
 
 
 void evaluate_steering_angle_fog(void) {
-  if (!front_fog_status && dipped_beam_status && rls_headlights_requested) {                                                        // Cannot tell if Auto-lights are on via CAN. This is the closest without using KWP jobs.
+  if (!front_fog_status && dipped_beam_status && rls_headlights_requested && diag_transmit) {                                       // Cannot tell if Auto-lights are on via CAN. This is the closest without using KWP jobs.
     steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
 
     // Max left angle is 1005 / 23
@@ -733,8 +762,10 @@ void evaluate_rls_light_status(void) {
 #if F_NIVI
 void request_vehicle_tilt_angle(void) {
   if (sine_angle_request_timer >= 500) {
-    kcan_write_msg(sine_angle_request_a_buf);
-    sine_angle_requested = true;
+    if (diag_transmit) {
+      kcan_write_msg(sine_angle_request_a_buf);
+      sine_angle_requested = true;
+    }
     sine_angle_request_timer = 0;
   }
 }
@@ -744,29 +775,40 @@ void evaluate_vehicle_tilt_angle(void) {                                        
   if (sine_angle_requested) {
     if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
       sine_tilt_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
-      if (sine_tilt_angle > 64.0) {                                                                                                 // Boundary check since F message has resolution -64..64.
-        sine_tilt_angle = 64.0;
-      } else if (sine_tilt_angle < -64.0) {
-        sine_tilt_angle = -64.0;
-      }
-      f_vehicle_angle = floor((sine_tilt_angle / 0.05) + 64);
+      sine_tilt_angle = constrain(sine_tilt_angle, -64.0, 64.0);                                                                    // Boundary check since F message has resolution -64..64.
+      f_vehicle_angle = round((sine_tilt_angle + 64) / 0.05);
       sine_angle_requested = false;
-      kcan_write_msg(sine_angle_request_b_buf);                                                                                     // Send this to complete the transaction.
+      if (diag_transmit) {
+        kcan_write_msg(sine_angle_request_b_buf);                                                                                   // Send this to complete the transaction.
+      }
     }
   }
 }
 
 
 void send_f_brightness_status(void) {
-  if (f_outside_brightness_timer >= 200) {
-    if (rls_brightness == 0xFF) {
-      f_outside_brightness[0] = f_outside_brightness[1] = 0xFE;
-    } else {
-      f_outside_brightness[0] = f_outside_brightness[1] = rls_brightness;
-    }
+  if (f_outside_brightness_timer >= 500) {
+    f_outside_brightness[0] = f_outside_brightness[1] = rls_brightness;
     f_outside_brightness_buf = make_msg_buf(0x2A5, 2, f_outside_brightness);
     ptcan_write_msg(f_outside_brightness_buf);
     f_outside_brightness_timer = 0;
+  }
+}
+#endif
+
+
+#if INDICATE_TRUNK_OPENED
+void evaluate_door_lock_ckm(void) {
+  if (bitRead(k_msg.buf[0], 0) == 0 && bitRead(k_msg.buf[0], 1) == 1) {
+    if (!visual_signal_ckm) {
+      serial_log("Visual signal CKM enabled.");
+      visual_signal_ckm = true;
+    }
+  } else {
+    if (visual_signal_ckm) {
+      serial_log("Visual signal CKM disabed.");
+      visual_signal_ckm = false;
+    }
   }
 }
 #endif

@@ -38,6 +38,8 @@ void setup()
 	// PTCAN.setFIFOFilter(REJECT_ALL);
 	// PTCAN.setFIFOFilter(0, 0xAA, STD);
 
+	pinMode(PTCAN_STBY_PIN, OUTPUT); 
+	pinMode(DCAN_STBY_PIN, OUTPUT);
 	digitalWrite(PTCAN_STBY_PIN, LOW);
 	digitalWrite(DCAN_STBY_PIN, LOW);
 

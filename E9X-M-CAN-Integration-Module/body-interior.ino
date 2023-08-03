@@ -83,9 +83,6 @@ void evaluate_terminal_clutch_keyno_status(void) {
 
   if (ignition && !ignition_) {                                                                                                     // Ignition changed from OFF to ON.
     scale_mcu_speed();
-    #if SERVOTRONIC_SVT70
-      indicate_svt_diagnosis_on();
-    #endif
     #if USB_DISABLE
       activate_usb();                                                                                                               // If this fails to run, the program button will need to be pressed to recover.
     #endif
@@ -311,7 +308,9 @@ void check_console_buttons(void) {
         holding_both_console = true;
       } else {
         if (both_console_buttons_timer >= 10000) {                                                                                  // Hold both buttons for more than 10s.
-          kcan_write_msg(cc_gong_buf);                                                                                              // Acknowledge anti-theft persist ON-OFF
+          if (diag_transmit) {
+            kcan_write_msg(cc_gong_buf);                                                                                            // Acknowledge anti-theft persist ON-OFF
+          }
           anti_theft_persist = !anti_theft_persist;
           EEPROM.update(15, anti_theft_persist);
           update_eeprom_checksum();
@@ -407,7 +406,7 @@ void update_car_time_from_rtc(void) {
 
 #if DOOR_VOLUME
 void send_volume_request_periodic(void) {
-  if (volume_request_timer >= 5000) {
+  if (volume_request_timer >= 3000) {
     if (diag_transmit) {
       kcan_write_msg(vol_request_buf);
     }
@@ -433,7 +432,7 @@ void evaluate_audio_volume(void) {
         if (peristent_volume != k_msg.buf[4]) {
           peristent_volume = k_msg.buf[4];
           #if DEBUG_MODE
-            sprintf(serial_debug_string, "Received audio volume: 0x%X.", k_msg.buf[4]);
+            sprintf(serial_debug_string, "Received new audio volume: 0x%X.", k_msg.buf[4]);
             serial_log(serial_debug_string);
           #endif
         }
@@ -485,17 +484,22 @@ void evaluate_audio_volume(void) {
               sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X.", volume_change[4]);
               serial_log(serial_debug_string);
             #endif
+          } else {
+            peristent_volume = k_msg.buf[4];                                                                                        // User changed volume while door was opened.
+            #if DEBUG_MODE
+              sprintf(serial_debug_string, "Volume changed by user while door was open to: 0x%X.", k_msg.buf[4]);
+              serial_log(serial_debug_string);
+            #endif
           }
           volume_reduced = false;
         }
       }
     } else {
-      serial_log("Received volume 0 from iDrive");                                                                                  // 0 means that the vol knob wasn't used / initial volume job was not sent since start.
       uint8_t restore_last_volume[] = {0x63, 4, 0x31, 0x23, peristent_volume, 0, 0, 0};
       kcan_write_msg(make_msg_buf(0x6F1, 8, restore_last_volume));
       initial_volume_set = true;
       #if DEBUG_MODE
-        sprintf(serial_debug_string, "Sent saved initial volume (0x%X) to iDrive after receiving volume 0.", peristent_volume);
+        sprintf(serial_debug_string, "Sent saved initial volume (0x%X) to iDrive after receiving volume 0.", peristent_volume);     // 0 means that the vol knob wasn't used / initial job was not sent since iDrive boot.
         serial_log(serial_debug_string);
       #endif
     }
@@ -511,16 +515,20 @@ void disable_door_ignition_cc(void) {
 
 
 void check_idrive_queue(void) {
-  if (!idrive_txq.isEmpty() && diag_transmit) {
-    idrive_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      if (vehicle_awake) {
-        kcan_write_msg(delayed_tx.tx_msg);
-        if (delayed_tx.tx_msg.buf[3] == 0x23) {
-          serial_log("Sent volume change job to iDrive.");
+  if (!idrive_txq.isEmpty()) {
+    if (diag_transmit) {
+      idrive_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        if (vehicle_awake) {
+          kcan_write_msg(delayed_tx.tx_msg);
+          if (delayed_tx.tx_msg.buf[3] == 0x23) {
+            serial_log("Sent volume change job to iDrive.");
+          }
         }
+        idrive_txq.drop();
       }
-      idrive_txq.drop();
+    } else {
+      idrive_txq.flush();
     }
   }
 }
@@ -557,8 +565,8 @@ void update_idrive_alive_timer(void) {
   idrive_alive_timer = 0;
 
   #if DOOR_VOLUME
-  if (k_msg.buf[7] == 3) {                                                                                                          // 0x273 has been transmitted X times according to the counter.
-    if (!initial_volume_set) {
+  if (k_msg.buf[7] >= 3) {                                                                                                          // 0x273 has been transmitted X times according to the counter.
+    if (!initial_volume_set && diag_transmit) {
       uint8_t restore_last_volume[] = {0x63, 4, 0x31, 0x23, peristent_volume, 0, 0, 0};
       kcan_write_msg(make_msg_buf(0x6F1, 8, restore_last_volume));                                                                  // Set iDrive volume to last volume before sleep. This must run before any set volumes.
       #if DEBUG_MODE

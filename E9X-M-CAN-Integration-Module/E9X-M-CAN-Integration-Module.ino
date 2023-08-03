@@ -2,13 +2,13 @@
 
 
 void setup() {
+  initialize_watchdog();
   if ( F_CPU_ACTUAL > (528 * 1000000)) {
     set_arm_clock(528 * 1000000);                                                                                                   // Prevent accidental overclocks. Remove if needed.
   }
   cpu_speed_ide = F_CPU_ACTUAL;
   configure_IO();
   configure_can_controllers();
-  initialize_watchdog();
   cache_can_message_buffers();
   read_initialize_eeprom();
   #if RTC
@@ -73,6 +73,7 @@ void loop() {
       send_f_brightness_status();
       send_f_powertrain_2_status();
     #endif
+    check_can_resend_queues();
   }
 
   if (ignition) {
@@ -148,13 +149,11 @@ void loop() {
       }
       #endif
 
-      #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
       else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
         evaluate_vehicle_moving();
       }
-      #endif
 
-      #if DIM_DRL || FRONT_FOG_CORNER
+      #if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
       else if (k_msg.id == 0x1F6) {                                                                                                 // Monitor indicator status
         evaluate_indicator_status_dim();
       }
@@ -300,6 +299,12 @@ void loop() {
     }
     #endif
 
+    #if INDICATE_TRUNK_OPENED
+    else if (k_msg.id == 0x3D7) {                                                                                                   // Received CKM setting for door locks.
+      evaluate_door_lock_ckm();
+    }
+    #endif
+
     #if F_ZBE_WAKE || F_VSW01
     else if (k_msg.id == 0x4E2) {
       send_f_wakeup();
@@ -328,7 +333,7 @@ void loop() {
 
     #if F_VSW01
     else if (k_msg.id == 0x648) {
-      forward_kcan_to_dcan();
+      dcan_write_msg(k_msg);
     }
     #endif
 
@@ -354,10 +359,13 @@ void loop() {
 
       #if F_NIVI
       else if (pt_msg.id == 0x1A0) {
-        send_f_road_inclination();
-        send_f_longitudinal_acceleration();
-        send_f_yaw_rate();
-        send_f_speed_status();
+        if (f_chassis_messages_timer >= 100) {                                                                                      // Throttle messages to reduce bus load.
+          send_f_road_inclination();
+          send_f_longitudinal_acceleration();
+          send_f_yaw_rate();
+          send_f_speed_status();
+          f_chassis_messages_timer = 0;
+        }
       }
       #endif
 
@@ -413,8 +421,8 @@ void loop() {
           send_svt_kcan_cc_notification();
         }
         else if (pt_msg.id == 0x60E) {                                                                                              // Forward Diagnostic responses from SVT module to DCAN
-          if (diagnose_svt) {
-            forward_ptcan_to_dcan();
+          if (!uif_read) {
+            dcan_write_msg(pt_msg);
           }
         }
         #endif
@@ -440,16 +448,27 @@ void loop() {
       // End MHD exceptions.
 
       #if SERVOTRONIC_SVT70
+      // UIF read or ISTA/D module identification:
+      else if (d_msg.buf[0] == 0xEF && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x1A && (d_msg.buf[3] == 0x80 || d_msg.buf[3] == 0x86)) {
+        serial_log("UIF being read. Skipping SVT.");
+        uif_read = true;
+      }
+
       else if (d_msg.buf[0] == 0xE) {                                                                                               // SVT_70 address is 0xE
-        if (diagnose_svt) {
-          forward_dcan_to_ptcan();                                                                                                  // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
+        if (uif_read) {
+          if (d_msg.buf[1] == 0x30) {
+            // Ignore this KWP continue message as the JBE forwards it anyway.
+            uif_read = false;
+          }
+        } else {
+          ptcan_write_msg(d_msg);                                                                                                   // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
         }
       } 
       #endif
 
       #if F_VSW01
       else if (d_msg.buf[0] == 0x48) {                                                                                              // F_VSW01 address is 0x48
-        forward_dcan_to_kcan();
+        kcan_write_msg(d_msg);
       }
       #endif
       
@@ -494,6 +513,7 @@ void loop() {
     while (Serial.available()) {
       serial_interpreter();
     }
+    check_serial_diag_queue();
   #endif
   
   wdt.feed();                                                                                                                       // Reset the watchdog timer.

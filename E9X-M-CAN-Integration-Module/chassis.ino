@@ -44,7 +44,7 @@ void evaluate_reverse_gear_status(void) {
       reverse_gear_status = true;
       serial_log("Reverse gear ON.");
       #if FRONT_FOG_CORNER
-        if (left_fog_on || right_fog_on) {
+        if ((left_fog_on || right_fog_on) && diag_transmit) {
           serial_log("Resetting corner fogs with reverse ON.");
           kcan_write_msg(front_fogs_all_off_buf);
           left_fog_on = right_fog_on = false;
@@ -52,8 +52,10 @@ void evaluate_reverse_gear_status(void) {
       #endif
       #if MSA_RVC
         if (pdc_status == 0xA4) {
-          kcan_write_msg(pdc_on_camera_on_buf);
-          serial_log("Activated full PDC and camera with reverse gear.");
+          if (diag_transmit) {
+            kcan_write_msg(pdc_on_camera_on_buf);
+            serial_log("Activated full PDC and camera with reverse gear.");
+          }
         }
       #endif
     }
@@ -61,7 +63,7 @@ void evaluate_reverse_gear_status(void) {
     if (reverse_gear_status) {
       reverse_gear_status = false;
       serial_log("Reverse gear OFF.");
-      if (left_fog_on || right_fog_on) {
+      if ((left_fog_on || right_fog_on) && diag_transmit) {
         serial_log("Resetting corner fogs with reverse OFF.");
         kcan_write_msg(front_fogs_all_off_buf);
         left_fog_on = right_fog_on = false;
@@ -72,7 +74,6 @@ void evaluate_reverse_gear_status(void) {
 #endif
 
 
-#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
 void evaluate_vehicle_moving(void) {
   if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0xD0) {
     if (vehicle_moving) {
@@ -104,22 +105,26 @@ void evaluate_vehicle_moving(void) {
     }
   #endif
 }
-#endif
 
 
 #if F_NIVI
 void send_f_road_inclination(void) {
-  f_road_inclination[2] = f_vehicle_angle;
+  f_road_inclination[2] = f_vehicle_angle & 0xFF;                                                                                   // Send in LE.
+  f_road_inclination[3] = 0x20 | f_vehicle_angle >> 8;                                                                              // Byte3 lower 4 bits fixed to 2 - QU_AVL_LOGR_RW Signal value is valid, permanent.
   f_road_inclination_buf = make_msg_buf(0x163, 8, f_road_inclination);
   ptcan_write_msg(f_road_inclination_buf);
 }
 
 
 void send_f_longitudinal_acceleration(void) {
+  e_long_acceleration = ((int16_t)(k_msg.buf[2] << 8 | k_msg.buf[3])) * 0.0001;                                                     // Value in m/s^2.
+  longitudinal_acceleration = round((e_long_acceleration + 65) / 0.002);
+
   f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
   f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
                                                    : f_longitudinal_acceleration_alive_counter++;
-  f_longitudinal_acceleration[2] = longitudinal_acceleration;
+  f_longitudinal_acceleration[2] = longitudinal_acceleration & 0xFF;                                                                // Convert and transmit in LE.
+  f_longitudinal_acceleration[3] = longitudinal_acceleration >> 8;
   f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
   ptcan_write_msg(f_longitudinal_acceleration_buf);
 }
@@ -135,8 +140,7 @@ void send_f_yaw_rate(void) {
 
 
 void send_f_speed_status(void) {
-  uint8_t speed_multiplier = pt_msg.buf[1] & 0xF;
-  real_speed = ceil((pt_msg.buf[0] + speed_multiplier * 0xFF) * 0.1);                                                               // KM/h
+  real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                           // KM/h
 
   vehicle_direction = pt_msg.buf[1] >> 4;
   if (vehicle_direction == 8) {                                                                                                     // Not moving.
@@ -152,7 +156,7 @@ void send_f_speed_status(void) {
   if (vehicle_direction == 9 || vehicle_direction == 0xA) {
     uint16_t f_temp_speed = real_speed / 0.015625;
     if (speed_mph) {
-      f_temp_speed = floor(f_temp_speed * 1.6);
+      f_temp_speed = round(f_temp_speed * 1.6);
     }
     f_speed[2] = f_temp_speed & 0xFF;
     f_speed[3] = f_temp_speed >> 8;

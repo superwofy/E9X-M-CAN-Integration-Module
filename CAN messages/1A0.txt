@@ -8,7 +8,7 @@
 
 
  Indicated speed: 18 Moving: Yes
-1A0 Buffer: 9E 90 E4 8F 0 E9 7F 
+1A0 Buffer: 9E 90 E4 8F 0 E9 7F                             // Real speed = 0x09E * 0.1 = 15.8
  Indicated speed: 18 Moving: Yes
 1A0 Buffer: 9F 90 EC 7F 0 EC 8F 
  Indicated speed: 18 Moving: Yes

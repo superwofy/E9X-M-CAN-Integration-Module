@@ -89,7 +89,6 @@ Program:
 Message transmission is optimized to reach the receiver module on the shortest route. I.e. messages that need to reach KOMBI are sent on KCAN even if the BMW implementation would have sent it over PTCAN. This is done to minimize any gateway (JBE) delay.
 Functions that make use of CANID 0x6F1 (iDrive volume, SVT_70 gateway, etc.) are deactivated if communication on the DCAN from an OBD tool is detected.
 Wherever pausing is required (dtc/dsc off for example), FiFo queues are implemented to ensure reading and processing of messages is unaffected.
-To diagnose/code/etc. the SVT module, hold POWER when turning on ignition. Transmitting to DCAN corrupts UIF reads for other modules hence why this function is disabled otherwise.
 A serial module is implemented to allow basic manipulation during runtime. Default password to unlock is "coldboot". "help" prints the available commands.
 
 

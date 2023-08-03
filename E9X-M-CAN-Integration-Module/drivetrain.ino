@@ -44,7 +44,7 @@ void toggle_mdrive_message_active(void) {
     mdrive_message[4] -= 0x10;
     mdrive_status = mdrive_power_active = false;
     #if FRM_HEADLIGHT_MODE
-      kcan_write_msg(frm_ckm_komfort_buf);
+      kcan_write_msg(frm_ckm_ahl_komfort_buf);
       serial_log("Set AHL back to comfort mode.");
     #endif
     if (mdrive_power == 0x30) {
@@ -73,7 +73,7 @@ void toggle_mdrive_message_active(void) {
     mdrive_status = true;
 
     #if FRM_HEADLIGHT_MODE
-      kcan_write_msg(frm_ckm_sport_buf);
+      kcan_write_msg(frm_ckm_ahl_sport_buf);
       serial_log("Set AHL to sport mode.");
     #endif
   }

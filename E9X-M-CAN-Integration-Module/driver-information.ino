@@ -95,10 +95,14 @@ void evaluate_update_shiftlight_sync(void) {
 #if NEEDLE_SWEEP
 void check_kombi_needle_queue(void) {
   if (!kombi_needle_txq.isEmpty()) {
-    kombi_needle_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      kombi_needle_txq.drop();
+    if (diag_transmit) {
+      kombi_needle_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        kcan_write_msg(delayed_tx.tx_msg);
+        kombi_needle_txq.drop();
+      }
+    } else {
+      kombi_needle_txq.flush();
     }
   }
 }
@@ -200,15 +204,6 @@ void send_svt_kcan_cc_notification(void) {
     pt_msg.buf[1] = 0x46;
   }
   kcan_write_msg(pt_msg);                                                                                                           // Forward the SVT error status to KCAN.
-}
-
-
-void indicate_svt_diagnosis_on(void) {
-  if (!digitalRead(POWER_BUTTON_PIN)) {                                                                                             // If POWER button is being held when turning ignition ON, allow SVT diagnosis.
-    diagnose_svt = true;
-    serial_log("Diagnosing SVT70 module now possible.");
-    kcan_write_msg(servotronic_cc_on_buf);                                                                                          // Indicate that diagnosing is now possible.
-  }
 }
 #endif
 

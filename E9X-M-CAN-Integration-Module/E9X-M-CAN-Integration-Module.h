@@ -9,9 +9,9 @@
 #include "src/queue/cppQueue.h"                                                                                                     // https://github.com/SMFSW/Queue
 #include "usb_dev.h"
 extern "C" uint32_t set_arm_clock(uint32_t frequency);
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> KCAN;
-FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> PTCAN;
-FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> DCAN;
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_64> KCAN;                                                                                     // RX: 32 messages with length 8, TX: 8 messages with length 8.
+FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_64> PTCAN;
+FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_64> DCAN;
 WDT_T4<WDT1> wdt;
 const uint8_t wdt_timeout_sec = 10;
 CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                                                                                   // XMODEM
@@ -99,7 +99,7 @@ const int8_t STEERTING_ANGLE_HYSTERESIS_INDICATORS = 15;
 #if AUTO_SEAT_HEATING
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
 #endif
-#define RTC 1                                                                                                                       // Set the time/date if power is lost. Requires external battery.
+#define RTC 1                                                                                                                       // Sets the time/date if power is lost. Requires external battery.
 
 
 #if SERVOTRONIC_SVT70
@@ -196,12 +196,17 @@ typedef struct delayed_can_tx_msg {
 	CAN_message_t	tx_msg;
 	unsigned long	transmit_time;
 } delayed_can_tx_msg;
-uint16_t stored_eeprom_checksum, calculated_eeprom_checksum;
+cppQueue kcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+cppQueue ptcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+cppQueue dcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+uint8_t kcan_retry_counter = 0, ptcan_retry_counter = 0, dcan_retry_counter = 0;
+uint16_t stored_eeprom_checksum = 0xFFFF, calculated_eeprom_checksum = 0;
 delayed_can_tx_msg delayed_tx, m;
 unsigned long time_now;
 uint32_t cpu_speed_ide;
-bool key_valid = false, terminal_r = false, ignition = false,  vehicle_awake = false;
+bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = false, vehicle_moving = false;
 bool terminal_50 = false, engine_running = false, clutch_pressed = false;
+bool clearing_dtcs = false;
 unsigned long engine_runtime = 0;
 float battery_voltage = 0;
 elapsedMillis vehicle_awake_timer = 0, vehicle_awakened_time = 0;
@@ -220,7 +225,7 @@ uint16_t RPM = 0;
 #if CKM || EDC_CKM_FIX
   uint8_t cas_key_number = 0;                                                                                                       // 0 = Key 1, 1 = Key 2...
 #endif
-uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
+uint8_t mdrive_dsc = 3, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
 bool mdrive_status = false, mdrive_power_active = false;
 bool console_power_mode, restore_console_power_mode = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
@@ -238,9 +243,8 @@ float last_cpu_temp = 0, max_cpu_temp = 0;
 CAN_message_t cc_gong_buf;
 
 #if SERVOTRONIC_SVT70
+  bool uif_read = false;
   uint8_t servotronic_message[] = {0, 0xFF};
-  CAN_message_t servotronic_cc_on_buf;
-  bool diagnose_svt = false;
 #endif
 #if CONTROL_SHIFTLIGHTS
   CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf;
@@ -252,11 +256,11 @@ CAN_message_t cc_gong_buf;
   uint16_t MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
   uint16_t GONG_UPSHIFT_WARN_RPM_ = GONG_UPSHIFT_WARN_RPM;
   bool engine_coolant_warmed_up = false;
-  uint16_t var_redline_position;
+  uint16_t var_redline_position = 0;
   uint8_t last_var_rpm_can = 0;
-  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // byte 5: shiftlights always on
+  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // Byte5: shiftlights always on
 #else
-  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // byte 5: shiftlights always off
+  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // Byte5: shiftlights always off
 #endif
 #if NEEDLE_SWEEP
   CAN_message_t speedo_needle_max_buf, speedo_needle_min_buf, speedo_needle_release_buf;
@@ -269,11 +273,11 @@ CAN_message_t cc_gong_buf;
 #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
   bool front_fog_status = false;
 #endif
-#if FRONT_FOG_CORNER
+#if FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
   bool indicators_on = false;
 #endif
 #if FRONT_FOG_CORNER
-  unsigned long last_fog_action_timer = 0;
+  unsigned long last_fog_action_timer = 15000;
   bool dipped_beam_status = false, left_fog_on = false, right_fog_on = false;
   int16_t steering_angle = 0;
   CAN_message_t front_left_fog_on_a_buf, front_left_fog_on_b_buf, front_left_fog_on_c_buf, front_left_fog_on_d_buf;
@@ -289,7 +293,7 @@ CAN_message_t cc_gong_buf;
   cppQueue fog_corner_right_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if DIM_DRL
-  unsigned long last_drl_action_timer = 0;
+  unsigned long last_drl_action_timer = 15000;
   bool drl_status = false, left_dimmed = false, right_dimmed = false;
   CAN_message_t left_drl_dim_off, left_drl_dim_buf, left_drl_bright_buf;
   CAN_message_t right_drl_dim_off, right_drl_dim_buf, right_drl_bright_buf;
@@ -303,7 +307,7 @@ CAN_message_t cc_gong_buf;
   uint8_t last_hood_status = 0;
 #endif
 #if FRM_HEADLIGHT_MODE
-  CAN_message_t frm_ckm_komfort_buf, frm_ckm_sport_buf;
+  CAN_message_t frm_ckm_ahl_komfort_buf, frm_ckm_ahl_sport_buf;
 #endif
 #if WIPE_AFTER_WASH
   bool wipe_scheduled = false;
@@ -312,7 +316,7 @@ CAN_message_t cc_gong_buf;
   cppQueue wiper_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if AUTO_MIRROR_FOLD
-  bool mirrors_folded, frm_status_requested = false;
+  bool mirrors_folded = false, frm_status_requested = false;
   bool lock_button_pressed  = false, unlock_button_pressed = false;
   CAN_message_t frm_status_request_a_buf, frm_status_request_b_buf;
   CAN_message_t frm_toggle_fold_mirror_a_buf, frm_toggle_fold_mirror_b_buf;
@@ -326,6 +330,7 @@ CAN_message_t cc_gong_buf;
 #endif
 #if INDICATE_TRUNK_OPENED
   CAN_message_t flash_hazards_buf;
+  bool visual_signal_ckm, hazards_on = false;
 #endif
 #if ANTI_THEFT_SEQ
   bool anti_theft_released = false, anti_theft_persist = true, holding_both_console = false;
@@ -376,13 +381,14 @@ CAN_message_t cc_gong_buf;
 #if F_NIVI
   float sine_tilt_angle = 0;
   bool sine_angle_requested = false;
-  int f_vehicle_angle = 0x40;                                                                                                       // 0 deg.
-  uint8_t f_road_inclination[] = {0xFF, 0xFF, 0, 0x25, 0xFF, 0xFF, 0xFF, 0xFF};                                                     // Angle formula simlar to 56.1.2. Byte3 fixed to QU_AVL_LOGR_RW-Signal value is valid, permanent.
-  int longitudinal_acceleration = 0x41;                                                                                             // 0 m/s^2.
-  uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0x7D, 0xFF, 0xBF};                                                        // Similar to 55.0.2
+  int f_vehicle_angle = 0x500;                                                                                                      // 0 deg.
+  uint8_t f_road_inclination[] = {0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF};                                                        // Angle formula simlar to 56.1.2.
+  float e_long_acceleration = 0;
+  int longitudinal_acceleration = 0x7EF4;                                                                                           // 32500 * 0.002 - 65 = 0 m/s^2.
+  uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                           // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
   uint8_t f_longitudinal_acceleration_alive_counter = 0;
   int yaw_rate = 0xA4;                                                                                                              // Nearly 0 deg/s.
-  uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0x7F, 0xFF, 0x2F};                                                                         // M4 (VYAW_VEH) 56.0.2. Byte5 fixed 0x2F - Signal value is valid QU_VYAW_VEH
+  uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                                            // M4 (VYAW_VEH) 56.0.2. Byte5 fixed 0x2F - Signal value is valid QU_VYAW_VEH.
   uint8_t f_yaw_alive_counter = 0;
   uint16_t real_speed = 0;
   uint8_t vehicle_direction = 0;
@@ -392,7 +398,8 @@ CAN_message_t cc_gong_buf;
   uint8_t f_outside_brightness[] = {0xFE, 0xFE};                                                                                    // Daytime?. The two bytes may represent the two photosensors (driver's/passenger's side in FXX).
   uint8_t f_data_powertrain_2_alive_counter = 0;
   uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                      // Byte7 max rpm: 50 * 8C = 7000.
-  elapsedMillis sine_angle_request_timer = 500, f_outside_brightness_timer = 200, f_data_powertrain_2_timer = 1000;
+  elapsedMillis sine_angle_request_timer = 500, f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000;
+  elapsedMillis f_chassis_messages_timer = 100;
   CAN_message_t sine_angle_request_a_buf, sine_angle_request_b_buf;
   CAN_message_t f_road_inclination_buf, f_longitudinal_acceleration_buf, f_yaw_rate_buf;
   CAN_message_t f_speed_buf, f_outside_brightness_buf, f_data_powertrain_2_buf;
@@ -434,7 +441,7 @@ float ambient_temperature_real = 87.5;
 #if DOOR_VOLUME
   bool volume_reduced = false, initial_volume_set = false;
   uint8_t volume_restore_offset = 0, volume_changed_to, peristent_volume = 0;
-  elapsedMillis volume_request_timer = 5000;
+  elapsedMillis volume_request_timer = 3000;
   CAN_message_t vol_request_buf, door_open_cc_off_buf;
   cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
@@ -457,9 +464,6 @@ float ambient_temperature_real = 87.5;
   CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
   CAN_message_t hdc_cc_activated_off_buf, hdc_cc_unavailable_off_buf, hdc_cc_deactivated_off_buf;
 #endif
-#if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
-  bool vehicle_moving = false;
-#endif
 #if FAKE_MSA
   CAN_message_t msa_deactivated_cc_on_buf, msa_deactivated_cc_off_buf;
 #endif
@@ -480,7 +484,7 @@ float ambient_temperature_real = 87.5;
   extern float tempmonGetTemp(void);
   char serial_debug_string[512];
   elapsedMillis debug_print_timer = 500;
-  unsigned long max_loop_timer = 0, loop_timer = 0, setup_time;
+  unsigned long max_loop_timer = 0, loop_timer = 0, setup_time = 0;
   uint32_t kcan_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
   bool serial_commands_unlocked = false;
   #if SECRETS
@@ -488,6 +492,7 @@ float ambient_temperature_real = 87.5;
   #else
     String serial_password = "coldboot";                                                                                            // Default password.
   #endif
+  cppQueue serial_diag_txq(sizeof(delayed_can_tx_msg), 384, queue_FIFO);
 #endif
 bool diag_transmit = true;
 elapsedMillis diag_deactivate_timer;

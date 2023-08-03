@@ -39,6 +39,7 @@ void read_initialize_eeprom(void) {
     EEPROM.update(14, 1);
     EEPROM.update(15, 0);
     EEPROM.update(16, 0x10);
+    EEPROM.update(17, 0);
     update_eeprom_checksum();
   } else {
     mdrive_dsc = EEPROM.read(2);
@@ -87,6 +88,9 @@ void read_initialize_eeprom(void) {
         peristent_volume = 0x10;
       }
     #endif
+    #if INDICATE_TRUNK_OPENED
+      visual_signal_ckm = EEPROM.read(17) == 1 ? true : false;
+    #endif
     serial_log("Loaded data from EEPROM.");
   }
 }
@@ -94,7 +98,7 @@ void read_initialize_eeprom(void) {
 
 uint16_t eeprom_crc(void) {
   teensy_eep_crc.restart();
-  for (uint8_t i = 2; i < 17; i++) {
+  for (uint8_t i = 2; i < 18; i++) {
     teensy_eep_crc.add(EEPROM.read(i));
   }
   return teensy_eep_crc.calc();
@@ -119,9 +123,12 @@ void update_data_in_eeprom(void) {
   #if AUTO_MIRROR_FOLD
     EEPROM.update(12, unfold_with_door_open);
   #endif
-  EEPROM.update(15, floor(max_cpu_temp));
+  EEPROM.update(15, round(max_cpu_temp));
   #if DOOR_VOLUME
     EEPROM.update(16, peristent_volume);
+  #endif
+  #if INDICATE_TRUNK_OPENED
+    EEPROM.update(17, visual_signal_ckm);
   #endif
   update_eeprom_checksum();
   serial_log("Saved data to EEPROM.");
@@ -129,30 +136,25 @@ void update_data_in_eeprom(void) {
 
 
 void update_eeprom_checksum(void) {
-  calculated_eeprom_checksum = eeprom_crc();
-  EEPROM.update(0, calculated_eeprom_checksum >> 8);
-  EEPROM.update(1, calculated_eeprom_checksum & 0xFF);
+  uint16_t new_eeprom_checksum = eeprom_crc();
+  EEPROM.update(0, new_eeprom_checksum >> 8);
+  EEPROM.update(1, new_eeprom_checksum & 0xFF);
 }
 
 
 void initialize_watchdog(void) {
   WDT_timings_t config;
-  #if DEBUG_MODE
-    config.trigger = wdt_timeout_sec;
-    config.callback = wdt_callback;
-    config.timeout = wdt_timeout_sec + 2;
-  #else
-    config.timeout = wdt_timeout_sec;                                                                                               // If the watchdog timer is not reset within 10s, re-start the program.
-  #endif
+  config.trigger = wdt_timeout_sec;
+  config.callback = wdt_callback;
+  config.timeout = wdt_timeout_sec + 3;                                                                                             // If the watchdog timer is not reset within 10s, re-start the program.
   wdt.begin(config);
 }
 
 
-#if DEBUG_MODE
 void wdt_callback(void) {
-  serial_log("Watchdog not fed. Program will reset in 2s!");
+  serial_log("Watchdog not fed. Program will reset in 3s!");
+  update_data_in_eeprom();
 }
-#endif
 
 
 #if DEBUG_MODE
@@ -170,6 +172,10 @@ void print_current_state(Stream &status_serial) {
   status_serial.println(serial_debug_string);
   #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
     sprintf(serial_debug_string, " Indicated speed: %d %s", indicated_speed, speed_mph ? "MPH" : "KPH");
+    status_serial.println(serial_debug_string);
+  #endif
+  #if F_NIVI
+    sprintf(serial_debug_string, " Real speed: %d %s", real_speed, speed_mph ? "MPH" : "KPH");
     status_serial.println(serial_debug_string);
   #endif
   #if HDC
@@ -196,10 +202,8 @@ void print_current_state(Stream &status_serial) {
   
   sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Pressed" : "Released");
   status_serial.println(serial_debug_string);
-  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
-    sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
-    status_serial.println(serial_debug_string);
-  #endif
+  sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
+  status_serial.println(serial_debug_string);
   #if F_NIVI
     if (vehicle_direction == 8) {
       status_serial.println(" Direction: None");
@@ -210,12 +214,12 @@ void print_current_state(Stream &status_serial) {
     } else {
       status_serial.println(" Direction: Unknown");
     }
-    sprintf(serial_debug_string, " Sine Tilt: %.1f Converted: %.1f deg", sine_tilt_angle, (f_vehicle_angle - 64.0) * 0.05);
+    sprintf(serial_debug_string, " Sine Tilt: %.1f, Converted: %.1f deg", sine_tilt_angle, f_vehicle_angle * 0.05 - 64.0);
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Outside brightness: 0x%X %s.", rls_brightness, 
             rls_time_of_day == 0 ? "Daytime" : rls_time_of_day == 1 ? "Twilight" : "Darkness");
     status_serial.println(serial_debug_string);
-    sprintf(serial_debug_string, " Longitudinal acceleration: %.2f m/s^2", (longitudinal_acceleration - 65.0) * 0.002);
+    sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, %.2f m/s^2", e_long_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0);
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Yaw rate: %.2f deg/s", (yaw_rate - 163.84) * 0.005);
     status_serial.println(serial_debug_string);
@@ -368,10 +372,6 @@ void print_current_state(Stream &status_serial) {
       status_serial.println(" FTM indicator: Inactive");
     }
   #endif
-  #if SERVOTRONIC_SVT70
-    sprintf(serial_debug_string, " DCAN fix for SVT: %s", diagnose_svt ? "ON" : "OFF");
-    status_serial.println(serial_debug_string);
-  #endif
 
   status_serial.println("============== Debug ===============");
   sprintf(serial_debug_string, " CPU temperature: %.2f °C", tempmonGetTemp());
@@ -419,6 +419,9 @@ void reset_runtime_variables(void) {                                            
   ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
   mfl_pressed_count = 0;
+  #if SERVOTRONIC_SVT70
+    uif_read = false;
+  #endif
   #if CKM
     console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                         // When cycling ignition, restore this to its CKM value.
   #endif
@@ -439,9 +442,6 @@ void reset_runtime_variables(void) {                                            
   #endif
   #if HDC || FAKE_MSA
     ihk_extra_buttons_cc_txq.flush();
-  #endif
-  #if SERVOTRONIC_SVT70
-    diagnose_svt = false;
   #endif
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
@@ -499,7 +499,7 @@ void reset_runtime_variables(void) {                                            
     ftm_indicator_status = false;
   #endif
   #if FRM_HEADLIGHT_MODE
-    kcan_write_msg(frm_ckm_komfort_buf);
+    kcan_write_msg(frm_ckm_ahl_komfort_buf);
   #endif
   #if HDC
     cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
@@ -546,9 +546,7 @@ void reset_sleep_variables(void) {
   #if NEEDLE_SWEEP
     kombi_needle_txq.flush();
   #endif
-  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
-    vehicle_moving = false;
-  #endif
+  vehicle_moving = false;
   #if WIPE_AFTER_WASH
     wiper_txq.flush();
     wash_message_counter = 0;
@@ -571,4 +569,8 @@ void reset_sleep_variables(void) {
     }
   #endif
   update_data_in_eeprom();
+  kcan_retry_counter = ptcan_retry_counter = dcan_retry_counter = 0;
+  kcan_resend_txq.flush();
+  ptcan_resend_txq.flush();
+  dcan_resend_txq.flush();
 }

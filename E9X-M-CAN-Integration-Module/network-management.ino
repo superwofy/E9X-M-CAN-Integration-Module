@@ -22,10 +22,6 @@ void cache_can_message_buffers(void) {                                          
   idrive_mdrive_settings_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_b);
   uint8_t cc_gong[] = {0x60, 3, 0x31, 0x22, 2, 0, 0, 0};
   cc_gong_buf = make_msg_buf(0x6F1, 8, cc_gong);
-  #if SERVOTRONIC_SVT70
-    uint8_t servotronic_cc_on[] = {0x40, 0x46, 0, 0x29, 0xFF, 0xFF, 0xFF, 0xFF};
-    servotronic_cc_on_buf = make_msg_buf(0x58E, 8, servotronic_cc_on);
-  #endif
   #if EDC_CKM_FIX
     uint8_t edc_button_press[] = {0, 5, 0x30, 1, 7, 0x1A, 0, 0};
     edc_button_press_buf = make_msg_buf(0x6F1, 8, edc_button_press);
@@ -37,10 +33,10 @@ void cache_can_message_buffers(void) {                                          
     ftm_indicator_off_buf = make_msg_buf(0x5A0, 8, ftm_indicator_off);
   #endif
   #if FRM_HEADLIGHT_MODE
-    uint8_t frm_ckm_komfort[] = {0, 4};
-    uint8_t frm_ckm_sport[] = {0, 0xA};
-    frm_ckm_komfort_buf = make_msg_buf(0x3F0, 2, frm_ckm_komfort);
-    frm_ckm_sport_buf = make_msg_buf(0x3F0, 2, frm_ckm_sport);
+    uint8_t frm_ckm_ahl_komfort[] = {0, 4};
+    uint8_t frm_ckm_ahl_sport[] = {0, 0xA};
+    frm_ckm_ahl_komfort_buf = make_msg_buf(0x3F0, 2, frm_ckm_ahl_komfort);
+    frm_ckm_ahl_sport_buf = make_msg_buf(0x3F0, 2, frm_ckm_ahl_sport);
   #endif
   #if WIPE_AFTER_WASH
     uint8_t wipe_single[] = {8, 0xF8};
@@ -309,81 +305,111 @@ CAN_message_t make_msg_buf(uint16_t txID, uint8_t txLen, uint8_t* txBuf) {
 
 void kcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
-    if (msg.buf[0] == 0x41 && (msg.buf[2] == 0x30 || msg.buf[2] == 0x31)) {
-      // Exception for alarm jobs.
+    if (msg.buf[0] == 0x41 && (msg.buf[2] == 0x30 || msg.buf[2] == 0x31)) {                                                         // Exception for alarm jobs.
     } else {
+      #if DEBUG_MODE
+        serial_log("6F1 message not sent to KCAN due to OBD tool presence.");
+        can_debug_print_buffer(msg);
+      #endif
       return;
     }
   }
-  #if DEBUG_MODE
-    uint8_t result;
-    result = KCAN.write(msg);
-    if (result != 1) {
-      sprintf(serial_debug_string, "KCAN write failed for ID: %lx with error %d.", msg.id, result);
-      serial_log(serial_debug_string);
-      kcan_error_counter++;
+  uint8_t result = KCAN.write(msg);
+  if (result != 1) {
+    if (kcan_retry_counter < 100) {                                                                                                 // Safeguard to avoid polluting the network in case of unrecoverable issue.
+      m = {msg, millis() + 50};
+      kcan_resend_txq.push(&m);
+      kcan_retry_counter++;
     }
-  #else
-    KCAN.write(msg);
-  #endif
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "KCAN write failed for ID: %lx with error %d. Re-sending.", msg.id, result);
+      serial_log(serial_debug_string);
+      can_debug_print_buffer(msg);
+      kcan_error_counter++;
+    #endif
+  }
 }
 
 
 void ptcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
-    #if ANTI_THEFT_SEQ
-      if (msg.buf[2] == 0x30 && msg.buf[3] == 6 && msg.buf[4] == 4) {                                                                  // Exception for EKP disable.
-      } else {
-        return;
-      }
-    #else
+    if (msg.buf[2] == 0x30 && msg.buf[3] == 6 && msg.buf[4] == 4) {                                                                  // Exception for EKP disable.
+    } else if (msg.buf[0] == 0xE) {                                                                                                  // Exception for SVT70 diag.
+    } else {
+      #if DEBUG_MODE
+        serial_log("6F1 message not sent to PTCAN due to OBD tool presence.");
+        can_debug_print_buffer(msg);
+      #endif
       return;
+    }
+  }
+
+  uint8_t result = PTCAN.write(msg);
+  if (result != 1) {
+    if (ptcan_retry_counter < 100) {                                                                                                // Safeguard to avoid polluting the network in case of unrecoverable issue.
+      m = {msg, millis() + 20};
+      ptcan_resend_txq.push(&m);
+      ptcan_retry_counter++;
+    }
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "PTCAN write failed for ID: %lx with error %d. Re-sending.", msg.id, result);
+      serial_log(serial_debug_string);
+      can_debug_print_buffer(msg);
+      ptcan_error_counter++;
     #endif
   }
-  #if DEBUG_MODE
-    uint8_t result;
-    result = PTCAN.write(msg);
-    if (result != 1) {
-      sprintf(serial_debug_string, "PTCAN write failed for ID: %lx with error %d.", msg.id, result);
-      serial_log(serial_debug_string);
-      ptcan_error_counter++;
-    }
-  #else
-    PTCAN.write(msg);
-  #endif
 }
 
 
 void dcan_write_msg(const CAN_message_t &msg) {
-  #if DEBUG_MODE
-    uint8_t result;
-    result = DCAN.write(msg);
-    if (result != 1) {
+  uint8_t result = DCAN.write(msg);
+  if (result != 1) {
+    if (dcan_retry_counter < 100) {                                                                                                 // Safeguard to avoid polluting the network in case of unrecoverable issue.
+      m = {msg, millis() + 100};
+      dcan_resend_txq.push(&m);
+      dcan_retry_counter++;
+    }
+    #if DEBUG_MODE
       sprintf(serial_debug_string, "DCAN write failed for ID: %lx with error %d.", msg.id, result);
       serial_log(serial_debug_string);
+      can_debug_print_buffer(msg);
       dcan_error_counter++;
+    #endif
+  }
+}
+
+
+void check_can_resend_queues(void) {
+  if (!kcan_resend_txq.isEmpty()) {
+    kcan_resend_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      kcan_resend_txq.drop();
     }
-  #else
-    DCAN.write(msg);
-  #endif
+  }
+  if (!ptcan_resend_txq.isEmpty()) {
+    ptcan_resend_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      ptcan_resend_txq.drop();
+    }
+  }
+  if (!dcan_resend_txq.isEmpty()) {
+    dcan_resend_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      dcan_resend_txq.drop();
+    }
+  }
 }
 
 
-void forward_dcan_to_ptcan(void) {
-  ptcan_write_msg(d_msg);
+#if DEBUG_MODE
+void can_debug_print_buffer(const CAN_message_t &msg) {
+  Serial.print(" Buffer: ");
+  for ( uint8_t i = 0; i < msg.len; i++ ) {
+    Serial.print(msg.buf[i], HEX); Serial.print(" ");
+  }
+  Serial.println();
 }
-
-
-void forward_ptcan_to_dcan(void) {
-  dcan_write_msg(pt_msg);
-}
-
-
-void forward_kcan_to_dcan(void) {
-  dcan_write_msg(k_msg);
-}
-
-
-void forward_dcan_to_kcan(void) {
-  kcan_write_msg(d_msg);
-}
+#endif

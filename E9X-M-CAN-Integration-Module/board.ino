@@ -60,6 +60,8 @@ void configure_can_controllers(void) {
 
   KCAN.setMaxMB(40);                                                                                                                // Increase max filters
   KCAN.setRFFN(RFFN_40);
+  PTCAN.setMaxMB(16);
+  PTCAN.setRFFN(RFFN_16);
 
   KCAN.setFIFOFilter(REJECT_ALL);                                                                                                   // Reject unfiltered messages
   PTCAN.setFIFOFilter(REJECT_ALL);
@@ -84,11 +86,9 @@ void configure_can_controllers(void) {
     KCAN.setFIFOFilter(filter_count, 0x1AA, STD);                                                                                   // iDrive ErgoCommander (rear entertainment?)                   Sent at boot time and when cycling Terminal R.
     filter_count++;
   #endif
-  #if LAUNCH_CONTROL_INDICATOR || HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || HOOD_OPEN_GONG || F_NIVI
-    KCAN.setFIFOFilter(filter_count, 0x1B4, STD);                                                                                   // Kombi status (corrected speed)                               Cycle time 100ms (terminal R ON)
-    filter_count++;
-  #endif
-  #if DIM_DRL || FRONT_FOG_CORNER
+  KCAN.setFIFOFilter(filter_count, 0x1B4, STD);                                                                                     // Kombi status (corrected speed)                               Cycle time 100ms (terminal R ON)
+  filter_count++;
+  #if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
     KCAN.setFIFOFilter(filter_count, 0x1F6, STD);                                                                                   // Indicator status                                             Cycle time 1s. Sent when changed.
     filter_count++;
   #endif
@@ -164,6 +164,10 @@ void configure_can_controllers(void) {
   #endif
   KCAN.setFIFOFilter(filter_count, 0x3CA, STD);                                                                                     // CIC MDrive settings                                          Sent when changed.
   filter_count++;
+  #if INDICATE_TRUNK_OPENED
+    KCAN.setFIFOFilter(filter_count, 0x3D7, STD);                                                                                   // Door lock settings from DWA.                                 Sent when changed.
+    filter_count++;
+  #endif
   #if F_ZBE_WAKE || F_VSW01 || F_NIVI
     KCAN.setFIFOFilter(filter_count, 0x4E2, STD);                                                                                   // CIC Network management.                                      Sent when CIC is ON, cycle time 1.5s.
     filter_count++;
@@ -222,6 +226,7 @@ void configure_can_controllers(void) {
     filter_count++;
     PTCAN.setFIFOFilter(filter_count, 0x60E, STD);                                                                                  // Receive diagnostic messages from SVT module to forward.
   #endif
+
 
   // DCAN
   DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                                                // Receive diagnostic queries from DCAN tool to forward.
