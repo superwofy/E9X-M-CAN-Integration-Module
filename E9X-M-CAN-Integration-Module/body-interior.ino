@@ -82,7 +82,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   #endif
 
   if (ignition && !ignition_) {                                                                                                     // Ignition changed from OFF to ON.
-    scale_mcu_speed();
+    scale_cpu_speed();
     #if USB_DISABLE
       activate_usb();                                                                                                               // If this fails to run, the program button will need to be pressed to recover.
     #endif
@@ -102,10 +102,8 @@ void evaluate_terminal_clutch_keyno_status(void) {
     #endif
   } else if (!ignition && ignition_) {
     reset_runtime_variables();
-    scale_mcu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
-    #if DEBUG_MODE
-      serial_log("Ignition OFF. Reset values.");
-    #endif
+    scale_cpu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
+    serial_log("Ignition OFF. Reset values.");
   }
 
   if (terminal_r && !terminal_r_) {
@@ -299,6 +297,16 @@ void evaluate_battery_voltage(void) {
 }
 
 
+void check_power_led_state(void) {
+  if (power_led_delayed_off_action) {
+    if (millis() >= power_led_delayed_off_action_time) {
+      digitalWrite(POWER_LED_PIN, LOW);
+      power_led_delayed_off_action = false;
+    }
+  }
+}
+
+
 void check_console_buttons(void) {
   #if ANTI_THEFT_SEQ
   if (anti_theft_released) {
@@ -406,11 +414,13 @@ void update_car_time_from_rtc(void) {
 
 #if DOOR_VOLUME
 void send_volume_request_periodic(void) {
-  if (volume_request_timer >= 3000) {
-    if (diag_transmit) {
-      kcan_write_msg(vol_request_buf);
+  if (terminal_r) {
+    if (volume_request_timer >= 3000) {
+      if (diag_transmit) {
+        kcan_write_msg(vol_request_buf);
+      }
+      volume_request_timer = 0;
     }
-    volume_request_timer = 0;
   }
 }
 
@@ -591,6 +601,7 @@ void update_idrive_alive_timer(void) {
 #if F_VSW01
 void vsw_switch_input(uint8_t input) {
   kcan_write_msg(vsw_switch_buf[input]);
+  vsw_current_input = input;
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent VSW/%d request.", input);
     serial_log(serial_debug_string);

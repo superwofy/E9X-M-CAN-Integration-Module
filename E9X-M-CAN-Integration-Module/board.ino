@@ -2,10 +2,6 @@
 
 
 void configure_IO(void) {
-  pinMode(PTCAN_STBY_PIN, OUTPUT); 
-  digitalWrite(PTCAN_STBY_PIN, HIGH);
-  pinMode(DCAN_STBY_PIN, OUTPUT);
-  digitalWrite(DCAN_STBY_PIN, HIGH); 
   pinMode(POWER_BUTTON_PIN, INPUT_PULLUP);                                                                                                 
   pinMode(DSC_BUTTON_PIN, INPUT_PULLUP);
   pinMode(POWER_LED_PIN, OUTPUT);
@@ -23,53 +19,62 @@ void configure_IO(void) {
   #if RTC
     setSyncProvider(get_teensy_time);
   #endif
-}
 
+  uint8_t disable_pins[40] = {1};                                                                                                   // Disable unused pins to save a tiny bit of current.
+  disable_pins[0] = 0;                                                                                                              // CAN2
+  disable_pins[1] = 0;
+  disable_pins[11] = 0;                                                                                                             // CAN3
+  disable_pins[13] = 0;
+  disable_pins[22] = 0;                                                                                                             // CAN1
+  disable_pins[23] = 0;
+  disable_pins[POWER_BUTTON_PIN] = 0;
+  disable_pins[POWER_LED_PIN] = 0;
+  disable_pins[FOG_LED_PIN] = 0;
+  #if AUTO_STEERING_HEATER
+    disable_pins[STEERING_HEATER_SWITCH_PIN] = 0;
+  #endif
+  disable_pins[DCAN_STBY_PIN] = 0;
+  disable_pins[PTCAN_STBY_PIN] = 0;
+  disable_pins[DSC_BUTTON_PIN] = 0;
+  #if EXHAUST_FLAP_CONTROL
+    disable_pins[EXHAUST_FLAP_SOLENOID_PIN] = 0;
+  #endif
 
-void scale_mcu_speed(void) {
-  if (ignition) {
-    set_arm_clock(cpu_speed_ide);
-    #if DEBUG_MODE
-      max_loop_timer = 0;
-    #endif
-  } else {
-      set_arm_clock(MAX_UNDERCLOCK);                                                                                                // Reduce core clock.
-      #if DEBUG_MODE
-        max_loop_timer = 0;
-      #endif
+  for (uint i = 0; i < 40; i++) {
+    if (disable_pins[i]) {
+      pinMode(disable_pins[i], INPUT_DISABLE);
+    }
   }
 }
 
 
-void configure_can_controllers(void) {
-  KCAN.begin();
-  PTCAN.begin();
-  DCAN.begin();
+void scale_cpu_speed(void) {
+  if (ignition) {
+    set_arm_clock(STANDARD_CLOCK);
+    #if DEBUG_MODE
+      max_loop_timer = 0;
+    #endif
+  } else {
+    set_arm_clock(MAX_UNDERCLOCK);                                                                                                  // Reduce core clock.
+    #if DEBUG_MODE
+      max_loop_timer = 0;
+    #endif
+  }
+}
 
-  KCAN.setClock(CLK_60MHz);                                                                                                         // Increase from the default 24MHz clock. Run before setBaudRate.
-  PTCAN.setClock(CLK_60MHz);
-  DCAN.setClock(CLK_60MHz);
 
-  KCAN.setBaudRate(100000);                                                                                                         // 100k
-  PTCAN.setBaudRate(500000);                                                                                                        // 500k
-  DCAN.setBaudRate(500000);                                                                                                         // 500k
-
-  KCAN.enableFIFO();                                                                                                                // Activate FIFO mode.
-  PTCAN.enableFIFO();
-  DCAN.enableFIFO();
-
-  KCAN.setMaxMB(40);                                                                                                                // Increase max filters
-  KCAN.setRFFN(RFFN_40);
-  PTCAN.setMaxMB(16);
-  PTCAN.setRFFN(RFFN_16);
-
-  KCAN.setFIFOFilter(REJECT_ALL);                                                                                                   // Reject unfiltered messages
-  PTCAN.setFIFOFilter(REJECT_ALL);
-  DCAN.setFIFOFilter(REJECT_ALL);
-
+void configure_can_controller(void) {
   uint8_t filter_count = 0;
 
   // KCAN
+  KCAN.begin();
+  KCAN.setClock(CLK_60MHz);                                                                                                         // Increase from the default 24MHz clock. Run before setBaudRate.
+  KCAN.setBaudRate(100000);                                                                                                         // 100k
+  KCAN.enableFIFO();                                                                                                                // Activate FIFO mode.
+  KCAN.setMaxMB(40);                                                                                                                // Increase max filters
+  KCAN.setRFFN(RFFN_40);
+  KCAN.setFIFOFilter(REJECT_ALL);                                                                                                   // Reject unfiltered messages
+
   KCAN.setFIFOFilter(filter_count, 0xAA, STD);                                                                                      // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
   filter_count++;
   KCAN.setFIFOFilter(filter_count, 0x130, STD);                                                                                     // Key/ignition status                                          Cycle time 100ms
@@ -195,6 +200,14 @@ void configure_can_controllers(void) {
 
 
   // PTCAN
+  PTCAN.begin();
+  PTCAN.setClock(CLK_60MHz);
+  PTCAN.setBaudRate(500000);                                                                                                        // 500k
+  PTCAN.enableFIFO();
+  PTCAN.setMaxMB(16);
+  PTCAN.setRFFN(RFFN_16);  
+  PTCAN.setFIFOFilter(REJECT_ALL);
+
   #if FRONT_FOG_CORNER
     PTCAN.setFIFOFilter(filter_count, 0xC8, STD);                                                                                   // Steering angle.                                              Cycle time 200ms.
     filter_count++;
@@ -229,7 +242,17 @@ void configure_can_controllers(void) {
 
 
   // DCAN
+  DCAN.begin();
+  DCAN.setClock(CLK_60MHz);
+  DCAN.setBaudRate(500000);                                                                                                         // 500k
+  DCAN.enableFIFO();
+  DCAN.setFIFOFilter(REJECT_ALL);
+
   DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                                                // Receive diagnostic queries from DCAN tool to forward.
+
+
+  pinMode(PTCAN_STBY_PIN, OUTPUT); 
+  pinMode(DCAN_STBY_PIN, OUTPUT);
 }
 
 
@@ -241,14 +264,14 @@ void toggle_transceiver_standby(void) {
     serial_log("Deactivated D-CAN transceiver.");
   } else {
     digitalWrite(PTCAN_STBY_PIN, LOW);
-    serial_log("Re-activated PT-CAN transceiver.");
+    serial_log("Activated PT-CAN transceiver.");
     digitalWrite(DCAN_STBY_PIN, LOW);
-    serial_log("Re-activated D-CAN transceiver.");
+    serial_log("Activated D-CAN transceiver.");
   }
 }
 
 
-void check_teensy_cpu_temp(void) {                                                                                                  // Underclock the processor if it starts to heat up.
+void check_teensy_cpu_temp_clock(void) {                                                                                            // Underclock the processor if it starts to heat up.
   if (ignition) {                                                                                                                   // If ignition is OFF, the processor will already be underclocked.
     float cpu_temp = tempmonGetTemp();
 
@@ -257,35 +280,71 @@ void check_teensy_cpu_temp(void) {                                              
     }
 
     if (+(cpu_temp - last_cpu_temp) > HYSTERESIS) {
-      if (cpu_temp >= MAX_THRESHOLD) {
-        if (clock_mode != 4) {
-          set_arm_clock(MAX_UNDERCLOCK);
-          serial_log("Processor temperature above max overheat threshold. Underclocking.");
-          clock_mode = 4;
-        }
-      } else if (cpu_temp >= HIGH_THRESHOLD) {
-        if (clock_mode != 3) {
-          set_arm_clock(HIGH_UNDERCLOCK);
-          serial_log("Processor temperature above high overheat threshold. Underclocking.");
-          clock_mode = 3;
+
+      if (ambient_temperature_real >= 32 && ambient_temperature_real != 87.5) {                                                     // Make underclock more aggressive at higher ambient temperatures. Ignore if not yet initialized.
+        HIGH_UNDERCLOCK = MAX_UNDERCLOCK;
+        MEDIUM_UNDERCLOCK = HIGH_UNDERCLOCK_;
+        MILD_UNDERCLOCK = MEDIUM_UNDERCLOCK_;
+      } else {
+        HIGH_UNDERCLOCK = HIGH_UNDERCLOCK_;
+        MEDIUM_UNDERCLOCK = MEDIUM_UNDERCLOCK_;
+        MILD_UNDERCLOCK = MILD_UNDERCLOCK_;
+      }
+
+      if (cpu_temp >= MILD_THRESHOLD) {
+        if (clock_mode != 1) {
+          set_arm_clock(MILD_UNDERCLOCK);
+          serial_log("Processor temperature above mild overheat threshold. Underclocking.");
+          clock_mode = 1;
+          #if DEBUG_MODE
+            max_loop_timer = 0;
+          #endif
         }
       } else if (cpu_temp >= MEDIUM_THRESHOLD) {
         if (clock_mode != 2) {
           set_arm_clock(MEDIUM_UNDERCLOCK);
           serial_log("Processor temperature above medium overheat threshold. Underclocking.");
           clock_mode = 2;
+          #if DEBUG_MODE
+            max_loop_timer = 0;
+          #endif
         }
-      } else if (cpu_temp >= MILD_THRESHOLD) {
-        if (clock_mode != 1) {
-          set_arm_clock(MILD_UNDERCLOCK);
-          serial_log("Processor temperature above mild overheat threshold. Underclocking.");
-          clock_mode = 1;
+      } else if (cpu_temp >= HIGH_THRESHOLD) {
+        if (clock_mode != 3) {
+          set_arm_clock(HIGH_UNDERCLOCK);
+          serial_log("Processor temperature above high overheat threshold. Underclocking.");
+          clock_mode = 3;
+          #if DEBUG_MODE
+            max_loop_timer = 0;
+          #endif
+        }
+      } else if (cpu_temp >= MAX_THRESHOLD) {
+        if (clock_mode != 4) {
+          set_arm_clock(MAX_UNDERCLOCK);
+          serial_log("Processor temperature above max overheat threshold. Underclocking.");
+          clock_mode = 4;
+          #if DEBUG_MODE
+            max_loop_timer = 0;
+          #endif
+        }
+      } else if (cpu_temp >= 90.0) {                                                                                                // This should never happen!
+        if (clock_mode != 5) {
+          uint32_t dcdc = DCDC_REG3;                                                                                                // From clockspeed.c
+          dcdc &= ~DCDC_REG3_TRG_MASK;
+          dcdc |= DCDC_REG3_TRG(CRITICAL_UNDERVOLT);
+          DCDC_REG3 = dcdc;
+          while (!(DCDC_REG0 & DCDC_REG0_STS_DC_OK));
+          serial_log("Processor temperature above max specified Tj. Damage will occur.");
+          clock_mode = 5;
         }
       } else {
         if (clock_mode != 0) {
-          set_arm_clock(cpu_speed_ide);
-          clock_mode = 0;
+          set_arm_clock(STANDARD_CLOCK);
           serial_log("Restored clock speed.");
+          clock_mode = 0;
+          #if DEBUG_MODE
+            max_loop_timer = 0;
+          #endif
         }
       }
     }

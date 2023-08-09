@@ -322,7 +322,7 @@ void kcan_write_msg(const CAN_message_t &msg) {
       kcan_retry_counter++;
     }
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "KCAN write failed for ID: %lx with error %d. Re-sending.", msg.id, result);
+      sprintf(serial_debug_string, "KCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
       serial_log(serial_debug_string);
       can_debug_print_buffer(msg);
       kcan_error_counter++;
@@ -352,7 +352,7 @@ void ptcan_write_msg(const CAN_message_t &msg) {
       ptcan_retry_counter++;
     }
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "PTCAN write failed for ID: %lx with error %d. Re-sending.", msg.id, result);
+      sprintf(serial_debug_string, "PTCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
       serial_log(serial_debug_string);
       can_debug_print_buffer(msg);
       ptcan_error_counter++;
@@ -370,7 +370,7 @@ void dcan_write_msg(const CAN_message_t &msg) {
       dcan_retry_counter++;
     }
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "DCAN write failed for ID: %lx with error %d.", msg.id, result);
+      sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
       serial_log(serial_debug_string);
       can_debug_print_buffer(msg);
       dcan_error_counter++;

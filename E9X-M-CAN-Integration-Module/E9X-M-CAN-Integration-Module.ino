@@ -2,20 +2,19 @@
 
 
 void setup() {
-  initialize_watchdog();
-  if ( F_CPU_ACTUAL > (528 * 1000000)) {
-    set_arm_clock(528 * 1000000);                                                                                                   // Prevent accidental overclocks. Remove if needed.
+  if ( F_CPU_ACTUAL > STANDARD_CLOCK) {
+    set_arm_clock(STANDARD_CLOCK);                                                                                                  // Prevent accidental overclocks. Remove if needed.
   }
-  cpu_speed_ide = F_CPU_ACTUAL;
+  configure_can_controller();
+  initialize_watchdog();
   configure_IO();
-  configure_can_controllers();
   cache_can_message_buffers();
   read_initialize_eeprom();
   #if RTC
     check_rtc_valid();
   #endif
   #if !USB_DISABLE
-    // This code allows compatibility with unmodified Teensy cores. Do not enable USB_DISABLE without modifying startup.c!
+    // This code ensures compatibility with unmodified Teensy cores. Do not enable USB_DISABLE without modifying startup.c!
     if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){                                                                              // Check if USB is already ON.
       usb_pll_start();
       usb_init();
@@ -77,7 +76,8 @@ void loop() {
   }
 
   if (ignition) {
-    check_teensy_cpu_temp();                                                                                                        // Monitor processor temperature to extend lifetime.
+    check_power_led_state();                                                                                                        // This delay function syncs the power button LED with EDC button LEDS.
+    check_teensy_cpu_temp_clock();                                                                                                  // Monitor processor temperature to extend lifetime.
     check_dsc_queue();
     check_console_buttons();
     send_mdrive_alive_message(10000);
@@ -105,7 +105,7 @@ void loop() {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring .
         serial_log("Vehicle Sleeping.");
         toggle_transceiver_standby();
-        scale_mcu_speed();
+        scale_cpu_speed();
         reset_sleep_variables();
       }
       send_mdrive_alive_message(15000);                                                                                             // Send this message while car is awake (but with ignition OFF) to populate the fields in iDrive.

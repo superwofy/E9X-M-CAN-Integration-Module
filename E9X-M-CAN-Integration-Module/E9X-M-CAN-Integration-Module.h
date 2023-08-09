@@ -18,34 +18,10 @@ CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                               
 
 
 /***********************************************************************************************************************************************************************************************************************************************
-  Board configuration section.
-***********************************************************************************************************************************************************************************************************************************************/
-
-#define POWER_BUTTON_PIN 2
-#define POWER_LED_PIN 3
-#define FOG_LED_PIN 4
-#define STEERING_HEATER_SWITCH_PIN 5
-#define DCAN_STBY_PIN 14
-#define PTCAN_STBY_PIN 15                                                                                                           // STBY pins are optional but recommended to save power when the car prepares to deep sleep.
-#define DSC_BUTTON_PIN 16
-#define EXHAUST_FLAP_SOLENOID_PIN 17
-
-/***********************************************************************************************************************************************************************************************************************************************
   Program configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
-#if !DEBUG_MODE
-  #define USB_DISABLE 1                                                                                                             // USB can be disabled if not using serial for security reasons. Use caution when enabling this.
-    // USB can be activated by holding POWER while turning on ignition.
-    // To make this work, the following changes need to be made to startup.c 
-    // (Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/startup.c)
-    // Comment these lines:
-    // usb_pll_start();
-    // while (millis() < TEENSY_INIT_USB_DELAY_BEFORE) ;
-    // usb_init();
-    // while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
-#endif
 
 #define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive.
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Also disables the door open with ignition warning CC.
@@ -126,13 +102,18 @@ const uint16_t AUTO_HEATING_START_DELAY = 5 * 1000;                             
 #endif
 const float MAX_THRESHOLD = 72.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
 const float HIGH_THRESHOLD = 68.0;
-const float MEDIUM_THRESHOLD = 64.0;
-const float MILD_THRESHOLD = 60.0;
+const float MEDIUM_THRESHOLD = 66.0;
+const float MILD_THRESHOLD = 62.0;
 const float HYSTERESIS = 2.0;
 const unsigned long MAX_UNDERCLOCK = 24 * 1000000;                                                                                  // temperature <= 90 (Tj) should be ok for more than 100,000 Power on Hours at 1.15V (freq <= 528 MHz).
 unsigned long HIGH_UNDERCLOCK = 150 * 1000000;
+const unsigned long HIGH_UNDERCLOCK_ = 150 * 1000000;
 unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
+const unsigned long MEDIUM_UNDERCLOCK_ = 396 * 1000000;
 unsigned long MILD_UNDERCLOCK = 450 * 1000000;
+const unsigned long MILD_UNDERCLOCK_ = 450 * 1000000;
+const unsigned long STANDARD_CLOCK = 528 * 1000000;
+const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;                                                                 // Desired voltage - 0.8...  DCDC range is from 0.8 to 1.575V. Safe range is 0.925 to 1.
 
 
 /***********************************************************************************************************************************************************************************************************************************************
@@ -141,6 +122,20 @@ unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 
 #if __has_include ("custom-settings.h")
   #include "custom-settings.h"
+#endif
+
+#if !DEBUG_MODE
+  #ifndef USB_DISABLE
+    #define USB_DISABLE 0                                                                                                           // USB can be disabled if not using serial for security reasons. Use caution when enabling this.
+      // USB can be re-activated by holding POWER while turning on ignition.
+      // To make this work, the following changes need to be made to startup.c 
+      // (Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/startup.c)
+      // Comment these lines:
+      // usb_pll_start();
+      // while (millis() < TEENSY_INIT_USB_DELAY_BEFORE) ;
+      // usb_init();
+      // while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
+  #endif
 #endif
 
 #ifndef EDC_CKM_FIX
@@ -176,8 +171,33 @@ unsigned long MILD_UNDERCLOCK = 450 * 1000000;
   #define F_NIVI 0                                                                                                                  // Enable/disable FXX NiVi diagnosis, wakeup and message BN2000->BN2010 translation.
 #endif
 
+
+/***********************************************************************************************************************************************************************************************************************************************
+  Board configuration section.
+***********************************************************************************************************************************************************************************************************************************************/
+
+#define POWER_BUTTON_PIN 2
+#define POWER_LED_PIN 3
+#define FOG_LED_PIN 4
+#define DCAN_STBY_PIN 14
+#define PTCAN_STBY_PIN 15                                                                                                           // STBY pins are optional but recommended to save power when the car prepares to deep sleep.
+#define DSC_BUTTON_PIN 16
+#define POWER_BUTTON_PIN 2
+#define POWER_LED_PIN 3
+#define FOG_LED_PIN 4
+#if AUTO_STEERING_HEATER
+  #define STEERING_HEATER_SWITCH_PIN 5
+#endif
+#define DCAN_STBY_PIN 14
+#define PTCAN_STBY_PIN 15                                                                                                           // STBY pins are optional but recommended to save power when the car prepares to deep sleep.
+#define DSC_BUTTON_PIN 16
+#if EXHAUST_FLAP_CONTROL
+  #define EXHAUST_FLAP_SOLENOID_PIN 17
+#endif
+
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
+
 
 #if !USB_DISABLE                                                                                                                    // Not needed if startup.c is modified.
   #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
@@ -203,7 +223,6 @@ uint8_t kcan_retry_counter = 0, ptcan_retry_counter = 0, dcan_retry_counter = 0;
 uint16_t stored_eeprom_checksum = 0xFFFF, calculated_eeprom_checksum = 0;
 delayed_can_tx_msg delayed_tx, m;
 unsigned long time_now;
-uint32_t cpu_speed_ide;
 bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = false, vehicle_moving = false;
 bool terminal_50 = false, engine_running = false, clutch_pressed = false;
 bool clearing_dtcs = false;
@@ -228,6 +247,8 @@ uint16_t RPM = 0;
 uint8_t mdrive_dsc = 3, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
 bool mdrive_status = false, mdrive_power_active = false;
 bool console_power_mode, restore_console_power_mode = false;
+bool power_led_delayed_off_action = false;
+unsigned long power_led_delayed_off_action_time;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DTC, 2 = DSC OFF
 bool holding_dsc_off_console = false;
@@ -374,7 +395,8 @@ CAN_message_t cc_gong_buf;
 #endif
 #if F_VSW01
   bool vsw_initialized = false;
-  uint16_t idrive_current_menu;
+  uint8_t vsw_current_input = 0;
+  // uint16_t idrive_current_menu;
   CAN_message_t vsw_switch_buf[6]; 
   // CAN_message_t idrive_menu_request_buf;
 #endif

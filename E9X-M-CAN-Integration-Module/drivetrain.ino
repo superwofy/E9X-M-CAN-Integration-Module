@@ -271,9 +271,11 @@ void send_power_mode(void) {
   if (console_power_mode || mdrive_power_active) {                                                                                  // Activate sport throttle mapping if POWER from console ON or Sport/Sport+ selected in MDrive (active).
     power_mode_only_dme_veh_mode[1] = 0xF2;                                                                                         // Sport
     digitalWrite(POWER_LED_PIN, HIGH);
+    power_led_delayed_off_action = false;
   } else {
     power_mode_only_dme_veh_mode[1] = 0xF1;                                                                                         // Normal
-    digitalWrite(POWER_LED_PIN, LOW);
+    power_led_delayed_off_action = true;
+    power_led_delayed_off_action_time = millis() + 105;
   }
 
   can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
@@ -353,7 +355,7 @@ void check_anti_theft_status(void) {
       }
 
       #if ANTI_THEFT_SEQ_ALARM
-        if (vehicle_awakened_time >= 6000) {                                                                                        // Delay so we don't interfere with the default DWA behavior indicating an alarm fault.
+        if (vehicle_awakened_time >= 10000) {                                                                                       // Delay so we don't interfere with normal DWA behavior indicating alarm faults. Also when doing 30G reset.
           if (!terminal_r && !alarm_led && !lock_led) {
             kcan_write_msg(alarm_led_on_buf);                                                                                       // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
             alarm_led = true;                                                                                                       // Sending this multiple times keeps the car awake.

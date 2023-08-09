@@ -72,11 +72,9 @@ void evaluate_indicator_status_dim(void) {
         }
         m = {left_drl_dim_buf, time_now + 100};
         dim_drl_txq.push(&m);
-        #if DEBUG_MODE
-          if (!left_dimmed) {
-            serial_log("Dimmed left DRL.");
-          }
-        #endif
+        if (!left_dimmed) {
+          serial_log("Dimmed left DRL.");
+        }
         left_dimmed = true;
       #endif
       indicators_on = true;
@@ -90,11 +88,9 @@ void evaluate_indicator_status_dim(void) {
         }
         m = {right_drl_dim_buf, time_now + 100};
         dim_drl_txq.push(&m);
-        #if DEBUG_MODE
-          if (!right_dimmed) {
-            serial_log("Dimmed right DRL.");
-          }
-        #endif
+        if (!right_dimmed) {
+          serial_log("Dimmed right DRL.");
+        }
         right_dimmed = true;
       #endif
     }
@@ -325,7 +321,7 @@ void evaluate_remote_button(void) {
                 if (alarm_led) {
                   m = {alarm_led_off_buf, time_now + 100};                                                                          // Release control of the LED so that alarm can control it.
                   anti_theft_txq.push(&m);
-                  m = {alarm_led_off_buf, time_now + 300};
+                  m = {alarm_led_off_buf, time_now + 400};
                   anti_theft_txq.push(&m);
                   alarm_led = false;
                   lock_led = true;
@@ -726,15 +722,7 @@ void check_wiper_queue(void) {
 
 
 void evaluate_ambient_temperature(void) {
-  ambient_temperature_real = (k_msg.buf[0] - 80) / 2.0 ;
-
-  if (ambient_temperature_real >= 30) {                                                                                             // Make underclock more aggressive at higher ambient temperatures.
-    MEDIUM_UNDERCLOCK = 150 * 1000000;
-    MILD_UNDERCLOCK = 396 * 1000000;
-  } else {
-    MEDIUM_UNDERCLOCK = 396 * 1000000;
-    MILD_UNDERCLOCK = 450 * 1000000;
-  }
+  ambient_temperature_real = (k_msg.buf[0] - 80) / 2.0;
 }
 
 

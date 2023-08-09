@@ -344,6 +344,10 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " iDrive volume: 0x%X", peristent_volume);
     status_serial.println(serial_debug_string);
   #endif
+  #if F_VSW01
+    sprintf(serial_debug_string, " VSW switch input: %d", vsw_current_input);
+    status_serial.println(serial_debug_string);
+  #endif
   #if EXHAUST_FLAP_CONTROL
     sprintf(serial_debug_string, " Exhaust flap: %s", exhaust_flap_open ? "Open" : "Closed");
     status_serial.println(serial_debug_string);
