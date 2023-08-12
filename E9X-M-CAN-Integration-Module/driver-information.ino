@@ -29,7 +29,7 @@ void evaluate_shiftlight_display(void) {
   } else if (MAX_UPSHIFT_WARN_RPM_ <= RPM) {                                                                                        // Flash all segments.
     activate_shiftlight_segments(shiftlights_max_flash_buf);
     if (GONG_UPSHIFT_WARN_RPM_ <= RPM) {
-      kcan_write_msg(cc_gong_buf);                                                                                                  // Send an audible warning.
+      play_cc_gong();                                                                                                               // Send an audible warning.
     }
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Flash max warning at RPM: %d", RPM / 4);
@@ -236,35 +236,14 @@ void evaluate_fog_status(void) {
 
 #if REVERSE_BEEP
 void evaluate_pdc_beep(void) {
-  if (k_msg.buf[0] == 0xFE) {
-    if (!pdc_beep_sent) {
+  if (reverse_gear_status) {
+    if (!pdc_beep_sent && !pdc_too_close) {
       serial_log("Sending PDC beep.");
-      if (idrive_died) {                                                                                                            // Send this message if iDrive is not fully ready.
-        time_now = millis();
-        m = {pdc_beep_buf, time_now};
-        pdc_beep_txq.push(&m);
-        m = {pdc_quiet_buf, time_now + 150};
-        pdc_beep_txq.push(&m);        
-      } else {
-        kcan_write_msg(cc_gong_buf);
-      }
+      play_cc_gong();
       pdc_beep_sent = true;
     }
   } else {
-    if (pdc_beep_sent) {
-      pdc_beep_sent = false;
-    }
-  }
-}
-
-
-void check_reverse_beep_queue(void)  {
-  if (!pdc_beep_txq.isEmpty()) {
-    pdc_beep_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      pdc_beep_txq.drop();
-    }
+    pdc_beep_sent = false;
   }
 }
 #endif
@@ -368,3 +347,10 @@ void evaluate_pdc_bus_status(void) {
   }
 }
 #endif
+
+
+void play_cc_gong(void) {
+  if (diag_transmit) {
+    kcan_write_msg(cc_gong_buf);
+  }
+}

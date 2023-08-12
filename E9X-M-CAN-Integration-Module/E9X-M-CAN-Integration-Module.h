@@ -23,7 +23,7 @@ CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                               
 
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 
-#define CKM 1                                                                                                                       // Persistently remember POWER when set in iDrive.
+#define PWR_CKM 1                                                                                                                   // Persistently remember POWER when set in iDrive.
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Also disables the door open with ignition warning CC.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster.
@@ -35,23 +35,23 @@ CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                               
 #define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
 #endif
 #define INDICATE_TRUNK_OPENED 1                                                                                                     // Flash hazards when remote opens trunk.
-#define ANTI_THEFT_SEQ 1                                                                                                            // Disable fuel pump until the steering wheel M button is pressed a number of times.
-#if __has_include ("secrets.h")                                                                                                     // Optionally, create this file to store sensitive settings.
-  #include "secrets.h"
+#define IMMOBILIZER_SEQ 1                                                                                                           // Disable fuel pump until the steering wheel M button is pressed a number of times.
+#if __has_include ("src/secrets.h")                                                                                                 // Optionally, create this file to store sensitive settings.
+  #include "src/secrets.h"
 #endif
-#if ANTI_THEFT_SEQ                                                                                                                  // If this is not deactivated before start, DME will store errors!
+#if IMMOBILIZER_SEQ                                                                                                                 // If this is not deactivated before start, DME will store errors!
 #if SECRETS
-  uint8_t ANTI_THEFT_SEQ_NUMBER = SECRET_ANTI_THEFT_SEQ;
+  uint8_t IMMOBILIZER_SEQ_NUMBER = SECRET_IMMOBILIZER_SEQ;
 #else
-  uint8_t ANTI_THEFT_SEQ_NUMBER = 3;                                                                                                // Number of times to press the button for the EKP to be re-activated.
+  uint8_t IMMOBILIZER_SEQ_NUMBER = 3;                                                                                               // Number of times to press the button for the EKP to be re-activated.
 #endif
-#define ANTI_THEFT_SEQ_ALARM 1                                                                                                      // Sound the alarm if engine is started without disabling anti-theft.
+#define IMMOBILIZER_SEQ_ALARM 1                                                                                                     // Sound the alarm if engine is started without disabling anti-theft.
 #endif
-#if ANTI_THEFT_SEQ_ALARM
+#if IMMOBILIZER_SEQ_ALARM
 #if SECRETS
-  uint8_t ANTI_THEFT_SEQ_ALARM_NUMBER = SECRET_ANTI_THEFT_SEQ_ALARM_NUMBER;
+  uint8_t IMMOBILIZER_SEQ_ALARM_NUMBER = SECRET_IMMOBILIZER_SEQ_ALARM_NUMBER;
 #else
-  const uint8_t ANTI_THEFT_SEQ_ALARM_NUMBER = 5;                                                                                    // Number of times to press the button for the alarm to be silenced and EKP re-activated.
+  const uint8_t IMMOBILIZER_SEQ_ALARM_NUMBER = 6;                                                                                   // Number of times to press the button for the alarm to be silenced and EKP re-activated.
 #endif
 #endif
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack this indicator.
@@ -76,15 +76,12 @@ const int8_t STEERTING_ANGLE_HYSTERESIS_INDICATORS = 15;
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
 #endif
 #define RTC 1                                                                                                                       // Sets the time/date if power is lost. Requires external battery.
-
-
 #if SERVOTRONIC_SVT70
   const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                   // New CAN-ID replacing 0x326 in SVT70 firmware bin. This stops it from changing modes together with EDC.
 #endif
 const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
 const double AUTO_SEAT_HEATING_TRESHOLD = 10.0;                                                                                     // Degrees Celsius temperature.
 const uint16_t AUTO_HEATING_START_DELAY = 5 * 1000;                                                                                 // Time to wait for battery voltage to catch up after starting (time in seconds * 1000)
-
 #if CONTROL_SHIFTLIGHTS
   const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                 // RPM setpoints (warning = desired RPM * 4).
   const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
@@ -113,17 +110,16 @@ const unsigned long MEDIUM_UNDERCLOCK_ = 396 * 1000000;
 unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 const unsigned long MILD_UNDERCLOCK_ = 450 * 1000000;
 const unsigned long STANDARD_CLOCK = 528 * 1000000;
-const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;                                                                 // Desired voltage - 0.8...  DCDC range is from 0.8 to 1.575V. Safe range is 0.925 to 1.
+const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;                                                                 // Desired voltage - 0.8...  DCDC range is from 0.8 to 1.575V. Safe range is 0.925 to 1.25V
 
 
 /***********************************************************************************************************************************************************************************************************************************************
   These features are *very* implementation specific - usually requiring fabrication. As such they are disabled by default since they're unlikely to be used by anyone except me.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#if __has_include ("custom-settings.h")
-  #include "custom-settings.h"
+#if __has_include ("src/custom-settings.h")
+  #include "src/custom-settings.h"
 #endif
-
 #if !DEBUG_MODE
   #ifndef USB_DISABLE
     #define USB_DISABLE 0                                                                                                           // USB can be disabled if not using serial for security reasons. Use caution when enabling this.
@@ -137,7 +133,6 @@ const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;             
       // while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
   #endif
 #endif
-
 #ifndef EDC_CKM_FIX
   #define EDC_CKM_FIX 0                                                                                                             // Sometimes the M Key setting for EDC is not recalled correctly - especially with CA.
 #endif
@@ -147,7 +142,7 @@ const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;             
 #ifndef FAKE_MSA
   #define FAKE_MSA 0                                                                                                                // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
   #if !FAKE_MSA
-    #define MSA_RVC 0                                                                                                               // Turn on the OEM rear view camera (TRSVC, E84 PDC) when pressing MSA button. E70 button from 61319202037.
+    #define MSA_RVC 0                                                                                                               // Turn on the OEM rear camera (TRSVC and E84 PDC ECUs) when pressing MSA button. E70 button from 61319202037.
   #endif                                                                                                                            // RVC can be controlled independently of PDC with this button.
 #endif
 #ifndef REVERSE_BEEP
@@ -168,7 +163,7 @@ const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;             
   #define F_VSW01 0                                                                                                                 // Enable/disable F01 Video Switch diagnosis and wakeup. Tested with 9201542.
 #endif
 #ifndef F_NIVI
-  #define F_NIVI 0                                                                                                                  // Enable/disable FXX NiVi diagnosis, wakeup and message BN2000->BN2010 translation.
+  #define F_NIVI 0                                                                                                                  // Enable/disable FXX NVE diagnosis, wakeup and BN2000->BN2010 message translation.
 #endif
 
 
@@ -232,7 +227,7 @@ elapsedMillis vehicle_awake_timer = 0, vehicle_awakened_time = 0;
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint16_t RPM = 0;
-#if CKM
+#if PWR_CKM
   uint8_t dme_ckm[4][2] = {{0, 0xFF}, {0, 0xFF}, {0, 0xFF}, {0xF1, 0xFF}};
 #endif
 #if EDC_CKM_FIX
@@ -241,7 +236,7 @@ uint16_t RPM = 0;
   CAN_message_t edc_button_press_buf;
   cppQueue edc_ckm_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
-#if CKM || EDC_CKM_FIX
+#if PWR_CKM || EDC_CKM_FIX
   uint8_t cas_key_number = 0;                                                                                                       // 0 = Key 1, 1 = Key 2...
 #endif
 uint8_t mdrive_dsc = 3, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
@@ -253,16 +248,15 @@ uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                          
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DTC, 2 = DSC OFF
 bool holding_dsc_off_console = false;
 elapsedMillis mdrive_message_timer = 0;
-uint8_t mfl_pressed_count = 0;
+uint8_t m_mfl_held_count = 0;
 CAN_message_t idrive_mdrive_settings_a_buf, idrive_mdrive_settings_b_buf;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms;
 elapsedMillis dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
-bool ignore_m_press = false, ignore_m_hold = false;
+bool ignore_m_press = false, ignore_m_hold = false, holding_both_console = false;
 uint8_t clock_mode = 0;
 float last_cpu_temp = 0, max_cpu_temp = 0;
 CAN_message_t cc_gong_buf;
-
 #if SERVOTRONIC_SVT70
   bool uif_read = false;
   uint8_t servotronic_message[] = {0, 0xFF};
@@ -353,18 +347,18 @@ CAN_message_t cc_gong_buf;
   CAN_message_t flash_hazards_buf;
   bool visual_signal_ckm, hazards_on = false;
 #endif
-#if ANTI_THEFT_SEQ
-  bool anti_theft_released = false, anti_theft_persist = true, holding_both_console = false;
-  unsigned long anti_theft_send_interval = 0;                                                                                       // Skip the first interval delay.
-  elapsedMillis anti_theft_timer = 0, both_console_buttons_timer;
-  uint8_t anti_theft_pressed_count = 0;
+#if IMMOBILIZER_SEQ
+  bool immobilizer_released = false, immobilizer_persist = true;
+  unsigned long immobilizer_send_interval = 0;                                                                                      // Skip the first interval delay.
+  elapsedMillis immobilizer_timer = 0, both_console_buttons_timer, immobilizer_activate_release_timer = 0;
+  uint8_t immobilizer_pressed_release_count = 0, immobilizer_pressed_activate_count = 0;
   CAN_message_t key_cc_on_buf, key_cc_off_buf;
   CAN_message_t start_cc_on_buf, start_cc_off_buf;
   CAN_message_t ekp_pwm_off_buf, ekp_return_to_normal_buf;
-  cppQueue anti_theft_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+  cppQueue immobilizer_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
   cppQueue ekp_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
-#if ANTI_THEFT_SEQ_ALARM
+#if IMMOBILIZER_SEQ_ALARM
   bool alarm_after_engine_stall = false, alarm_active = false, alarm_led = false, lock_led = false;
   uint8_t led_message_counter = 60;
   CAN_message_t alarm_led_on_buf, alarm_led_off_buf;
@@ -372,9 +366,7 @@ CAN_message_t cc_gong_buf;
   cppQueue alarm_siren_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if REVERSE_BEEP
-  CAN_message_t pdc_beep_buf, pdc_quiet_buf;
-  bool pdc_beep_sent = false;
-  cppQueue pdc_beep_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+  bool pdc_beep_sent = false, pdc_too_close = false;
 #endif
 #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
   bool reverse_gear_status = false;
@@ -395,9 +387,8 @@ CAN_message_t cc_gong_buf;
 #endif
 #if F_VSW01
   bool vsw_initialized = false;
-  uint8_t vsw_current_input = 0;
+  uint8_t vsw_current_input = 0, vsw_switch_counter = 0xF1;
   // uint16_t idrive_current_menu;
-  CAN_message_t vsw_switch_buf[6]; 
   // CAN_message_t idrive_menu_request_buf;
 #endif
 #if F_NIVI
@@ -421,7 +412,8 @@ CAN_message_t cc_gong_buf;
   uint8_t f_data_powertrain_2_alive_counter = 0;
   uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                      // Byte7 max rpm: 50 * 8C = 7000.
   elapsedMillis sine_angle_request_timer = 500, f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000;
-  elapsedMillis f_chassis_messages_timer = 100;
+  elapsedMillis f_chassis_inclination_timer = 98, f_chassis_longitudinal_timer = 100, f_chassis_yaw_timer = 102;
+  elapsedMillis f_chassis_speed_timer = 104;
   CAN_message_t sine_angle_request_a_buf, sine_angle_request_b_buf;
   CAN_message_t f_road_inclination_buf, f_longitudinal_acceleration_buf, f_yaw_rate_buf;
   CAN_message_t f_speed_buf, f_outside_brightness_buf, f_data_powertrain_2_buf;
@@ -467,15 +459,15 @@ float ambient_temperature_real = 87.5;
   CAN_message_t vol_request_buf, door_open_cc_off_buf;
   cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
-#if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ
+#if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ
   bool left_door_open = false, right_door_open = false;
   uint8_t last_door_status = 0;
 #endif
-#if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
+#if PWR_CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
   elapsedMillis idrive_alive_timer = 0;
   bool idrive_died = false;
 #endif
-#if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
+#if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
   uint16_t indicated_speed = 0;
   bool speed_mph = false;
 #endif

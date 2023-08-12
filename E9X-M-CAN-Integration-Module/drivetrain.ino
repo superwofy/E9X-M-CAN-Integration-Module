@@ -17,8 +17,8 @@ void evaluate_engine_rpm(void) {
         exhaust_flap_action_timer = 0;                                                                                              // Start tracking the exhaust flap.
       #endif
       serial_log("Engine started.");
-      #if ANTI_THEFT_SEQ_ALARM
-        if (!anti_theft_released) {
+      #if IMMOBILIZER_SEQ_ALARM
+        if (!immobilizer_released) {
           alarm_after_engine_stall = true;
           serial_log("Anti-theft active. Alarm will sound after stall.");      
         }
@@ -29,7 +29,7 @@ void evaluate_engine_rpm(void) {
       engine_running = false;
       engine_runtime = 0;
       serial_log("Engine stopped.");
-      #if ANTI_THEFT_SEQ_ALARM
+      #if IMMOBILIZER_SEQ_ALARM
         trip_alarm_after_stall();
       #endif
     }
@@ -103,43 +103,55 @@ void evaluate_m_mfl_button_press(void) {
   if (pt_msg.buf[1] == 0x4C) {                                                                                                      // M button is pressed.
     if (!ignore_m_press) {
       ignore_m_press = true;                                                                                                        // Ignore further pressed messages until the button is released.
-      #if ANTI_THEFT_SEQ
-      if (anti_theft_released && ignition) {                                                                                        // Disable normal M button function when used for anti-theft.
+      #if IMMOBILIZER_SEQ
+      if (immobilizer_released && ignition) {                                                                                       // Disable normal M button function when used for anti-theft.
       #endif
         toggle_mdrive_message_active();
         send_mdrive_message();
         toggle_mdrive_dsc_mode();
-      #if ANTI_THEFT_SEQ
+      #if IMMOBILIZER_SEQ
       }
       #endif
     }
-    if (mfl_pressed_count > 10 && !ignore_m_hold) {                                                                                 // Each count is about 100ms
-      #if ANTI_THEFT_SEQ
-      if (anti_theft_released && ignition) {
+    if (m_mfl_held_count > 10 && !ignore_m_hold) {                                                                                  // Each count is about 100ms
+      #if IMMOBILIZER_SEQ
+      if (immobilizer_released) {
       #endif
-      show_mdrive_settings_screen();
-      #if ANTI_THEFT_SEQ
+      if (ignition) {
+        show_mdrive_settings_screen();
+      }
+      #if IMMOBILIZER_SEQ
       }
       #endif
     } else {
-      mfl_pressed_count++;
+      m_mfl_held_count++;
     }
   } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
     ignore_m_press = ignore_m_hold = false;
-    mfl_pressed_count = 0;
+    m_mfl_held_count = 0;
 
-    #if ANTI_THEFT_SEQ
-    if (!anti_theft_released) {
-      #if ANTI_THEFT_SEQ_ALARM
-        uint8_t release_counter = alarm_active ? ANTI_THEFT_SEQ_ALARM_NUMBER - 1 : ANTI_THEFT_SEQ_NUMBER - 1;
-      #else
-        uint8_t release_counter = ANTI_THEFT_SEQ_NUMBER - 1;
+    #if IMMOBILIZER_SEQ
+    uint8_t activate_release_counter = IMMOBILIZER_SEQ_NUMBER - 1;
+    if (!immobilizer_released) {
+      #if IMMOBILIZER_SEQ_ALARM
+        activate_release_counter = alarm_active ? IMMOBILIZER_SEQ_ALARM_NUMBER - 1 : IMMOBILIZER_SEQ_NUMBER - 1;
       #endif
 
-      if (anti_theft_pressed_count < release_counter) {
-        anti_theft_pressed_count++;
+      if (immobilizer_pressed_release_count < activate_release_counter) {
+        immobilizer_pressed_release_count++;
       } else {
-        release_anti_theft();
+        release_immobilizer();
+      }
+    } else {                                                                                                                        // Allow re-activation before sleep mode.
+      if (immobilizer_activate_release_timer >= 3000) {
+        if (!terminal_r && immobilizer_persist) {
+          if (immobilizer_pressed_activate_count < activate_release_counter) {
+            immobilizer_pressed_activate_count++;
+          } else {
+            activate_immobilizer();
+            play_cc_gong();
+          }
+        }
       }
     }
     #endif
@@ -149,13 +161,13 @@ void evaluate_m_mfl_button_press(void) {
 
 void show_mdrive_settings_screen(void) {
   if (diag_transmit) {
-    #if ANTI_THEFT_SEQ
-    if (anti_theft_released) {
+    #if IMMOBILIZER_SEQ
+    if (immobilizer_released) {
     #endif
       serial_log("Steering wheel M button held. Showing settings screen.");
       kcan_write_msg(idrive_mdrive_settings_a_buf);                                                                                 // Send steuern_menu job to iDrive.
       kcan_write_msg(idrive_mdrive_settings_b_buf);
-    #if ANTI_THEFT_SEQ
+    #if IMMOBILIZER_SEQ
     }
     #endif
     ignore_m_hold = true;
@@ -234,7 +246,7 @@ void reset_mdrive_settings(void) {
   mdrive_message[3] = mdrive_edc;
   mdrive_svt = 0xE9;                                                                                                                // Normal
   mdrive_message[4] = 0x41;
-  #if CKM
+  #if PWR_CKM
     dme_ckm[cas_key_number][0] = 0xF1;                                                                                              // Normal
   #endif
   #if EDC_CKM_FIX
@@ -283,7 +295,7 @@ void send_power_mode(void) {
 }
 
 
-#if CKM
+#if PWR_CKM
 void send_dme_power_ckm(void) {
   kcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                  // This is sent by the DME to populate the M Key iDrive section
   serial_log("Sent DME POWER CKM.");
@@ -345,16 +357,16 @@ void check_edc_ckm_queue(void) {
 #endif
 
 
-#if ANTI_THEFT_SEQ
-void check_anti_theft_status(void) {
+#if IMMOBILIZER_SEQ
+void check_immobilizer_status(void) {
   if (vehicle_awakened_time >= 2000) {                                                                                              // Delay ensures that time passed after Teensy (re)started to receive messages.
-    if (!anti_theft_released) {
+    if (!immobilizer_released) {
       uint16_t theft_max_speed = 20;
       if (speed_mph) {
         theft_max_speed = 12;
       }
 
-      #if ANTI_THEFT_SEQ_ALARM
+      #if IMMOBILIZER_SEQ_ALARM
         if (vehicle_awakened_time >= 10000) {                                                                                       // Delay so we don't interfere with normal DWA behavior indicating alarm faults. Also when doing 30G reset.
           if (!terminal_r && !alarm_led && !lock_led) {
             kcan_write_msg(alarm_led_on_buf);                                                                                       // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
@@ -368,7 +380,7 @@ void check_anti_theft_status(void) {
       // This could be temporarily bypassed if the car is started and driven very very quickly?
       // It will reactivate once indicated_speed <= theft_max_speed. Think Speed (1994)...
       if (!vehicle_moving || indicated_speed <= theft_max_speed) {                                                                  // Make sure we don't cut this OFF while the car is in (quick) motion!!!
-        if (anti_theft_timer >= anti_theft_send_interval) {
+        if (immobilizer_timer >= immobilizer_send_interval) {
           if (terminal_r) {
             if (engine_running) {                                                                                                   // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
               ptcan_write_msg(ekp_pwm_off_buf);
@@ -377,7 +389,7 @@ void check_anti_theft_status(void) {
 
             // Visual indicators with Terminal R, 15.
             kcan_write_msg(key_cc_on_buf);                                                                                          // Keep sending this message so that CC is ON until disabled.
-            #if ANTI_THEFT_SEQ_ALARM
+            #if IMMOBILIZER_SEQ_ALARM
               if (led_message_counter > 56) {                                                                                       // Send LED message every 112s to keep it ON.
                 kcan_write_msg(alarm_led_on_buf);
                 alarm_led = true;
@@ -387,8 +399,8 @@ void check_anti_theft_status(void) {
               }
             #endif
           }
-          anti_theft_timer = 0;
-          anti_theft_send_interval = 2000;
+          immobilizer_timer = 0;
+          immobilizer_send_interval = 2000;
         }
       }
     }
@@ -400,14 +412,14 @@ void check_anti_theft_status(void) {
       ekp_txq.drop();
     }
   }
-  if (!anti_theft_txq.isEmpty()) {
-    anti_theft_txq.peek(&delayed_tx);
+  if (!immobilizer_txq.isEmpty()) {
+    immobilizer_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
-      anti_theft_txq.drop();
+      immobilizer_txq.drop();
     }
   }
-  #if ANTI_THEFT_SEQ_ALARM
+  #if IMMOBILIZER_SEQ_ALARM
     if (!alarm_siren_txq.isEmpty()) {
       alarm_siren_txq.peek(&delayed_tx);
       if (millis() >= delayed_tx.transmit_time) {
@@ -424,65 +436,68 @@ void reset_key_cc(void) {
 }
 
 
-void activate_anti_theft(void) {
-  anti_theft_released = false;
-  anti_theft_pressed_count = 0;
-  anti_theft_txq.flush();
+void activate_immobilizer(void) {
+  immobilizer_released = false;
+  immobilizer_pressed_release_count = 0;
+  immobilizer_txq.flush();
   ekp_txq.flush();
-  EEPROM.update(13, anti_theft_released);
+  EEPROM.update(13, immobilizer_released);
   update_eeprom_checksum();                                                                                                         // Update now in case we lose power before sleep.
-  #if ANTI_THEFT_SEQ_ALARM
+  #if IMMOBILIZER_SEQ_ALARM
     alarm_led = false;
   #endif
+  immobilizer_activate_release_timer = 0;
+  serial_log("Anti-theft activated.");
 }
 
 
-void release_anti_theft(void) {
-  anti_theft_released = true;
-  EEPROM.update(13, anti_theft_released);                                                                                           // Save to EEPROM directly in case program crashes.
+void release_immobilizer(void) {
+  immobilizer_released = true;
+  immobilizer_pressed_activate_count = 0;
+  EEPROM.update(13, immobilizer_released);                                                                                          // Save to EEPROM directly in case program crashes.
   update_eeprom_checksum();
   ptcan_write_msg(ekp_return_to_normal_buf);                                                                                        // KWP To EKP.
   serial_log("Anti-theft released. EKP control restored to DME.");
   time_now = millis();
-  #if ANTI_THEFT_SEQ_ALARM
+  #if IMMOBILIZER_SEQ_ALARM
     if (alarm_active) {
       m = {alarm_siren_off_buf, time_now};                                                                                          // KWP to DWA.
-      anti_theft_txq.push(&m);
+      immobilizer_txq.push(&m);
       alarm_after_engine_stall = alarm_active = false;
       alarm_siren_txq.flush();
       serial_log("Deactivated alarm.");
     }
   #endif
   m = {key_cc_off_buf, time_now + 50};                                                                                              // CC to KCAN.
-  anti_theft_txq.push(&m);
-  #if ANTI_THEFT_SEQ_ALARM
+  immobilizer_txq.push(&m);
+  #if IMMOBILIZER_SEQ_ALARM
     if (alarm_led) {
       m = {alarm_led_off_buf, time_now + 100};                                                                                      // KWP to DWA.
-      anti_theft_txq.push(&m);
-      m = {alarm_led_off_buf, time_now + 300};
-      anti_theft_txq.push(&m);
+      immobilizer_txq.push(&m);
+      m = {alarm_led_off_buf, time_now + 500};
+      immobilizer_txq.push(&m);
       alarm_led = false;
     }
   #endif
   if (terminal_r) {
     m = {start_cc_on_buf, time_now + 400};                                                                                          // CC to KCAN.
-    anti_theft_txq.push(&m);
+    immobilizer_txq.push(&m);
     serial_log("Sent start ready CC.");
   }
   if (!terminal_r) {
-    kcan_write_msg(cc_gong_buf);                                                                                                    // KWP to KOMBI.
-    serial_log("Sent start ready gong.");
+    play_cc_gong();                                                                                                                 // KWP to KOMBI.
   }
   m = {ekp_return_to_normal_buf, time_now + 500};                                                                                   // KWP To EKP. Make sure these messages are received.
   ekp_txq.push(&m);
   m = {ekp_return_to_normal_buf, time_now + 800};                                                                                   // KWP To EKP.
   ekp_txq.push(&m);
   m = {start_cc_off_buf, time_now + 1000};                                                                                          // CC to KCAN
-  anti_theft_txq.push(&m);
+  immobilizer_txq.push(&m);
+  immobilizer_activate_release_timer = 0;
 }
 
 
-#if ANTI_THEFT_SEQ_ALARM
+#if IMMOBILIZER_SEQ_ALARM
 void trip_alarm_after_stall(void) {
   if (alarm_after_engine_stall) {
     serial_log("Alarm siren and hazards ON.");

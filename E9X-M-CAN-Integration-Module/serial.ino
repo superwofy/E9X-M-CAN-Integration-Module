@@ -64,8 +64,12 @@ void serial_interpreter(void) {
       }
     }
     if (cmd == "cc_gong") {
-      serial_log("  Serial: Sending CC gong.");
-      kcan_write_msg(cc_gong_buf);
+      if (diag_transmit) {
+        serial_log("  Serial: Sending CC gong.");
+        play_cc_gong();
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.");
+      }
     } 
     #if EXHAUST_FLAP_CONTROL
     else if (cmd == "open_exhaust_flap") {
@@ -208,17 +212,17 @@ void serial_interpreter(void) {
         }
       }
     #endif
-    #if ANTI_THEFT_SEQ
-      else if (cmd == "release_anti_theft") {
-        release_anti_theft();
+    #if IMMOBILIZER_SEQ
+      else if (cmd == "release_immobilizer") {
+        release_immobilizer();
         Serial.print("  Serial: ");
       }
-      else if (cmd == "lock_anti_theft") {
+      else if (cmd == "lock_immobilizer") {
         reset_key_cc();
-        activate_anti_theft();
+        activate_immobilizer();
         serial_log("  Serial: Locked EKP anti theft.");
       }
-      #if ANTI_THEFT_SEQ_ALARM
+      #if IMMOBILIZER_SEQ_ALARM
         else if (cmd == "alarm_siren_on") {
           kcan_write_msg(alarm_siren_on_buf);
           serial_log("  Serial: Alarm siren ON.");
@@ -229,10 +233,10 @@ void serial_interpreter(void) {
         }
         else if (cmd == "test_trip_stall_alarm") {
           if (ignition) {
-            activate_anti_theft();
+            activate_immobilizer();
             alarm_after_engine_stall = true;
             trip_alarm_after_stall();
-            serial_log("  Serial: Stall alarm tripped. Deactivate with ANTI_THEFT_SEQ process.");
+            serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.");
           } else {
             serial_log("  Serial: Activate ignition first.");
           }
@@ -339,10 +343,10 @@ void print_help(void) {
     serial_log("  toggle_mirror_fold - Change mirror fold state ON-OFF.");
     serial_log("  mirror_fold_status - Prints the mirror fold state.");
   #endif
-  #if ANTI_THEFT_SEQ
-    serial_log("  release_anti_theft - Deactivates the EKP immobilizer.");
-    serial_log("  lock_anti_theft - Activates the EKP immobilizer.");
-    #if ANTI_THEFT_SEQ_ALARM
+  #if IMMOBILIZER_SEQ
+    serial_log("  release_immobilizer - Deactivates the EKP immobilizer.");
+    serial_log("  lock_immobilizer - Activates the EKP immobilizer.");
+    #if IMMOBILIZER_SEQ_ALARM
       serial_log("  alarm_siren_on - Activates the Alarm siren.");
       serial_log("  alarm_siren_off - Deactivates the Alarm siren.");
       serial_log("  test_trip_stall_alarm - Simulates tripping the EKP immobilizer without disabling it first.");

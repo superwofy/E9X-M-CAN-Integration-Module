@@ -84,7 +84,7 @@ void evaluate_vehicle_moving(void) {
     vehicle_moving = true;
     serial_log("Vehicle moving.");
   }
-  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
+  #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
     if (vehicle_moving) {
       if (speed_mph) {
        indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
@@ -109,68 +109,80 @@ void evaluate_vehicle_moving(void) {
 
 #if F_NIVI
 void send_f_road_inclination(void) {
-  f_road_inclination[2] = f_vehicle_angle & 0xFF;                                                                                   // Send in LE.
-  f_road_inclination[3] = 0x20 | f_vehicle_angle >> 8;                                                                              // Byte3 lower 4 bits fixed to 2 - QU_AVL_LOGR_RW Signal value is valid, permanent.
-  f_road_inclination_buf = make_msg_buf(0x163, 8, f_road_inclination);
-  ptcan_write_msg(f_road_inclination_buf);
+  if (f_chassis_inclination_timer >= 98) {
+    f_road_inclination[2] = f_vehicle_angle & 0xFF;                                                                                 // Send in LE.
+    f_road_inclination[3] = 0x20 | f_vehicle_angle >> 8;                                                                            // Byte3 lower 4 bits fixed to 2 - QU_AVL_LOGR_RW Signal value is valid, permanent.
+    f_road_inclination_buf = make_msg_buf(0x163, 8, f_road_inclination);
+    ptcan_write_msg(f_road_inclination_buf);
+    f_chassis_inclination_timer = 0;
+  }
 }
 
 
 void send_f_longitudinal_acceleration(void) {
-  e_long_acceleration = ((int16_t)(k_msg.buf[2] << 8 | k_msg.buf[3])) * 0.0001;                                                     // Value in m/s^2.
-  longitudinal_acceleration = round((e_long_acceleration + 65) / 0.002);
+  if (f_chassis_longitudinal_timer >= 100) {
+    e_long_acceleration = ((int16_t)(k_msg.buf[2] << 8 | k_msg.buf[3])) * 0.0001;                                                   // Value in m/s^2.
+    longitudinal_acceleration = round((e_long_acceleration + 65) / 0.002);
 
-  f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
-  f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
-                                                   : f_longitudinal_acceleration_alive_counter++;
-  f_longitudinal_acceleration[2] = longitudinal_acceleration & 0xFF;                                                                // Convert and transmit in LE.
-  f_longitudinal_acceleration[3] = longitudinal_acceleration >> 8;
-  f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
-  ptcan_write_msg(f_longitudinal_acceleration_buf);
+    f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
+    f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
+                                                    : f_longitudinal_acceleration_alive_counter++;
+    f_longitudinal_acceleration[2] = longitudinal_acceleration & 0xFF;                                                              // Convert and transmit in LE.
+    f_longitudinal_acceleration[3] = longitudinal_acceleration >> 8;
+    f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
+    ptcan_write_msg(f_longitudinal_acceleration_buf);
+    f_chassis_longitudinal_timer = 0;
+  }
 }
 
 
 void send_f_yaw_rate(void) {
-  f_yaw_rate[1] = 0xF << 4 | f_yaw_alive_counter;
-  f_yaw_alive_counter == 0xE ? f_yaw_alive_counter = 0 : f_yaw_alive_counter++;
-  f_yaw_rate[2] = yaw_rate;
-  f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
-  ptcan_write_msg(f_yaw_rate_buf);
+  if (f_chassis_yaw_timer >= 102) {
+    f_yaw_rate[1] = 0xF << 4 | f_yaw_alive_counter;
+    f_yaw_alive_counter == 0xE ? f_yaw_alive_counter = 0 : f_yaw_alive_counter++;
+    f_yaw_rate[2] = yaw_rate;
+    f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
+    ptcan_write_msg(f_yaw_rate_buf);
+    f_chassis_yaw_timer = 0;
+  }
 }
 
 
 void send_f_speed_status(void) {
-  real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                           // KM/h
+  if (f_chassis_speed_timer >= 104) {
+    real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                         // KM/h
 
-  vehicle_direction = pt_msg.buf[1] >> 4;
-  if (vehicle_direction == 8) {                                                                                                     // Not moving.
-    f_speed[4] = 0x81;
-  } else if (vehicle_direction == 9) {                                                                                              // Moving forward.
-    f_speed[4] = 0x91;
-  } else if (vehicle_direction == 0xA) {                                                                                            // Moving backwards.
-    f_speed[4] = 0xA1;
-  }                                                                                                                                 // QU_V_VEH_COG hardcoded to 1 (Signal valid).
+    vehicle_direction = pt_msg.buf[1] >> 4;
+    if (vehicle_direction == 8) {                                                                                                   // Not moving.
+      f_speed[4] = 0x81;
+    } else if (vehicle_direction == 9) {                                                                                            // Moving forward.
+      f_speed[4] = 0x91;
+    } else if (vehicle_direction == 0xA) {                                                                                          // Moving backwards.
+      f_speed[4] = 0xA1;
+    }                                                                                                                               // QU_V_VEH_COG hardcoded to 1 (Signal valid).
 
-  f_speed[1] = 0xC << 4 | f_speed_alive_counter;
-  f_speed_alive_counter == 0xE ? f_speed_alive_counter = 0 : f_speed_alive_counter += 2;                                            // This message increments the alive counter by 2.
-  if (vehicle_direction == 9 || vehicle_direction == 0xA) {
-    uint16_t f_temp_speed = real_speed / 0.015625;
-    if (speed_mph) {
-      f_temp_speed = round(f_temp_speed * 1.6);
+    f_speed[1] = 0xC << 4 | f_speed_alive_counter;
+    f_speed_alive_counter == 0xE ? f_speed_alive_counter = 0 : f_speed_alive_counter += 2;                                          // This message increments the alive counter by 2.
+    if (vehicle_direction == 9 || vehicle_direction == 0xA) {
+      uint16_t f_temp_speed = real_speed / 0.015625;
+      if (speed_mph) {
+        f_temp_speed = round(f_temp_speed * 1.6);
+      }
+      f_speed[2] = f_temp_speed & 0xFF;
+      f_speed[3] = f_temp_speed >> 8;
+    } else {
+      f_speed[2] = f_speed[3] = 0;
     }
-    f_speed[2] = f_temp_speed & 0xFF;
-    f_speed[3] = f_temp_speed >> 8;
-  } else {
-    f_speed[2] = f_speed[3] = 0;
-  }
 
-  f_speed_crc.restart();
-  for (uint8_t i = 1; i < 5; i++) {
-    f_speed_crc.add(f_speed[i]);
+    f_speed_crc.restart();
+    for (uint8_t i = 1; i < 5; i++) {
+      f_speed_crc.add(f_speed[i]);
+    }
+    f_speed[0] = f_speed_crc.calc();
+    f_speed_buf = make_msg_buf(0x1A1, 5, f_speed);
+    ptcan_write_msg(f_speed_buf);
+    f_chassis_speed_timer = 0;
   }
-  f_speed[0] = f_speed_crc.calc();
-  f_speed_buf = make_msg_buf(0x1A1, 5, f_speed);
-  ptcan_write_msg(f_speed_buf);
 }
 #endif
 
@@ -236,7 +248,7 @@ void evaluate_cruise_control_status(void) {
 #endif
 
 
-#if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
+#if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
 void evaluate_speed_units(void) {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   #if HDC

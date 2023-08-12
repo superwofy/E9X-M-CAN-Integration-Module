@@ -87,12 +87,16 @@ void configure_can_controller(void) {
     KCAN.setFIFOFilter(filter_count, 0x195, STD);                                                                                   // MSA button status sent by IHKA.
     filter_count++;
   #endif
-  #if CKM
+  #if PWR_CKM
     KCAN.setFIFOFilter(filter_count, 0x1AA, STD);                                                                                   // iDrive ErgoCommander (rear entertainment?)                   Sent at boot time and when cycling Terminal R.
     filter_count++;
   #endif
   KCAN.setFIFOFilter(filter_count, 0x1B4, STD);                                                                                     // Kombi status (corrected speed)                               Cycle time 100ms (terminal R ON)
   filter_count++;
+  #if REVERSE_BEEP
+    KCAN.setFIFOFilter(filter_count, 0x1C6, STD);                                                                                   // PDC acoustic message
+    filter_count++;
+  #endif
   #if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
     KCAN.setFIFOFilter(filter_count, 0x1F6, STD);                                                                                   // Indicator status                                             Cycle time 1s. Sent when changed.
     filter_count++;
@@ -109,17 +113,17 @@ void configure_can_controller(void) {
     KCAN.setFIFOFilter(filter_count, 0x232, STD);                                                                                   // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change).
     filter_count++;
   #endif
-  #if AUTO_MIRROR_FOLD || CKM || INDICATE_TRUNK_OPENED
+  #if AUTO_MIRROR_FOLD || PWR_CKM || INDICATE_TRUNK_OPENED
     KCAN.setFIFOFilter(filter_count, 0x23A, STD);                                                                                   // Remote button and number sent by CAS                         Sent 3x when changed.
     filter_count++;
   #endif
-  #if F_ZBE_WAKE || CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
+  #if F_ZBE_WAKE || PWR_CKM || DOOR_VOLUME || F_VSW01
     KCAN.setFIFOFilter(filter_count, 0x273, STD);                                                                                   // CIC status and ZBE challenge.                                Sent when CIC is idle or a button is pressed on the ZBE.
     filter_count++;
   #endif
   KCAN.setFIFOFilter(filter_count, 0x2CA, STD);                                                                                     // Ambient temperature                                          Cycle time 1s.
   filter_count++;                                                                         
-  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
+  #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
     KCAN.setFIFOFilter(filter_count, 0x2F7, STD);                                                                                   // Units from KOMBI                                             Sent 3x on Terminal R. Sent when changed.
     filter_count++;
   #endif
@@ -131,7 +135,7 @@ void configure_can_controller(void) {
     KCAN.setFIFOFilter(filter_count, 0x2FA, STD);                                                                                   // Seat occupancy and belt status                               Cycle time 5s
     filter_count++;
   #endif
-  #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ || HOOD_OPEN_GONG
+  #if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
     KCAN.setFIFOFilter(filter_count, 0x2FC, STD);                                                                                   // Door, hood status sent by CAS.                               Cycle time 5s. Sent when changed.
     filter_count++;
   #endif
@@ -151,7 +155,7 @@ void configure_can_controller(void) {
     KCAN.setFIFOFilter(filter_count, 0x39E, STD);                                                                                   // Time and date set by the user in CIC.
     filter_count++;    
   #endif
-  #if CKM
+  #if PWR_CKM
     KCAN.setFIFOFilter(filter_count, 0x3A8, STD);                                                                                   // M Key POWER setting from iDrive.                             Sent when changed.
     filter_count++;
   #endif

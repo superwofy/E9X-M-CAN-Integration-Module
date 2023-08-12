@@ -53,8 +53,8 @@ void loop() {
     #if AUTO_MIRROR_FOLD
       check_mirror_fold_queue();
     #endif
-    #if ANTI_THEFT_SEQ
-      check_anti_theft_status();
+    #if IMMOBILIZER_SEQ
+      check_immobilizer_status();
     #endif
     #if DIM_DRL
       check_drl_queue();
@@ -62,7 +62,7 @@ void loop() {
     #if FRONT_FOG_CORNER
       check_fog_corner_queue();
     #endif
-    #if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
+    #if PWR_CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
       check_idrive_alive_monitor();
     #endif
     #if F_ZBE_WAKE || F_VSW01 || F_NIVI
@@ -86,9 +86,6 @@ void loop() {
     #endif
     #if AUTO_STEERING_HEATER
       evaluate_steering_heating_request();
-    #endif
-    #if REVERSE_BEEP
-      check_reverse_beep_queue();
     #endif
     #if HDC || FAKE_MSA
       check_ihk_buttons_cc_queue();
@@ -153,6 +150,12 @@ void loop() {
         evaluate_vehicle_moving();
       }
 
+      #if REVERSE_BEEP
+      else if (k_msg.id == 0x1C6) {                                                                                                 // Monitor PDC warning.
+        evaluate_pdc_warning();
+      }
+      #endif
+
       #if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
       else if (k_msg.id == 0x1F6) {                                                                                                 // Monitor indicator status
         evaluate_indicator_status_dim();
@@ -195,7 +198,7 @@ void loop() {
       }
       #endif
 
-      #if CKM
+      #if PWR_CKM
       else if (k_msg.id == 0x3A8) {                                                                                                 // Received POWER M Key settings from iDrive.
         update_dme_power_ckm();
       }
@@ -237,29 +240,29 @@ void loop() {
       evaluate_terminal_clutch_keyno_status();
     }
 
-    #if CKM
+    #if PWR_CKM
     else if (k_msg.id == 0x1AA) {                                                                                                   // Time POWER CKM message with iDrive ErgoCommander.
       send_dme_power_ckm();
     }
     #endif
 
-    #if AUTO_MIRROR_FOLD || CKM || INDICATE_TRUNK_OPENED
+    #if AUTO_MIRROR_FOLD || PWR_CKM || INDICATE_TRUNK_OPENED
     else if (k_msg.id == 0x23A) {                                                                                                   // Monitor remote function status
       #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
         evaluate_remote_button();
       #endif
-      #if CKM
+      #if PWR_CKM
         evaluate_key_number_remote();
       #endif
     }
     #endif
 
-    #if F_ZBE_WAKE || CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
+    #if F_ZBE_WAKE || PWR_CKM || DOOR_VOLUME || F_VSW01
     else if (k_msg.id == 0x273) {
       #if F_ZBE_WAKE
         send_zbe_acknowledge();
       #endif
-      #if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
+      #if PWR_CKM || DOOR_VOLUME || F_VSW01
         update_idrive_alive_timer();
       #endif
     }
@@ -275,7 +278,7 @@ void loop() {
     } 
     #endif
 
-    #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
+    #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
     else if (k_msg.id == 0x2F7) {
       evaluate_speed_units();
     }
@@ -288,7 +291,7 @@ void loop() {
       }
     }
 
-    #if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ || HOOD_OPEN_GONG
+    #if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
     if (k_msg.id == 0x2FC) {
       evaluate_door_status();
     }
@@ -359,17 +362,14 @@ void loop() {
 
       #if F_NIVI
       else if (pt_msg.id == 0x1A0) {
-        if (f_chassis_messages_timer >= 100) {                                                                                      // Throttle messages to reduce bus load.
-          send_f_road_inclination();
-          send_f_longitudinal_acceleration();
-          send_f_yaw_rate();
-          send_f_speed_status();
-          f_chassis_messages_timer = 0;
-        }
+        send_f_road_inclination();
+        send_f_longitudinal_acceleration();
+        send_f_yaw_rate();
+        send_f_speed_status();
       }
       #endif
 
-      #if ANTI_THEFT_SEQ                                                                                                            // We need this button data with ignition off too
+      #if IMMOBILIZER_SEQ                                                                                                           // We need this button data with ignition off too
       else if (pt_msg.id == 0x1D6) {                                                                                                // A button was pressed on the steering wheel.
         evaluate_m_mfl_button_press();
       }
@@ -398,7 +398,7 @@ void loop() {
         }
         #endif
 
-        #if !ANTI_THEFT_SEQ
+        #if !IMMOBILIZER_SEQ
         else if (pt_msg.id == 0x1D6) {
           evaluate_m_mfl_button_press();
         }

@@ -13,7 +13,7 @@ void read_initialize_eeprom(void) {
     mdrive_power = 0x30;
     mdrive_edc = 0x2A;
     mdrive_svt = 0xF1;
-    #if CKM
+    #if PWR_CKM
       dme_ckm[0][0] = 0xF1;
       dme_ckm[1][0] = 0xF1;
       dme_ckm[2][0] = 0xF1;
@@ -56,7 +56,7 @@ void read_initialize_eeprom(void) {
       mdrive_message[4] = 0x81;                                                                                                     // SVT sport, MDrive OFF.
     }
 
-    #if CKM
+    #if PWR_CKM
       dme_ckm[0][0] = EEPROM.read(6);
       dme_ckm[1][0] = EEPROM.read(7);
       dme_ckm[2][0] = EEPROM.read(8);
@@ -69,11 +69,11 @@ void read_initialize_eeprom(void) {
     #if UNFOLD_WITH_DOOR
       unfold_with_door_open = EEPROM.read(12) == 1 ? true : false;
     #endif
-    #if ANTI_THEFT_SEQ
-      anti_theft_released = EEPROM.read(13) == 1 ? true : false;
-      anti_theft_persist = EEPROM.read(14) == 1 ? true : false;
-      if (!anti_theft_persist) {
-        anti_theft_released = true;                                                                                                 // Deactivate anti-theft at boot if this value is set.
+    #if IMMOBILIZER_SEQ
+      immobilizer_released = EEPROM.read(13) == 1 ? true : false;
+      immobilizer_persist = EEPROM.read(14) == 1 ? true : false;
+      if (!immobilizer_persist) {
+        immobilizer_released = true;                                                                                                // Deactivate anti-theft at boot if this value is set.
       }
     #endif
     max_cpu_temp = EEPROM.read(15);
@@ -110,7 +110,7 @@ void update_data_in_eeprom(void) {
   EEPROM.update(3, mdrive_power);
   EEPROM.update(4, mdrive_edc);
   EEPROM.update(5, mdrive_svt);
-  #if CKM
+  #if PWR_CKM
     EEPROM.update(6, dme_ckm[0][0]);
     EEPROM.update(7, dme_ckm[1][0]);
     EEPROM.update(8, dme_ckm[2][0]);
@@ -170,7 +170,7 @@ void print_current_state(Stream &status_serial) {
   status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " RPM: %d", RPM / 4);
   status_serial.println(serial_debug_string);
-  #if HDC || ANTI_THEFT_SEQ || FRONT_FOG_CORNER || F_NIVI
+  #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
     sprintf(serial_debug_string, " Indicated speed: %d %s", indicated_speed, speed_mph ? "MPH" : "KPH");
     status_serial.println(serial_debug_string);
   #endif
@@ -224,9 +224,9 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Yaw rate: %.2f deg/s", (yaw_rate - 163.84) * 0.005);
     status_serial.println(serial_debug_string);
   #endif
-  #if ANTI_THEFT_SEQ
+  #if IMMOBILIZER_SEQ
     status_serial.println("============= Antitheft ============");
-    sprintf(serial_debug_string, " Anti-theft: %s", anti_theft_released ? "OFF" : "Active");
+    sprintf(serial_debug_string, " Anti-theft: %s", immobilizer_released ? "OFF" : "Active");
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Anti-theft persistent setting: %s", EEPROM.read(14) == 1 ? "Active" : "OFF");
     status_serial.println(serial_debug_string);
@@ -279,7 +279,7 @@ void print_current_state(Stream &status_serial) {
   status_serial.println();
   sprintf(serial_debug_string, " Console POWER: %s", console_power_mode ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
-  #if CKM
+  #if PWR_CKM
     sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport");
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Key profile number: %d", cas_key_number + 1);
@@ -422,11 +422,11 @@ void reset_runtime_variables(void) {                                            
   RPM = 0;
   ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
-  mfl_pressed_count = 0;
+  m_mfl_held_count = 0;
   #if SERVOTRONIC_SVT70
     uif_read = false;
   #endif
-  #if CKM
+  #if PWR_CKM
     console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                         // When cycling ignition, restore this to its CKM value.
   #endif
   #if EDC_CKM_FIX
@@ -441,8 +441,7 @@ void reset_runtime_variables(void) {                                            
     #endif
   #endif
   #if REVERSE_BEEP
-    pdc_beep_txq.flush();
-    pdc_beep_sent = false;
+    pdc_beep_sent = pdc_too_close = false;
   #endif
   #if HDC || FAKE_MSA
     ihk_extra_buttons_cc_txq.flush();
@@ -516,7 +515,7 @@ void reset_runtime_variables(void) {                                            
     pdc_status = 0x80;
     pdc_button_pressed = pdc_with_rvc_requested = false;
   #endif
-  #if ANTI_THEFT_SEQ
+  #if IMMOBILIZER_SEQ
     reset_key_cc();
   #endif
   #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
@@ -566,10 +565,14 @@ void reset_sleep_variables(void) {
   #endif
   #if F_VSW01
     vsw_initialized = false;
+    vsw_current_input = 0;
+    vsw_switch_counter = 0xF1;
   #endif
-  #if ANTI_THEFT_SEQ
-    if (anti_theft_persist) {
-      activate_anti_theft();
+  #if IMMOBILIZER_SEQ
+    if (immobilizer_persist) {
+      if (immobilizer_released) {
+        activate_immobilizer();
+      }
     }
   #endif
   update_data_in_eeprom();

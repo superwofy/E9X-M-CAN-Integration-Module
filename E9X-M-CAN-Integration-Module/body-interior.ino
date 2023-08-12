@@ -33,7 +33,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   }
   #endif
 
-  #if CKM || EDC_CKM_FIX
+  #if PWR_CKM || EDC_CKM_FIX
     check_key_changed();
   #endif
 
@@ -308,28 +308,26 @@ void check_power_led_state(void) {
 
 
 void check_console_buttons(void) {
-  #if ANTI_THEFT_SEQ
-  if (anti_theft_released) {
+  #if IMMOBILIZER_SEQ
+  if (immobilizer_released) {
     if (!digitalRead(POWER_BUTTON_PIN) && !digitalRead(DSC_BUTTON_PIN)) {
       if (!holding_both_console) {
         both_console_buttons_timer = 0;
         holding_both_console = true;
       } else {
         if (both_console_buttons_timer >= 10000) {                                                                                  // Hold both buttons for more than 10s.
-          if (diag_transmit) {
-            kcan_write_msg(cc_gong_buf);                                                                                            // Acknowledge anti-theft persist ON-OFF
-          }
-          anti_theft_persist = !anti_theft_persist;
-          EEPROM.update(15, anti_theft_persist);
+          play_cc_gong();                                                                                                           // Acknowledge anti-theft persist ON-OFF with Gong.
+          immobilizer_persist = !immobilizer_persist;
+          EEPROM.update(15, immobilizer_persist);
           update_eeprom_checksum();
           #if DEBUG_MODE
-            sprintf(serial_debug_string, "Anti theft persistently: %s.", anti_theft_persist ? "ON" : "OFF");
+            sprintf(serial_debug_string, "Anti theft now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
             serial_log(serial_debug_string);
           #endif
           both_console_buttons_timer = 0;                                                                                           // Reset to prevent multiple activations.
         }
       }
-      return;
+      return;                                                                                                                       // Prevent nuisance mode changes while holding both buttons.
     } else {
       holding_both_console = false;
     }
@@ -363,26 +361,25 @@ void check_console_buttons(void) {
     if (!holding_dsc_off_console) {
       holding_dsc_off_console = true;
       dsc_off_button_hold_timer = 0;
-    } else {
-      if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                          // DSC OFF sequence should only be sent after user holds button for a configured time
-        if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
-          if (dsc_program_status != 2) {
-            serial_log("Console: DSC OFF button held.");
-            send_dsc_mode(2);
-            dsc_off_button_debounce_timer = 0;
-            holding_dsc_off_console = false;
-          }
+    }
+    
+    if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                            // DSC OFF sequence should only be sent after user holds button for a configured time.
+      if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
+        if (dsc_program_status != 2) {                                                                                              // If the button is held after DSC OFF, no more messages are sent until release.
+          serial_log("Console: DSC OFF button held.");
+          send_dsc_mode(2);
         }
+        dsc_off_button_debounce_timer = 0;
       }
     }      
-  } else {                                                                                                                          // A quick tap re-enables everything
+  } else {                                                                                                                          // A quick tap re-enables everything.
     if (holding_dsc_off_console) {
       if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
         if (dsc_program_status != 0) {
           serial_log("Console: DSC button tapped.");
-          dsc_off_button_debounce_timer = 0;
           send_dsc_mode(0);
         }
+        dsc_off_button_debounce_timer = 0;
       }
       holding_dsc_off_console = false;
     }
@@ -545,7 +542,7 @@ void check_idrive_queue(void) {
 #endif
 
 
-#if CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
+#if PWR_CKM || DOOR_VOLUME || F_VSW01
 void check_idrive_alive_monitor(void) {
   if (terminal_r) {
     if (idrive_alive_timer >= 4000) {                                                                                               // This message should be received every 2s.
@@ -600,8 +597,10 @@ void update_idrive_alive_timer(void) {
 
 #if F_VSW01
 void vsw_switch_input(uint8_t input) {
-  kcan_write_msg(vsw_switch_buf[input]);
+  uint8_t vsw_switch_position[] = {input, 0, 0, 0, 0, 0, 0, vsw_switch_counter};
+  kcan_write_msg(make_msg_buf(0x2FB, 8, vsw_switch_position));
   vsw_current_input = input;
+  vsw_switch_counter == 0xFE ? vsw_switch_counter = 0xF1 : vsw_switch_counter++;
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent VSW/%d request.", input);
     serial_log(serial_debug_string);

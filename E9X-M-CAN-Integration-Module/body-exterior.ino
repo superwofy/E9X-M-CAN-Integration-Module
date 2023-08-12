@@ -102,7 +102,7 @@ void evaluate_indicator_status_dim(void) {
 #endif
 
 
-#if DOOR_VOLUME || AUTO_MIRROR_FOLD || ANTI_THEFT_SEQ || HOOD_OPEN_GONG
+#if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
 void evaluate_door_status(void) {
   if (k_msg.buf[1] != last_door_status) {
     if (k_msg.buf[1] == 1) {
@@ -183,7 +183,7 @@ void evaluate_door_status(void) {
       serial_log("Hood opened.");
       if (diag_transmit) {
         if (!vehicle_moving && terminal_r) {
-          kcan_write_msg(cc_gong_buf); 
+          play_cc_gong();
         }
       }
       last_hood_status = k_msg.buf[2];
@@ -256,7 +256,7 @@ void actuate_exhaust_solenoid(bool activate) {
 #endif
 
 
-#if CKM || EDC_CKM_FIX
+#if PWR_CKM || EDC_CKM_FIX
 void evaluate_key_number_remote(void) {
   if (k_msg.buf[0] / 11 != cas_key_number) {
     cas_key_number = k_msg.buf[0] / 11;                                                                                             // Key 1 = 0, Key 2 = 11, Key 3 = 22...
@@ -270,7 +270,7 @@ void evaluate_key_number_remote(void) {
       serial_log(serial_debug_string);
     }
     #endif
-    #if CKM
+    #if PWR_CKM
       console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
     #endif
   }
@@ -288,7 +288,7 @@ void check_key_changed(void) {
         sprintf(serial_debug_string, "Received new key number after unlock: %d.", cas_key_number + 1);
         serial_log(serial_debug_string);
       #endif
-      #if CKM
+      #if PWR_CKM
         console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
         send_dme_power_ckm();                                                                                                       // Update iDrive in case key remote changed
       #endif
@@ -317,12 +317,12 @@ void evaluate_remote_button(void) {
               #if UNFOLD_WITH_DOOR
                 unfold_with_door_open = false;
               #endif
-              #if ANTI_THEFT_SEQ_ALARM
+              #if IMMOBILIZER_SEQ_ALARM
                 if (alarm_led) {
                   m = {alarm_led_off_buf, time_now + 100};                                                                          // Release control of the LED so that alarm can control it.
-                  anti_theft_txq.push(&m);
-                  m = {alarm_led_off_buf, time_now + 400};
-                  anti_theft_txq.push(&m);
+                  immobilizer_txq.push(&m);
+                  m = {alarm_led_off_buf, time_now + 500};
+                  immobilizer_txq.push(&m);
                   alarm_led = false;
                   lock_led = true;
                   led_message_counter = 60;                                                                                         // Make sure we're ready once Terminal R cycles.
@@ -342,7 +342,7 @@ void evaluate_remote_button(void) {
             mirror_fold_txq.push(&m);
             frm_status_requested = true;
           }
-          #if ANTI_THEFT_SEQ_ALARM
+          #if IMMOBILIZER_SEQ_ALARM
             lock_led = false;
           #endif
         } 
@@ -797,6 +797,21 @@ void evaluate_door_lock_ckm(void) {
       serial_log("Visual signal CKM disabed.");
       visual_signal_ckm = false;
     }
+  }
+}
+#endif
+
+
+#if REVERSE_BEEP
+void evaluate_pdc_warning(void) {
+  uint8_t max_volume = k_msg.buf[0];
+  if (k_msg.buf[1] > max_volume) {
+    max_volume = k_msg.buf[1];
+  }
+  if (max_volume >= 7) {
+    pdc_too_close = true;
+  } else {
+    pdc_too_close = false;
   }
 }
 #endif

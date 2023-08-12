@@ -56,8 +56,8 @@ void cache_can_message_buffers(void) {                                          
     uint8_t flash_hazards[] = {0, 0xF1};
     flash_hazards_buf = make_msg_buf(0x2B4, 2, flash_hazards);
   #endif
-  #if ANTI_THEFT_SEQ
-    #if ANTI_THEFT_SEQ_ALARM
+  #if IMMOBILIZER_SEQ
+    #if IMMOBILIZER_SEQ_ALARM
       uint8_t alarm_siren_on[] = {0x41, 3, 0x31, 4, 2, 0, 0, 0};
       uint8_t alarm_siren_off[] = {0x41, 3, 0x31, 4, 3, 0, 0, 0};
       uint8_t alarm_led_on[] = {0x41, 4, 0x30, 2, 7, 1, 0, 0};
@@ -79,16 +79,6 @@ void cache_can_message_buffers(void) {                                          
     start_cc_off_buf = make_msg_buf(0x5C0, 8, start_cc_off);
     ekp_pwm_off_buf = make_msg_buf(0x6F1, 8, ekp_pwm_off);
     ekp_return_to_normal_buf = make_msg_buf(0x6F1, 8, ekp_return_to_normal);
-  #endif
-  #if REVERSE_BEEP
-    #if RHD 
-      uint8_t pdc_beep[] = {0, 0, 0, 1};                                                                                            // Front right beep.
-    #else
-      uint8_t pdc_beep[] = {0, 0, 1, 0};                                                                                            // Front left beep.
-    #endif
-    uint8_t pdc_quiet[] = {0, 0, 0, 0};
-    pdc_beep_buf = make_msg_buf(0x1C6, 4, pdc_beep);
-    pdc_quiet_buf = make_msg_buf(0x1C6, 4, pdc_quiet);
   #endif
   #if FRONT_FOG_CORNER
     uint8_t front_left_fog_on_a[] = {0x72, 6, 0x30, 3, 7, 6, 0, 8};                                                                 // Soft on/off buffers.
@@ -165,11 +155,6 @@ void cache_can_message_buffers(void) {                                          
     f_kombi_network_mgmt_buf = make_msg_buf(0x560, 8, f_kombi_network_mgmt);
   #endif
   #if F_VSW01
-    uint8_t vsw_switch[] = {0, 0, 0, 0, 0, 0, 0, 0xF1};
-    for (uint8_t i = 0; i < 6; i++) {                                                                                               // Typical VSWs have 5 outputs. The PCB could have 7 inputs if components were soldered.
-      vsw_switch[0] = i;
-      vsw_switch_buf[i] = make_msg_buf(0x2FB, 8, vsw_switch);
-    }
     // uint8_t idrive_menu_request[] = {};
     // idrive_menu_request_buf = make_msg_buf(0x6F1, 8, idrive_menu_request);
   #endif
