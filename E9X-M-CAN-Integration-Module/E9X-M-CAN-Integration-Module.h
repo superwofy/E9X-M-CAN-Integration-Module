@@ -30,7 +30,7 @@ CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                               
 #define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood.
 #define FRM_HEADLIGHT_MODE 1                                                                                                        // Switches FRM AHL mode from Komfort and Sport.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
-#define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Un-fold mirrors when locking. Can be done with coding but this integrates nicer.
+#define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold mirrors when locking. Can be done with coding but this integrates nicer.
 #if AUTO_MIRROR_FOLD
 #define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
 #endif
@@ -83,7 +83,7 @@ const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                 
 const double AUTO_SEAT_HEATING_TRESHOLD = 10.0;                                                                                     // Degrees Celsius temperature.
 const uint16_t AUTO_HEATING_START_DELAY = 5 * 1000;                                                                                 // Time to wait for battery voltage to catch up after starting (time in seconds * 1000)
 #if CONTROL_SHIFTLIGHTS
-  const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                 // RPM setpoints (warning = desired RPM * 4).
+  const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                 // RPM setpoints when warmed up (warning = desired RPM * 4).
   const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
   const uint16_t MAX_UPSHIFT_WARN_RPM = 6500 * 4;
   const uint16_t GONG_UPSHIFT_WARN_RPM = 7000 * 4;
@@ -219,7 +219,7 @@ uint16_t stored_eeprom_checksum = 0xFFFF, calculated_eeprom_checksum = 0;
 delayed_can_tx_msg delayed_tx, m;
 unsigned long time_now;
 bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = false, vehicle_moving = false;
-bool terminal_50 = false, engine_running = false, clutch_pressed = false;
+bool terminal_50 = false, engine_running = false, clutch_pressed = false, frm_consumer_shutdown = false;
 bool clearing_dtcs = false;
 unsigned long engine_runtime = 0;
 float battery_voltage = 0;
@@ -331,7 +331,8 @@ CAN_message_t cc_gong_buf;
   cppQueue wiper_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if AUTO_MIRROR_FOLD
-  bool mirrors_folded = false, frm_status_requested = false;
+  uint8_t mirror_status_retry = 0;
+  bool mirrors_folded = false, frm_mirror_status_requested = false;
   bool lock_button_pressed  = false, unlock_button_pressed = false;
   CAN_message_t frm_status_request_a_buf, frm_status_request_b_buf;
   CAN_message_t frm_toggle_fold_mirror_a_buf, frm_toggle_fold_mirror_b_buf;
@@ -472,11 +473,14 @@ float ambient_temperature_real = 87.5;
   bool speed_mph = false;
 #endif
 #if HDC
-  uint8_t min_hdc_speed = 20, max_hdc_speed = 35;
+  uint8_t max_hdc_speed = 35, hdc_deactivate_speed = 60, stalk_message_counter = 0;
+  uint8_t set_hdc_checksums[] = {0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF, 0, 2, 3, 4};
+  uint8_t cancel_hdc_checksums[] = {0xFD, 0xFE, 0xFF, 0, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC};
   bool cruise_control_status = false, hdc_button_pressed = false, hdc_requested = false, hdc_active = false;
   CAN_message_t set_hdc_cruise_control_buf, cancel_hdc_cruise_control_buf;
   CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
   CAN_message_t hdc_cc_activated_off_buf, hdc_cc_unavailable_off_buf, hdc_cc_deactivated_off_buf;
+  cppQueue hdc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #endif
 #if FAKE_MSA
   CAN_message_t msa_deactivated_cc_on_buf, msa_deactivated_cc_off_buf;

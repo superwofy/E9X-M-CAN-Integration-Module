@@ -93,7 +93,7 @@ void evaluate_vehicle_moving(void) {
       }
       #if HDC
         if (hdc_active) {
-          if (indicated_speed > max_hdc_speed) {
+          if (indicated_speed > hdc_deactivate_speed) {
             serial_log("HDC deactivated due to high vehicle speed.");
             hdc_active = false;
             kcan_write_msg(hdc_cc_deactivated_on_buf);
@@ -192,8 +192,15 @@ void evaluate_hdc_button(void) {
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!hdc_button_pressed) {
       if (!hdc_active) {
-        if (!cruise_control_status && indicated_speed >= min_hdc_speed && indicated_speed <= max_hdc_speed) {
-          ptcan_write_msg(set_hdc_cruise_control_buf);
+        if (!cruise_control_status && vehicle_moving && indicated_speed <= max_hdc_speed) {
+          stalk_message_counter == 0xFF ? stalk_message_counter = 0xF0 : stalk_message_counter++;
+          uint8_t set_hdc_cruise_control[] = {set_hdc_checksums[stalk_message_counter - 0xF0], stalk_message_counter, 8, 0xFC};
+          set_hdc_cruise_control_buf = make_msg_buf(0x194, 4, set_hdc_cruise_control);
+          time_now = millis();
+          m = {set_hdc_cruise_control_buf, time_now};
+          hdc_txq.push(&m);
+          m = {set_hdc_cruise_control_buf, time_now + 20};
+          hdc_txq.push(&m);
           hdc_requested = true;                                                                                                     // Send request. "HDC" will only activate if cruise control conditions permit.
           serial_log("Sent HDC cruise control ON message.");
         } else if (!vehicle_moving) {
@@ -205,8 +212,14 @@ void evaluate_hdc_button(void) {
           serial_log("Conditions not right for HDC. Sent CC.");
         }
       } else {
-        ptcan_write_msg(cancel_hdc_cruise_control_buf);
-        hdc_active = false;
+        stalk_message_counter == 0xFF ? stalk_message_counter = 0xF0 : stalk_message_counter++;
+        uint8_t cancel_hdc_cruise_control[] = {cancel_hdc_checksums[stalk_message_counter - 0xF0], stalk_message_counter, 0x10, 0xFC};
+        cancel_hdc_cruise_control_buf = make_msg_buf(0x194, 4, cancel_hdc_cruise_control);
+        time_now = millis();
+        m = {cancel_hdc_cruise_control_buf, time_now};
+        hdc_txq.push(&m);
+        m = {cancel_hdc_cruise_control_buf, time_now + 20};
+        hdc_txq.push(&m);
         serial_log("Sent HDC cruise control OFF message.");
       }
       hdc_button_pressed = true;
@@ -228,7 +241,7 @@ void evaluate_cruise_control_status(void) {
         hdc_requested = false;
         serial_log("HDC cruise control activated.");
       } else {
-        serial_log("Cruise control activated.");
+        serial_log("Normal cruise control activated.");
       }
     }
   } else {
@@ -237,11 +250,31 @@ void evaluate_cruise_control_status(void) {
       if (hdc_active) {
         serial_log("HDC cruise control deactivated by user.");
         kcan_write_msg(hdc_cc_activated_off_buf);
-        hdc_active = false;
-        hdc_requested = false;
+        hdc_active = hdc_requested = false;
       } else {
-        serial_log("Cruise control deactivated.");
+        serial_log("Normal cruise control deactivated.");
       }
+    } else {
+      if (hdc_requested) {
+        hdc_requested = false;
+        serial_log("Cruise control did not activate when HDC was requested.");
+      }
+    }
+  }
+}
+
+
+void evaluate_cruise_stalk_message(void) {
+  stalk_message_counter = pt_msg.buf[1];
+}
+
+
+void check_hdc_queue(void) {
+  if (!hdc_txq.isEmpty()) {
+    hdc_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      ptcan_write_msg(delayed_tx.tx_msg);
+      hdc_txq.drop();
     }
   }
 }
@@ -253,11 +286,11 @@ void evaluate_speed_units(void) {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   #if HDC
     if (speed_mph) {
-      min_hdc_speed = 12;
       max_hdc_speed = 22;
+      hdc_deactivate_speed = 37;
     } else {
-      min_hdc_speed = 20;
       max_hdc_speed = 35;
+      hdc_deactivate_speed = 60;
     }
   #endif
 }

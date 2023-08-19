@@ -173,7 +173,7 @@ void evaluate_door_status(void) {
           send_volume_request_door();
         #endif
       }
-    } 
+    }
     last_door_status = k_msg.buf[1];
   }
 
@@ -310,24 +310,21 @@ void evaluate_remote_button(void) {
               if (diag_transmit) {
                 lock_button_pressed = true;
                 serial_log("Remote lock button pressed. Checking mirror status.");
-                m = {frm_status_request_a_buf, time_now + 200};
-                mirror_fold_txq.push(&m);
-                frm_status_requested = true;
+                kcan_write_msg(frm_status_request_a_buf);
+                frm_mirror_status_requested = true;
               }
               #if UNFOLD_WITH_DOOR
                 unfold_with_door_open = false;
               #endif
               #if IMMOBILIZER_SEQ_ALARM
-                if (alarm_led) {
-                  m = {alarm_led_off_buf, time_now + 100};                                                                          // Release control of the LED so that alarm can control it.
-                  immobilizer_txq.push(&m);
-                  m = {alarm_led_off_buf, time_now + 500};
-                  immobilizer_txq.push(&m);
-                  alarm_led = false;
-                  lock_led = true;
-                  led_message_counter = 60;                                                                                         // Make sure we're ready once Terminal R cycles.
-                  serial_log("Deactivated DWA LED when door locked.");
-                }
+                m = {alarm_led_off_buf, time_now + 100};                                                                            // Release control of the LED so that alarm can control it.
+                immobilizer_txq.push(&m);
+                m = {alarm_led_off_buf, time_now + 500};
+                immobilizer_txq.push(&m);
+                alarm_led = false;
+                lock_led = true;
+                led_message_counter = 60;                                                                                           // Make sure we're ready once Terminal R cycles.
+                serial_log("Deactivated DWA LED when door locked.");
               #endif
             #endif
           }
@@ -338,9 +335,8 @@ void evaluate_remote_button(void) {
           if (diag_transmit) {
             unlock_button_pressed = true;
             serial_log("Remote unlock button pressed. Checking mirror status.");
-            m = {frm_status_request_a_buf, time_now + 200};
-            mirror_fold_txq.push(&m);
-            frm_status_requested = true;
+            kcan_write_msg(frm_status_request_a_buf);
+            frm_mirror_status_requested = true;
           }
           #if IMMOBILIZER_SEQ_ALARM
             lock_led = false;
@@ -370,8 +366,12 @@ void evaluate_remote_button(void) {
 
 #if AUTO_MIRROR_FOLD
 void evaluate_mirror_fold_status(void) {
-  if (frm_status_requested) {                                                                                                       // Make sure the request came from this module.
-    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {
+  if (frm_mirror_status_requested) {                                                                                                // Make sure the request came from this module.
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
+      kcan_write_msg(frm_status_request_b_buf);
+    } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x21) {
+      // Ignore {F1 21 80 3 22 0 6C 41}.
+    } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {
       if (k_msg.buf[4] == 0) {
         mirrors_folded = false;
         serial_log("Mirrors are un-folded.");
@@ -379,14 +379,16 @@ void evaluate_mirror_fold_status(void) {
         mirrors_folded = true;
         serial_log("Mirrors are folded.");
       }
-      frm_status_requested = false;
+      frm_mirror_status_requested = false;
+      mirror_status_retry = 0;
 
       if (lock_button_pressed) {
         if (!mirrors_folded) {
-          if (!left_door_open && !right_door_open) {
-            serial_log("Folding mirrors after lock button pressed.");
-            toggle_mirror_fold();
-          }
+          serial_log("Folding mirrors after lock button pressed.");
+          toggle_mirror_fold();
+          #if UNFOLD_WITH_DOOR
+            unfold_with_door_open = true;
+          #endif
         }
         lock_button_pressed = false;
       } else if (unlock_button_pressed) {
@@ -400,30 +402,28 @@ void evaluate_mirror_fold_status(void) {
           unlock_button_pressed = false;
         }
       }
-    } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
-      kcan_write_msg(frm_status_request_b_buf);
-    } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x21) {
-      // Ignore {F1 21 80 3 22 0 6C 41}.
-    } else {                                                                                                                        // Try again.
-      serial_log("Did not receive the mirror status. Re-trying.");
-      m = {frm_status_request_a_buf, millis() + 100};
-      mirror_fold_txq.push(&m);
+    } else {                                                                                                                        // Try again. This will only work if the FRM first sent an error code.
+      if (mirror_status_retry < 3 && diag_transmit) {
+        serial_log("Did not receive mirror status. Re-trying.");
+        m = {frm_status_request_a_buf, millis() + 500};
+        mirror_fold_txq.push(&m);
+        mirror_status_retry++;
+      } else {
+        frm_mirror_status_requested = false;                                                                                        // Retries have failed.
+        mirror_status_retry = 0;
+        mirror_fold_txq.flush();
+      }
     }
   }
 }
 
 
 void toggle_mirror_fold(void) {
-  uint16_t delay = 200;
-  if (millis() < 2000) {
-    delay = 500;
-  }
   time_now = millis();
-  m = {frm_toggle_fold_mirror_a_buf, time_now + delay};
+  m = {frm_toggle_fold_mirror_a_buf, time_now + 500};
   mirror_fold_txq.push(&m);
-  m = {frm_toggle_fold_mirror_b_buf, time_now + delay + 10};
+  m = {frm_toggle_fold_mirror_b_buf, time_now + 510};
   mirror_fold_txq.push(&m);
-  mirrors_folded = !mirrors_folded;
 }
 
 

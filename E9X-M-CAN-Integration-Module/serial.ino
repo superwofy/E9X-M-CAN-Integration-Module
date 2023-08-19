@@ -5,27 +5,31 @@
 void serial_interpreter(void) {
   String cmd = Serial.readStringUntil('\n');
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
-    if (cmd == "module_reboot") {
+    if (cmd == "lock_serial") {
+      serial_commands_unlocked = false;
+      serial_log("  Serial: Locked.");
+    }
+    else if (cmd == "module_reboot") {
       serial_log("  Serial: Rebooting.");
       Serial.print("   Serial: ");
       update_data_in_eeprom();
       delay(1000);
       module_reboot();
     }
-    if (cmd == "test_watchdog") {
+    else if (cmd == "test_watchdog") {
       serial_log("  Serial: Will reboot after watchdog timeout.");
       update_data_in_eeprom();
       delay(1000);
       while(1);
     }
-    if (cmd == "print_status") {
+    else if (cmd == "print_status") {
       print_current_state(Serial);
     }
-    if (cmd == "print_setup_time") {
+    else if (cmd == "print_setup_time") {
       sprintf(serial_debug_string, "  Serial: %.2f ms", setup_time / 1000.0);
       serial_log(serial_debug_string);
     }
-    if (cmd == "print_voltage") {
+    else if (cmd == "print_voltage") {
       if (battery_voltage > 0) {
         sprintf(serial_debug_string, " Serial: %.2f V", battery_voltage);
         serial_log(serial_debug_string);
@@ -33,7 +37,7 @@ void serial_interpreter(void) {
         serial_log("  Serial: voltage unavailable.");
       }
     }
-    if (cmd == "clear_all_dtcs") {                                                                                                  // Should take around 6s to complete.
+    else if (cmd == "clear_all_dtcs") {                                                                                             // Should take around 6s to complete.
       if (ignition) {
         if (diag_transmit) {
           serial_log("  Serial: Clearing error and shadow memories.");
@@ -46,7 +50,7 @@ void serial_interpreter(void) {
           }
           time_now += 20;
           uint8_t clear_is_job[] = {0, 3, 0x31, 6, 0, 0, 0, 0}, j;
-          for (uint8_t j = 0; j < 0x8C; j++) {
+          for (j = 0; j < 0x8C; j++) {
             clear_fs_job[0] = j;
             m = {make_msg_buf(0x6F1, 8, clear_is_job), time_now + (i + j) * 20};
             serial_diag_txq.push(&m);
@@ -63,7 +67,7 @@ void serial_interpreter(void) {
         serial_log("  Serial: Activate ignition first.");
       }
     }
-    if (cmd == "cc_gong") {
+    else if (cmd == "cc_gong") {
       if (diag_transmit) {
         serial_log("  Serial: Sending CC gong.");
         play_cc_gong();
@@ -193,97 +197,108 @@ void serial_interpreter(void) {
     }
     #endif
     #if AUTO_MIRROR_FOLD
-      else if (cmd == "toggle_mirror_fold") {
-        if (diag_transmit) {
-          toggle_mirror_fold();
-          serial_log("  Serial: Sent mirror fold request.");
-        } else {
-          serial_log("  Serial: Function unavailable due to OBD tool presence.");
-        }
+    else if (cmd == "toggle_mirror_fold") {
+      if (diag_transmit) {
+        toggle_mirror_fold();
+        serial_log("  Serial: Sent mirror fold/unfold request.");
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.");
       }
-      else if (cmd == "mirror_fold_status") {
-        if (diag_transmit) {
-          lock_button_pressed = unlock_button_pressed = false;
-          frm_status_requested = true;
-          kcan_write_msg(frm_status_request_a_buf);
-          Serial.print("  Serial: ");
-        } else {
-          serial_log("  Serial: Function unavailable due to OBD tool presence.");
-        }
+    }
+    else if (cmd == "mirror_fold_status") {
+      if (diag_transmit) {
+        lock_button_pressed = unlock_button_pressed = false;
+        frm_mirror_status_requested = true;
+        kcan_write_msg(frm_status_request_a_buf);
+        Serial.print("  Serial: ");
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.");
       }
+    }
     #endif
     #if IMMOBILIZER_SEQ
-      else if (cmd == "release_immobilizer") {
-        release_immobilizer();
-        Serial.print("  Serial: ");
-      }
-      else if (cmd == "lock_immobilizer") {
-        reset_key_cc();
+    else if (cmd == "release_immobilizer") {
+      release_immobilizer();
+      Serial.print("  Serial: ");
+    }
+    else if (cmd == "lock_immobilizer") {
+      reset_key_cc();
+      activate_immobilizer();
+      serial_log("  Serial: Locked EKP anti theft.");
+    }
+    #if IMMOBILIZER_SEQ_ALARM
+    else if (cmd == "alarm_siren_on") {
+      kcan_write_msg(alarm_siren_on_buf);
+      serial_log("  Serial: Alarm siren ON.");
+    }
+    else if (cmd == "alarm_siren_off") {
+      kcan_write_msg(alarm_siren_off_buf);
+      serial_log("  Serial: Alarm siren OFF.");
+    }
+    else if (cmd == "test_trip_stall_alarm") {
+      if (ignition) {
         activate_immobilizer();
-        serial_log("  Serial: Locked EKP anti theft.");
+        alarm_after_engine_stall = true;
+        trip_alarm_after_stall();
+        serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.");
+      } else {
+        serial_log("  Serial: Activate ignition first.");
       }
-      #if IMMOBILIZER_SEQ_ALARM
-        else if (cmd == "alarm_siren_on") {
-          kcan_write_msg(alarm_siren_on_buf);
-          serial_log("  Serial: Alarm siren ON.");
-        }
-        else if (cmd == "alarm_siren_off") {
-          kcan_write_msg(alarm_siren_off_buf);
-          serial_log("  Serial: Alarm siren OFF.");
-        }
-        else if (cmd == "test_trip_stall_alarm") {
-          if (ignition) {
-            activate_immobilizer();
-            alarm_after_engine_stall = true;
-            trip_alarm_after_stall();
-            serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.");
-          } else {
-            serial_log("  Serial: Activate ignition first.");
-          }
-        }
-      #endif
+    }
+    #endif
     #endif
     #if RTC
-      else if (cmd == "reset_rtc") {
-        Teensy3Clock.set(1546300800);
-        serial_log("  Serial: RTC reset to initial value (1/1/19 0:0:0).");
-      }
+    else if (cmd == "reset_rtc") {
+      setTime(0, 0, 0, 1, 1, 2019); 
+      time_t t = now();
+      Teensy3Clock.set(t); 
+      rtc_valid = false;
+      serial_log("  Serial: RTC reset to initial value (1/1/19 0:0:0).");
+    }
     #endif
     #if MSA_RVC
-      else if (cmd == "activate_rvc") {
-        if (ignition) {
-          kcan_write_msg(pdc_off_camera_on_buf);
-          serial_log("  Serial: Activated RVC on display.");
-        } else {
-          serial_log("  Serial: Activate ignition first.");
-        }
+    else if (cmd == "activate_rvc") {
+      if (ignition) {
+        kcan_write_msg(pdc_off_camera_on_buf);
+        serial_log("  Serial: Activated RVC on display.");
+      } else {
+        serial_log("  Serial: Activate ignition first.");
       }
+    }
     #endif
     #if F_VSW01
-      else if (cmd == "vsw_0") {
-        Serial.print("  Serial: ");
-        vsw_switch_input(0);
-      }
-      else if (cmd == "vsw_1") {
-        Serial.print("  Serial: ");
-        vsw_switch_input(1);
-      }
-      else if (cmd == "vsw_2") {
-        Serial.print("  Serial: ");
-        vsw_switch_input(2);
-      }
-      else if (cmd == "vsw_3") {
-        Serial.print("  Serial: ");
-        vsw_switch_input(3);
-      }
-      else if (cmd == "vsw_4") {
-        Serial.print("  Serial: ");
-        vsw_switch_input(4);
-      }
-      else if (cmd == "vsw_5") {
-        Serial.print("  Serial: ");
-        vsw_switch_input(5);
-      }
+    else if (cmd == "vsw_0") {
+      Serial.print("  Serial: ");
+      vsw_switch_input(0);
+    }
+    else if (cmd == "vsw_1") {
+      Serial.print("  Serial: ");
+      vsw_switch_input(1);
+    }
+    else if (cmd == "vsw_2") {
+      Serial.print("  Serial: ");
+      vsw_switch_input(2);
+    }
+    else if (cmd == "vsw_3") {
+      Serial.print("  Serial: ");
+      vsw_switch_input(3);
+    }
+    else if (cmd == "vsw_4") {
+      Serial.print("  Serial: ");
+      vsw_switch_input(4);
+    }
+    else if (cmd == "vsw_5") {
+      Serial.print("  Serial: ");
+      vsw_switch_input(5);
+    }
+    else if (cmd == "vsw_6") {
+      Serial.print("  Serial: ");
+      vsw_switch_input(6);
+    }
+    else if (cmd == "vsw_7") {
+      Serial.print("  Serial: ");
+      vsw_switch_input(7);
+    }
     #endif
     else if (cmd == "help") {
       print_help();
@@ -307,6 +322,7 @@ void module_reboot(void) {
 void print_help(void) {
   serial_log("========================== Help ==========================");
   serial_log("  Commands:");
+  serial_log("  lock_serial - Restores the password prompt before accepting serial commands.");
   serial_log("  module_reboot - Saves EEPROM data and restarts the program.");
   serial_log("  test_watchdog - Create an infinite loop to test the watchdog reset.");
   serial_log("  print_status - Prints a set of current runtime variables.");
@@ -365,6 +381,8 @@ void print_help(void) {
     serial_log("  vsw_3 - Sets the VideoSwitch to input 3 (A40*1B Pins: 3 FBAS+, 21 FBAS-, 39 Shield).");
     serial_log("  vsw_4 - Sets the VideoSwitch to input 4 (A40*1B Pins: 4 FBAS+, 22 FBAS-, 40 Shield).");
     serial_log("  vsw_5 - Sets the VideoSwitch to input 5 (A40*1B Pins: 5 FBAS+, 23 FBAS-, 41 Shield).");
+    serial_log("  vsw_6 - Sets the VideoSwitch to input 6. This position exists but is not wired originally.");
+    serial_log("  vsw_7 - Sets the VideoSwitch to input 7. This position exists but is not wired originally.");
   #endif
   serial_log("==========================================================");
 }

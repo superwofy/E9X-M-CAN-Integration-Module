@@ -235,16 +235,12 @@ void cache_can_message_buffers(void) {                                          
     door_open_cc_off_buf = make_msg_buf(0x5C0, 8, door_open_cc_off);
   #endif
   #if HDC
-    uint8_t set_hdc_cruise_control[] = {0, 0xFB, 8, 0xFC};
-    uint8_t cancel_hdc_cruise_control[] = {0, 4, 0x10, 0xFC};
     uint8_t hdc_cc_activated_on[] = {0x40, 0x4B, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xAB};
     uint8_t hdc_cc_unavailable_on[] = {0x40, 0x4D, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xAB};
     uint8_t hdc_cc_deactivated_on[] = {0x40, 0x4C, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xAB};
     uint8_t hdc_cc_activated_off[] = {0x40, 0x4B, 1, 0, 0xFF, 0xFF, 0xFF, 0xAB};
     uint8_t hdc_cc_unavailable_off[] = {0x40, 0x4D, 1, 0, 0xFF, 0xFF, 0xFF, 0xAB};
     uint8_t hdc_cc_deactivated_off[] = {0x40, 0x4C, 1, 0, 0xFF, 0xFF, 0xFF, 0xAB};
-    set_hdc_cruise_control_buf = make_msg_buf(0x194, 4, set_hdc_cruise_control);
-    cancel_hdc_cruise_control_buf = make_msg_buf(0x194, 4, cancel_hdc_cruise_control);
     hdc_cc_activated_on_buf = make_msg_buf(0x5A9, 8, hdc_cc_activated_on);
     hdc_cc_unavailable_on_buf = make_msg_buf(0x5A9, 8, hdc_cc_unavailable_on);
     hdc_cc_deactivated_on_buf = make_msg_buf(0x5A9, 8, hdc_cc_deactivated_on);
@@ -305,13 +301,15 @@ void kcan_write_msg(const CAN_message_t &msg) {
       m = {msg, millis() + 50};
       kcan_resend_txq.push(&m);
       kcan_retry_counter++;
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "KCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
+        serial_log(serial_debug_string);
+        can_debug_print_buffer(msg);
+      #endif
+    } else {
+      serial_log("KCAN resend max counter exceeded.");
     }
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "KCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
-      serial_log(serial_debug_string);
-      can_debug_print_buffer(msg);
-      kcan_error_counter++;
-    #endif
+    kcan_error_counter++;
   }
 }
 
@@ -335,13 +333,15 @@ void ptcan_write_msg(const CAN_message_t &msg) {
       m = {msg, millis() + 20};
       ptcan_resend_txq.push(&m);
       ptcan_retry_counter++;
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "PTCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
+        serial_log(serial_debug_string);
+        can_debug_print_buffer(msg);
+      #endif
+    } else {
+      serial_log("PTCAN resend max counter exceeded.");
     }
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "PTCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
-      serial_log(serial_debug_string);
-      can_debug_print_buffer(msg);
-      ptcan_error_counter++;
-    #endif
+    ptcan_error_counter++;
   }
 }
 
@@ -353,13 +353,15 @@ void dcan_write_msg(const CAN_message_t &msg) {
       m = {msg, millis() + 100};
       dcan_resend_txq.push(&m);
       dcan_retry_counter++;
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
+        serial_log(serial_debug_string);
+        can_debug_print_buffer(msg);
+      #endif
+    } else {
+      serial_log("DCAN resend max counter exceeded.");
     }
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
-      serial_log(serial_debug_string);
-      can_debug_print_buffer(msg);
-      dcan_error_counter++;
-    #endif
+    dcan_error_counter++;
   }
 }
 

@@ -51,11 +51,13 @@ void configure_IO(void) {
 void scale_cpu_speed(void) {
   if (ignition) {
     set_arm_clock(STANDARD_CLOCK);
+    clock_mode = 0;
     #if DEBUG_MODE
       max_loop_timer = 0;
     #endif
   } else {
     set_arm_clock(MAX_UNDERCLOCK);                                                                                                  // Reduce core clock.
+    clock_mode = 4;
     #if DEBUG_MODE
       max_loop_timer = 0;
     #endif
@@ -167,6 +169,8 @@ void configure_can_controller(void) {
     KCAN.setFIFOFilter(filter_count, 0x3B0, STD);                                                                                   // Reverse gear status.                                         Cycle time 1s (idle).
     filter_count++;
   #endif
+  KCAN.setFIFOFilter(filter_count, 0x3BD, STD);                                                                                     // FRM consumer shutdown.                                       Cycle time 5s (idle). Sent when changed.
+  filter_count++;
   #if EDC_CKM_FIX
     KCAN.setFIFOFilter(filter_count, 0x3C5, STD);                                                                                   // M Key EDC CKM setting from iDrive.                           Sent when changed.
     filter_count++;
@@ -216,6 +220,10 @@ void configure_can_controller(void) {
     PTCAN.setFIFOFilter(filter_count, 0xC8, STD);                                                                                   // Steering angle.                                              Cycle time 200ms.
     filter_count++;
   #endif
+  #if HDC
+    PTCAN.setFIFOFilter(filter_count, 0x194, STD);                                                                                  // Cruise stalk position.                                       Cycle time 50ms.
+    filter_count++;
+  #endif
   #if F_NIVI
     PTCAN.setFIFOFilter(filter_count, 0x1A0, STD);                                                                                  // Speed.                                                       Cycle time 20ms.
     filter_count++;
@@ -260,8 +268,8 @@ void configure_can_controller(void) {
 }
 
 
-void toggle_transceiver_standby(void) {
-  if (!vehicle_awake) {
+void toggle_transceiver_standby(bool sleep) {
+  if (sleep) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
     serial_log("Deactivated PT-CAN transceiver.");
     digitalWrite(DCAN_STBY_PIN, HIGH);
@@ -359,10 +367,10 @@ void check_teensy_cpu_temp_clock(void) {                                        
 
 #if RTC
 void update_rtc_from_idrive(void) {
-  if (k_msg.buf[3] == 0xFE) {                                                                                                       // Only time is updated
+  if (k_msg.buf[3] == 0xFE) {                                                                                                       // Only time is updated.
     uint8_t idrive_hour = k_msg.buf[0];
     uint8_t idrive_minutes = k_msg.buf[1];
-    //uint8_t idrive_seconds = k_msg.buf[2];                                                                                        // Seconds are always 0
+    uint8_t idrive_seconds = k_msg.buf[2];                                                                                          // Seconds are always 0.
     time_t t = now();
     uint8_t rtc_day = day(t);
     uint8_t rtc_month = month(t);
@@ -373,10 +381,10 @@ void update_rtc_from_idrive(void) {
               idrive_hour > 9 ? "" : "0", idrive_hour, idrive_minutes > 9 ? "" : "0", idrive_minutes);
       serial_log(serial_debug_string);
     #endif
-    setTime(idrive_hour, idrive_minutes, 0, rtc_day, rtc_month, rtc_year);
+    setTime(idrive_hour, idrive_minutes, idrive_seconds, rtc_day, rtc_month, rtc_year);
     t = now();
     Teensy3Clock.set(t); 
-  } else if (k_msg.buf[0] == 0xFE) {                                                                                                // Only date was updated
+  } else if (k_msg.buf[0] == 0xFE) {                                                                                                // Only date was updated.
     uint8_t idrive_day = k_msg.buf[3];
     uint8_t idrive_month = k_msg.buf[4] >> 4;
     uint16_t idrive_year = k_msg.buf[6] << 8 | k_msg.buf[5];
@@ -393,11 +401,12 @@ void update_rtc_from_idrive(void) {
     t = now();
     Teensy3Clock.set(t); 
   }
+  check_rtc_valid();                                                                                                                // Check and update. Both date and time must be set.
 }
 
 
 void update_rtc_from_dcan(void) {
-  if (d_msg.buf[1] == 0x10) {                                                                                                       // Only time was updated
+  if (d_msg.buf[1] == 0x10) {                                                                                                       // Only time was updated.
     uint8_t dcan_hour = d_msg.buf[5];
     uint8_t dcan_minutes = d_msg.buf[6];
     uint8_t dcan_seconds = d_msg.buf[7]; 
@@ -431,6 +440,7 @@ void update_rtc_from_dcan(void) {
     t = now();
     Teensy3Clock.set(t); 
   }
+  check_rtc_valid();
 }
 
 
@@ -445,6 +455,12 @@ void check_rtc_valid(void) {
   if (t >= 1546300800 && t <= 1548979200) {                                                                                         // See startup.c (1546300800). Will warn for the first month after failure if not fixed.
     serial_log("Teensy RTC invalid. Check RTC battery.");
     rtc_valid = false;
+  } else {
+    if (!rtc_valid) {
+      rtc_valid = true;
+      kcan_write_msg(set_time_cc_off_buf);                                                                                          // Now that the time is set, cancel the CC.
+      serial_log("Teensy RTC time set. Disabling set time CC.");
+    }
   }
 }
 #endif

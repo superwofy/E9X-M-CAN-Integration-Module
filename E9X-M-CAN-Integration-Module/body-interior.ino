@@ -5,7 +5,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   vehicle_awake_timer = 0;
   if (!vehicle_awake) {
     vehicle_awake = true;    
-    toggle_transceiver_standby();                                                                                                   // Re-activate the transceivers.                                                                                         
+    toggle_transceiver_standby(0);                                                                                                  // Re-activate the transceivers.                                                                                         
     serial_log("Vehicle Awake.");
     vehicle_awakened_time = 0;
   }
@@ -115,6 +115,27 @@ void evaluate_terminal_clutch_keyno_status(void) {
     #endif
   } else if (!terminal_r && terminal_r_) {
     serial_log("Terminal R OFF.");
+  }
+}
+
+
+void evaluate_frm_consumer_shutdown(void) {
+  // The FRM sends this request after the vehicle has been sleeping for a predefined time.
+  // This can be observed when the car wakes up and turns off the interior lights. It then goes to deep sleep.
+  // OR
+  // If the car is locked, FC is sent immediately.
+  if (k_msg.buf[0] == 0xFC) {
+    if (!frm_consumer_shutdown) {
+      frm_consumer_shutdown = true;
+      serial_log("FRM requested consumers OFF.");
+      scale_cpu_speed();                                                                                                            // Reduce power consumption in this state.
+      digitalWrite(DCAN_STBY_PIN, HIGH);
+    }
+  } else if (k_msg.buf[0] == 0xFD) {
+    if (frm_consumer_shutdown) {
+      frm_consumer_shutdown = false;
+      digitalWrite(DCAN_STBY_PIN, LOW);
+    }
   }
 }
 
@@ -401,7 +422,7 @@ void update_car_time_from_rtc(void) {
     uint8_t date_time_can[] = {rtc_hours, rtc_minutes, rtc_seconds, 
                               rtc_day, uint8_t((rtc_month << 4) | 0xF), uint8_t(rtc_year & 0xFF), uint8_t(rtc_year >> 8), 0xF2};
     kcan_write_msg(make_msg_buf(0x39E, 8, date_time_can));
-    kcan_write_msg(set_time_cc_off_buf);                                                                                            // Now that the time is fixed, cancel the CC>
+    kcan_write_msg(set_time_cc_off_buf);                                                                                            // Now that the time is fixed, cancel the CC.
   } else {
     serial_log("Teensy RTC invalid. Cannot set car's clock.");
   }
@@ -411,7 +432,7 @@ void update_car_time_from_rtc(void) {
 
 #if DOOR_VOLUME
 void send_volume_request_periodic(void) {
-  if (terminal_r) {
+  if (terminal_r && !frm_consumer_shutdown) {
     if (volume_request_timer >= 3000) {
       if (diag_transmit) {
         kcan_write_msg(vol_request_buf);
@@ -443,30 +464,32 @@ void evaluate_audio_volume(void) {
             serial_log(serial_debug_string);
           #endif
         }
-        if (left_door_open || right_door_open) {
-          volume_change[4] = floor(k_msg.buf[4] * 0.75);                                                                            // Softer decrease.
-          if (volume_change[4] > 0x33) {
-            volume_change[4] = 0x33;
+        if (k_msg.buf[4] >= 5) {                                                                                                    // Don't reduce if already very low.
+          if (left_door_open || right_door_open) {
+            volume_change[4] = floor(k_msg.buf[4] * 0.75);                                                                          // Softer decrease.
+            if (volume_change[4] > 0x33) {
+              volume_change[4] = 0x33;
+            }
+            time_now = millis();
+            m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 200};
+            idrive_txq.push(&m);
+            volume_restore_offset = (k_msg.buf[4] % 2) == 0 ? 0 : 1;                                                                // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
+            volume_change[4] = floor(k_msg.buf[4] / 2);                                                                             // Reduce volume to 50%.
+            if ((volume_change[4] + volume_restore_offset) > 0x33) {                                                                // Don't blow the speakers out if something went wrong...
+              volume_change[4] = 0x33;
+              volume_restore_offset = 0;
+            }
+            m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 600};
+            idrive_txq.push(&m);
+            m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 900};
+            idrive_txq.push(&m);
+            volume_reduced = true;
+            volume_changed_to = volume_change[4];                                                                                   // Save this value to compare when door is closed back.
+            #if DEBUG_MODE
+              sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X.", volume_changed_to);
+              serial_log(serial_debug_string);
+            #endif
           }
-          time_now = millis();
-          m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 200};
-          idrive_txq.push(&m);
-          volume_restore_offset = (k_msg.buf[4] % 2) == 0 ? 0 : 1;                                                                  // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
-          volume_change[4] = floor(k_msg.buf[4] / 2);                                                                               // Reduce volume to 50%.
-          if ((volume_change[4] + volume_restore_offset) > 0x33) {                                                                  // Don't blow the speakers out if something went wrong...
-            volume_change[4] = 0x33;
-            volume_restore_offset = 0;
-          }
-          m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 600};
-          idrive_txq.push(&m);
-          m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 900};
-          idrive_txq.push(&m);
-          volume_reduced = true;
-          volume_changed_to = volume_change[4];                                                                                     // Save this value to compare when door is closed back.
-          #if DEBUG_MODE
-            sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X.", volume_changed_to);
-            serial_log(serial_debug_string);
-          #endif
         }
       } else {
         peristent_volume = k_msg.buf[4] * 2 + volume_restore_offset;
@@ -514,7 +537,7 @@ void evaluate_audio_volume(void) {
 }
 
 
-void disable_door_ignition_cc(void) {
+void disable_door_open_ignition_on_cc(void) {
   if (k_msg.buf[1] == 0x4F && k_msg.buf[2] == 1 && k_msg.buf[3] == 0x29) {
     kcan_write_msg(door_open_cc_off_buf);
   }

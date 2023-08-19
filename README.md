@@ -37,7 +37,7 @@ I use it to:
 * Display Launch Control flag.
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
 * Fold/Un-fold mirrors when locking/unlocking.
-* Indicate when the trunk is opened by remote.
+* Indicate when the trunk is opened by remote (flash hazards).
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 	* If engine is started without releasing this immobilizer, alarm will sound once engine stalls.
 	* Can be disabled persistently by first deactivating then, holding the POWER and DSC OFF buttons for 10s.

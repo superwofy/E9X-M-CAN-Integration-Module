@@ -34,7 +34,6 @@ void loop() {
 /***********************************************************************************************************************************************************************************************************************************************
   General section.
 ***********************************************************************************************************************************************************************************************************************************************/
-  time_now = millis();
   if (vehicle_awake) {
     #if EXHAUST_FLAP_CONTROL
       control_exhaust_flap_user();
@@ -69,8 +68,10 @@ void loop() {
       send_f_vehicle_mode();
     #endif
     #if F_NIVI
-      send_f_brightness_status();
-      send_f_powertrain_2_status();
+      if (!frm_consumer_shutdown) {
+        send_f_brightness_status();
+        send_f_powertrain_2_status();
+      }
     #endif
     check_can_resend_queues();
   }
@@ -89,6 +90,9 @@ void loop() {
     #endif
     #if HDC || FAKE_MSA
       check_ihk_buttons_cc_queue();
+      #if HDC
+        check_hdc_queue();
+      #endif
     #endif
     #if EDC_CKM_FIX
       check_edc_ckm_queue();
@@ -101,7 +105,7 @@ void loop() {
       if (vehicle_awake_timer >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring .
         serial_log("Vehicle Sleeping.");
-        toggle_transceiver_standby();
+        toggle_transceiver_standby(1);
         scale_cpu_speed();
         reset_sleep_variables();
       }
@@ -308,6 +312,10 @@ void loop() {
     }
     #endif
 
+    else if (k_msg.id == 0x3BD) {                                                                                                   // Received consumer shutdown message from FRM.
+      evaluate_frm_consumer_shutdown();
+    }
+
     #if F_ZBE_WAKE || F_VSW01
     else if (k_msg.id == 0x4E2) {
       send_f_wakeup();
@@ -319,7 +327,7 @@ void loop() {
 
     #if DOOR_VOLUME
     else if (k_msg.id == 0x5C0) {
-      disable_door_ignition_cc();
+      disable_door_open_ignition_on_cc();
     }
     #endif
 
@@ -362,10 +370,12 @@ void loop() {
 
       #if F_NIVI
       else if (pt_msg.id == 0x1A0) {
-        send_f_road_inclination();
-        send_f_longitudinal_acceleration();
-        send_f_yaw_rate();
-        send_f_speed_status();
+        if (!frm_consumer_shutdown) {
+          send_f_road_inclination();
+          send_f_longitudinal_acceleration();
+          send_f_yaw_rate();
+          send_f_speed_status();
+        }
       }
       #endif
 
@@ -395,6 +405,12 @@ void loop() {
         #if FRONT_FOG_CORNER
         else if (pt_msg.id == 0xC8) {
           evaluate_steering_angle_fog();
+        }
+        #endif
+
+        #if HDC
+        else if (pt_msg.id == 0x194) {
+          evaluate_cruise_stalk_message();
         }
         #endif
 
@@ -437,8 +453,10 @@ void loop() {
     
   if (DCAN.read(d_msg)) {
     if (d_msg.id == 0x6F1) {
+      if (clearing_dtcs) {}                                                                                                         // Ignore 6F1s while this module is clearing DTCs.
+
       // MHD monitoring exceptions:
-      if (d_msg.buf[0] == 0x12){
+      else if (d_msg.buf[0] == 0x12){
         if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                       // SID 34h requestDownload Service
           disable_diag_transmit_jobs();
         }

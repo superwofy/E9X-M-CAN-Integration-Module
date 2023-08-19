@@ -445,6 +445,7 @@ void reset_runtime_variables(void) {                                            
   #endif
   #if HDC || FAKE_MSA
     ihk_extra_buttons_cc_txq.flush();
+    hdc_txq.flush();
   #endif
   #if EXHAUST_FLAP_CONTROL
     exhaust_flap_sport = false;
@@ -556,8 +557,9 @@ void reset_sleep_variables(void) {
     wipe_scheduled = false;
   #endif
   #if AUTO_MIRROR_FOLD
-    frm_status_requested = false;
+    frm_mirror_status_requested = false;
     lock_button_pressed  = unlock_button_pressed = false;
+    mirror_status_retry = 0;
     mirror_fold_txq.flush();
   #endif
   #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED

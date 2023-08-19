@@ -368,7 +368,7 @@ void check_immobilizer_status(void) {
 
       #if IMMOBILIZER_SEQ_ALARM
         if (vehicle_awakened_time >= 10000) {                                                                                       // Delay so we don't interfere with normal DWA behavior indicating alarm faults. Also when doing 30G reset.
-          if (!terminal_r && !alarm_led && !lock_led) {
+          if (!terminal_r && !alarm_led && !frm_consumer_shutdown && !lock_led) {
             kcan_write_msg(alarm_led_on_buf);                                                                                       // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
             alarm_led = true;                                                                                                       // Sending this multiple times keeps the car awake.
             serial_log("Sent DWA LED ON with Terminal R off.");
@@ -471,16 +471,14 @@ void release_immobilizer(void) {
   m = {key_cc_off_buf, time_now + 50};                                                                                              // CC to KCAN.
   immobilizer_txq.push(&m);
   #if IMMOBILIZER_SEQ_ALARM
-    if (alarm_led) {
-      m = {alarm_led_off_buf, time_now + 100};                                                                                      // KWP to DWA.
-      immobilizer_txq.push(&m);
-      m = {alarm_led_off_buf, time_now + 500};
-      immobilizer_txq.push(&m);
-      alarm_led = false;
-    }
+    m = {alarm_led_off_buf, time_now + 100};                                                                                        // KWP to DWA.
+    immobilizer_txq.push(&m);
+    m = {alarm_led_off_buf, time_now + 500};
+    immobilizer_txq.push(&m);
+    alarm_led = false;
   #endif
   if (terminal_r) {
-    m = {start_cc_on_buf, time_now + 400};                                                                                          // CC to KCAN.
+    m = {start_cc_on_buf, time_now + 450};                                                                                          // CC to KCAN.
     immobilizer_txq.push(&m);
     serial_log("Sent start ready CC.");
   }
