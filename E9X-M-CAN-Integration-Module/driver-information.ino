@@ -1,7 +1,6 @@
 // Functions that generate warnings or information for the driver go here.
 
 
-#if CONTROL_SHIFTLIGHTS
 void shiftlight_startup_animation(void) {
   activate_shiftlight_segments(shiftlights_startup_buildup_buf);
   serial_log("Showing shift light on engine startup.");
@@ -89,10 +88,8 @@ void evaluate_update_shiftlight_sync(void) {
     }
   }
 }
-#endif
 
 
-#if NEEDLE_SWEEP
 void check_kombi_needle_queue(void) {
   if (!kombi_needle_txq.isEmpty()) {
     if (diag_transmit) {
@@ -148,10 +145,8 @@ void needle_sweep_animation(void) {
     serial_log("Sending needle sweep animation.");
   }
 }
-#endif
 
 
-#if LAUNCH_CONTROL_INDICATOR
 void evaluate_lc_display(void) {
   if (LC_RPM_MIN <= RPM && RPM <= LC_RPM_MAX) {
     if (clutch_pressed && !vehicle_moving) {
@@ -195,20 +190,16 @@ void deactivate_lc_display(void) {
     #endif
   }  
 }
-#endif
 
 
-#if SERVOTRONIC_SVT70
 void send_svt_kcan_cc_notification(void) {
   if (pt_msg.buf[1] == 0x49 && pt_msg.buf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
     pt_msg.buf[1] = 0x46;
   }
   kcan_write_msg(pt_msg);                                                                                                           // Forward the SVT error status to KCAN.
 }
-#endif
 
 
-#if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
 void evaluate_fog_status(void) {
   if ((k_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
     if (!front_fog_status) {
@@ -231,10 +222,8 @@ void evaluate_fog_status(void) {
     }
   }
 }
-#endif
 
 
-#if REVERSE_BEEP
 void evaluate_pdc_beep(void) {
   if (reverse_gear_status) {
     if (!pdc_beep_sent && !pdc_too_close) {
@@ -246,10 +235,8 @@ void evaluate_pdc_beep(void) {
     pdc_beep_sent = false;
   }
 }
-#endif
 
 
-#if FTM_INDICATOR
 void evaluate_indicate_ftm_status(void) {
   if (pt_msg.buf[0] == 3 && !ftm_indicator_status) {
     kcan_write_msg(ftm_indicator_flash_buf);
@@ -261,10 +248,8 @@ void evaluate_indicate_ftm_status(void) {
     serial_log("Deactivated FTM indicator.");
   }
 }
-#endif
 
 
-#if FAKE_MSA || MSA_RVC
 void evaluate_msa_button(void) {
   if (k_msg.buf[0] == 0xF5 || k_msg.buf[0] == 0xF1) {                                                                               // Button pressed.
     if (!msa_button_pressed) {
@@ -300,10 +285,8 @@ void evaluate_msa_button(void) {
     msa_button_pressed = false;
   }
 }
-#endif
 
 
-#if HDC || FAKE_MSA
 void check_ihk_buttons_cc_queue(void) {
   if (!ihk_extra_buttons_cc_txq.isEmpty()) {
     ihk_extra_buttons_cc_txq.peek(&delayed_tx);
@@ -313,10 +296,8 @@ void check_ihk_buttons_cc_queue(void) {
     }
   }
 }
-#endif
 
 
-#if MSA_RVC
 void evaluate_pdc_button(void) {
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!pdc_button_pressed) {
@@ -346,7 +327,6 @@ void evaluate_pdc_bus_status(void) {
     pdc_status = k_msg.buf[2];
   }
 }
-#endif
 
 
 void play_cc_gong(void) {

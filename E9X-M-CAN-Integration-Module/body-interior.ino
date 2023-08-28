@@ -33,9 +33,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   }
   #endif
 
-  #if PWR_CKM || EDC_CKM_FIX
-    check_key_changed();
-  #endif
+  check_key_changed();
 
   #if F_ZBE_WAKE || F_VSW01 || F_NIVI                                                                                               // Translate 0x130 to 0x12F for F-series modules.
     f_terminal_status[2] = 0xF << 4;                                                                                                // Set ST_KL
@@ -140,7 +138,6 @@ void evaluate_frm_consumer_shutdown(void) {
 }
 
 
-#if AUTO_SEAT_HEATING
 void evaluate_seat_heating_status(void) {
   if (k_msg.id == 0x232) {
     driver_seat_heating_status = !k_msg.buf[0] ? false : true;
@@ -191,20 +188,16 @@ void check_seatheating_queue(void) {
       seat_heating_dr_txq.drop();
     }
   }
-  #if AUTO_SEAT_HEATING_PASS
-    if (!seat_heating_pas_txq.isEmpty()) {
-      seat_heating_pas_txq.peek(&delayed_tx);
-      if (millis() >= delayed_tx.transmit_time) {
-        kcan_write_msg(delayed_tx.tx_msg);
-        seat_heating_pas_txq.drop();
-      }
+  if (!seat_heating_pas_txq.isEmpty()) {
+    seat_heating_pas_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      seat_heating_pas_txq.drop();
     }
-  #endif
+  }
 }
-#endif
 
 
-#if AUTO_SEAT_HEATING_PASS
 void evaluate_passenger_seat_status(void) {
   passenger_seat_status = k_msg.buf[1];
   if (ignition) {
@@ -238,10 +231,8 @@ void send_seat_heating_request_pas(void) {
     serial_log(serial_debug_string);
   #endif
 }
-#endif
 
 
-#if AUTO_STEERING_HEATER
 void evaluate_steering_heating_request(void) {
   if (engine_running && engine_runtime >= AUTO_HEATING_START_DELAY) {                                                               // Wait for supply voltage to stabilize.
     if (!sent_steering_heating_request) {
@@ -261,14 +252,10 @@ void evaluate_steering_heating_request(void) {
     }
   }
 }
-#endif
 
 
-#if F_ZBE_WAKE || F_VSW01 || F_NIVI
 void send_f_wakeup(void) {
-  #if F_ZBE_WAKE || F_VSW01
-    kcan_write_msg(f_kombi_network_mgmt_buf);
-  #endif
+  kcan_write_msg(f_kombi_network_mgmt_buf);
   #if F_NIVI
     ptcan_write_msg(f_kombi_network_mgmt_buf);
   #endif
@@ -288,9 +275,7 @@ void send_f_vehicle_mode(void) {
       f_vehicle_mode[2] = 0xF0;                                                                                                     // Energy good.
     }
     f_vehicle_mode_buf = make_msg_buf(0x3A0, 8, f_vehicle_mode);
-    #if F_ZBE_WAKE || F_VSW01
-      kcan_write_msg(f_vehicle_mode_buf);
-    #endif
+    kcan_write_msg(f_vehicle_mode_buf);
     #if F_NIVI
       ptcan_write_msg(f_vehicle_mode_buf);
     #endif
@@ -298,10 +283,8 @@ void send_f_vehicle_mode(void) {
     f_vehicle_mode_timer = 0;
   }
 }
-#endif
 
 
-#if F_ZBE_WAKE
 void send_zbe_acknowledge(void) {
   zbe_response[2] = k_msg.buf[7];
   kcan_write_msg(make_msg_buf(0x277, 4, zbe_response));
@@ -310,7 +293,6 @@ void send_zbe_acknowledge(void) {
     serial_log(serial_debug_string);
   #endif
 }
-#endif
 
 
 void evaluate_battery_voltage(void) {
@@ -430,7 +412,6 @@ void update_car_time_from_rtc(void) {
 #endif
 
 
-#if DOOR_VOLUME
 void send_volume_request_periodic(void) {
   if (terminal_r && !frm_consumer_shutdown) {
     if (volume_request_timer >= 3000) {
@@ -562,39 +543,28 @@ void check_idrive_queue(void) {
     }
   }
 }
-#endif
 
 
-#if PWR_CKM || DOOR_VOLUME || F_VSW01
 void check_idrive_alive_monitor(void) {
   if (terminal_r) {
     if (idrive_alive_timer >= 4000) {                                                                                               // This message should be received every 2s.
       if (!idrive_died) {
         idrive_died = true;
         serial_log("iDrive booting/rebooting.");
-        #if DOOR_VOLUME
-          initial_volume_set = false;
-        #endif
-        #if F_VSW01
-          vsw_initialized = false;
-        #endif
+        initial_volume_set = false;
+        vsw_initialized = false;
       }
     } else {
       if (idrive_died) {                                                                                                            // It's back.
         idrive_died = false;
-        #if F_VSW01
-          vsw_initialized = true;
-        #endif
+        vsw_initialized = true;
       }
     }
   }
 }
 
 
-void update_idrive_alive_timer(void) {
-  idrive_alive_timer = 0;
-
-  #if DOOR_VOLUME
+void send_initial_volume(void) {
   if (k_msg.buf[7] >= 3) {                                                                                                          // 0x273 has been transmitted X times according to the counter.
     if (!initial_volume_set && diag_transmit) {
       uint8_t restore_last_volume[] = {0x63, 4, 0x31, 0x23, peristent_volume, 0, 0, 0};
@@ -606,19 +576,9 @@ void update_idrive_alive_timer(void) {
       initial_volume_set = true;
     }
   }
-  #endif
-
-  #if F_VSW01
-    if (!vsw_initialized) {
-      vsw_switch_input(1);
-      vsw_initialized = true;
-    }
-  #endif
 }
-#endif
 
 
-#if F_VSW01
 void vsw_switch_input(uint8_t input) {
   uint8_t vsw_switch_position[] = {input, 0, 0, 0, 0, 0, 0, vsw_switch_counter};
   kcan_write_msg(make_msg_buf(0x2FB, 8, vsw_switch_position));
@@ -631,6 +591,14 @@ void vsw_switch_input(uint8_t input) {
 }
 
 
+void initialize_vsw(void) {
+  if (!vsw_initialized) {
+    vsw_switch_input(1);
+    vsw_initialized = true;
+  }
+}
+
+
 // void request_idrive_menu(void) {
 //   kcan_write_msg(idrive_menu_request_buf);
 // }
@@ -639,4 +607,3 @@ void vsw_switch_input(uint8_t input) {
 // void evaluate_idrive_menu(void) {
   
 // }
-#endif

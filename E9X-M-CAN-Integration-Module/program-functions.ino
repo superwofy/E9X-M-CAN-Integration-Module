@@ -13,11 +13,9 @@ void read_initialize_eeprom(void) {
     mdrive_power = 0x30;
     mdrive_edc = 0x2A;
     mdrive_svt = 0xF1;
-    #if PWR_CKM
-      dme_ckm[0][0] = 0xF1;
-      dme_ckm[1][0] = 0xF1;
-      dme_ckm[2][0] = 0xF1;
-    #endif
+    dme_ckm[0][0] = 0xF1;
+    dme_ckm[1][0] = 0xF1;
+    dme_ckm[2][0] = 0xF1;
     #if EDC_CKM_FIX
       edc_ckm[0] = 0xF1;
       edc_ckm[1] = 0xF1;
@@ -56,11 +54,9 @@ void read_initialize_eeprom(void) {
       mdrive_message[4] = 0x81;                                                                                                     // SVT sport, MDrive OFF.
     }
 
-    #if PWR_CKM
-      dme_ckm[0][0] = EEPROM.read(6);
-      dme_ckm[1][0] = EEPROM.read(7);
-      dme_ckm[2][0] = EEPROM.read(8);
-    #endif
+    dme_ckm[0][0] = EEPROM.read(6);
+    dme_ckm[1][0] = EEPROM.read(7);
+    dme_ckm[2][0] = EEPROM.read(8);
     #if EDC_CKM_FIX
       edc_ckm[0] = EEPROM.read(9);
       edc_ckm[1] = EEPROM.read(10);
@@ -110,11 +106,9 @@ void update_data_in_eeprom(void) {
   EEPROM.update(3, mdrive_power);
   EEPROM.update(4, mdrive_edc);
   EEPROM.update(5, mdrive_svt);
-  #if PWR_CKM
-    EEPROM.update(6, dme_ckm[0][0]);
-    EEPROM.update(7, dme_ckm[1][0]);
-    EEPROM.update(8, dme_ckm[2][0]);
-  #endif 
+  EEPROM.update(6, dme_ckm[0][0]);
+  EEPROM.update(7, dme_ckm[1][0]);
+  EEPROM.update(8, dme_ckm[2][0]);
   #if EDC_CKM_FIX
     EEPROM.update(9, edc_ckm[0]);
     EEPROM.update(10, edc_ckm[1]);
@@ -279,12 +273,10 @@ void print_current_state(Stream &status_serial) {
   status_serial.println();
   sprintf(serial_debug_string, " Console POWER: %s", console_power_mode ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
-  #if PWR_CKM
-    sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport");
-    status_serial.println(serial_debug_string);
-    sprintf(serial_debug_string, " Key profile number: %d", cas_key_number + 1);
-    status_serial.println(serial_debug_string);
-  #endif
+  sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport");
+  status_serial.println(serial_debug_string);
+  sprintf(serial_debug_string, " Key profile number: %d", cas_key_number + 1);
+  status_serial.println(serial_debug_string);
 
   status_serial.println("=========== Body ============");
   #if RTC
@@ -423,61 +415,38 @@ void reset_runtime_variables(void) {                                            
   ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
   m_mfl_held_count = 0;
-  #if SERVOTRONIC_SVT70
-    uif_read = false;
-  #endif
-  #if PWR_CKM
-    console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                         // When cycling ignition, restore this to its CKM value.
-  #endif
-  #if EDC_CKM_FIX
-    edc_mismatch_check_counter = 0;
-    edc_ckm_txq.flush();
-  #endif
+  uif_read = false;
+  console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                           // When cycling ignition, restore this to its CKM value.
+  edc_mismatch_check_counter = 0;
+  edc_ckm_txq.flush();
   dsc_txq.flush();
-  #if AUTO_SEAT_HEATING
-    seat_heating_dr_txq.flush();
-    #if AUTO_SEAT_HEATING_PASS
-      seat_heating_pas_txq.flush();
-    #endif
+  seat_heating_dr_txq.flush();
+  seat_heating_pas_txq.flush();
+  pdc_beep_sent = pdc_too_close = false;
+  ihk_extra_buttons_cc_txq.flush();
+  hdc_txq.flush();
+  exhaust_flap_sport = false;
+  #if !QUIET_START
+    actuate_exhaust_solenoid(LOW);
   #endif
-  #if REVERSE_BEEP
-    pdc_beep_sent = pdc_too_close = false;
-  #endif
-  #if HDC || FAKE_MSA
-    ihk_extra_buttons_cc_txq.flush();
-    hdc_txq.flush();
-  #endif
-  #if EXHAUST_FLAP_CONTROL
-    exhaust_flap_sport = false;
-    #if !QUIET_START
-      actuate_exhaust_solenoid(LOW);
-    #endif
-  #endif
-  #if LAUNCH_CONTROL_INDICATOR
-    lc_cc_active = mdm_with_lc = false;
-  #endif
-  #if CONTROL_SHIFTLIGHTS
-    shiftlights_segments_active = engine_coolant_warmed_up = false;
-    ignore_shiftlights_off_counter = 0;
-    last_var_rpm_can = 0;
-    START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
-    MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
-    MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
-  #endif
+  lc_cc_active = mdm_with_lc = false;
+  shiftlights_segments_active = engine_coolant_warmed_up = false;
+  ignore_shiftlights_off_counter = 0;
+  last_var_rpm_can = 0;
+  START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
+  MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
+  MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM;
   digitalWrite(POWER_LED_PIN, LOW);
   #if FRONT_FOG_LED_INDICATOR
     digitalWrite(FOG_LED_PIN, LOW);
   #endif
-
   #if AUTO_STEERING_HEATER
     if (transistor_active) {
       digitalWrite(STEERING_HEATER_SWITCH_PIN, LOW);
       transistor_active = false;
     }
   #endif
-  #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
-    front_fog_status = false;
-  #endif
+  front_fog_status = false;
   #if FRONT_FOG_CORNER
     fog_corner_left_txq.flush();
     fog_corner_right_txq.flush();
@@ -499,77 +468,47 @@ void reset_runtime_variables(void) {                                            
     }
     drl_status = left_dimmed = right_dimmed = false;
   #endif
-  #if FTM_INDICATOR
-    ftm_indicator_status = false;
-  #endif
+  ftm_indicator_status = false;
   #if FRM_HEADLIGHT_MODE
     kcan_write_msg(frm_ckm_ahl_komfort_buf);
   #endif
-  #if HDC
-    cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
-  #endif
-  #if FAKE_MSA
-    msa_button_pressed = false;
-    msa_fake_status_counter = 0;
-  #endif
-  #if MSA_RVC
-    pdc_status = 0x80;
-    pdc_button_pressed = pdc_with_rvc_requested = false;
-  #endif
+  cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
+  msa_button_pressed = false;
+  msa_fake_status_counter = 0;
+  pdc_status = 0x80;
+  pdc_button_pressed = pdc_with_rvc_requested = false;
   #if IMMOBILIZER_SEQ
     reset_key_cc();
   #endif
-  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
-    reverse_gear_status = false;
-  #endif
-  #if F_NIVI
-    sine_angle_requested = false;
-  #endif
+  reverse_gear_status = false;
+  sine_angle_requested = false;
 }
 
 
 void reset_sleep_variables(void) {
-  #if AUTO_SEAT_HEATING
-    driver_sent_seat_heating_request = false;                                                                                       // Reset the seat heating request now that the car's asleep.
-    driver_seat_heating_status = false;
-    #if AUTO_SEAT_HEATING_PASS
-      passenger_sent_seat_heating_request = false;
-      passenger_seat_status = 0;
-      passenger_seat_heating_status = false;
-    #endif
-    #if AUTO_STEERING_HEATER
-      sent_steering_heating_request = false;
-    #endif
-  #endif
-  #if DOOR_VOLUME
-    volume_reduced = false;                                                                                                         // In case the car falls asleep with the door open.
-    volume_restore_offset = 0;
-    initial_volume_set = false;
-    idrive_txq.flush();
-  #endif
-  #if NEEDLE_SWEEP
-    kombi_needle_txq.flush();
-  #endif
+  driver_sent_seat_heating_request = false;                                                                                         // Reset the seat heating request now that the car's asleep.
+  driver_seat_heating_status = false;
+  passenger_sent_seat_heating_request = false;
+  passenger_seat_status = 0;
+  passenger_seat_heating_status = false;
+  sent_steering_heating_request = false;
+  volume_reduced = false;                                                                                                           // In case the car falls asleep with the door open.
+  volume_restore_offset = 0;
+  initial_volume_set = false;
+  idrive_txq.flush();
+  kombi_needle_txq.flush();
   vehicle_moving = false;
-  #if WIPE_AFTER_WASH
-    wiper_txq.flush();
-    wash_message_counter = 0;
-    wipe_scheduled = false;
-  #endif
-  #if AUTO_MIRROR_FOLD
-    frm_mirror_status_requested = false;
-    lock_button_pressed  = unlock_button_pressed = false;
-    mirror_status_retry = 0;
-    mirror_fold_txq.flush();
-  #endif
-  #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
-    last_lock_status_can = 0;
-  #endif
-  #if F_VSW01
-    vsw_initialized = false;
-    vsw_current_input = 0;
-    vsw_switch_counter = 0xF1;
-  #endif
+  wiper_txq.flush();
+  wash_message_counter = 0;
+  wipe_scheduled = false;
+  frm_mirror_status_requested = false;
+  lock_button_pressed  = unlock_button_pressed = false;
+  mirror_status_retry = 0;
+  mirror_fold_txq.flush();
+  last_lock_status_can = 0;
+  vsw_initialized = false;
+  vsw_current_input = 0;
+  vsw_switch_counter = 0xF1;
   #if IMMOBILIZER_SEQ
     if (immobilizer_persist) {
       if (immobilizer_released) {

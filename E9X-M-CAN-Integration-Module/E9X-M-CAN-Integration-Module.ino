@@ -61,9 +61,7 @@ void loop() {
     #if FRONT_FOG_CORNER
       check_fog_corner_queue();
     #endif
-    #if PWR_CKM || DOOR_VOLUME || REVERSE_BEEP || F_VSW01
-      check_idrive_alive_monitor();
-    #endif
+    check_idrive_alive_monitor();
     #if F_ZBE_WAKE || F_VSW01 || F_NIVI
       send_f_vehicle_mode();
     #endif
@@ -90,9 +88,9 @@ void loop() {
     #endif
     #if HDC || FAKE_MSA
       check_ihk_buttons_cc_queue();
-      #if HDC
-        check_hdc_queue();
-      #endif
+    #endif
+    #if HDC
+      check_hdc_queue();
     #endif
     #if EDC_CKM_FIX
       check_edc_ckm_queue();
@@ -180,15 +178,19 @@ void loop() {
       }
       #endif
 
-      #if AUTO_SEAT_HEATING
-      #if AUTO_SEAT_HEATING_PAS
-      else if (k_msg.id == 0x22A || k_msg.id == 0x232) {                                                                            // Monitor passenger and driver's seat heating.
-      #else
-      else if (k_msg.id == 0x232) { 
-      #endif
+      
+      #if AUTO_SEAT_HEATING_PASS
+      else if (k_msg.id == 0x22A) {                                                                                                 // Monitor passenger's seat heating.
         evaluate_seat_heating_status();
       }
       #endif
+
+      #if AUTO_SEAT_HEATING
+      else if (k_msg.id == 0x232) {                                                                                                 // Monitor driver's seat heating.
+        evaluate_seat_heating_status();
+      }
+      #endif
+
 
       #if FRONT_FOG_CORNER || F_NIVI
       else if (k_msg.id == 0x314) {                                                                                                 // RLS light status.
@@ -200,19 +202,15 @@ void loop() {
       else if (k_msg.id == 0x317) {                                                                                                 // Received PDC button press from IHKA.
         evaluate_pdc_button();
       }
-      #endif
 
-      #if PWR_CKM
-      else if (k_msg.id == 0x3A8) {                                                                                                 // Received POWER M Key settings from iDrive.
-        update_dme_power_ckm();
-      }
-      #endif
-
-      #if MSA_RVC
       else if (k_msg.id == 0x3AF) {                                                                                                 // Monitor PDC bus status.
         evaluate_pdc_bus_status();
       }
       #endif
+
+      else if (k_msg.id == 0x3A8) {                                                                                                 // Received POWER M Key settings from iDrive.
+        update_dme_power_ckm();
+      }
 
       #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
@@ -244,33 +242,29 @@ void loop() {
       evaluate_terminal_clutch_keyno_status();
     }
 
-    #if PWR_CKM
     else if (k_msg.id == 0x1AA) {                                                                                                   // Time POWER CKM message with iDrive ErgoCommander.
       send_dme_power_ckm();
     }
-    #endif
 
-    #if AUTO_MIRROR_FOLD || PWR_CKM || INDICATE_TRUNK_OPENED
     else if (k_msg.id == 0x23A) {                                                                                                   // Monitor remote function status
-      #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
+      #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED || IMMOBILIZER_SEQ_ALARM
         evaluate_remote_button();
       #endif
-      #if PWR_CKM
-        evaluate_key_number_remote();
-      #endif
+      evaluate_key_number_remote();
     }
-    #endif
 
-    #if F_ZBE_WAKE || PWR_CKM || DOOR_VOLUME || F_VSW01
     else if (k_msg.id == 0x273) {
+      idrive_alive_timer = 0;
       #if F_ZBE_WAKE
         send_zbe_acknowledge();
       #endif
-      #if PWR_CKM || DOOR_VOLUME || F_VSW01
-        update_idrive_alive_timer();
+      #if DOOR_VOLUME 
+        send_initial_volume();
+      #endif
+      #if F_VSW01
+        initialize_vsw();
       #endif
     }
-    #endif
 
     else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
       evaluate_ambient_temperature();
@@ -295,14 +289,14 @@ void loop() {
       }
     }
 
-    #if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
-    if (k_msg.id == 0x2FC) {
-      evaluate_door_status();
+    else if (k_msg.id == 0x39E) {                                                                                                   // Received new date/time from CIC.
+      update_rtc_from_idrive();
     }
     #endif
 
-    else if (k_msg.id == 0x39E) {                                                                                                   // Received new date/time from CIC.
-      update_rtc_from_idrive();
+    #if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
+    else if (k_msg.id == 0x2FC) {
+      evaluate_door_status();
     }
     #endif
 
@@ -316,7 +310,7 @@ void loop() {
       evaluate_frm_consumer_shutdown();
     }
 
-    #if F_ZBE_WAKE || F_VSW01
+    #if F_ZBE_WAKE || F_VSW01 || F_NIVI
     else if (k_msg.id == 0x4E2) {
       send_f_wakeup();
       // #if F_VSW01
@@ -405,6 +399,7 @@ void loop() {
         #if FRONT_FOG_CORNER
         else if (pt_msg.id == 0xC8) {
           evaluate_steering_angle_fog();
+          evaluate_corner_fog_activation();
         }
         #endif
 

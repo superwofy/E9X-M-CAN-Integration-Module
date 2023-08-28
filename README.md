@@ -4,7 +4,7 @@ Unlike my previous modules, this one has access to PTCAN, KCAN and DCAN. While t
 Included are also tools to allow full manipulation of the program section in the MSD81 bin file.
 
 
-Hardware used:
+Electronics used:
  
 * Skpang Triple CAN board https://copperhilltech.com/teensy-4-0-triple-can-bus-board-with-two-can-2-0b-and-one-can-fd-port/ (Teensy 4.0, MCP2562s).
 * Small copper heatsink.
@@ -19,6 +19,20 @@ Hardware used:
 	-> https://www.nxp.com/docs/en/nxp/data-sheets/IMXRT1060CEC.pdf P.28 (SNVSS) + P.34 (RTC-OSC).
 * Old PDC module PCB and housing. It has nice automotive connectors.
 * SVT70 module P/N 6795802.
+
+
+Required hardware:
+* MSD81 DME.
+* CIC iDrive.
+* MK60E5 or DSC8 (E89 Z4) non-M modules.
+* E9X M3 centre console trim and buttons.
+
+
+Optional hardware:
+* E9X M3 EDC system.
+* E9X M3 DCT instrument cluster (Shiftlights).
+* SVT70 module (Servotronic).
+* Dashboard centre buttons with Start-Stop and HDC buttons.
 
 
 

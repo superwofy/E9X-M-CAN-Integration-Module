@@ -37,7 +37,6 @@ void check_dsc_queue(void) {
 }
 
 
-#if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
 void evaluate_reverse_gear_status(void) {
   if (k_msg.buf[0] == 0xFE) {
     if (!reverse_gear_status) {
@@ -71,7 +70,6 @@ void evaluate_reverse_gear_status(void) {
     }
   }
 }
-#endif
 
 
 void evaluate_vehicle_moving(void) {
@@ -87,7 +85,7 @@ void evaluate_vehicle_moving(void) {
   #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
     if (vehicle_moving) {
       if (speed_mph) {
-       indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
+        indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
       } else {
         indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 10;
       }
@@ -107,7 +105,6 @@ void evaluate_vehicle_moving(void) {
 }
 
 
-#if F_NIVI
 void send_f_road_inclination(void) {
   if (f_chassis_inclination_timer >= 98) {
     f_road_inclination[2] = f_vehicle_angle & 0xFF;                                                                                 // Send in LE.
@@ -184,10 +181,8 @@ void send_f_speed_status(void) {
     f_chassis_speed_timer = 0;
   }
 }
-#endif
 
 
-#if HDC
 void evaluate_hdc_button(void) {
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!hdc_button_pressed) {
@@ -256,7 +251,7 @@ void evaluate_cruise_control_status(void) {
       }
     } else {
       if (hdc_requested) {
-        hdc_requested = false;
+        hdc_active = hdc_requested = cruise_control_status = false;
         serial_log("Cruise control did not activate when HDC was requested.");
       }
     }
@@ -278,10 +273,8 @@ void check_hdc_queue(void) {
     }
   }
 }
-#endif
 
 
-#if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
 void evaluate_speed_units(void) {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   #if HDC
@@ -294,10 +287,8 @@ void evaluate_speed_units(void) {
     }
   #endif
 }
-#endif
 
 
-#if SERVOTRONIC_SVT70
 void send_servotronic_message(void) {
   servotronic_message[0] += 0x10;                                                                                                   // Increase alive counter.
   if (servotronic_message[0] > 0xEF) {                                                                                              // Alive(first half of byte) must be between 0..E.
@@ -312,4 +303,3 @@ void send_servotronic_message(void) {
   }
   ptcan_write_msg(make_msg_buf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
 }
-#endif

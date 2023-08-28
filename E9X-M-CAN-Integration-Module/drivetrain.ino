@@ -246,9 +246,7 @@ void reset_mdrive_settings(void) {
   mdrive_message[3] = mdrive_edc;
   mdrive_svt = 0xE9;                                                                                                                // Normal
   mdrive_message[4] = 0x41;
-  #if PWR_CKM
-    dme_ckm[cas_key_number][0] = 0xF1;                                                                                              // Normal
-  #endif
+  dme_ckm[cas_key_number][0] = 0xF1;                                                                                                // Normal
   #if EDC_CKM_FIX
     edc_ckm[cas_key_number] = 0xF1;                                                                                                 // Comfort
   #endif
@@ -295,7 +293,6 @@ void send_power_mode(void) {
 }
 
 
-#if PWR_CKM
 void send_dme_power_ckm(void) {
   kcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                  // This is sent by the DME to populate the M Key iDrive section
   serial_log("Sent DME POWER CKM.");
@@ -311,10 +308,8 @@ void update_dme_power_ckm(void) {
   #endif
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
-#endif
 
 
-#if EDC_CKM_FIX
 void update_edc_ckm(void) {
   edc_ckm[cas_key_number] = k_msg.buf[0];
   #if DEBUG_MODE
@@ -354,10 +349,8 @@ void check_edc_ckm_queue(void) {
     }
   }
 }
-#endif
 
 
-#if IMMOBILIZER_SEQ
 void check_immobilizer_status(void) {
   if (vehicle_awakened_time >= 2000) {                                                                                              // Delay ensures that time passed after Teensy (re)started to receive messages.
     if (!immobilizer_released) {
@@ -495,7 +488,6 @@ void release_immobilizer(void) {
 }
 
 
-#if IMMOBILIZER_SEQ_ALARM
 void trip_alarm_after_stall(void) {
   if (alarm_after_engine_stall) {
     serial_log("Alarm siren and hazards ON.");
@@ -507,11 +499,8 @@ void trip_alarm_after_stall(void) {
     }
   }
 }
-#endif
-#endif
 
 
-#if F_NIVI
 void send_f_powertrain_2_status(void) {
   if (f_data_powertrain_2_timer >= 1000) {
 
@@ -568,4 +557,3 @@ void send_f_powertrain_2_status(void) {
     f_data_powertrain_2_timer = 0;
   }
 }
-#endif

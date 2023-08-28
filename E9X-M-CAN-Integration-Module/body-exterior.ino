@@ -1,7 +1,6 @@
 // General body functions dealing with exterior electronics go here.
 
 
-#if DIM_DRL
 void evaluate_drl_status(void) {
   if (k_msg.buf[1] == 0x32) {
     if (!drl_status) {
@@ -31,10 +30,8 @@ void check_drl_queue(void) {
     }
   }
 }
-#endif
 
 
-#if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
 void evaluate_indicator_status_dim(void) {
   #if DIM_DRL
   time_now = millis();
@@ -99,10 +96,8 @@ void evaluate_indicator_status_dim(void) {
   }
   #endif
 }
-#endif
 
 
-#if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
 void evaluate_door_status(void) {
   if (k_msg.buf[1] != last_door_status) {
     if (k_msg.buf[1] == 1) {
@@ -195,10 +190,8 @@ void evaluate_door_status(void) {
   }
   #endif
 }
-#endif
 
 
-#if EXHAUST_FLAP_CONTROL
 void control_exhaust_flap_user(void) {
   if (engine_running) {
     if (exhaust_flap_sport) {                                                                                                       // Flap always open in sport mode.
@@ -253,10 +246,8 @@ void actuate_exhaust_solenoid(bool activate) {
   exhaust_flap_action_timer = 0;
   exhaust_flap_open = !activate;                                                                                                    // Flap position is the inverse of solenoid state. When active, the flap is closed.
 }
-#endif
 
 
-#if PWR_CKM || EDC_CKM_FIX
 void evaluate_key_number_remote(void) {
   if (k_msg.buf[0] / 11 != cas_key_number) {
     cas_key_number = k_msg.buf[0] / 11;                                                                                             // Key 1 = 0, Key 2 = 11, Key 3 = 22...
@@ -270,9 +261,7 @@ void evaluate_key_number_remote(void) {
       serial_log(serial_debug_string);
     }
     #endif
-    #if PWR_CKM
-      console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
-    #endif
+    console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
   }
 }
 
@@ -288,17 +277,13 @@ void check_key_changed(void) {
         sprintf(serial_debug_string, "Received new key number after unlock: %d.", cas_key_number + 1);
         serial_log(serial_debug_string);
       #endif
-      #if PWR_CKM
-        console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
-        send_dme_power_ckm();                                                                                                       // Update iDrive in case key remote changed
-      #endif
+      console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
+      send_dme_power_ckm();                                                                                                         // Update iDrive in case key remote changed
     }
   }
 }
-#endif
 
 
-#if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED
 void evaluate_remote_button(void) {
   if (!engine_running) {                                                                                                            // Ignore if locking car while running.
     if (k_msg.buf[2] != last_lock_status_can) {                                                                                     // Lock/Unlock messages are sent many times. Should only react to the first.
@@ -361,10 +346,8 @@ void evaluate_remote_button(void) {
     }
   }
 }
-#endif
 
 
-#if AUTO_MIRROR_FOLD
 void evaluate_mirror_fold_status(void) {
   if (frm_mirror_status_requested) {                                                                                                // Make sure the request came from this module.
     if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
@@ -420,9 +403,9 @@ void evaluate_mirror_fold_status(void) {
 
 void toggle_mirror_fold(void) {
   time_now = millis();
-  m = {frm_toggle_fold_mirror_a_buf, time_now + 500};
+  m = {frm_toggle_fold_mirror_a_buf, time_now + 300};
   mirror_fold_txq.push(&m);
-  m = {frm_toggle_fold_mirror_b_buf, time_now + 510};
+  m = {frm_toggle_fold_mirror_b_buf, time_now + 310};
   mirror_fold_txq.push(&m);
 }
 
@@ -440,10 +423,8 @@ void check_mirror_fold_queue(void) {
     }
   }
 }
-#endif
 
 
-#if FRONT_FOG_CORNER
 void check_fog_corner_queue(void) {
   if (!fog_corner_left_txq.isEmpty()) {
     if (diag_transmit) {
@@ -494,14 +475,16 @@ void evaluate_dipped_beam_status(void) {
 
 
 void evaluate_steering_angle_fog(void) {
+  steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
+  // Max left angle is 1005 / 23
+  if (steering_angle >= 435) { 
+    steering_angle = steering_angle - 2849;
+  }
+}
+
+
+void evaluate_corner_fog_activation(void) {
   if (!front_fog_status && dipped_beam_status && rls_headlights_requested && diag_transmit) {                                       // Cannot tell if Auto-lights are on via CAN. This is the closest without using KWP jobs.
-    steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
-
-    // Max left angle is 1005 / 23
-    if (steering_angle >= 435) { 
-      steering_angle = steering_angle - 2849;
-    }
-
     int8_t ANGLE, HYSTERESIS;
     if (indicators_on) {
       ANGLE = FOG_CORNER_STEERTING_ANGLE_INDICATORS;
@@ -675,10 +658,8 @@ void right_fog_soft(bool on) {
     fog_corner_right_txq.push(&m);
   }
 }
-#endif
 
 
-#if WIPE_AFTER_WASH
 void evaluate_wiping_request(void) {
   if (terminal_r) {
     if (pt_msg.buf[0] == 0x10) {
@@ -718,7 +699,6 @@ void check_wiper_queue(void) {
     }
   }
 }
-#endif
 
 
 void evaluate_ambient_temperature(void) {
@@ -726,7 +706,6 @@ void evaluate_ambient_temperature(void) {
 }
 
 
-#if FRONT_FOG_CORNER || F_NIVI
 void evaluate_rls_light_status(void) {
   if (k_msg.buf[1] == 2) {                                                                                                          // 1 = Twilight mode, 2 = Darkness.
     if (!rls_headlights_requested) {
@@ -744,10 +723,8 @@ void evaluate_rls_light_status(void) {
     rls_brightness = k_msg.buf[0];
   #endif
 }
-#endif
 
 
-#if F_NIVI
 void request_vehicle_tilt_angle(void) {
   if (sine_angle_request_timer >= 500) {
     if (diag_transmit) {
@@ -782,10 +759,8 @@ void send_f_brightness_status(void) {
     f_outside_brightness_timer = 0;
   }
 }
-#endif
 
 
-#if INDICATE_TRUNK_OPENED
 void evaluate_door_lock_ckm(void) {
   if (bitRead(k_msg.buf[0], 0) == 0 && bitRead(k_msg.buf[0], 1) == 1) {
     if (!visual_signal_ckm) {
@@ -799,10 +774,8 @@ void evaluate_door_lock_ckm(void) {
     }
   }
 }
-#endif
 
 
-#if REVERSE_BEEP
 void evaluate_pdc_warning(void) {
   uint8_t max_volume = k_msg.buf[0];
   if (k_msg.buf[1] > max_volume) {
@@ -814,4 +787,3 @@ void evaluate_pdc_warning(void) {
     pdc_too_close = false;
   }
 }
-#endif
