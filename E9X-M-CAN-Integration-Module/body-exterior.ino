@@ -98,6 +98,14 @@ void evaluate_indicator_status_dim(void) {
 }
 
 
+void indicate_trunk_opened(void) {
+  if (visual_signal_ckm && !engine_running && !hazards_on && !indicators_on) {
+    serial_log("Remote trunk button pressed. Flashing hazards.");
+    kcan_write_msg(flash_hazards_buf);
+  }
+}
+
+
 void evaluate_door_status(void) {
   if (k_msg.buf[1] != last_door_status) {
     if (k_msg.buf[1] == 1) {
@@ -172,23 +180,33 @@ void evaluate_door_status(void) {
     last_door_status = k_msg.buf[1];
   }
 
-  #if HOOD_OPEN_GONG
-  if (k_msg.buf[2] != last_hood_status) {
-    if (k_msg.buf[2] == 4) {
+  uint8_t hood_open_status = bitRead(k_msg.buf[2], 2);
+  if (hood_open_status != last_hood_status) {
+    if (hood_open_status) {
       serial_log("Hood opened.");
-      if (diag_transmit) {
-        if (!vehicle_moving && terminal_r) {
-          play_cc_gong();
+      #if HOOD_OPEN_GONG
+        if (diag_transmit) {
+          if (!vehicle_moving && terminal_r) {
+            play_cc_gong();
+          }
         }
-      }
-      last_hood_status = k_msg.buf[2];
-    } else if (k_msg.buf[2] == 0) {
+      #endif
+    } else {
       serial_log("Hood closed.");
-      last_hood_status = k_msg.buf[2];
     }
-    // Ignore other statuses such as boot open.
+    last_hood_status = hood_open_status;
   }
-  #endif
+
+  uint8_t trunk_open_status = bitRead(k_msg.buf[2], 0);
+  if (trunk_open_status != last_trunk_status) {
+    if (trunk_open_status) {
+      serial_log("Trunk opened.");
+      
+    } else {
+      serial_log("Trunk closed.");
+    }
+    last_trunk_status = trunk_open_status;
+  }
 }
 
 
@@ -295,7 +313,7 @@ void evaluate_remote_button(void) {
               if (diag_transmit) {
                 lock_button_pressed = true;
                 serial_log("Remote lock button pressed. Checking mirror status.");
-                kcan_write_msg(frm_status_request_a_buf);
+                kcan_write_msg(frm_mirror_status_request_a_buf);
                 frm_mirror_status_requested = true;
               }
               #if UNFOLD_WITH_DOOR
@@ -320,7 +338,7 @@ void evaluate_remote_button(void) {
           if (diag_transmit) {
             unlock_button_pressed = true;
             serial_log("Remote unlock button pressed. Checking mirror status.");
-            kcan_write_msg(frm_status_request_a_buf);
+            kcan_write_msg(frm_mirror_status_request_a_buf);
             frm_mirror_status_requested = true;
           }
           #if IMMOBILIZER_SEQ_ALARM
@@ -331,10 +349,7 @@ void evaluate_remote_button(void) {
 
         #if INDICATE_TRUNK_OPENED
         else if (k_msg.buf[2] == 0x10) {
-          if (visual_signal_ckm && !engine_running && !hazards_on && !indicators_on) {
-            serial_log("Remote trunk button pressed. Flashing hazards.");
-            kcan_write_msg(flash_hazards_buf);
-          }
+          indicate_trunk_opened();
         }
         #endif
 
@@ -351,7 +366,7 @@ void evaluate_remote_button(void) {
 void evaluate_mirror_fold_status(void) {
   if (frm_mirror_status_requested) {                                                                                                // Make sure the request came from this module.
     if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
-      kcan_write_msg(frm_status_request_b_buf);
+      kcan_write_msg(frm_mirror_status_request_b_buf);
     } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x21) {
       // Ignore {F1 21 80 3 22 0 6C 41}.
     } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {
@@ -388,7 +403,7 @@ void evaluate_mirror_fold_status(void) {
     } else {                                                                                                                        // Try again. This will only work if the FRM first sent an error code.
       if (mirror_status_retry < 3 && diag_transmit) {
         serial_log("Did not receive mirror status. Re-trying.");
-        m = {frm_status_request_a_buf, millis() + 500};
+        m = {frm_mirror_status_request_a_buf, millis() + 500};
         mirror_fold_txq.push(&m);
         mirror_status_retry++;
       } else {
@@ -441,6 +456,9 @@ void check_fog_corner_queue(void) {
   if (!fog_corner_right_txq.isEmpty()) {
     if (diag_transmit) {
       fog_corner_right_txq.peek(&delayed_tx);
+      if (delayed_tx.tx_msg.buf[3] == 0x28) {
+        frm_ahl_flc_status_requested = true;
+      }
       if (millis() >= delayed_tx.transmit_time) {
         kcan_write_msg(delayed_tx.tx_msg);
         fog_corner_right_txq.drop();
@@ -454,16 +472,23 @@ void check_fog_corner_queue(void) {
 
 
 void evaluate_dipped_beam_status(void) {
-  if ((k_msg.buf[0] & 1) == 1) {                                                                                                    // Check the 8th bit of this byte for dipped beam status.
+  if ((k_msg.buf[0] & 1) == 1) {                                                                                                    // Check the first bit (LSB 0) of this byte for dipped beam status.
    if (!dipped_beam_status) {
       dipped_beam_status = true;
       serial_log("Dipped beam ON.");
+      #if FRONT_FOG_CORNER_AHL_SYNC
+        frm_ahl_flc_status_requested = true;
+        kcan_write_msg(frm_ahl_flc_status_request_buf);
+        time_now = millis();
+        m = {frm_ahl_flc_status_request_buf, time_now + 5000};                                                                      // Send a delayed message as this job can return 0 right after startup.
+        fog_corner_right_txq.push(&m);
+      #endif
     }
   } else {
     if (dipped_beam_status) {
       dipped_beam_status = false;
       serial_log("Dipped beam OFF");
-
+      ahl_active = flc_active = false;
       if (left_fog_on || right_fog_on) {
         m = {front_fogs_all_off_buf, millis() + 100};
         fog_corner_left_txq.push(&m);
@@ -484,7 +509,12 @@ void evaluate_steering_angle_fog(void) {
 
 
 void evaluate_corner_fog_activation(void) {
-  if (!front_fog_status && dipped_beam_status && rls_headlights_requested && diag_transmit) {                                       // Cannot tell if Auto-lights are on via CAN. This is the closest without using KWP jobs.
+  #if FRONT_FOG_CORNER_AHL_SYNC
+  if (!front_fog_status && dipped_beam_status && ahl_active && diag_transmit) {
+  #else
+  if (!front_fog_status && dipped_beam_status && flc_active && diag_transmit) {
+  #endif
+    
     int8_t ANGLE, HYSTERESIS;
     if (indicators_on) {
       ANGLE = FOG_CORNER_STEERTING_ANGLE_INDICATORS;
@@ -660,6 +690,27 @@ void right_fog_soft(bool on) {
 }
 
 
+void evaluate_ahl_flc_status(void) {
+  if (frm_ahl_flc_status_requested) {
+    flc_active = bitRead(k_msg.buf[5], 0);
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 4 && k_msg.buf[3] == 0x28) {
+      uint8_t ahl_active_ = bitRead(k_msg.buf[5], 3);
+      if (ahl_active != ahl_active_) {
+        ahl_active = ahl_active_;
+        #if DEBUG_MODE
+          sprintf(serial_debug_string, "Received status AHL: %s FLC: %s",
+                  ahl_active ? "ON" : "OFF", flc_active ? "ON" : "OFF");
+          serial_log(serial_debug_string);
+        #endif      
+      }
+      frm_ahl_flc_status_requested = false;
+    } else {
+
+    }
+  }
+}
+
+
 void evaluate_wiping_request(void) {
   if (terminal_r) {
     if (pt_msg.buf[0] == 0x10) {
@@ -707,17 +758,6 @@ void evaluate_ambient_temperature(void) {
 
 
 void evaluate_rls_light_status(void) {
-  if (k_msg.buf[1] == 2) {                                                                                                          // 1 = Twilight mode, 2 = Darkness.
-    if (!rls_headlights_requested) {
-      rls_headlights_requested = true;
-      serial_log("RLS ambient light low enough for auto-headlights.");
-    }
-  } else {
-    if (rls_headlights_requested) {
-      rls_headlights_requested = false;
-      serial_log("RLS ambient light bright enough to disable auto-headlights.");
-    }
-  }
   #if F_NIVI
     rls_time_of_day = k_msg.buf[1];
     rls_brightness = k_msg.buf[0];
@@ -726,7 +766,7 @@ void evaluate_rls_light_status(void) {
 
 
 void request_vehicle_tilt_angle(void) {
-  if (sine_angle_request_timer >= 500) {
+  if (sine_angle_request_timer >= 333) {
     if (diag_transmit) {
       kcan_write_msg(sine_angle_request_a_buf);
       sine_angle_requested = true;

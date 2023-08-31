@@ -32,7 +32,7 @@ Optional hardware:
 * E9X M3 EDC system.
 * E9X M3 DCT instrument cluster (Shiftlights).
 * SVT70 module (Servotronic).
-* Dashboard centre buttons with Start-Stop and HDC buttons.
+* Dashboard centre buttons with Start-Stop (or Camera) and HDC buttons.
 
 
 
@@ -44,11 +44,13 @@ I use it to:
 	* Control EDC mode with the M button.
 	* Control Servotronic mode with the M button - through SVT70 module.
 	* Control the exhaust flap position with the M button.
+	* Control ASD with the M button.
+	* Control AHL swivel mode (sport/comfort) with the M button.
 	* Display M Drive settings when holding M button
 	* Control M Key settings from iDrive.
 * Display Shiftlights - including startup animation, sync with the M3 KOMBI variable redline.
-* Display a Needle sweep animation on startup.
-* Display Launch Control flag.
+* Display a needle sweep animation on startup.
+* Display the Launch Control flag (MHD).
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
 * Fold/Un-fold mirrors when locking/unlocking.
 * Indicate when the trunk is opened by remote (flash hazards).
@@ -69,6 +71,7 @@ I use it to:
 * Enable full diagnosis and coding of SVT70 module.
 * Turn on heated seats below a set temperature.
 * Turn on heated steering below a set temperature.
+* Automatically turn off PDC when parked and pulling handbrake.
 * Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding, etc.).
 	* After uploading to Teensy, set the time in iDrive/ISTA to synchronize the RTC to the same time.
 * Close the exhaust flap before engine start to reduce start noise.

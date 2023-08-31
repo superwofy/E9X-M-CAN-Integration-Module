@@ -111,6 +111,9 @@ void evaluate_terminal_clutch_keyno_status(void) {
         kcan_write_msg(set_time_cc_buf);                                                                                            // Warn that the time needs to be updated by the user.
       }
     #endif
+    #if FRM_AHL_MODE
+      kcan_write_msg(frm_ckm_ahl_komfort_buf);                                                                                      // Make sure we're in comfort mode on startup.
+    #endif
   } else if (!terminal_r && terminal_r_) {
     serial_log("Terminal R OFF.");
   }
@@ -168,7 +171,7 @@ void send_seat_heating_request_dr(void) {
   driver_sent_seat_heating_request = true;
   m = {seat_heating_button_released_dr_buf, time_now + 100};
   seat_heating_dr_txq.push(&m);
-  m = {seat_heating_button_released_dr_buf, time_now + 250};
+  m = {seat_heating_button_released_dr_buf, time_now + 200};
   seat_heating_dr_txq.push(&m);
   m = {seat_heating_button_released_dr_buf, time_now + 400};
   seat_heating_dr_txq.push(&m);
@@ -221,7 +224,7 @@ void send_seat_heating_request_pas(void) {
   passenger_sent_seat_heating_request = true;
   m = {seat_heating_button_released_pas_buf, time_now + 100};
   seat_heating_pas_txq.push(&m);
-  m = {seat_heating_button_released_pas_buf, time_now + 250};
+  m = {seat_heating_button_released_pas_buf, time_now + 200};
   seat_heating_pas_txq.push(&m);
   m = {seat_heating_button_released_pas_buf, time_now + 400};
   seat_heating_pas_txq.push(&m);
@@ -257,7 +260,9 @@ void evaluate_steering_heating_request(void) {
 void send_f_wakeup(void) {
   kcan_write_msg(f_kombi_network_mgmt_buf);
   #if F_NIVI
-    ptcan_write_msg(f_kombi_network_mgmt_buf);
+    if (ignition) {
+      ptcan_write_msg(f_kombi_network_mgmt_buf);
+    }
   #endif
     //serial_log("Sent FXX wake-up message.");
 }
@@ -277,7 +282,9 @@ void send_f_vehicle_mode(void) {
     f_vehicle_mode_buf = make_msg_buf(0x3A0, 8, f_vehicle_mode);
     kcan_write_msg(f_vehicle_mode_buf);
     #if F_NIVI
-      ptcan_write_msg(f_vehicle_mode_buf);
+      if (ignition) {                                                                                                               // NiVi is powered by Terminal 15.
+        ptcan_write_msg(f_vehicle_mode_buf);
+      }
     #endif
 
     f_vehicle_mode_timer = 0;
@@ -319,7 +326,7 @@ void check_console_buttons(void) {
         holding_both_console = true;
       } else {
         if (both_console_buttons_timer >= 10000) {                                                                                  // Hold both buttons for more than 10s.
-          play_cc_gong();                                                                                                           // Acknowledge anti-theft persist ON-OFF with Gong.
+          play_cc_gong();                                                                                                           // Acknowledge Immobilizer persist ON-OFF with Gong.
           immobilizer_persist = !immobilizer_persist;
           EEPROM.update(15, immobilizer_persist);
           update_eeprom_checksum();
@@ -414,11 +421,11 @@ void update_car_time_from_rtc(void) {
 
 void send_volume_request_periodic(void) {
   if (terminal_r && !frm_consumer_shutdown) {
-    if (volume_request_timer >= 3000) {
+    if (volume_request_periodic_timer >= 3000) {
       if (diag_transmit) {
         kcan_write_msg(vol_request_buf);
+        volume_request_periodic_timer = 0;
       }
-      volume_request_timer = 0;
     }
   }
 }
@@ -426,9 +433,11 @@ void send_volume_request_periodic(void) {
 
 void send_volume_request_door(void) {
   if (diag_transmit) {
-    m = {vol_request_buf, millis() + 10};
-    idrive_txq.push(&m);
-    serial_log("Requesting volume from iDrive with door status change.");
+    if (volume_request_door_timer >= 500) {                                                                                         // Basic debounce to account for door not fully shut.
+      kcan_write_msg(vol_request_buf);
+      volume_request_door_timer = volume_request_periodic_timer = 0;
+      serial_log("Requested volume from iDrive with door status change.");
+    }
   }
 }
 
@@ -553,11 +562,11 @@ void check_idrive_alive_monitor(void) {
         serial_log("iDrive booting/rebooting.");
         initial_volume_set = false;
         vsw_initialized = false;
+        asd_initialized = false;
       }
     } else {
       if (idrive_died) {                                                                                                            // It's back.
         idrive_died = false;
-        vsw_initialized = true;
       }
     }
   }
@@ -579,13 +588,22 @@ void send_initial_volume(void) {
 }
 
 
+void send_nivi_button_press(void) {
+  ptcan_write_msg(nivi_button_pressed_buf);
+  ptcan_write_msg(nivi_button_pressed_buf);
+  ptcan_write_msg(nivi_button_released_buf);
+  ptcan_write_msg(nivi_button_released_buf);
+  serial_log("Sent NiVi button press.");
+}
+
+
 void vsw_switch_input(uint8_t input) {
   uint8_t vsw_switch_position[] = {input, 0, 0, 0, 0, 0, 0, vsw_switch_counter};
   kcan_write_msg(make_msg_buf(0x2FB, 8, vsw_switch_position));
   vsw_current_input = input;
   vsw_switch_counter == 0xFE ? vsw_switch_counter = 0xF1 : vsw_switch_counter++;
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent VSW/%d request.", input);
+    sprintf(serial_debug_string, "Sent VSW/%d (%s) request.", input, vsw_positions[input]);
     serial_log(serial_debug_string);
   #endif
 }
@@ -599,8 +617,17 @@ void initialize_vsw(void) {
 }
 
 
+void initialize_asd(void) {
+  if (!asd_initialized) {
+    kcan_write_msg(mute_asd_buf);
+    serial_log("Muted ASD on init.");
+    asd_initialized = true;
+  }
+}
+
+
 // void request_idrive_menu(void) {
-//   kcan_write_msg(idrive_menu_request_buf);
+//   kcan_write_msg(idrive_menu_request_a_buf);
 // }
 
 

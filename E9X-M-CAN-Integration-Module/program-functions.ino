@@ -69,7 +69,7 @@ void read_initialize_eeprom(void) {
       immobilizer_released = EEPROM.read(13) == 1 ? true : false;
       immobilizer_persist = EEPROM.read(14) == 1 ? true : false;
       if (!immobilizer_persist) {
-        immobilizer_released = true;                                                                                                // Deactivate anti-theft at boot if this value is set.
+        immobilizer_released = true;                                                                                                // Deactivate immobilizer at boot if this value is set.
       }
     #endif
     max_cpu_temp = EEPROM.read(15);
@@ -213,27 +213,24 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Outside brightness: 0x%X %s.", rls_brightness, 
             rls_time_of_day == 0 ? "Daytime" : rls_time_of_day == 1 ? "Twilight" : "Darkness");
     status_serial.println(serial_debug_string);
-    sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, %.2f m/s^2", e_long_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0);
+    sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, %.2f m/s^2", 
+            e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0);
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Yaw rate: %.2f deg/s", (yaw_rate - 163.84) * 0.005);
     status_serial.println(serial_debug_string);
   #endif
   #if IMMOBILIZER_SEQ
-    status_serial.println("============= Antitheft ============");
-    sprintf(serial_debug_string, " Anti-theft: %s", immobilizer_released ? "OFF" : "Active");
+    status_serial.println("============= Immobilizer ============");
+    sprintf(serial_debug_string, " Immobilizer: %s", immobilizer_released ? "OFF" : "Active");
     status_serial.println(serial_debug_string);
-    sprintf(serial_debug_string, " Anti-theft persistent setting: %s", EEPROM.read(14) == 1 ? "Active" : "OFF");
+    sprintf(serial_debug_string, " Immobilizer persistent setting: %s", EEPROM.read(14) == 1 ? "Active" : "OFF");
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Key detected: %s", key_valid ? "YES" : "NO");
     status_serial.println(serial_debug_string);
   #endif
   status_serial.println("============== MDrive ==============");
-  if (ignition) {
-    sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
-    status_serial.println(serial_debug_string);
-  } else {
-    status_serial.println(" Inactive");
-  }
+  sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
+  status_serial.println(serial_debug_string);
   status_serial.print(" Settings: DSC-");
   if (mdrive_dsc == 3) {
     status_serial.print("Unchanged");
@@ -294,10 +291,8 @@ void print_current_state(Stream &status_serial) {
             rtc_valid ? "Valid" : "Invalid");
     status_serial.println(serial_debug_string);
   #endif
-  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER
-    sprintf(serial_debug_string, " Reverse gear: %s", reverse_gear_status ? "ON" : "OFF");
-    status_serial.println(serial_debug_string);
-  #endif
+  sprintf(serial_debug_string, " Reverse gear: %s", reverse_gear_status ? "ON" : "OFF");
+  status_serial.println(serial_debug_string);
   #if MSA_RVC
     sprintf(serial_debug_string, " PDC: %s", pdc_status > 0x80 ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
@@ -311,14 +306,18 @@ void print_current_state(Stream &status_serial) {
   #if AUTO_SEAT_HEATING
     sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
-    #if AUTO_SEAT_HEATING_PASS
-      sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
-      status_serial.println(serial_debug_string);
-      sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
-      status_serial.println(serial_debug_string);
-      sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
-      status_serial.println(serial_debug_string);
-    #endif
+  #endif
+  #if AUTO_SEAT_HEATING_PASS
+    sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
+    status_serial.println(serial_debug_string);
+    sprintf(serial_debug_string, " Passenger's seat occupied: %s", (passenger_seat_status >= 8) ? "YES" : "NO");
+    status_serial.println(serial_debug_string);
+    sprintf(serial_debug_string, " Passenger's seatbelt fastened: %s", passenger_seat_status & 1 ? "YES" : "NO");
+    status_serial.println(serial_debug_string);
+  #endif
+  #if HOOD_OPEN_GONG
+    sprintf(serial_debug_string, " Hood: %s", last_hood_status ? "Open" : "Closed");
+    status_serial.println(serial_debug_string);
   #endif
   #if DOOR_VOLUME
     #if RHD
@@ -351,6 +350,10 @@ void print_current_state(Stream &status_serial) {
    #if FRONT_FOG_CORNER
     sprintf(serial_debug_string, " Dipped beam: %s", dipped_beam_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
+    #if FRONT_FOG_CORNER_AHL_SYNC
+      sprintf(serial_debug_string, " AHL: %s", ahl_active ? "ON" : "OFF");
+      status_serial.println(serial_debug_string);
+    #endif
   #endif
   #if DIM_DRL || FRONT_FOG_CORNER
     sprintf(serial_debug_string, " Indicators: %s", indicators_on ? "ON" : "OFF");
@@ -399,7 +402,9 @@ void print_current_state(Stream &status_serial) {
 
 void serial_log(const char message[]) {
   #if DEBUG_MODE
+  if (!clearing_dtcs) {
     Serial.println(message);
+  }
   #endif
 }
 
@@ -410,7 +415,6 @@ void reset_runtime_variables(void) {                                            
     toggle_mdrive_message_active();
   }
   engine_running = false;
-  engine_runtime = 0;
   RPM = 0;
   ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
@@ -422,9 +426,11 @@ void reset_runtime_variables(void) {                                            
   dsc_txq.flush();
   seat_heating_dr_txq.flush();
   seat_heating_pas_txq.flush();
-  pdc_beep_sent = pdc_too_close = false;
+  reverse_beep_sent = pdc_too_close = false;
+  reverse_beep_resend_timer = 0;
   ihk_extra_buttons_cc_txq.flush();
   hdc_txq.flush();
+  pdc_buttons_txq.flush();
   exhaust_flap_sport = false;
   #if !QUIET_START
     actuate_exhaust_solenoid(LOW);
@@ -458,6 +464,7 @@ void reset_runtime_variables(void) {                                            
     }
     dipped_beam_status = left_fog_on = right_fog_on = indicators_on = false;
   #endif
+  ahl_active = flc_active = false;
   #if DIM_DRL
     dim_drl_txq.flush();
     if (((millis() - last_drl_action_timer) < 15000) || (left_dimmed || right_dimmed)) {
@@ -469,7 +476,7 @@ void reset_runtime_variables(void) {                                            
     drl_status = left_dimmed = right_dimmed = false;
   #endif
   ftm_indicator_status = false;
-  #if FRM_HEADLIGHT_MODE
+  #if FRM_AHL_MODE
     kcan_write_msg(frm_ckm_ahl_komfort_buf);
   #endif
   cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
@@ -502,6 +509,7 @@ void reset_sleep_variables(void) {
   wash_message_counter = 0;
   wipe_scheduled = false;
   frm_mirror_status_requested = false;
+  frm_ahl_flc_status_requested = false;
   lock_button_pressed  = unlock_button_pressed = false;
   mirror_status_retry = 0;
   mirror_fold_txq.flush();
@@ -509,6 +517,7 @@ void reset_sleep_variables(void) {
   vsw_initialized = false;
   vsw_current_input = 0;
   vsw_switch_counter = 0xF1;
+  asd_initialized = false;
   #if IMMOBILIZER_SEQ
     if (immobilizer_persist) {
       if (immobilizer_released) {

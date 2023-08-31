@@ -21,7 +21,7 @@ void setup() {
     }
   #endif
   #if DEBUG_MODE
-    #if (AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED) && !USB_DISABLE
+    #if !USB_DISABLE && !STARTUPC_MODIFIED
       setup_time = micros() - 300000;
     #else
       setup_time = micros();
@@ -65,12 +65,6 @@ void loop() {
     #if F_ZBE_WAKE || F_VSW01 || F_NIVI
       send_f_vehicle_mode();
     #endif
-    #if F_NIVI
-      if (!frm_consumer_shutdown) {
-        send_f_brightness_status();
-        send_f_powertrain_2_status();
-      }
-    #endif
     check_can_resend_queues();
   }
 
@@ -92,11 +86,16 @@ void loop() {
     #if HDC
       check_hdc_queue();
     #endif
+    #if PDC_AUTO_OFF
+      check_pdc_button_queue();
+    #endif
     #if EDC_CKM_FIX
       check_edc_ckm_queue();
     #endif
     #if F_NIVI
       request_vehicle_tilt_angle();
+      send_f_brightness_status();
+      send_f_powertrain_2_status();
     #endif
   } else {
     if (vehicle_awake) {
@@ -150,6 +149,8 @@ void loop() {
 
       else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
         evaluate_vehicle_moving();
+        evaluate_handbrake_status();
+        evaluate_indicated_speed();
       }
 
       #if REVERSE_BEEP
@@ -192,7 +193,7 @@ void loop() {
       #endif
 
 
-      #if FRONT_FOG_CORNER || F_NIVI
+      #if F_NIVI
       else if (k_msg.id == 0x314) {                                                                                                 // RLS light status.
         evaluate_rls_light_status();
       }
@@ -202,7 +203,9 @@ void loop() {
       else if (k_msg.id == 0x317) {                                                                                                 // Received PDC button press from IHKA.
         evaluate_pdc_button();
       }
+      #endif
 
+      #if MSA_RVC || PDC_AUTO_OFF
       else if (k_msg.id == 0x3AF) {                                                                                                 // Monitor PDC bus status.
         evaluate_pdc_bus_status();
       }
@@ -212,14 +215,12 @@ void loop() {
         update_dme_power_ckm();
       }
 
-      #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
       else if (k_msg.id == 0x3B0) {                                                                                                 // Monitor reverse status.
         evaluate_reverse_gear_status();
         #if REVERSE_BEEP
-          evaluate_pdc_beep();
+          evaluate_reverse_beep();
         #endif
       }
-      #endif
 
       #if EDC_CKM_FIX
       else if (k_msg.id == 0x3C5) {                                                                                                 // Received EDC M Key settings from iDrive.
@@ -263,6 +264,9 @@ void loop() {
       #endif
       #if F_VSW01
         initialize_vsw();
+      #endif
+      #if ASD
+        initialize_asd();
       #endif
     }
 
@@ -347,6 +351,9 @@ void loop() {
       #if AUTO_MIRROR_FOLD 
         evaluate_mirror_fold_status();
       #endif
+      #if FRONT_FOG_CORNER
+        evaluate_ahl_flc_status();
+      #endif
     }
     #endif
   }
@@ -361,17 +368,6 @@ void loop() {
       if (pt_msg.id == 0x3B4) {                                                                                                     // Monitor battery voltage from DME.
         evaluate_battery_voltage();
       }
-
-      #if F_NIVI
-      else if (pt_msg.id == 0x1A0) {
-        if (!frm_consumer_shutdown) {
-          send_f_road_inclination();
-          send_f_longitudinal_acceleration();
-          send_f_yaw_rate();
-          send_f_speed_status();
-        }
-      }
-      #endif
 
       #if IMMOBILIZER_SEQ                                                                                                           // We need this button data with ignition off too
       else if (pt_msg.id == 0x1D6) {                                                                                                // A button was pressed on the steering wheel.
@@ -406,6 +402,15 @@ void loop() {
         #if HDC
         else if (pt_msg.id == 0x194) {
           evaluate_cruise_stalk_message();
+        }
+        #endif
+
+        #if F_NIVI
+        else if (pt_msg.id == 0x1A0) {
+          send_f_road_inclination();
+          send_f_longitudinal_acceleration();
+          send_f_yaw_rate();
+          send_f_speed_status();
         }
         #endif
 

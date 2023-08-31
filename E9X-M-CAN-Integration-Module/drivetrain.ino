@@ -4,8 +4,8 @@
 void evaluate_engine_rpm(void) {
   RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
   if (RPM > 2000) {
-    engine_runtime = millis();
     if (!engine_running) {
+      engine_runtime = 0;
       engine_running = true;
       #if CONTROL_SHIFTLIGHTS
         shiftlight_startup_animation();                                                                                             // Show off shift light segments during engine startup (>500rpm).
@@ -20,14 +20,13 @@ void evaluate_engine_rpm(void) {
       #if IMMOBILIZER_SEQ_ALARM
         if (!immobilizer_released) {
           alarm_after_engine_stall = true;
-          serial_log("Anti-theft active. Alarm will sound after stall.");      
+          serial_log("Immobilizer still active. Alarm will sound after stall.");      
         }
       #endif
     }
   } else if (RPM < 200) {                                                                                                           // Less than 50 RPM. Engine stalled or was stopped.
     if (engine_running) {
       engine_running = false;
-      engine_runtime = 0;
       serial_log("Engine stopped.");
       #if IMMOBILIZER_SEQ_ALARM
         trip_alarm_after_stall();
@@ -43,9 +42,13 @@ void toggle_mdrive_message_active(void) {
     mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
     mdrive_message[4] -= 0x10;
     mdrive_status = mdrive_power_active = false;
-    #if FRM_HEADLIGHT_MODE
+    #if FRM_AHL_MODE
       kcan_write_msg(frm_ckm_ahl_komfort_buf);
       serial_log("Set AHL back to comfort mode.");
+    #endif
+    #if ASD
+      kcan_write_msg(mute_asd_buf);
+      serial_log("Muted ASD.");
     #endif
     if (mdrive_power == 0x30) {
       #if EXHAUST_FLAP_CONTROL
@@ -59,6 +62,10 @@ void toggle_mdrive_message_active(void) {
     if (mdrive_power == 0x20) {                                                                                                     // POWER in Sport.
       mdrive_power_active = true;
     } else if (mdrive_power == 0x30) {                                                                                              // POWER Sport+.
+      #if ASD
+        kcan_write_msg(demute_asd_buf);
+        serial_log("De-muted ASD.");
+      #endif
       #if EXHAUST_FLAP_CONTROL
         exhaust_flap_sport = true;                                                                                                  // Exhaust flap always open in Sport+
       #endif
@@ -72,7 +79,7 @@ void toggle_mdrive_message_active(void) {
     mdrive_message[4] += 0x10;
     mdrive_status = true;
 
-    #if FRM_HEADLIGHT_MODE
+    #if FRM_AHL_MODE
       kcan_write_msg(frm_ckm_ahl_sport_buf);
       serial_log("Set AHL to sport mode.");
     #endif
@@ -104,7 +111,7 @@ void evaluate_m_mfl_button_press(void) {
     if (!ignore_m_press) {
       ignore_m_press = true;                                                                                                        // Ignore further pressed messages until the button is released.
       #if IMMOBILIZER_SEQ
-      if (immobilizer_released && ignition) {                                                                                       // Disable normal M button function when used for anti-theft.
+      if (immobilizer_released && ignition) {                                                                                       // Disable normal M button function when used for immobilizer.
       #endif
         toggle_mdrive_message_active();
         send_mdrive_message();
@@ -440,7 +447,7 @@ void activate_immobilizer(void) {
     alarm_led = false;
   #endif
   immobilizer_activate_release_timer = 0;
-  serial_log("Anti-theft activated.");
+  serial_log("Immobilizer activated.");
 }
 
 
@@ -450,7 +457,7 @@ void release_immobilizer(void) {
   EEPROM.update(13, immobilizer_released);                                                                                          // Save to EEPROM directly in case program crashes.
   update_eeprom_checksum();
   ptcan_write_msg(ekp_return_to_normal_buf);                                                                                        // KWP To EKP.
-  serial_log("Anti-theft released. EKP control restored to DME.");
+  serial_log("Immobilizer released. EKP control restored to DME.");
   time_now = millis();
   #if IMMOBILIZER_SEQ_ALARM
     if (alarm_active) {

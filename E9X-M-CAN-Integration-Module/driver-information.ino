@@ -201,7 +201,7 @@ void send_svt_kcan_cc_notification(void) {
 
 
 void evaluate_fog_status(void) {
-  if ((k_msg.buf[0] & 32) == 32) {                                                                                                  // Check the third bit of the first byte represented in binary for front fog status.
+  if (bitRead(k_msg.buf[0], 5)) {                                                                                                   // Check bit 5 (from LSB 0) of the first byte represented in binary for front fog status.
     if (!front_fog_status) {
       front_fog_status = true;
       #if FRONT_FOG_LED_INDICATOR
@@ -224,15 +224,18 @@ void evaluate_fog_status(void) {
 }
 
 
-void evaluate_pdc_beep(void) {
+void evaluate_reverse_beep(void) {
   if (reverse_gear_status) {
-    if (!pdc_beep_sent && !pdc_too_close) {
-      serial_log("Sending PDC beep.");
-      play_cc_gong();
-      pdc_beep_sent = true;
+    if (reverse_beep_resend_timer >= 3000) {
+      if (!reverse_beep_sent && !pdc_too_close) {
+        serial_log("Sending reverse beep.");
+        play_cc_gong();
+        reverse_beep_sent = true;
+      }
+      reverse_beep_resend_timer = 0;
     }
   } else {
-    pdc_beep_sent = false;
+    reverse_beep_sent = false;
   }
 }
 
@@ -314,17 +317,54 @@ void evaluate_pdc_button(void) {
 
 void evaluate_pdc_bus_status(void) {
   if (pdc_status != k_msg.buf[2]) {
-    if (pdc_status == 0xA4 && k_msg.buf[2] == 0x81) {
-      kcan_write_msg(pdc_off_camera_off_buf);                                                                                       // Fix for PDC coming on when navingating away from RVC only.
-    } else if (pdc_status == 0xA4 && k_msg.buf[2] == 0xA1) {
-      kcan_write_msg(pdc_off_camera_off_buf);                                                                                       // Fix for PDC coming on when turning off RVC from iDrive UI.
-    }
-    if (pdc_with_rvc_requested && k_msg.buf[2] == 0x80) {
-      kcan_write_msg(pdc_on_camera_on_buf);
-      serial_log("Activated PDC with RVC ON.");
-      pdc_with_rvc_requested = false;
-    }
+    #if MSA_RVC
+      if (pdc_status == 0xA4 && k_msg.buf[2] == 0x81) {
+        kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when navingating away from RVC only.
+      } else if (pdc_status == 0xA4 && k_msg.buf[2] == 0xA1) {
+        kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when turning off RVC from iDrive UI.
+      }
+      if (pdc_with_rvc_requested && k_msg.buf[2] == 0x80) {
+        kcan_write_msg(pdc_on_camera_on_buf);
+        serial_log("Activated PDC with RVC ON.");
+        pdc_with_rvc_requested = false;
+      }
+    #endif
     pdc_status = k_msg.buf[2];
+  }
+}
+
+
+void evaluate_handbrake_status(void) {
+  if (k_msg.buf[5] == 0x32) {
+    if (!handbrake_status) {
+      handbrake_status = true;
+      serial_log("Handbrake ON.");
+      #if PDC_AUTO_OFF
+        if (!reverse_gear_status && pdc_status != 0x80) {
+          time_now = millis();
+          kcan_write_msg(pdc_button_presssed_buf);
+          m = {pdc_button_released_buf, time_now + 100};
+          pdc_buttons_txq.push(&m);
+          serial_log("Disabled PDC after handbrake was pulled up.");
+        }
+      #endif
+    }
+  } else if (k_msg.buf[5] == 0x30) {
+    if (handbrake_status) {
+      handbrake_status = false;
+      serial_log("Handbrake OFF.");
+    }
+  }
+}
+
+
+void check_pdc_button_queue(void) {
+  if (!pdc_buttons_txq.isEmpty()) {
+    pdc_buttons_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      pdc_buttons_txq.drop();
+    }
   }
 }
 

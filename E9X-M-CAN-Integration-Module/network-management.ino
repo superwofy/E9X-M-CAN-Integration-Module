@@ -41,13 +41,13 @@ void cache_can_message_buffers(void) {                                          
 
   uint8_t frm_toggle_fold_mirror_a[] = {0x72, 0x10, 7, 0x30, 0x10, 7, 1, 5};
   uint8_t frm_toggle_fold_mirror_b[] = {0x72, 0x21, 0, 1, 0, 0, 0, 0};
-  uint8_t frm_status_request_a[] = {0x72, 3, 0x30, 0x16, 1, 0, 0, 0};
-  uint8_t frm_status_request_b[] = {0x72, 0x30, 0, 0, 0, 0, 0, 0};
+  uint8_t frm_mirror_status_request_a[] = {0x72, 3, 0x30, 0x16, 1, 0, 0, 0};
+  uint8_t frm_mirror_status_request_b[] = {0x72, 0x30, 0, 0, 0, 0, 0, 0};
   frm_toggle_fold_mirror_a_buf = make_msg_buf(0x6F1, 8, frm_toggle_fold_mirror_a);
   frm_toggle_fold_mirror_b_buf = make_msg_buf(0x6F1, 8, frm_toggle_fold_mirror_b);
-  frm_status_request_a_buf = make_msg_buf(0x6F1, 8, frm_status_request_a);
-  frm_status_request_b_buf = make_msg_buf(0x6F1, 8, frm_status_request_b);
-
+  frm_mirror_status_request_a_buf = make_msg_buf(0x6F1, 8, frm_mirror_status_request_a);
+  frm_mirror_status_request_b_buf = make_msg_buf(0x6F1, 8, frm_mirror_status_request_b);
+  
   uint8_t flash_hazards[] = {0, 0xF1};
   flash_hazards_buf = make_msg_buf(0x2B4, 2, flash_hazards);
 
@@ -128,6 +128,9 @@ void cache_can_message_buffers(void) {                                          
   front_right_fog_off_buf = make_msg_buf(0x6F1, 8, front_right_fog_off);
   front_fogs_all_off_buf = make_msg_buf(0x6F1, 8, front_fogs_all_off);                                                              // This job only works with ignition ON.
 
+  uint8_t frm_ahl_status_request[] = {0x72, 3, 0x30, 0x28, 1, 0, 0, 0};
+  frm_ahl_flc_status_request_buf = make_msg_buf(0x6F1, 8, frm_ahl_status_request);
+
   uint8_t left_drl_off[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0};
   uint8_t left_drl_dim[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0x16};
   uint8_t left_drl_bright[] = {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0x64};
@@ -144,8 +147,10 @@ void cache_can_message_buffers(void) {                                          
   uint8_t f_kombi_network_mgmt[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                               // Network management KOMBI - F-series.
   f_kombi_network_mgmt_buf = make_msg_buf(0x560, 8, f_kombi_network_mgmt);
 
-  // uint8_t idrive_menu_request[] = {};
-  // idrive_menu_request_buf = make_msg_buf(0x6F1, 8, idrive_menu_request);
+  // uint8_t idrive_menu_request_a[] = {0x63, 2, 0x33, 0x52, 0, 0, 0, 0};
+  // uint8_t idrive_menu_request_b[] = {0x63, 0x30, 0, 0, 0, 0, 0, 0};
+  // idrive_menu_request_a_buf = make_msg_buf(0x6F1, 8, idrive_menu_request_a);
+  // idrive_menu_request_b_buf = make_msg_buf(0x6F1, 8, idrive_menu_request_b);
 
   uint8_t sine_angle_request_a[] = {0x50, 2, 0x21, 5};
   uint8_t sine_angle_request_b[] = {0x50, 0x30, 0, 2, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -157,12 +162,12 @@ void cache_can_message_buffers(void) {                                          
   lc_cc_on_buf = make_msg_buf(0x598, 8, lc_cc_on);
   lc_cc_off_buf = make_msg_buf(0x598, 8, lc_cc_off);
 
-  uint8_t seat_heating_button_pressed[] = {0xFD, 0xFF};
-  uint8_t seat_heating_button_released[] = {0xFC, 0xFF};
-  seat_heating_button_pressed_dr_buf = make_msg_buf(0x1E7, 2, seat_heating_button_pressed);
-  seat_heating_button_released_dr_buf = make_msg_buf(0x1E7, 2, seat_heating_button_released);
-  seat_heating_button_pressed_pas_buf = make_msg_buf(0x1E8, 2, seat_heating_button_pressed);
-  seat_heating_button_released_pas_buf = make_msg_buf(0x1E8, 2, seat_heating_button_released);
+  uint8_t generic_button_pressed[] = {0xFD, 0xFF};
+  uint8_t generic_button_released[] = {0xFC, 0xFF};
+  seat_heating_button_pressed_dr_buf = make_msg_buf(0x1E7, 2, generic_button_pressed);
+  seat_heating_button_released_dr_buf = make_msg_buf(0x1E7, 2, generic_button_released);
+  seat_heating_button_pressed_pas_buf = make_msg_buf(0x1E8, 2, generic_button_pressed);
+  seat_heating_button_released_pas_buf = make_msg_buf(0x1E8, 2, generic_button_released);
 
   uint8_t set_time_cc[] = {0x40, 0xA7, 0, 0x39, 0xFF, 0xFF, 0xFF, 0xFF};
   uint8_t set_time_cc_off[] = {0x40, 0xA7, 0, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -174,7 +179,7 @@ void cache_can_message_buffers(void) {                                          
   #if NEEDLE_SWEEP
     uint8_t shiftlights_startup_buildup[] = {0x86, 0};
   #else
-    uint8_t shiftlights_startup_buildup[] = {0x56, 0};                                                                              // Faster sequential buildup. First bit 0-0xF (0xF - slowest).
+    uint8_t shiftlights_startup_buildup[] = {0x56, 0};                                                                              // Faster sequential buildup. First 8 bits: 0-0xF (0xF - slowest).
   #endif
   uint8_t shiftlights_max_flash[] = {0xA, 0};
   uint8_t shiftlights_off[] = {5, 0};
@@ -214,12 +219,12 @@ void cache_can_message_buffers(void) {                                          
   vol_request_buf = make_msg_buf(0x6F1, 8, vol_request);
   door_open_cc_off_buf = make_msg_buf(0x5C0, 8, door_open_cc_off);
 
-  uint8_t hdc_cc_activated_on[] = {0x40, 0x4B, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xAB};
-  uint8_t hdc_cc_unavailable_on[] = {0x40, 0x4D, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xAB};
-  uint8_t hdc_cc_deactivated_on[] = {0x40, 0x4C, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xAB};
-  uint8_t hdc_cc_activated_off[] = {0x40, 0x4B, 1, 0, 0xFF, 0xFF, 0xFF, 0xAB};
-  uint8_t hdc_cc_unavailable_off[] = {0x40, 0x4D, 1, 0, 0xFF, 0xFF, 0xFF, 0xAB};
-  uint8_t hdc_cc_deactivated_off[] = {0x40, 0x4C, 1, 0, 0xFF, 0xFF, 0xFF, 0xAB};
+  uint8_t hdc_cc_activated_on[] = {0x40, 0x4B, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t hdc_cc_unavailable_on[] = {0x40, 0x4D, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t hdc_cc_deactivated_on[] = {0x40, 0x4C, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t hdc_cc_activated_off[] = {0x40, 0x4B, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t hdc_cc_unavailable_off[] = {0x40, 0x4D, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t hdc_cc_deactivated_off[] = {0x40, 0x4C, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
   hdc_cc_activated_on_buf = make_msg_buf(0x5A9, 8, hdc_cc_activated_on);
   hdc_cc_unavailable_on_buf = make_msg_buf(0x5A9, 8, hdc_cc_unavailable_on);
   hdc_cc_deactivated_on_buf = make_msg_buf(0x5A9, 8, hdc_cc_deactivated_on);
@@ -242,9 +247,19 @@ void cache_can_message_buffers(void) {                                          
   pdc_off_camera_on_buf = make_msg_buf(0x6F1, 8, pdc_off_camera_on);
   pdc_on_camera_on_buf = make_msg_buf(0x6F1, 8, pdc_on_camera_on);
   pdc_off_camera_off_buf = make_msg_buf(0x6F1, 8, pdc_off_camera_off);
+  pdc_button_presssed_buf = make_msg_buf(0x317, 2, generic_button_pressed);
+  pdc_button_released_buf = make_msg_buf(0x317, 2, generic_button_released);
 
   uint8_t msa_fake_status[] = {0xFF, 0xFF};
   msa_fake_status_buf = make_msg_buf(0x308, 2, msa_fake_status);
+
+  uint8_t mute_asd[] = {0x3F, 5, 0x31, 0xB8, 0xC, 1, 1, 0};
+  uint8_t demute_asd[] = {0x3F, 5, 0x31, 0xB8, 0xC, 1, 0, 0};
+  mute_asd_buf = make_msg_buf(0x6F1, 8, mute_asd);
+  demute_asd_buf = make_msg_buf(0x6F1, 8, demute_asd);
+
+  nivi_button_pressed_buf = make_msg_buf(0x28A, 2, generic_button_pressed);
+  nivi_button_released_buf = make_msg_buf(0x28A, 2, generic_button_released);
 }
 
 

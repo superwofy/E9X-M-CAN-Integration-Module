@@ -77,124 +77,122 @@ void configure_can_controller(void) {
   KCAN.setRFFN(RFFN_40);
   KCAN.setFIFOFilter(REJECT_ALL);                                                                                                   // Reject unfiltered messages
 
-  KCAN.setFIFOFilter(filter_count, 0xAA, STD);                                                                                      // RPM, throttle pos.                                           Cycle time 100ms (KCAN)
+  KCAN.setFIFOFilter(filter_count, 0xAA, STD);                                                                                      // RPM, throttle pos:                                           Cycle time 100ms (KCAN).
   filter_count++;
-  KCAN.setFIFOFilter(filter_count, 0x130, STD);                                                                                     // Key/ignition status                                          Cycle time 100ms
+  KCAN.setFIFOFilter(filter_count, 0x130, STD);                                                                                     // Key/ignition status:                                         Cycle time 100ms.
   filter_count++;
   #if HDC
-    KCAN.setFIFOFilter(filter_count, 0x193, STD);                                                                                   // Kombi cruise control status
+    KCAN.setFIFOFilter(filter_count, 0x193, STD);                                                                                   // Kombi cruise control status:                                 Sent when changed.
     filter_count++;
   #endif
   #if FAKE_MSA || MSA_RVC
-    KCAN.setFIFOFilter(filter_count, 0x195, STD);                                                                                   // MSA button status sent by IHKA.
+    KCAN.setFIFOFilter(filter_count, 0x195, STD);                                                                                   // MSA button status sent by IHKA:                              Sent when changed.
     filter_count++;
   #endif
-  KCAN.setFIFOFilter(filter_count, 0x1AA, STD);                                                                                     // iDrive ErgoCommander (rear entertainment?)                   Sent at boot time and when cycling Terminal R.
+  KCAN.setFIFOFilter(filter_count, 0x1AA, STD);                                                                                     // iDrive ErgoCommander (rear entertainment?):                  Sent at boot time and when cycling Terminal R.
   filter_count++;
-  KCAN.setFIFOFilter(filter_count, 0x1B4, STD);                                                                                     // Kombi status (corrected speed)                               Cycle time 100ms (terminal R ON)
+  KCAN.setFIFOFilter(filter_count, 0x1B4, STD);                                                                                     // Kombi status (indicated speed, handbrake):                   Cycle time 100ms (terminal R ON).
   filter_count++;
   #if REVERSE_BEEP
     KCAN.setFIFOFilter(filter_count, 0x1C6, STD);                                                                                   // PDC acoustic message
     filter_count++;
   #endif
   #if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
-    KCAN.setFIFOFilter(filter_count, 0x1F6, STD);                                                                                   // Indicator status                                             Cycle time 1s. Sent when changed.
+    KCAN.setFIFOFilter(filter_count, 0x1F6, STD);                                                                                   // Indicator status:                                            Cycle time 1s. Sent when changed.
     filter_count++;
   #endif
   #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
-    KCAN.setFIFOFilter(filter_count, 0x21A, STD);                                                                                   // FRM Light status                                             Cycle time 5s (idle). Sent when changed.
+    KCAN.setFIFOFilter(filter_count, 0x21A, STD);                                                                                   // FRM Light status:                                            Cycle time 5s (idle). Sent when changed.
     filter_count++;
   #endif
   #if AUTO_SEAT_HEATING_PASS
-    KCAN.setFIFOFilter(filter_count, 0x22A, STD);                                                                                   // Passenger's seat heating status                              Cycle time 10s (idle), 150ms (change).
+    KCAN.setFIFOFilter(filter_count, 0x22A, STD);                                                                                   // Passenger's seat heating status:                             Cycle time 10s (idle), 150ms (change).
     filter_count++;
   #endif
   #if AUTO_SEAT_HEATING
-    KCAN.setFIFOFilter(filter_count, 0x232, STD);                                                                                   // Driver's seat heating status                                 Cycle time 10s (idle), 150ms (change).
+    KCAN.setFIFOFilter(filter_count, 0x232, STD);                                                                                   // Driver's seat heating status:                                Cycle time 10s (idle), 150ms (change).
     filter_count++;
   #endif
-  KCAN.setFIFOFilter(filter_count, 0x23A, STD);                                                                                     // Remote button and number sent by CAS                         Sent 3x when changed.
+  KCAN.setFIFOFilter(filter_count, 0x23A, STD);                                                                                     // Remote button and number sent by CAS:                        Sent 3x when changed.
   filter_count++;
-  KCAN.setFIFOFilter(filter_count, 0x273, STD);                                                                                     // CIC status and ZBE challenge.                                Sent when CIC is idle or a button is pressed on the ZBE.
+  KCAN.setFIFOFilter(filter_count, 0x273, STD);                                                                                     // CIC status and ZBE challenge:                                Sent when CIC is idle or a button is pressed on the ZBE.
   filter_count++;
-  KCAN.setFIFOFilter(filter_count, 0x2CA, STD);                                                                                     // Ambient temperature                                          Cycle time 1s.
+  KCAN.setFIFOFilter(filter_count, 0x2CA, STD);                                                                                     // Ambient temperature:                                         Cycle time 1s.
   filter_count++;                                                                         
   #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
-    KCAN.setFIFOFilter(filter_count, 0x2F7, STD);                                                                                   // Units from KOMBI                                             Sent 3x on Terminal R. Sent when changed.
+    KCAN.setFIFOFilter(filter_count, 0x2F7, STD);                                                                                   // Units from KOMBI:                                            Sent 3x on Terminal R. Sent when changed.
     filter_count++;
   #endif
   #if RTC
-    KCAN.setFIFOFilter(filter_count, 0x2F8, STD);                                                                                   // Time from KOMBI                                              Cycle time 15s (idle). Sent when changed.
+    KCAN.setFIFOFilter(filter_count, 0x2F8, STD);                                                                                   // Time from KOMBI:                                             Cycle time 15s (idle). Sent when changed.
     filter_count++;
   #endif
   #if AUTO_SEAT_HEATING_PASS
-    KCAN.setFIFOFilter(filter_count, 0x2FA, STD);                                                                                   // Seat occupancy and belt status                               Cycle time 5s
+    KCAN.setFIFOFilter(filter_count, 0x2FA, STD);                                                                                   // Seat occupancy and belt status:                              Cycle time 5s.
     filter_count++;
   #endif
   #if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
-    KCAN.setFIFOFilter(filter_count, 0x2FC, STD);                                                                                   // Door, hood status sent by CAS.                               Cycle time 5s. Sent when changed.
-    filter_count++;
-  #endif
-  #if FRONT_FOG_CORNER || F_NIVI
-    KCAN.setFIFOFilter(filter_count, 0x314, STD);                                                                                   // RLS light status.                                            Cycle time 3s. Sent when changed.
-    filter_count++;
-  #endif
-  #if MSA_RVC
-    KCAN.setFIFOFilter(filter_count, 0x317, STD);                                                                                   // Monitor PDC button status.                                   Sent when changed.
-    filter_count++;
-  #endif
-  #if HDC
-    KCAN.setFIFOFilter(filter_count, 0x31A, STD);                                                                                   // HDC button status sent by IHKA.
-    filter_count++;
-  #endif
-  #if RTC
-    KCAN.setFIFOFilter(filter_count, 0x39E, STD);                                                                                   // Time and date set by the user in CIC.
-    filter_count++;    
-  #endif
-  KCAN.setFIFOFilter(filter_count, 0x3A8, STD);                                                                                     // M Key POWER setting from iDrive.                             Sent when changed.
-  filter_count++;
-  #if MSA_RVC
-    KCAN.setFIFOFilter(filter_count, 0x3AF, STD);                                                                                   // PDC bus status.                                              Cycle time 2s (idle). Sent when changed.
-    filter_count++;
-  #endif
-  #if REVERSE_BEEP || LAUNCH_CONTROL_INDICATOR || FRONT_FOG_CORNER || MSA_RVC || F_NIVI
-    KCAN.setFIFOFilter(filter_count, 0x3B0, STD);                                                                                   // Reverse gear status.                                         Cycle time 1s (idle).
-    filter_count++;
-  #endif
-  KCAN.setFIFOFilter(filter_count, 0x3BD, STD);                                                                                     // FRM consumer shutdown.                                       Cycle time 5s (idle). Sent when changed.
-  filter_count++;
-  #if EDC_CKM_FIX
-    KCAN.setFIFOFilter(filter_count, 0x3C5, STD);                                                                                   // M Key EDC CKM setting from iDrive.                           Sent when changed.
-    filter_count++;
-  #endif
-  KCAN.setFIFOFilter(filter_count, 0x3CA, STD);                                                                                     // CIC MDrive settings                                          Sent when changed.
-  filter_count++;
-  #if INDICATE_TRUNK_OPENED
-    KCAN.setFIFOFilter(filter_count, 0x3D7, STD);                                                                                   // Door lock settings from DWA.                                 Sent when changed.
-    filter_count++;
-  #endif
-  #if F_ZBE_WAKE || F_VSW01 || F_NIVI
-    KCAN.setFIFOFilter(filter_count, 0x4E2, STD);                                                                                   // CIC Network management.                                      Sent when CIC is ON, cycle time 1.5s.
-    filter_count++;
-  #endif
-  #if DOOR_VOLUME
-    KCAN.setFIFOFilter(filter_count, 0x5C0, STD);                                                                                   // CAS CC notifications.
-    filter_count++;
-  #endif
-  #if F_VSW01
-    KCAN.setFIFOFilter(filter_count, 0x648, STD);                                                                                   // VSW diagnostic responses.                                    Sent when response is requested.
+    KCAN.setFIFOFilter(filter_count, 0x2FC, STD);                                                                                   // Door, hood status sent by CAS:                               Cycle time 5s. Sent when changed.
     filter_count++;
   #endif
   #if F_NIVI
-    KCAN.setFIFOFilter(filter_count, 0x650, STD);                                                                                   // SINE diagnostic responses.                                   Sent when response is requested.
+    KCAN.setFIFOFilter(filter_count, 0x314, STD);                                                                                   // RLS light status:                                            Cycle time 3s. Sent when changed.
+    filter_count++;
+  #endif
+  #if MSA_RVC
+    KCAN.setFIFOFilter(filter_count, 0x317, STD);                                                                                   // Monitor PDC button status:                                   Sent when changed.
+    filter_count++;
+  #endif
+  #if HDC
+    KCAN.setFIFOFilter(filter_count, 0x31A, STD);                                                                                   // HDC button status sent by IHKA:                              Sent when changed.
+    filter_count++;
+  #endif
+  #if RTC
+    KCAN.setFIFOFilter(filter_count, 0x39E, STD);                                                                                   // Time and date set by the user in iDrive:                     Sent when changed.
+    filter_count++;    
+  #endif
+  KCAN.setFIFOFilter(filter_count, 0x3A8, STD);                                                                                     // M Key (CKM) POWER setting from iDrive:                       Sent when changed.
+  filter_count++;
+  #if MSA_RVC || PDC_AUTO_OFF
+    KCAN.setFIFOFilter(filter_count, 0x3AF, STD);                                                                                   // PDC bus status:                                              Cycle time 2s (idle). Sent when changed.
+    filter_count++;
+  #endif
+  KCAN.setFIFOFilter(filter_count, 0x3B0, STD);                                                                                     // Reverse gear status:                                         Cycle time 1s (idle).
+  filter_count++;
+  KCAN.setFIFOFilter(filter_count, 0x3BD, STD);                                                                                     // FRM consumer shutdown:                                       Cycle time 5s (idle). Sent when changed.
+  filter_count++;
+  #if EDC_CKM_FIX
+    KCAN.setFIFOFilter(filter_count, 0x3C5, STD);                                                                                   // M Key EDC CKM setting from iDrive:                           Sent when changed.
+    filter_count++;
+  #endif
+  KCAN.setFIFOFilter(filter_count, 0x3CA, STD);                                                                                     // CIC MDrive settings:                                         Sent when changed.
+  filter_count++;
+  #if INDICATE_TRUNK_OPENED
+    KCAN.setFIFOFilter(filter_count, 0x3D7, STD);                                                                                   // Door lock settings from DWA:                                 Sent when changed.
+    filter_count++;
+  #endif
+  #if F_ZBE_WAKE || F_VSW01 || F_NIVI
+    KCAN.setFIFOFilter(filter_count, 0x4E2, STD);                                                                                   // CIC Network management:                                      Sent when CIC is ON, cycle time 1.5s.
+    filter_count++;
+  #endif
+  #if DOOR_VOLUME
+    KCAN.setFIFOFilter(filter_count, 0x5C0, STD);                                                                                   // CAS CC notifications:                                        Sent when changed.
+    filter_count++;
+  #endif
+  #if F_VSW01
+    KCAN.setFIFOFilter(filter_count, 0x648, STD);                                                                                   // VSW diagnostic responses:                                    Sent when response is requested.
+    filter_count++;
+  #endif
+  #if F_NIVI
+    KCAN.setFIFOFilter(filter_count, 0x650, STD);                                                                                   // SINE diagnostic responses:                                   Sent when response is requested.
     filter_count++;
   #endif
   #if DOOR_VOLUME || F_VSW01
-    KCAN.setFIFOFilter(filter_count, 0x663, STD);                                                                                   // iDrive diagnostic responses.                                 Sent when response is requested.
+    KCAN.setFIFOFilter(filter_count, 0x663, STD);                                                                                   // iDrive diagnostic responses:                                 Sent when response is requested.
     filter_count++;
   #endif
-  #if AUTO_MIRROR_FOLD || FRONT_FOG_CORNER 
-    KCAN.setFIFOFilter(filter_count, 0x672, STD);                                                                                   // FRM diagnostic responses.                                    Sent when response is requested.
+  #if AUTO_MIRROR_FOLD || FRONT_FOG_CORNER
+    KCAN.setFIFOFilter(filter_count, 0x672, STD);                                                                                   // FRM diagnostic responses:                                    Sent when response is requested.
   #endif
   filter_count = 0;
 
@@ -209,37 +207,37 @@ void configure_can_controller(void) {
   PTCAN.setFIFOFilter(REJECT_ALL);
 
   #if FRONT_FOG_CORNER
-    PTCAN.setFIFOFilter(filter_count, 0xC8, STD);                                                                                   // Steering angle.                                              Cycle time 200ms.
+    PTCAN.setFIFOFilter(filter_count, 0xC8, STD);                                                                                   // Steering angle:                                              Cycle time 200ms.
     filter_count++;
   #endif
   #if HDC
-    PTCAN.setFIFOFilter(filter_count, 0x194, STD);                                                                                  // Cruise stalk position.                                       Cycle time 50ms.
+    PTCAN.setFIFOFilter(filter_count, 0x194, STD);                                                                                  // Cruise stalk position:                                       Cycle time 50ms.
     filter_count++;
   #endif
   #if F_NIVI
-    PTCAN.setFIFOFilter(filter_count, 0x1A0, STD);                                                                                  // Real speed.                                                  Cycle time 20ms.
+    PTCAN.setFIFOFilter(filter_count, 0x1A0, STD);                                                                                  // Real speed:                                                  Cycle time 20ms.
     filter_count++;
   #endif
-  PTCAN.setFIFOFilter(filter_count, 0x1D6, STD);                                                                                    // MFL button status.                                           Cycle time 1s (idle), 100ms (pressed)
+  PTCAN.setFIFOFilter(filter_count, 0x1D6, STD);                                                                                    // MFL button status:                                           Cycle time 1s (idle), 100ms (pressed).
   filter_count++;
   #if WIPE_AFTER_WASH
-    PTCAN.setFIFOFilter(filter_count, 0x2A6, STD);                                                                                  // Wiper stalk status from SZL
+    PTCAN.setFIFOFilter(filter_count, 0x2A6, STD);                                                                                  // Wiper stalk status from SZL.
     filter_count++;
   #endif
-  PTCAN.setFIFOFilter(filter_count, 0x315, STD);                                                                                    // Vehicle mode (+EDC) from JBE.                                Cycle time 500ms (idle).
+  PTCAN.setFIFOFilter(filter_count, 0x315, STD);                                                                                    // Vehicle mode (+EDC) from JBE:                                Cycle time 500ms (idle).
   filter_count++;
   #if FTM_INDICATOR
-    PTCAN.setFIFOFilter(filter_count, 0x31D, STD);                                                                                  // FTM status broadcast by DSC                                  Cycle time 5s (idle)
+    PTCAN.setFIFOFilter(filter_count, 0x31D, STD);                                                                                  // FTM status broadcast by DSC:                                 Cycle time 5s (idle).
     filter_count++;
   #endif
   #if CONTROL_SHIFTLIGHTS
-    PTCAN.setFIFOFilter(filter_count, 0x332, STD);                                                                                  // Variable redline position from DME                           Cycle time 1s
+    PTCAN.setFIFOFilter(filter_count, 0x332, STD);                                                                                  // Variable redline position from DME:                          Cycle time 1s.
     filter_count++;
   #endif
   PTCAN.setFIFOFilter(filter_count, 0x3B4, STD);                                                                                    // Battery voltage from DME.
   filter_count++;
   #if SERVOTRONIC_SVT70
-    PTCAN.setFIFOFilter(filter_count, 0x58E, STD);                                                                                  // Forward SVT CC to KCAN for KOMBI to display                  Cycle time 10s
+    PTCAN.setFIFOFilter(filter_count, 0x58E, STD);                                                                                  // Forward SVT CC to KCAN for KOMBI to display:                 Cycle time 10s.
     filter_count++;
     PTCAN.setFIFOFilter(filter_count, 0x60E, STD);                                                                                  // Receive diagnostic messages from SVT module to forward.
   #endif
@@ -458,7 +456,7 @@ void check_rtc_valid(void) {
 #endif
 
 
-void disable_diag_transmit_jobs(void) {
+void disable_diag_transmit_jobs(void) {                                                                                             // Without this, other KWP jobs sent by Ediabas will receive strange reponse codes.
   if (diag_transmit) {
     serial_log("Detected OBD port diagnosis request. Pausing all diagnostic jobs.");
     diag_transmit = false;

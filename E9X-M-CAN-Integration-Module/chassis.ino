@@ -62,11 +62,13 @@ void evaluate_reverse_gear_status(void) {
     if (reverse_gear_status) {
       reverse_gear_status = false;
       serial_log("Reverse gear OFF.");
-      if ((left_fog_on || right_fog_on) && diag_transmit) {
-        serial_log("Resetting corner fogs with reverse OFF.");
-        kcan_write_msg(front_fogs_all_off_buf);
-        left_fog_on = right_fog_on = false;
-      }
+      #if FRONT_FOG_CORNER
+        if ((left_fog_on || right_fog_on) && diag_transmit) {
+          serial_log("Resetting corner fogs with reverse OFF.");
+          kcan_write_msg(front_fogs_all_off_buf);
+          left_fog_on = right_fog_on = false;
+        }
+      #endif
     }
   }
 }
@@ -82,26 +84,30 @@ void evaluate_vehicle_moving(void) {
     vehicle_moving = true;
     serial_log("Vehicle moving.");
   }
-  #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
-    if (vehicle_moving) {
-      if (speed_mph) {
-        indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
-      } else {
-        indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 10;
-      }
-      #if HDC
-        if (hdc_active) {
-          if (indicated_speed > hdc_deactivate_speed) {
-            serial_log("HDC deactivated due to high vehicle speed.");
-            hdc_active = false;
-            kcan_write_msg(hdc_cc_deactivated_on_buf);
-            m = {hdc_cc_deactivated_off_buf, millis() + 2000};
-            ihk_extra_buttons_cc_txq.push(&m);
-          }
-        }
-      #endif
+}
+
+
+void evaluate_indicated_speed(void) {
+  if (vehicle_moving) {
+    if (speed_mph) {
+      indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
+    } else {
+      indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 10;
     }
-  #endif
+    #if HDC
+      if (hdc_active) {
+        if (indicated_speed > hdc_deactivate_speed) {
+          serial_log("HDC deactivated due to high vehicle speed.");
+          hdc_active = false;
+          kcan_write_msg(hdc_cc_deactivated_on_buf);
+          m = {hdc_cc_deactivated_off_buf, millis() + 2000};
+          ihk_extra_buttons_cc_txq.push(&m);
+        }
+      }
+    #endif
+  } else {
+    indicated_speed = 0;
+  }
 }
 
 
@@ -118,9 +124,11 @@ void send_f_road_inclination(void) {
 
 void send_f_longitudinal_acceleration(void) {
   if (f_chassis_longitudinal_timer >= 100) {
-    e_long_acceleration = ((int16_t)(k_msg.buf[2] << 8 | k_msg.buf[3])) * 0.0001;                                                   // Value in m/s^2.
-    longitudinal_acceleration = round((e_long_acceleration + 65) / 0.002);
+    uint16_t raw_value = ((pt_msg.buf[3] & 0xF) << 8 | pt_msg.buf[2]);
+    int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
+    e_longitudinal_acceleration = signed_value * 0.025;                                                                             // Value in m/s^2.
 
+    longitudinal_acceleration = round((e_longitudinal_acceleration + 65) / 0.002);
     f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
     f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
                                                     : f_longitudinal_acceleration_alive_counter++;
@@ -148,7 +156,6 @@ void send_f_yaw_rate(void) {
 void send_f_speed_status(void) {
   if (f_chassis_speed_timer >= 104) {
     real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                         // KM/h
-
     vehicle_direction = pt_msg.buf[1] >> 4;
     if (vehicle_direction == 8) {                                                                                                   // Not moving.
       f_speed[4] = 0x81;

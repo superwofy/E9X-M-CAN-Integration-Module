@@ -3,7 +3,7 @@
 
 #if DEBUG_MODE
 void serial_interpreter(void) {
-  String cmd = Serial.readStringUntil('\n');
+  String cmd = Serial.readStringUntil('\n', 64);                                                                                    // Limit command the size to prevent overflow.
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
     if (cmd == "lock_serial") {
       serial_commands_unlocked = false;
@@ -209,7 +209,7 @@ void serial_interpreter(void) {
       if (diag_transmit) {
         lock_button_pressed = unlock_button_pressed = false;
         frm_mirror_status_requested = true;
-        kcan_write_msg(frm_status_request_a_buf);
+        kcan_write_msg(frm_mirror_status_request_a_buf);
         Serial.print("  Serial: ");
       } else {
         serial_log("  Serial: Function unavailable due to OBD tool presence.");
@@ -399,6 +399,7 @@ if (!serial_diag_txq.isEmpty()) {
     if (clearing_dtcs) {
       clearing_dtcs = false;
       diag_transmit = true;
+      serial_log("  Serial: Error memories cleared. Cycle Terminal R ON/OFF.");
     }
   }
 }
