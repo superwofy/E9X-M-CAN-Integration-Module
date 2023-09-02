@@ -66,3 +66,5 @@ RPA_SWITCH													// Enables the Flat tyre monitor reset button.
 
 ASP_KOMFORT_EINKLAPP										// Disable the original comfort fold mirror behavior.
 	nicht_aktiv
+MAX_SCHWENK_V_H_BEGR_SP										// Faster swivel speed (horizontal) in sport mode.
+	wert_21

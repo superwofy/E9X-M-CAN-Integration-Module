@@ -14,7 +14,7 @@ FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_64> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_64> DCAN;
 WDT_T4<WDT1> wdt;
 const uint8_t wdt_timeout_sec = 10;
-CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                                                                                   // XMODEM
+CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                                                                                // XMODEM
 
 
 /***********************************************************************************************************************************************************************************************************************************************
@@ -32,6 +32,8 @@ CRC16 teensy_eep_crc(0x1021, 0, 0, false, false);                               
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold mirrors when locking. Can be done with coding but this integrates nicer.
 #define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
+#define MIRROR_UNDIM 1                                                                                                              // Undim electrochromic exterior mirrors when indicating at night.
+#define COMFORT_EXIT 1                                                                                                              // Move driver's seat back when exiting car.
 #define INDICATE_TRUNK_OPENED 1                                                                                                     // Flash hazards when remote opens trunk.
 #define IMMOBILIZER_SEQ 1                                                                                                           // Disable fuel pump until the steering wheel M button is pressed a number of times.
 #if __has_include ("src/secrets.h")                                                                                                 // Optionally, create this file to store sensitive settings.
@@ -281,7 +283,7 @@ CAN_message_t front_left_fog_off_buf, front_right_fog_off_buf, front_fogs_all_of
 cppQueue fog_corner_left_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue fog_corner_right_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 unsigned long last_drl_action_timer = 15000;
-bool drl_status = false, left_dimmed = false, right_dimmed = false;
+bool drl_ckm, drl_status = false, left_dimmed = false, right_dimmed = false;
 CAN_message_t left_drl_dim_off, left_drl_dim_buf, left_drl_bright_buf;
 CAN_message_t right_drl_dim_off, right_drl_dim_buf, right_drl_bright_buf;
 cppQueue dim_drl_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -298,12 +300,17 @@ bool mirrors_folded = false, frm_mirror_status_requested = false;
 bool lock_button_pressed  = false, unlock_button_pressed = false;
 CAN_message_t frm_mirror_status_request_a_buf, frm_mirror_status_request_b_buf;
 CAN_message_t frm_toggle_fold_mirror_a_buf, frm_toggle_fold_mirror_b_buf;
+CAN_message_t frm_mirror_undim_buf;
 cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+elapsedMillis frm_undim_timer = 10000;
+bool auto_seat_ckm, comfort_exit_ready = false, comfort_exit_done = false;
+CAN_message_t dr_seat_move_back_buf;
 uint8_t last_lock_status_can = 0;
 bool unfold_with_door_open = false;
 CAN_message_t flash_hazards_buf;
 bool visual_signal_ckm, hazards_on = false;
 bool immobilizer_released = false, immobilizer_persist = true;
+uint16_t theft_max_speed = 20;
 unsigned long immobilizer_send_interval = 0;                                                                                        // Skip the first interval delay.
 elapsedMillis immobilizer_timer = 0, both_console_buttons_timer, immobilizer_activate_release_timer = 0;
 uint8_t immobilizer_pressed_release_count = 0, immobilizer_pressed_activate_count = 0;
@@ -336,10 +343,11 @@ bool sine_angle_requested = false;
 int f_vehicle_angle = 0x500;                                                                                                        // 0 deg.
 uint8_t f_road_inclination[] = {0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF};                                                          // Angle formula simlar to 56.1.2.
 float e_longitudinal_acceleration = 0;
-int longitudinal_acceleration = 0x7EF4;                                                                                             // 32500 * 0.002 - 65 = 0 m/s^2.
+uint16_t longitudinal_acceleration = 0x7EF4;                                                                                        // 32500 * 0.002 - 65 = 0 m/s^2.
 uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                             // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
 uint8_t f_longitudinal_acceleration_alive_counter = 0;
-int yaw_rate = 0xA4;                                                                                                                // Nearly 0 deg/s.
+float e_yaw_rate = 0;
+uint16_t yaw_rate = 0x7FFE;                                                                                                         // 32766 * 0.005 - 163.83 = 0 deg/sec.
 uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                                              // M4 (VYAW_VEH) 56.0.2. Byte5 fixed 0x2F - Signal value is valid QU_VYAW_VEH.
 uint8_t f_yaw_alive_counter = 0;
 uint16_t real_speed = 0;

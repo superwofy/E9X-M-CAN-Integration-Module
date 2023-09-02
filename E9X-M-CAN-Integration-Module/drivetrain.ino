@@ -47,8 +47,10 @@ void toggle_mdrive_message_active(void) {
       serial_log("Set AHL back to comfort mode.");
     #endif
     #if ASD
-      kcan_write_msg(mute_asd_buf);
-      serial_log("Muted ASD.");
+      if (diag_transmit) {
+        kcan_write_msg(mute_asd_buf);
+        serial_log("Muted ASD.");
+      }
     #endif
     if (mdrive_power == 0x30) {
       #if EXHAUST_FLAP_CONTROL
@@ -63,8 +65,10 @@ void toggle_mdrive_message_active(void) {
       mdrive_power_active = true;
     } else if (mdrive_power == 0x30) {                                                                                              // POWER Sport+.
       #if ASD
-        kcan_write_msg(demute_asd_buf);
-        serial_log("De-muted ASD.");
+        if (diag_transmit) {
+          kcan_write_msg(demute_asd_buf);
+          serial_log("De-muted ASD.");
+        }
       #endif
       #if EXHAUST_FLAP_CONTROL
         exhaust_flap_sport = true;                                                                                                  // Exhaust flap always open in Sport+
@@ -75,14 +79,16 @@ void toggle_mdrive_message_active(void) {
       console_power_mode = false;                                                                                                   // Turn OFF POWER from console too.
     }                                                                                                                               // Else, POWER unchanged.
 
-    mdrive_message[1] += 1;
-    mdrive_message[4] += 0x10;
-    mdrive_status = true;
-
     #if FRM_AHL_MODE
+    if (mdrive_svt == 0xF1) {                                                                                                       // Headlights will move faster if Servotronic is set to Sport.
       kcan_write_msg(frm_ckm_ahl_sport_buf);
       serial_log("Set AHL to sport mode.");
+    }
     #endif
+
+    mdrive_message[1] += 1;
+    mdrive_message[4] += 0x10;
+    mdrive_status = true;   
   }
 }
 
@@ -221,17 +227,42 @@ void update_mdrive_message_settings(void) {
     mdrive_message[1] = mdrive_dsc - 2 + mdrive_status;                                                                             // DSC message is 2 less than iDrive setting. 1 is added if MDrive is ON.
     mdrive_message[2] = mdrive_power;                                                                                               // Copy POWER as is.
     mdrive_message[3] = mdrive_edc;                                                                                                 // Copy EDC as is.
+    
+    #if ASD
+    if (mdrive_status) {
+      if (mdrive_power != 0x30) {
+        if (diag_transmit) {
+          kcan_write_msg(mute_asd_buf);
+          serial_log("Muted ASD.");
+        }
+      } else {
+        if (diag_transmit) {
+          kcan_write_msg(demute_asd_buf);
+          serial_log("De-muted ASD with POWER setting of Sport+.");
+        }
+      }
+    }
+    #endif
+    
     if (mdrive_svt == 0xE9) {
-      if (mdrive_status == 0) {
+      if (!mdrive_status) {
         mdrive_message[4] = 0x41;                                                                                                   // SVT normal, MDrive OFF.
       } else {
         mdrive_message[4] = 0x51;                                                                                                   // SVT normal, MDrive ON.
+        #if FRM_AHL_MODE
+          kcan_write_msg(frm_ckm_ahl_komfort_buf);
+          serial_log("Set AHL to comfort mode with SVT setting of Normal.");
+        #endif
       }
     } else if (mdrive_svt == 0xF1) {
-      if (mdrive_status == 0) {
+      if (!mdrive_status) {
         mdrive_message[4] = 0x81;                                                                                                   // SVT sport, MDrive OFF.
       } else {
         mdrive_message[4] = 0x91;                                                                                                   // SVT sport, MDrive ON.
+        #if FRM_AHL_MODE
+          kcan_write_msg(frm_ckm_ahl_sport_buf);
+          serial_log("Set AHL to sport mode with SVT setting of Sport.");
+        #endif
       }
     }
     #if DEBUG_MODE
@@ -361,11 +392,6 @@ void check_edc_ckm_queue(void) {
 void check_immobilizer_status(void) {
   if (vehicle_awakened_time >= 2000) {                                                                                              // Delay ensures that time passed after Teensy (re)started to receive messages.
     if (!immobilizer_released) {
-      uint16_t theft_max_speed = 20;
-      if (speed_mph) {
-        theft_max_speed = 12;
-      }
-
       #if IMMOBILIZER_SEQ_ALARM
         if (vehicle_awakened_time >= 10000) {                                                                                       // Delay so we don't interfere with normal DWA behavior indicating alarm faults. Also when doing 30G reset.
           if (!terminal_r && !alarm_led && !frm_consumer_shutdown && !lock_led) {
@@ -382,7 +408,7 @@ void check_immobilizer_status(void) {
       if (!vehicle_moving || indicated_speed <= theft_max_speed) {                                                                  // Make sure we don't cut this OFF while the car is in (quick) motion!!!
         if (immobilizer_timer >= immobilizer_send_interval) {
           if (terminal_r) {
-            if (engine_running) {                                                                                                   // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
+            if (engine_running && engine_runtime >= 2000) {                                                                         // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
               ptcan_write_msg(ekp_pwm_off_buf);
               serial_log("EKP is disabled.");
             }

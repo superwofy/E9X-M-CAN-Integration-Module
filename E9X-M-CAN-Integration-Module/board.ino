@@ -97,10 +97,8 @@ void configure_can_controller(void) {
     KCAN.setFIFOFilter(filter_count, 0x1C6, STD);                                                                                   // PDC acoustic message
     filter_count++;
   #endif
-  #if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
-    KCAN.setFIFOFilter(filter_count, 0x1F6, STD);                                                                                   // Indicator status:                                            Cycle time 1s. Sent when changed.
-    filter_count++;
-  #endif
+  KCAN.setFIFOFilter(filter_count, 0x1F6, STD);                                                                                     // Indicator status:                                            Cycle time 1s. Sent when changed.
+  filter_count++;
   #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
     KCAN.setFIFOFilter(filter_count, 0x21A, STD);                                                                                   // FRM Light status:                                            Cycle time 5s (idle). Sent when changed.
     filter_count++;
@@ -119,10 +117,8 @@ void configure_can_controller(void) {
   filter_count++;
   KCAN.setFIFOFilter(filter_count, 0x2CA, STD);                                                                                     // Ambient temperature:                                         Cycle time 1s.
   filter_count++;                                                                         
-  #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
-    KCAN.setFIFOFilter(filter_count, 0x2F7, STD);                                                                                   // Units from KOMBI:                                            Sent 3x on Terminal R. Sent when changed.
-    filter_count++;
-  #endif
+  KCAN.setFIFOFilter(filter_count, 0x2F7, STD);                                                                                     // Units from KOMBI:                                            Sent 3x on Terminal R. Sent when changed.
+  filter_count++;
   #if RTC
     KCAN.setFIFOFilter(filter_count, 0x2F8, STD);                                                                                   // Time from KOMBI:                                             Cycle time 15s (idle). Sent when changed.
     filter_count++;
@@ -135,7 +131,7 @@ void configure_can_controller(void) {
     KCAN.setFIFOFilter(filter_count, 0x2FC, STD);                                                                                   // Door, hood status sent by CAS:                               Cycle time 5s. Sent when changed.
     filter_count++;
   #endif
-  #if F_NIVI
+  #if F_NIVI || MIRROR_UNDIM
     KCAN.setFIFOFilter(filter_count, 0x314, STD);                                                                                   // RLS light status:                                            Cycle time 3s. Sent when changed.
     filter_count++;
   #endif
@@ -168,7 +164,15 @@ void configure_can_controller(void) {
   KCAN.setFIFOFilter(filter_count, 0x3CA, STD);                                                                                     // CIC MDrive settings:                                         Sent when changed.
   filter_count++;
   #if INDICATE_TRUNK_OPENED
-    KCAN.setFIFOFilter(filter_count, 0x3D7, STD);                                                                                   // Door lock settings from DWA:                                 Sent when changed.
+    KCAN.setFIFOFilter(filter_count, 0x3D7, STD);                                                                                   // Door lock CKM settings from DWA:                             Sent when changed.
+    filter_count++;
+  #endif
+  #if COMFORT_EXIT
+    KCAN.setFIFOFilter(filter_count, 0x3DB, STD);                                                                                   // Seat CKM settings:                                           Sent when changed.
+    filter_count++;
+  #endif
+  #if DIM_DRL
+    KCAN.setFIFOFilter(filter_count, 0x3DD, STD);                                                                                   // Lights CKM settings:                                         Sent when changed.
     filter_count++;
   #endif
   #if F_ZBE_WAKE || F_VSW01 || F_NIVI

@@ -16,6 +16,21 @@ void evaluate_drl_status(void) {
 }
 
 
+void evaluate_drl_ckm(void) {
+  if (k_msg.buf[2] == 0xFE) {
+    if (!drl_ckm) {
+      serial_log("DRL CKM enabled.");
+      drl_ckm = true;
+    }
+  } else {
+    if (drl_ckm) {
+      serial_log("DRL CKM disabed.");
+      drl_ckm = false;
+    }
+  }
+}
+
+
 void check_drl_queue(void) {
   if (!dim_drl_txq.isEmpty()) {
     if (diag_transmit) {
@@ -33,12 +48,10 @@ void check_drl_queue(void) {
 
 
 void evaluate_indicator_status_dim(void) {
-  #if DIM_DRL
-  time_now = millis();
-  if (drl_status && diag_transmit) {
-  #endif
-    if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                              // Off or Hazards
-      #if DIM_DRL
+  if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                                // Off or Hazards
+    #if DIM_DRL
+      if (drl_ckm && drl_status && diag_transmit) {
+        time_now = millis();
         if (right_dimmed) {
           m = {right_drl_bright_buf, time_now + 100};
           dim_drl_txq.push(&m);
@@ -50,17 +63,20 @@ void evaluate_indicator_status_dim(void) {
           left_dimmed = false;
           serial_log("Restored left DRL brightness.");
         }
-      #endif
-      #if INDICATE_TRUNK_OPENED
-        if (k_msg.buf[0] == 0xB1) {
-          hazards_on = true;
-        } else {
-          hazards_on = false;
-        }
-      #endif
-      indicators_on = false;
-    } else if (k_msg.buf[0] == 0x91) {                                                                                              // Left indicator
-      #if DIM_DRL
+      }
+    #endif
+    #if INDICATE_TRUNK_OPENED
+      if (k_msg.buf[0] == 0xB1) {
+        hazards_on = true;
+      } else {
+        hazards_on = false;
+      }
+    #endif
+    indicators_on = false;
+  } else if (k_msg.buf[0] == 0x91) {                                                                                                // Left indicator
+    #if DIM_DRL
+      if (drl_ckm && drl_status && diag_transmit) {
+        time_now = millis();
         if (right_dimmed) {
           m = {right_drl_bright_buf, time_now + 100};
           dim_drl_txq.push(&m);
@@ -73,10 +89,16 @@ void evaluate_indicator_status_dim(void) {
           serial_log("Dimmed left DRL.");
         }
         left_dimmed = true;
-      #endif
-      indicators_on = true;
-    } else if (k_msg.buf[0] == 0xA1) {                                                                                              // Right indicator
-      #if DIM_DRL
+      }
+    #endif
+    indicators_on = true;
+    #if MIRROR_UNDIM
+      undim_mirrors_with_indicators();
+    #endif
+  } else if (k_msg.buf[0] == 0xA1) {                                                                                                // Right indicator
+    #if DIM_DRL
+      if (drl_ckm && drl_status && diag_transmit) {
+        time_now = millis();
         if (left_dimmed) {
           m = {left_drl_bright_buf, time_now + 100};
           dim_drl_txq.push(&m);
@@ -89,12 +111,25 @@ void evaluate_indicator_status_dim(void) {
           serial_log("Dimmed right DRL.");
         }
         right_dimmed = true;
-      #endif
-    }
+      }
+    #endif
     indicators_on = true;
-  #if DIM_DRL
+    #if MIRROR_UNDIM
+      undim_mirrors_with_indicators();
+    #endif
   }
-  #endif
+}
+
+
+void undim_mirrors_with_indicators(void) {
+  // Makes it easier to see cyclists at night in the city when turning...
+  if (indicators_on && rls_time_of_day == 2 && frm_undim_timer >= 10000) {
+    if (engine_running && indicated_speed <= 30) {
+      kcan_write_msg(frm_mirror_undim_buf);
+      frm_undim_timer = 0;
+      serial_log("Undimmed exterior mirrors with indicator.");
+    }
+  }
 }
 
 
@@ -119,11 +154,11 @@ void evaluate_door_status(void) {
               unfold_with_door_open = false;
             }
           #endif
+          #if COMFORT_EXIT
+            evaluate_comfort_exit();
+          #endif
         #else
           serial_log("Passenger's door open.");
-        #endif
-        #if DOOR_VOLUME
-          send_volume_request_door();
         #endif
       }
     } else if (k_msg.buf[1] == 4) {
@@ -139,9 +174,9 @@ void evaluate_door_status(void) {
               unfold_with_door_open = false;
             }
           #endif
-        #endif
-        #if DOOR_VOLUME
-          send_volume_request_door();
+          #if COMFORT_EXIT
+            evaluate_comfort_exit();
+          #endif
         #endif
       }
     } else if (k_msg.buf[1] == 5) {
@@ -161,9 +196,6 @@ void evaluate_door_status(void) {
         #else
           serial_log("Driver's door closed.");
         #endif
-        #if DOOR_VOLUME
-          send_volume_request_door();
-        #endif
       }
       if (right_door_open) {
         right_door_open = false;
@@ -172,12 +204,12 @@ void evaluate_door_status(void) {
         #else
           serial_log("Passenger's door closed.");
         #endif
-        #if DOOR_VOLUME
-          send_volume_request_door();
-        #endif
       }
     }
     last_door_status = k_msg.buf[1];
+    #if DOOR_VOLUME
+      send_volume_request_door();
+    #endif
   }
 
   uint8_t hood_open_status = bitRead(k_msg.buf[2], 2);
@@ -309,43 +341,48 @@ void evaluate_remote_button(void) {
         time_now = millis();
         if (k_msg.buf[2] == 4) {
           if (!left_door_open && !right_door_open) {
+            lock_button_pressed = true;
+            serial_log("Remote lock button pressed.");
             #if AUTO_MIRROR_FOLD
               if (diag_transmit) {
-                lock_button_pressed = true;
-                serial_log("Remote lock button pressed. Checking mirror status.");
+                serial_log("Checking mirror status.");
                 kcan_write_msg(frm_mirror_status_request_a_buf);
                 frm_mirror_status_requested = true;
               }
-              #if UNFOLD_WITH_DOOR
-                unfold_with_door_open = false;
-              #endif
-              #if IMMOBILIZER_SEQ_ALARM
-                m = {alarm_led_off_buf, time_now + 100};                                                                            // Release control of the LED so that alarm can control it.
-                immobilizer_txq.push(&m);
-                m = {alarm_led_off_buf, time_now + 500};
-                immobilizer_txq.push(&m);
-                alarm_led = false;
-                lock_led = true;
-                led_message_counter = 60;                                                                                           // Make sure we're ready once Terminal R cycles.
-                serial_log("Deactivated DWA LED when door locked.");
-              #endif
+            #endif
+            #if UNFOLD_WITH_DOOR
+              unfold_with_door_open = false;
+            #endif
+            #if IMMOBILIZER_SEQ_ALARM
+              m = {alarm_led_off_buf, time_now + 100};                                                                            // Release control of the LED so that alarm can control it.
+              immobilizer_txq.push(&m);
+              m = {alarm_led_off_buf, time_now + 500};
+              immobilizer_txq.push(&m);
+              alarm_led = false;
+              lock_led = true;
+              led_message_counter = 60;                                                                                           // Make sure we're ready once Terminal R cycles.
+              serial_log("Deactivated DWA LED when door locked.");
+            #endif
+            #if COMFORT_EXIT
+              comfort_exit_done = false;
             #endif
           }
         }
         
-        #if AUTO_MIRROR_FOLD
         else if (k_msg.buf[2] == 1) {
+          unlock_button_pressed = true;
+          serial_log("Remote unlock button pressed.");
+          #if AUTO_MIRROR_FOLD
           if (diag_transmit) {
-            unlock_button_pressed = true;
-            serial_log("Remote unlock button pressed. Checking mirror status.");
+            serial_log("Checking mirror status.");
             kcan_write_msg(frm_mirror_status_request_a_buf);
             frm_mirror_status_requested = true;
           }
+          #endif
           #if IMMOBILIZER_SEQ_ALARM
             lock_led = false;
           #endif
-        } 
-        #endif
+        }
 
         #if INDICATE_TRUNK_OPENED
         else if (k_msg.buf[2] == 0x10) {
@@ -528,9 +565,9 @@ void evaluate_corner_fog_activation(void) {
     if (left_fog_on || right_fog_on) {
       if (speed_mph) {
         FOG_MAX_SPEED = 22;
-        FOG_MAX_SPEED_HYSTERESIS = 5;
-      } else {
         FOG_MAX_SPEED_HYSTERESIS = 3;
+      } else {
+        FOG_MAX_SPEED_HYSTERESIS = 5;
       }
     } else {
       if (speed_mph) {
@@ -539,17 +576,16 @@ void evaluate_corner_fog_activation(void) {
       FOG_MAX_SPEED_HYSTERESIS = 0;
     }
 
-
-    if (indicated_speed >= (FOG_MAX_SPEED + FOG_MAX_SPEED_HYSTERESIS)) {
+    if (indicated_speed > (FOG_MAX_SPEED + FOG_MAX_SPEED_HYSTERESIS)) {
       if (left_fog_on) {
         left_fog_soft(false);
         left_fog_on = false;
-        serial_log("Max speed exceeded. Turned left fog light OFF.");
+        serial_log("Max speed exceeded. Turned left fog corner light OFF.");
       }
       if (right_fog_on) {
         right_fog_soft(false);
         right_fog_on = false;
-        serial_log("Max speed exceeded. Turned right fog light OFF.");
+        serial_log("Max speed exceeded. Turned right fog corner light OFF.");
       }
     } else {
       if (steering_angle > ANGLE) {
@@ -557,13 +593,13 @@ void evaluate_corner_fog_activation(void) {
           if (!left_fog_on) {
             left_fog_soft(true);
             left_fog_on = true;
-            serial_log("Steering angle below setpoint. Turned left fog light ON.");
+            serial_log("Steering angle below setpoint. Turned left fog corner light ON.");
           }
         } else {
             if (!right_fog_on) {
             right_fog_soft(true);
             right_fog_on = true;
-            serial_log("Reverse: Steering angle above setpoint. Turned right fog light ON.");
+            serial_log("Reverse: Steering angle above setpoint. Turned right fog corner light ON.");
           }
         }
       } else if (steering_angle < (ANGLE - HYSTERESIS)) {
@@ -571,13 +607,13 @@ void evaluate_corner_fog_activation(void) {
           if (left_fog_on) {
             left_fog_soft(false);
             left_fog_on = false;
-            serial_log("Steering angle returned. Turned left fog light OFF.");
+            serial_log("Steering angle returned. Turned left fog corner light OFF.");
           }
         } else {
           if (right_fog_on) {
             right_fog_soft(false);
             right_fog_on = false;
-            serial_log("Reverse: Steering angle returned. Turned right fog light OFF.");
+            serial_log("Reverse: Steering angle returned. Turned right fog corner light OFF.");
           }
         }
       }
@@ -587,13 +623,13 @@ void evaluate_corner_fog_activation(void) {
           if (!right_fog_on) {
             right_fog_soft(true);
             right_fog_on = true;
-            serial_log("Steering angle above setpoint. Turned right fog light ON.");
+            serial_log("Steering angle above setpoint. Turned right fog corner light ON.");
           }
         } else {
           if (!left_fog_on) {
             left_fog_soft(true);
             left_fog_on = true;
-            serial_log("Reverse: Steering angle below setpoint. Turned left fog light ON.");
+            serial_log("Reverse: Steering angle below setpoint. Turned left fog corner light ON.");
           }
         }
       } else if (steering_angle > (-ANGLE + HYSTERESIS)) {
@@ -601,13 +637,13 @@ void evaluate_corner_fog_activation(void) {
           if (right_fog_on) {
             right_fog_soft(false);
             right_fog_on = false;
-            serial_log("Steering angle returned. Turned right fog light OFF.");
+            serial_log("Steering angle returned. Turned right fog corner light OFF.");
           }
         } else {
           if (left_fog_on) {
             left_fog_soft(false);
             left_fog_on = false;
-            serial_log("Reverse: Steering angle returned. Turned left fog light OFF.");
+            serial_log("Reverse: Steering angle returned. Turned left fog corner light OFF.");
           }
         }
       }
@@ -758,10 +794,8 @@ void evaluate_ambient_temperature(void) {
 
 
 void evaluate_rls_light_status(void) {
-  #if F_NIVI
-    rls_time_of_day = k_msg.buf[1];
-    rls_brightness = k_msg.buf[0];
-  #endif
+  rls_time_of_day = k_msg.buf[1];
+  rls_brightness = k_msg.buf[0];
 }
 
 
@@ -812,18 +846,5 @@ void evaluate_door_lock_ckm(void) {
       serial_log("Visual signal CKM disabed.");
       visual_signal_ckm = false;
     }
-  }
-}
-
-
-void evaluate_pdc_warning(void) {
-  uint8_t max_volume = k_msg.buf[0];
-  if (k_msg.buf[1] > max_volume) {
-    max_volume = k_msg.buf[1];
-  }
-  if (max_volume >= 7) {
-    pdc_too_close = true;
-  } else {
-    pdc_too_close = false;
   }
 }

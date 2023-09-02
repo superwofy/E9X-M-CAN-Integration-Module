@@ -24,7 +24,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     if (clutch_pressed != clutch_pressed_can) {
       if (clutch_pressed_can) {
         clutch_pressed = true;
-        serial_log("Clutch pedal pressed.");
+        serial_log("Clutch pedal depressed.");
       } else {
         clutch_pressed = false;
         serial_log("Clutch pedal released.");
@@ -114,8 +114,14 @@ void evaluate_terminal_clutch_keyno_status(void) {
     #if FRM_AHL_MODE
       kcan_write_msg(frm_ckm_ahl_komfort_buf);                                                                                      // Make sure we're in comfort mode on startup.
     #endif
+    #if COMFORT_EXIT
+      comfort_exit_ready = false;
+    #endif
   } else if (!terminal_r && terminal_r_) {
     serial_log("Terminal R OFF.");
+    #if COMFORT_EXIT
+      comfort_exit_ready = true;
+    #endif
   }
 }
 
@@ -420,8 +426,8 @@ void update_car_time_from_rtc(void) {
 
 
 void send_volume_request_periodic(void) {
-  if (terminal_r && !frm_consumer_shutdown) {
-    if (volume_request_periodic_timer >= 3000) {
+  if (terminal_r) {
+    if (initial_volume_set && !volume_reduced && volume_request_periodic_timer >= 3000) {
       if (diag_transmit) {
         kcan_write_msg(vol_request_buf);
         volume_request_periodic_timer = 0;
@@ -432,11 +438,13 @@ void send_volume_request_periodic(void) {
 
 
 void send_volume_request_door(void) {
-  if (diag_transmit) {
-    if (volume_request_door_timer >= 500) {                                                                                         // Basic debounce to account for door not fully shut.
-      kcan_write_msg(vol_request_buf);
-      volume_request_door_timer = volume_request_periodic_timer = 0;
-      serial_log("Requested volume from iDrive with door status change.");
+  if (terminal_r) {
+    if (diag_transmit) {
+      if (volume_request_door_timer >= 500) {                                                                                       // Basic debounce to account for door not fully shut.
+        kcan_write_msg(vol_request_buf);
+        volume_request_door_timer = volume_request_periodic_timer = 0;
+        serial_log("Requested volume from iDrive with door status change.");
+      }
     }
   }
 }
@@ -617,15 +625,6 @@ void initialize_vsw(void) {
 }
 
 
-void initialize_asd(void) {
-  if (!asd_initialized) {
-    kcan_write_msg(mute_asd_buf);
-    serial_log("Muted ASD on init.");
-    asd_initialized = true;
-  }
-}
-
-
 // void request_idrive_menu(void) {
 //   kcan_write_msg(idrive_menu_request_a_buf);
 // }
@@ -634,3 +633,41 @@ void initialize_asd(void) {
 // void evaluate_idrive_menu(void) {
   
 // }
+
+
+void initialize_asd(void) {
+  if (!asd_initialized) {
+    if (diag_transmit) {
+      kcan_write_msg(mute_asd_buf);
+      serial_log("Muted ASD on init.");
+      asd_initialized = true;
+    }
+  }
+}
+
+
+void evaluate_dr_seat_ckm(void) {
+  if (k_msg.buf[0] == 0xFC) {
+    if (!auto_seat_ckm) {
+      serial_log("Automatic seat position CKM enabled.");
+      auto_seat_ckm = true;
+    }
+  } else {
+    if (auto_seat_ckm) {
+      serial_log("Automatic seat position CKM disabed.");
+      auto_seat_ckm = false;
+    }
+  }
+}
+
+
+void evaluate_comfort_exit(void) {
+  if (comfort_exit_ready && auto_seat_ckm) {
+    kcan_write_msg(dr_seat_move_back_buf);
+    comfort_exit_done = true;
+    comfort_exit_ready = false;
+    serial_log("Moved driver's seat back for comfort exit.");
+  } else {
+    comfort_exit_ready = comfort_exit_done = false;
+  }
+}

@@ -124,11 +124,21 @@ void send_f_road_inclination(void) {
 
 void send_f_longitudinal_acceleration(void) {
   if (f_chassis_longitudinal_timer >= 100) {
-    uint16_t raw_value = ((pt_msg.buf[3] & 0xF) << 8 | pt_msg.buf[2]);
+    uint16_t raw_value = 0;
+    // Combine the second half (LTR) of byte3 with byte2 to form 12-bit signed integer.
+    if (pt_msg.buf[2] > 0xF) {
+      raw_value = ((pt_msg.buf[3] & 0xF) << 8 | pt_msg.buf[2]);
+    } else {
+      raw_value = ((pt_msg.buf[3] & 0xF) << 4 | pt_msg.buf[2]);
+    }
     int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
     e_longitudinal_acceleration = signed_value * 0.025;                                                                             // Value in m/s^2.
 
-    longitudinal_acceleration = round((e_longitudinal_acceleration + 65) / 0.002);
+    if (vehicle_moving) {
+      longitudinal_acceleration = round((e_longitudinal_acceleration + 65) / 0.002);
+    } else {
+      longitudinal_acceleration = 0x7EF4;
+    }
     f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
     f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
                                                     : f_longitudinal_acceleration_alive_counter++;
@@ -143,9 +153,25 @@ void send_f_longitudinal_acceleration(void) {
 
 void send_f_yaw_rate(void) {
   if (f_chassis_yaw_timer >= 102) {
+    uint16_t raw_value = 0;
+    if (pt_msg.buf[5] > 0xF) {
+      raw_value = ((pt_msg.buf[6] & 0xF) << 8 | pt_msg.buf[5]);
+    } else {
+      raw_value = ((pt_msg.buf[6] & 0xF) << 4 | pt_msg.buf[5]);
+    }
+    int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
+    e_yaw_rate = signed_value * 0.05;                                                                                               // Value in deg/sec.
+
+    if (vehicle_moving) {
+      yaw_rate = round((e_yaw_rate + 163.83) / 0.005);
+    } else {
+      yaw_rate = 0x7FFE;
+    }
     f_yaw_rate[1] = 0xF << 4 | f_yaw_alive_counter;
     f_yaw_alive_counter == 0xE ? f_yaw_alive_counter = 0 : f_yaw_alive_counter++;
     f_yaw_rate[2] = yaw_rate;
+    f_yaw_rate[2] = yaw_rate & 0xFF;                                                                                                // Convert and transmit in LE.
+    f_yaw_rate[3] = yaw_rate >> 8;
     f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
     ptcan_write_msg(f_yaw_rate_buf);
     f_chassis_yaw_timer = 0;
@@ -155,7 +181,11 @@ void send_f_yaw_rate(void) {
 
 void send_f_speed_status(void) {
   if (f_chassis_speed_timer >= 104) {
-    real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                         // KM/h
+    if (pt_msg.buf[0] > 0xF) {
+      real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                       // KM/h
+    } else {
+      real_speed = round(((pt_msg.buf[1] & 0xF) << 4 | pt_msg.buf[0]) * 0.1);
+    }
     vehicle_direction = pt_msg.buf[1] >> 4;
     if (vehicle_direction == 8) {                                                                                                   // Not moving.
       f_speed[4] = 0x81;
@@ -284,15 +314,15 @@ void check_hdc_queue(void) {
 
 void evaluate_speed_units(void) {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
-  #if HDC
-    if (speed_mph) {
-      max_hdc_speed = 22;
-      hdc_deactivate_speed = 37;
-    } else {
-      max_hdc_speed = 35;
-      hdc_deactivate_speed = 60;
-    }
-  #endif
+  if (speed_mph) {
+    max_hdc_speed = 22;
+    hdc_deactivate_speed = 37;
+    theft_max_speed = 12;
+  } else {
+    max_hdc_speed = 35;
+    hdc_deactivate_speed = 60;
+    theft_max_speed = 20;
+  }
 }
 
 

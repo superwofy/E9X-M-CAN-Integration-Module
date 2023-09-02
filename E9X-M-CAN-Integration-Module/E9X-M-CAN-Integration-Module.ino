@@ -159,11 +159,9 @@ void loop() {
       }
       #endif
 
-      #if DIM_DRL || FRONT_FOG_CORNER || INDICATE_TRUNK_OPENED
       else if (k_msg.id == 0x1F6) {                                                                                                 // Monitor indicator status
         evaluate_indicator_status_dim();
       }
-      #endif
 
       #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
       else if (k_msg.id == 0x21A) {                                                                                                 // Light status sent by the FRM.
@@ -193,7 +191,7 @@ void loop() {
       #endif
 
 
-      #if F_NIVI
+      #if F_NIVI || MIRROR_UNDIM
       else if (k_msg.id == 0x314) {                                                                                                 // RLS light status.
         evaluate_rls_light_status();
       }
@@ -280,11 +278,9 @@ void loop() {
     } 
     #endif
 
-    #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
     else if (k_msg.id == 0x2F7) {
       evaluate_speed_units();
     }
-    #endif
 
     #if RTC
     else if (k_msg.id == 0x2F8) {
@@ -304,15 +300,27 @@ void loop() {
     }
     #endif
 
+    else if (k_msg.id == 0x3BD) {                                                                                                   // Received consumer shutdown message from FRM.
+      evaluate_frm_consumer_shutdown();
+    }
+
     #if INDICATE_TRUNK_OPENED
     else if (k_msg.id == 0x3D7) {                                                                                                   // Received CKM setting for door locks.
       evaluate_door_lock_ckm();
     }
     #endif
 
-    else if (k_msg.id == 0x3BD) {                                                                                                   // Received consumer shutdown message from FRM.
-      evaluate_frm_consumer_shutdown();
+    #if COMFORT_EXIT
+    else if (k_msg.id == 0x3DB) {                                                                                                   // Received CKM setting for driver's seat.
+      evaluate_dr_seat_ckm();
     }
+    #endif
+
+    #if DIM_DRL
+    else if (k_msg.id == 0x3DD) {                                                                                                   // Received CKM setting for lights.
+      evaluate_drl_ckm();
+    }
+    #endif
 
     #if F_ZBE_WAKE || F_VSW01 || F_NIVI
     else if (k_msg.id == 0x4E2) {

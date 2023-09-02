@@ -334,6 +334,19 @@ void evaluate_pdc_bus_status(void) {
 }
 
 
+void evaluate_pdc_warning(void) {
+  uint8_t max_volume = k_msg.buf[0];
+  if (k_msg.buf[1] > max_volume) {
+    max_volume = k_msg.buf[1];
+  }
+  if (max_volume >= 7) {
+    pdc_too_close = true;
+  } else {
+    pdc_too_close = false;
+  }
+}
+
+
 void evaluate_handbrake_status(void) {
   if (k_msg.buf[5] == 0x32) {
     if (!handbrake_status) {

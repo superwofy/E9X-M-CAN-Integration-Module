@@ -47,6 +47,9 @@ void cache_can_message_buffers(void) {                                          
   frm_toggle_fold_mirror_b_buf = make_msg_buf(0x6F1, 8, frm_toggle_fold_mirror_b);
   frm_mirror_status_request_a_buf = make_msg_buf(0x6F1, 8, frm_mirror_status_request_a);
   frm_mirror_status_request_b_buf = make_msg_buf(0x6F1, 8, frm_mirror_status_request_b);
+
+  uint8_t frm_mirror_undim[] = {0x72, 5, 0x30, 0x11, 7, 0, 0x90, 0};
+  frm_mirror_undim_buf = make_msg_buf(0x6F1, 8, frm_mirror_undim);
   
   uint8_t flash_hazards[] = {0, 0xF1};
   flash_hazards_buf = make_msg_buf(0x2B4, 2, flash_hazards);
@@ -72,6 +75,9 @@ void cache_can_message_buffers(void) {                                          
   start_cc_off_buf = make_msg_buf(0x5C0, 8, start_cc_off);
   ekp_pwm_off_buf = make_msg_buf(0x6F1, 8, ekp_pwm_off);
   ekp_return_to_normal_buf = make_msg_buf(0x6F1, 8, ekp_return_to_normal);
+
+  uint8_t dr_seat_move_back[] = {0x6D, 6, 0x30, 0x10, 6, 8, 2, 0xA};
+  dr_seat_move_back_buf = make_msg_buf(0x6F1, 8, dr_seat_move_back);
 
   uint8_t front_left_fog_on_a[] = {0x72, 6, 0x30, 3, 7, 6, 0, 8};                                                                   // Soft on/off buffers.
   uint8_t front_left_fog_on_b[] = {0x72, 6, 0x30, 3, 7, 6, 0, 0x16};
@@ -288,7 +294,7 @@ void kcan_write_msg(const CAN_message_t &msg) {
   uint8_t result = KCAN.write(msg);
   if (result != 1) {
     if (kcan_retry_counter < 100) {                                                                                                 // Safeguard to avoid polluting the network in case of unrecoverable issue.
-      m = {msg, millis() + 50};
+      m = {msg, millis() + 100};
       kcan_resend_txq.push(&m);
       kcan_retry_counter++;
       #if DEBUG_MODE
@@ -320,7 +326,7 @@ void ptcan_write_msg(const CAN_message_t &msg) {
   uint8_t result = PTCAN.write(msg);
   if (result != 1) {
     if (ptcan_retry_counter < 100) {                                                                                                // Safeguard to avoid polluting the network in case of unrecoverable issue.
-      m = {msg, millis() + 20};
+      m = {msg, millis() + 100};
       ptcan_resend_txq.push(&m);
       ptcan_retry_counter++;
       #if DEBUG_MODE

@@ -216,6 +216,16 @@ void serial_interpreter(void) {
       }
     }
     #endif
+    #if MIRROR_UNDIM
+    else if (cmd == "undim_mirrors") {
+      if (diag_transmit) {
+        kcan_write_msg(frm_mirror_undim_buf);
+        serial_log("  Serial: Sent undim request.");
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.");
+      }
+    }
+    #endif
     #if IMMOBILIZER_SEQ
     else if (cmd == "release_immobilizer") {
       release_immobilizer();
@@ -358,6 +368,9 @@ void print_help(void) {
   #if AUTO_MIRROR_FOLD
     serial_log("  toggle_mirror_fold - Change mirror fold state ON-OFF.");
     serial_log("  mirror_fold_status - Prints the mirror fold state.");
+  #endif
+  #if MIRROR_UNDIM
+    serial_log("  undim_mirrors - Undim electrochromic exterior mirrors.");
   #endif
   #if IMMOBILIZER_SEQ
     serial_log("  release_immobilizer - Deactivates the EKP immobilizer.");

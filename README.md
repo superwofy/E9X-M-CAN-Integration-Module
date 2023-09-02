@@ -33,6 +33,8 @@ Optional hardware:
 * E9X M3 DCT instrument cluster (Shiftlights).
 * SVT70 module (Servotronic).
 * Dashboard centre buttons with Start-Stop (or Camera) and HDC buttons.
+* Folding mirrors.
+* Memory seats.
 
 
 
@@ -43,9 +45,9 @@ I use it to:
 	* Control DTC/DSC OFF with the M button.
 	* Control EDC mode with the M button.
 	* Control Servotronic mode with the M button - through SVT70 module.
+	* Control AHL swivel speed mode (sport/comfort) with the M button.
 	* Control the exhaust flap position with the M button.
 	* Control ASD with the M button.
-	* Control AHL swivel mode (sport/comfort) with the M button.
 	* Display M Drive settings when holding M button
 	* Control M Key settings from iDrive.
 * Display Shiftlights - including startup animation, sync with the M3 KOMBI variable redline.
@@ -53,6 +55,8 @@ I use it to:
 * Display the Launch Control flag (MHD).
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
 * Fold/Un-fold mirrors when locking/unlocking.
+* Undim electrochromic exterior mirrors when indicating at night.
+* Move driver's seat back when exiting car.
 * Indicate when the trunk is opened by remote (flash hazards).
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 	* If engine is started without releasing this immobilizer, alarm will sound once engine stalls.

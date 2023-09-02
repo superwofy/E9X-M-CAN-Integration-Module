@@ -1,0 +1,4 @@
+Last seat position automatically:
+
+KCAN:  ID: 3DB Buffer: FC FF 			// ON
+KCAN:  ID: 3DB Buffer: F9 FF 			// OFF
