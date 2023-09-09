@@ -312,7 +312,7 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 void ptcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
-    if (msg.buf[2] == 0x30 && msg.buf[3] == 6 && msg.buf[4] == 4) {                                                                  // Exception for EKP disable.
+    if (msg.buf[0] == 0x17 && msg.buf[2] == 0x30 && (msg.buf[1] == 4 || msg.buf[1] == 2)) {                                          // Exception for EKP disable.
     } else if (msg.buf[0] == 0xE) {                                                                                                  // Exception for SVT70 diag.
     } else {
       #if DEBUG_MODE

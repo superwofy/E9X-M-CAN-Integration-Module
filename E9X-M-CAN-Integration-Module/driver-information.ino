@@ -227,12 +227,18 @@ void evaluate_fog_status(void) {
 void evaluate_reverse_beep(void) {
   if (reverse_gear_status) {
     if (reverse_beep_resend_timer >= 3000) {
-      if (!reverse_beep_sent && !pdc_too_close) {
-        serial_log("Sending reverse beep.");
-        play_cc_gong();
-        reverse_beep_sent = true;
+      if (!reverse_beep_sent) {
+        if (!pdc_too_close) {
+          serial_log("Sending reverse beep.");
+          play_cc_gong();
+          reverse_beep_sent = true;
+        } else {
+          reverse_beep_sent = true;                                                                                                 // Cancel beep if already too close.
+        }
       }
       reverse_beep_resend_timer = 0;
+    } else {
+      reverse_beep_sent = true;                                                                                                     // Cancel beep if reverse engaged again quickly.
     }
   } else {
     reverse_beep_sent = false;

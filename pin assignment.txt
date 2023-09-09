@@ -1,6 +1,5 @@
 Black connector
 
-6  - GND - 			brown
 7  - 30G Power - 	black/red
 8  - KCAN-H - 		orange/green
 2  - KCAN-L - 		green
@@ -8,13 +7,13 @@ Black connector
 4  - PTCAN-L - 		red
 11 - DCAN-H - 		white/yellow
 10 - DCAN-L - 		white/blue
-12 - Extra GND - 	black/brown
-	-> To cope with solenoid draw 
-
+12 - GND - 			black/brown
 
 
 White connector
 
+12 - Extra GND - 						brown
+	-> To cope with solenoid draw
 13 - Exhaust flap solenoid (D17) - 		gray
 	-> Use flyback diode between +/-
 	-> Disconnect DME X60001 pin 5

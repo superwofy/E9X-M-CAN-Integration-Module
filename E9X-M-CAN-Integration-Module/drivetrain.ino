@@ -494,8 +494,7 @@ void release_immobilizer(void) {
       serial_log("Deactivated alarm.");
     }
   #endif
-  m = {key_cc_off_buf, time_now + 50};                                                                                              // CC to KCAN.
-  immobilizer_txq.push(&m);
+  kcan_write_msg(key_cc_off_buf);                                                                                                   // CC to KCAN.
   #if IMMOBILIZER_SEQ_ALARM
     m = {alarm_led_off_buf, time_now + 100};                                                                                        // KWP to DWA.
     immobilizer_txq.push(&m);
@@ -504,16 +503,14 @@ void release_immobilizer(void) {
     alarm_led = false;
   #endif
   if (terminal_r) {
-    m = {start_cc_on_buf, time_now + 450};                                                                                          // CC to KCAN.
+    m = {start_cc_on_buf, time_now + 500};                                                                                          // CC to KCAN.
     immobilizer_txq.push(&m);
     serial_log("Sent start ready CC.");
   }
   if (!terminal_r) {
     play_cc_gong();                                                                                                                 // KWP to KOMBI.
   }
-  m = {ekp_return_to_normal_buf, time_now + 500};                                                                                   // KWP To EKP. Make sure these messages are received.
-  ekp_txq.push(&m);
-  m = {ekp_return_to_normal_buf, time_now + 800};                                                                                   // KWP To EKP.
+  m = {ekp_return_to_normal_buf, time_now + 800};                                                                                   // KWP To EKP. Make sure these messages are received.
   ekp_txq.push(&m);
   m = {start_cc_off_buf, time_now + 1000};                                                                                          // CC to KCAN
   immobilizer_txq.push(&m);
