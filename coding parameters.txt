@@ -8,6 +8,8 @@ EDC_CIC														// EDC, if retrofitted.
 	aktiv
 DSC_OFF_CIC													// Allows disabling DSC from MDrive menu,
 	aktiv
+MACRO_L6_PARKMENU											// Rear view camera settings
+	aktiv
 
 
 # KOMBI

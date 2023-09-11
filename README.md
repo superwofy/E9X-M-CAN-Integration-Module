@@ -35,6 +35,7 @@ Optional hardware:
 * Dashboard centre buttons with Start-Stop (or Camera) and HDC buttons.
 * Folding mirrors.
 * Memory seats.
+* TRSVC.
 
 
 
@@ -48,8 +49,8 @@ I use it to:
 	* Control AHL swivel speed mode (sport/comfort) with the M button.
 	* Control the exhaust flap position with the M button.
 	* Control ASD with the M button.
-	* Display M Drive settings when holding M button
 	* Control M Key settings from iDrive.
+	* Display M Drive settings menu when holding M button
 * Display Shiftlights - including startup animation, sync with the M3 KOMBI variable redline.
 * Display a needle sweep animation on startup.
 * Display the Launch Control flag (MHD).
@@ -76,7 +77,8 @@ I use it to:
 * Turn on heated seats below a set temperature.
 * Turn on heated steering below a set temperature.
 * Automatically turn off PDC when parked and pulling handbrake.
-* Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding, etc.).
+* Automatically activate top down rear view camera option when close to an obstacle.
+* Keep time and date in RTC and set back if KOMBI is reset (30G_F, battery removed/flat, coding KOMBI, etc.).
 	* After uploading to Teensy, set the time in iDrive/ISTA to synchronize the RTC to the same time.
 * Close the exhaust flap before engine start to reduce start noise.
 * Reduce audio volume when opening doors. Restore when closing.

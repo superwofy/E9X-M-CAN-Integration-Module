@@ -50,7 +50,7 @@ void evaluate_reverse_gear_status(void) {
         }
       #endif
       #if MSA_RVC
-        if (pdc_status == 0xA4) {
+        if (pdc_bus_status == 0xA4) {
           if (diag_transmit) {
             kcan_write_msg(pdc_on_camera_on_buf);
             serial_log("Activated full PDC and camera with reverse gear.");
@@ -67,6 +67,25 @@ void evaluate_reverse_gear_status(void) {
           serial_log("Resetting corner fogs with reverse OFF.");
           kcan_write_msg(front_fogs_all_off_buf);
           left_fog_on = right_fog_on = false;
+        }
+      #endif
+      #if PDC_AUTO_OFF
+        if (handbrake_status && pdc_bus_status > 0x80) {
+          time_now = millis();
+          kcan_write_msg(pdc_button_presssed_buf);
+          m = {pdc_button_released_buf, time_now + 100};
+          pdc_buttons_txq.push(&m);
+          m = {pdc_button_released_buf, time_now + 200};
+          pdc_buttons_txq.push(&m);
+          serial_log("Disabled PDC after reverse gear OFF and handbrake already up.");
+        }
+      #endif
+      #if AUTO_DIP_RVC
+        if (rvc_dipped) {
+          bitWrite(rvc_settings[0], 3, 0);                                                                                              // Set tow hitch view to OFF.
+          serial_log("Disabled camera dip after reverse gear OFF.");
+          kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
+          rvc_dipped = false;
         }
       #endif
     }

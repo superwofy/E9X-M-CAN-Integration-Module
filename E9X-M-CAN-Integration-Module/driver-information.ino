@@ -3,11 +3,12 @@
 
 void shiftlight_startup_animation(void) {
   activate_shiftlight_segments(shiftlights_startup_buildup_buf);
+  startup_animation_active = true;
   serial_log("Showing shift light on engine startup.");
   #if NEEDLE_SWEEP
-    ignore_shiftlights_off_counter = 18;
+    ignore_shiftlights_off_counter = 7;
   #else
-    ignore_shiftlights_off_counter = 8;                                                                                             // Skip a few OFF cycles to allow segments to light up.
+    ignore_shiftlights_off_counter = 4;                                                                                             // Skip a few OFF cycles to allow segments to light up.
   #endif
 }
 
@@ -37,7 +38,17 @@ void evaluate_shiftlight_display(void) {
   } else {                                                                                                                          // RPM dropped. Disable lights.
     if (shiftlights_segments_active) {
       if (ignore_shiftlights_off_counter == 0) {
-        deactivate_shiftlights();
+        if (startup_animation_active) {
+          activate_shiftlight_segments(shiftlights_max_flash_buf);
+          #if NEEDLE_SWEEP
+            ignore_shiftlights_off_counter = 10;
+          #else
+            ignore_shiftlights_off_counter = 5;
+          #endif
+          startup_animation_active = false;
+        } else {
+          deactivate_shiftlights();
+        }
       } else {
         ignore_shiftlights_off_counter--;
       }
@@ -271,19 +282,19 @@ void evaluate_msa_button(void) {
         }
       #endif
       #if MSA_RVC
-        if (pdc_status == 0xA5) {
+        if (pdc_bus_status == 0xA5) {
           kcan_write_msg(camera_off_buf);
           serial_log("Deactivated RVC with PDC ON.");
-        } else if (pdc_status == 0xA4) {
+        } else if (pdc_bus_status == 0xA4) {
           kcan_write_msg(pdc_off_camera_off_buf);
           serial_log("Deactivated RVC.");
-        } else if (pdc_status == 0xA1) {
+        } else if (pdc_bus_status == 0xA1) {
           kcan_write_msg(camera_on_buf);
           serial_log("Activated RVC with PDC displayed.");
-        } else if (pdc_status == 0x81) {
+        } else if (pdc_bus_status == 0x81) {
           kcan_write_msg(pdc_on_camera_on_buf);
           serial_log("Activated RVC from PDC ON, not displayed.");
-        } else if (pdc_status == 0x80) {
+        } else if (pdc_bus_status == 0x80) {
           kcan_write_msg(pdc_off_camera_on_buf);
           serial_log("Activated RVC from PDC OFF.");
         }
@@ -310,7 +321,7 @@ void check_ihk_buttons_cc_queue(void) {
 void evaluate_pdc_button(void) {
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!pdc_button_pressed) {
-      if (pdc_status == 0xA4) {
+      if (pdc_bus_status == 0xA4) {
         pdc_with_rvc_requested = true;
       }
       pdc_button_pressed = true;
@@ -322,11 +333,11 @@ void evaluate_pdc_button(void) {
 
 
 void evaluate_pdc_bus_status(void) {
-  if (pdc_status != k_msg.buf[2]) {
+  if (pdc_bus_status != k_msg.buf[2]) {
     #if MSA_RVC
-      if (pdc_status == 0xA4 && k_msg.buf[2] == 0x81) {
+      if (pdc_bus_status == 0xA4 && k_msg.buf[2] == 0x81) {
         kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when navingating away from RVC only.
-      } else if (pdc_status == 0xA4 && k_msg.buf[2] == 0xA1) {
+      } else if (pdc_bus_status == 0xA4 && k_msg.buf[2] == 0xA1) {
         kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when turning off RVC from iDrive UI.
       }
       if (pdc_with_rvc_requested && k_msg.buf[2] == 0x80) {
@@ -335,7 +346,12 @@ void evaluate_pdc_bus_status(void) {
         pdc_with_rvc_requested = false;
       }
     #endif
-    pdc_status = k_msg.buf[2];
+    pdc_bus_status = k_msg.buf[2];
+    if (pdc_bus_status > 0x80) {
+      serial_log("PDC ON.");
+    } else {
+      serial_log("PDC OFF.");
+    }
   }
 }
 
@@ -353,26 +369,48 @@ void evaluate_pdc_warning(void) {
 }
 
 
+void evaluate_pdc_distance(void) {
+  uint8_t distance_threshold = 0x35;                                                                                                // There's a slight delay when changing modes. Pre-empt by switching earlier.
+  if (vehicle_moving) {
+    distance_threshold = 0x42;
+  }
+
+  if (k_msg.buf[2] <= distance_threshold || k_msg.buf[3] <= distance_threshold) {
+    if (reverse_gear_status && !rvc_dipped) {
+      bitWrite(rvc_settings[0], 3, 1);                                                                                              // Set tow hitch view to ON.
+      serial_log("Rear inner sensors RED, enabling camera dip.");
+      kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
+      rvc_dipped = true;
+    }
+  }
+}
+
+
 void evaluate_handbrake_status(void) {
-  if (k_msg.buf[5] == 0x32) {
-    if (!handbrake_status) {
-      handbrake_status = true;
-      serial_log("Handbrake ON.");
-      #if PDC_AUTO_OFF
-        if (!reverse_gear_status && pdc_status != 0x80) {
-          time_now = millis();
-          kcan_write_msg(pdc_button_presssed_buf);
-          m = {pdc_button_released_buf, time_now + 100};
-          pdc_buttons_txq.push(&m);
-          serial_log("Disabled PDC after handbrake was pulled up.");
-        }
-      #endif
+  if (handbrake_status_debounce_timer >= 200) {
+    if (k_msg.buf[0] == 0xFE) {
+      if (!handbrake_status) {
+        handbrake_status = true;
+        serial_log("Handbrake ON.");
+        #if PDC_AUTO_OFF
+          if (!reverse_gear_status && !vehicle_moving && pdc_bus_status > 0x80) {
+            time_now = millis();
+            kcan_write_msg(pdc_button_presssed_buf);
+            m = {pdc_button_released_buf, time_now + 100};
+            pdc_buttons_txq.push(&m);
+            m = {pdc_button_released_buf, time_now + 200};
+            pdc_buttons_txq.push(&m);
+            serial_log("Disabled PDC after handbrake was pulled up.");
+          }
+        #endif
+      }
+    } else {
+      if (handbrake_status) {
+        handbrake_status = false;
+        serial_log("Handbrake OFF.");
+      }
     }
-  } else if (k_msg.buf[5] == 0x30) {
-    if (handbrake_status) {
-      handbrake_status = false;
-      serial_log("Handbrake OFF.");
-    }
+    handbrake_status_debounce_timer = 0;
   }
 }
 

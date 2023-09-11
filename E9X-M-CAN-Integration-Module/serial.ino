@@ -178,22 +178,22 @@ void serial_interpreter(void) {
     #endif
     #if NEEDLE_SWEEP || CONTROL_SHIFTLIGHTS
     else if (cmd == "startup_animation") {
-      #if CONTROL_SHIFTLIGHTS
-        Serial.print("  Serial: ");
-        shiftlight_startup_animation();
-      #endif
-      #if NEEDLE_SWEEP
-        if (ignition) {
+      if (ignition) {
+        #if CONTROL_SHIFTLIGHTS
+          Serial.print("  Serial: ");
+          shiftlight_startup_animation();
+        #endif
+        #if NEEDLE_SWEEP
           if (diag_transmit) {
             Serial.print("  Serial: ");
             needle_sweep_animation();
           } else {
             serial_log("  Serial: Function unavailable due to OBD tool presence.");
           }
-        } else {
-          serial_log("  Serial: Activate ignition first.");
-        }
-      #endif
+        #endif
+      } else {
+        serial_log("  Serial: Activate ignition first.");
+      }
     }
     #endif
     #if AUTO_MIRROR_FOLD

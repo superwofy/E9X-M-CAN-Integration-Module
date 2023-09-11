@@ -546,108 +546,111 @@ void evaluate_steering_angle_fog(void) {
 
 
 void evaluate_corner_fog_activation(void) {
-  #if FRONT_FOG_CORNER_AHL_SYNC
-  if (!front_fog_status && dipped_beam_status && ahl_active && diag_transmit) {
-  #else
-  if (!front_fog_status && dipped_beam_status && flc_active && diag_transmit) {
-  #endif
-    
-    int8_t ANGLE, HYSTERESIS;
-    if (indicators_on) {
-      ANGLE = FOG_CORNER_STEERTING_ANGLE_INDICATORS;
-      HYSTERESIS = STEERTING_ANGLE_HYSTERESIS_INDICATORS;
-    } else {
-      ANGLE = FOG_CORNER_STEERTING_ANGLE;
-      HYSTERESIS = STEERTING_ANGLE_HYSTERESIS;
-    }
-    
-    int16_t FOG_MAX_SPEED = 35, FOG_MAX_SPEED_HYSTERESIS;
-    if (left_fog_on || right_fog_on) {
-      if (speed_mph) {
-        FOG_MAX_SPEED = 22;
-        FOG_MAX_SPEED_HYSTERESIS = 3;
+  if (front_fog_corner_timer >= 300) {
+    #if FRONT_FOG_CORNER_AHL_SYNC
+    if (!front_fog_status && dipped_beam_status && rls_time_of_day > 0 && ahl_active && diag_transmit) {
+    #else
+    if (!front_fog_status && dipped_beam_status && rls_time_of_day > 0 && flc_active && diag_transmit) {
+    #endif
+      
+      int8_t ANGLE, HYSTERESIS;
+      if (indicators_on) {
+        ANGLE = FOG_CORNER_STEERTING_ANGLE_INDICATORS;
+        HYSTERESIS = STEERTING_ANGLE_HYSTERESIS_INDICATORS;
       } else {
-        FOG_MAX_SPEED_HYSTERESIS = 5;
+        ANGLE = FOG_CORNER_STEERTING_ANGLE;
+        HYSTERESIS = STEERTING_ANGLE_HYSTERESIS;
       }
-    } else {
-      if (speed_mph) {
-        FOG_MAX_SPEED = 22;
-      }
-      FOG_MAX_SPEED_HYSTERESIS = 0;
-    }
-
-    if (indicated_speed > (FOG_MAX_SPEED + FOG_MAX_SPEED_HYSTERESIS)) {
-      if (left_fog_on) {
-        left_fog_soft(false);
-        left_fog_on = false;
-        serial_log("Max speed exceeded. Turned left fog corner light OFF.");
-      }
-      if (right_fog_on) {
-        right_fog_soft(false);
-        right_fog_on = false;
-        serial_log("Max speed exceeded. Turned right fog corner light OFF.");
-      }
-    } else {
-      if (steering_angle > ANGLE) {
-        if (!reverse_gear_status) {
-          if (!left_fog_on) {
-            left_fog_soft(true);
-            left_fog_on = true;
-            serial_log("Steering angle below setpoint. Turned left fog corner light ON.");
-          }
+      
+      int16_t FOG_MAX_SPEED = 35, FOG_MAX_SPEED_HYSTERESIS;
+      if (left_fog_on || right_fog_on) {
+        if (speed_mph) {
+          FOG_MAX_SPEED = 22;
+          FOG_MAX_SPEED_HYSTERESIS = 3;
         } else {
+          FOG_MAX_SPEED_HYSTERESIS = 5;
+        }
+      } else {
+        if (speed_mph) {
+          FOG_MAX_SPEED = 22;
+        }
+        FOG_MAX_SPEED_HYSTERESIS = 0;
+      }
+
+      if (indicated_speed > (FOG_MAX_SPEED + FOG_MAX_SPEED_HYSTERESIS)) {
+        if (left_fog_on) {
+          left_fog_soft(false);
+          left_fog_on = false;
+          serial_log("Max speed exceeded. Turned left fog corner light OFF.");
+        }
+        if (right_fog_on) {
+          right_fog_soft(false);
+          right_fog_on = false;
+          serial_log("Max speed exceeded. Turned right fog corner light OFF.");
+        }
+      } else {
+        if (steering_angle > ANGLE) {
+          if (!reverse_gear_status) {
+            if (!left_fog_on) {
+              left_fog_soft(true);
+              left_fog_on = true;
+              serial_log("Steering angle below setpoint. Turned left fog corner light ON.");
+            }
+          } else {
+              if (!right_fog_on) {
+              right_fog_soft(true);
+              right_fog_on = true;
+              serial_log("Reverse: Steering angle above setpoint. Turned right fog corner light ON.");
+            }
+          }
+        } else if (steering_angle < (ANGLE - HYSTERESIS)) {
+          if (!reverse_gear_status) {
+            if (left_fog_on) {
+              left_fog_soft(false);
+              left_fog_on = false;
+              serial_log("Steering angle returned. Turned left fog corner light OFF.");
+            }
+          } else {
+            if (right_fog_on) {
+              right_fog_soft(false);
+              right_fog_on = false;
+              serial_log("Reverse: Steering angle returned. Turned right fog corner light OFF.");
+            }
+          }
+        }
+
+        if (steering_angle < -ANGLE) {
+          if (!reverse_gear_status) {
             if (!right_fog_on) {
-            right_fog_soft(true);
-            right_fog_on = true;
-            serial_log("Reverse: Steering angle above setpoint. Turned right fog corner light ON.");
+              right_fog_soft(true);
+              right_fog_on = true;
+              serial_log("Steering angle above setpoint. Turned right fog corner light ON.");
+            }
+          } else {
+            if (!left_fog_on) {
+              left_fog_soft(true);
+              left_fog_on = true;
+              serial_log("Reverse: Steering angle below setpoint. Turned left fog corner light ON.");
+            }
           }
-        }
-      } else if (steering_angle < (ANGLE - HYSTERESIS)) {
-        if (!reverse_gear_status) {
-          if (left_fog_on) {
-            left_fog_soft(false);
-            left_fog_on = false;
-            serial_log("Steering angle returned. Turned left fog corner light OFF.");
-          }
-        } else {
-          if (right_fog_on) {
-            right_fog_soft(false);
-            right_fog_on = false;
-            serial_log("Reverse: Steering angle returned. Turned right fog corner light OFF.");
-          }
-        }
-      }
-
-      if (steering_angle < -ANGLE) {
-        if (!reverse_gear_status) {
-          if (!right_fog_on) {
-            right_fog_soft(true);
-            right_fog_on = true;
-            serial_log("Steering angle above setpoint. Turned right fog corner light ON.");
-          }
-        } else {
-          if (!left_fog_on) {
-            left_fog_soft(true);
-            left_fog_on = true;
-            serial_log("Reverse: Steering angle below setpoint. Turned left fog corner light ON.");
-          }
-        }
-      } else if (steering_angle > (-ANGLE + HYSTERESIS)) {
-        if (!reverse_gear_status) {
-          if (right_fog_on) {
-            right_fog_soft(false);
-            right_fog_on = false;
-            serial_log("Steering angle returned. Turned right fog corner light OFF.");
-          }
-        } else {
-          if (left_fog_on) {
-            left_fog_soft(false);
-            left_fog_on = false;
-            serial_log("Reverse: Steering angle returned. Turned left fog corner light OFF.");
+        } else if (steering_angle > (-ANGLE + HYSTERESIS)) {
+          if (!reverse_gear_status) {
+            if (right_fog_on) {
+              right_fog_soft(false);
+              right_fog_on = false;
+              serial_log("Steering angle returned. Turned right fog corner light OFF.");
+            }
+          } else {
+            if (left_fog_on) {
+              left_fog_soft(false);
+              left_fog_on = false;
+              serial_log("Reverse: Steering angle returned. Turned left fog corner light OFF.");
+            }
           }
         }
       }
     }
+    front_fog_corner_timer = 0;
   }
 }
 

@@ -73,8 +73,8 @@ void configure_can_controller(void) {
   KCAN.setClock(CLK_60MHz);                                                                                                         // Increase from the default 24MHz clock. Run before setBaudRate.
   KCAN.setBaudRate(100000);                                                                                                         // 100k
   KCAN.enableFIFO();                                                                                                                // Activate FIFO mode.
-  KCAN.setMaxMB(40);                                                                                                                // Increase max filters
-  KCAN.setRFFN(RFFN_40);
+  KCAN.setMaxMB(48);                                                                                                                // Increase max filters
+  KCAN.setRFFN(RFFN_48);
   KCAN.setFIFOFilter(REJECT_ALL);                                                                                                   // Reject unfiltered messages
 
   KCAN.setFIFOFilter(filter_count, 0xAA, STD);                                                                                      // RPM, throttle pos:                                           Cycle time 100ms (KCAN).
@@ -131,7 +131,7 @@ void configure_can_controller(void) {
     KCAN.setFIFOFilter(filter_count, 0x2FC, STD);                                                                                   // Door, hood status sent by CAS:                               Cycle time 5s. Sent when changed.
     filter_count++;
   #endif
-  #if F_NIVI || MIRROR_UNDIM
+  #if F_NIVI || MIRROR_UNDIM || FRONT_FOG_CORNER
     KCAN.setFIFOFilter(filter_count, 0x314, STD);                                                                                   // RLS light status:                                            Cycle time 3s. Sent when changed.
     filter_count++;
   #endif
@@ -141,6 +141,16 @@ void configure_can_controller(void) {
   #endif
   #if HDC
     KCAN.setFIFOFilter(filter_count, 0x31A, STD);                                                                                   // HDC button status sent by IHKA:                              Sent when changed.
+    filter_count++;
+  #endif
+  #if PDC_AUTO_OFF
+    KCAN.setFIFOFilter(filter_count, 0x34F, STD);                                                                                   // Handbrake status sent by JBBFE:                              Sent when changed.
+    filter_count++;
+  #endif
+  #if AUTO_DIP_RVC
+    KCAN.setFIFOFilter(filter_count, 0x36D, STD);                                                                                   // Distance status sent by PDC:                                 Sent when active.
+    filter_count++;
+    KCAN.setFIFOFilter(filter_count, 0x38F, STD);                                                                                   // Camera settings sent by CIC:                                 Sent when activating camera and when changed.
     filter_count++;
   #endif
   #if RTC

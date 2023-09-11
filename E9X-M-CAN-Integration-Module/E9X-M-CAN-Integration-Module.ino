@@ -149,7 +149,6 @@ void loop() {
 
       else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
         evaluate_vehicle_moving();
-        evaluate_handbrake_status();
         evaluate_indicated_speed();
       }
 
@@ -191,7 +190,7 @@ void loop() {
       #endif
 
 
-      #if F_NIVI || MIRROR_UNDIM
+      #if F_NIVI || MIRROR_UNDIM || FRONT_FOG_CORNER
       else if (k_msg.id == 0x314) {                                                                                                 // RLS light status.
         evaluate_rls_light_status();
       }
@@ -200,6 +199,22 @@ void loop() {
       #if MSA_RVC
       else if (k_msg.id == 0x317) {                                                                                                 // Received PDC button press from IHKA.
         evaluate_pdc_button();
+      }
+      #endif
+
+      #if PDC_AUTO_OFF
+      else if (k_msg.id == 0x34F) {
+        evaluate_handbrake_status();
+      }
+      #endif
+
+      #if AUTO_DIP_RVC
+      else if (k_msg.id == 0x36D) {
+        evaluate_pdc_distance();
+      }
+
+      else if (k_msg.id == 0x38F) {
+        store_rvc_settings();
       }
       #endif
 

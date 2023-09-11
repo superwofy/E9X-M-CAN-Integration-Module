@@ -24,6 +24,7 @@ CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                            
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
 
 #define PDC_AUTO_OFF 1                                                                                                              // Deactivates PDC when handbrake is pulled.
+#define AUTO_DIP_RVC 1                                                                                                              // Turn on top down rear view camera option when close to an obstacle.
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Also disables the door open with ignition warning CC.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster. Do not use with RDC.
@@ -144,10 +145,12 @@ const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;             
 #endif
 #ifndef FAKE_MSA
   #define FAKE_MSA 0                                                                                                                // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
-  #if !FAKE_MSA
-    #define MSA_RVC 0                                                                                                               // Turn on the OEM rear camera (TRSVC and E84 PDC ECUs) when pressing MSA button. E70 button from 61319202037.
-  #endif                                                                                                                            // RVC can be controlled independently of PDC with this button.
 #endif
+#if !FAKE_MSA
+  #ifndef MSA_RVC
+    #define MSA_RVC 0                                                                                                               // Turn on the OEM rear camera (TRSVC and E84 PDC ECUs) when pressing MSA button. E70 button from 61319202037.
+  #endif
+#endif                                                                                                                              // RVC can be controlled independently of PDC with this button.
 #ifndef REVERSE_BEEP
   #define REVERSE_BEEP 0                                                                                                            // Play a beep throught the speaker closest to the driver when engaging reverse.
 #endif
@@ -216,6 +219,7 @@ CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint16_t RPM = 0;
 bool handbrake_status = true;
+elapsedMillis handbrake_status_debounce_timer = 300;
 uint8_t dme_ckm[4][2] = {{0, 0xFF}, {0, 0xFF}, {0, 0xFF}, {0xF1, 0xFF}};
 uint8_t edc_ckm[] = {0, 0, 0, 0xF1};
 uint8_t edc_mismatch_check_counter = 0;
@@ -244,7 +248,7 @@ bool uif_read = false;
 uint8_t servotronic_message[] = {0, 0xFF};
 CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf;
 CAN_message_t shiftlights_max_flash_buf, shiftlights_off_buf;
-bool shiftlights_segments_active = false;
+bool shiftlights_segments_active = false, startup_animation_active = false;
 uint8_t ignore_shiftlights_off_counter = 0;
 uint16_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
 uint16_t MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
@@ -267,6 +271,7 @@ cppQueue kombi_needle_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
 bool front_fog_status = false;
 bool indicators_on = false;
 unsigned long last_fog_action_timer = 15000;
+elapsedMillis front_fog_corner_timer = 300;
 bool dipped_beam_status = false, left_fog_on = false, right_fog_on = false;
 bool ahl_active = false, flc_active = false, frm_ahl_flc_status_requested = false;
 CAN_message_t frm_ahl_flc_status_request_buf;
@@ -404,11 +409,13 @@ CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactiv
 CAN_message_t hdc_cc_activated_off_buf, hdc_cc_unavailable_off_buf, hdc_cc_deactivated_off_buf;
 cppQueue hdc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 CAN_message_t msa_deactivated_cc_on_buf, msa_deactivated_cc_off_buf;
-uint8_t pdc_status = 0x80;
+uint8_t pdc_bus_status = 0x80;
 bool pdc_button_pressed = false, pdc_with_rvc_requested = false;
 CAN_message_t camera_off_buf, camera_on_buf, pdc_off_camera_on_buf, pdc_on_camera_on_buf, pdc_off_camera_off_buf;
 CAN_message_t pdc_button_presssed_buf, pdc_button_released_buf;
 cppQueue pdc_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+uint8_t rvc_settings[] = {0, 0, 0, 0};
+bool rvc_dipped = false;
 bool msa_button_pressed = false;
 uint8_t msa_fake_status_counter = 0;
 CAN_message_t msa_fake_status_buf;

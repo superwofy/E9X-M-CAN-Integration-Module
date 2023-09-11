@@ -301,8 +301,12 @@ void print_current_state(Stream &status_serial) {
   #endif
   sprintf(serial_debug_string, " Reverse gear: %s", reverse_gear_status ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
+  #if PDC_AUTO_OFF
+    sprintf(serial_debug_string, " Handbrake: %s", handbrake_status ? "ON" : "OFF");
+    status_serial.println(serial_debug_string);
+  #endif
   #if MSA_RVC
-    sprintf(serial_debug_string, " PDC: %s", pdc_status > 0x80 ? "ON" : "OFF");
+    sprintf(serial_debug_string, " PDC: %s", pdc_bus_status > 0x80 ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
   #endif
   if (ambient_temperature_real != 87.5) {
@@ -408,7 +412,7 @@ void serial_log(const char message[]) {
 }
 
 
-void reset_runtime_variables(void) {                                                                                                // Ignition OFF. Set variables to pre-ignition state.
+void reset_ignition_variables(void) {                                                                                               // Ignition OFF. Set variables to pre-ignition state.
   dsc_program_status = 0;
   if (mdrive_status) {
     toggle_mdrive_message_active();
@@ -437,6 +441,7 @@ void reset_runtime_variables(void) {                                            
   lc_cc_active = mdm_with_lc = false;
   shiftlights_segments_active = engine_coolant_warmed_up = false;
   ignore_shiftlights_off_counter = 0;
+  startup_animation_active = false;
   last_var_rpm_can = 0;
   START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM;
   MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM;
@@ -481,8 +486,9 @@ void reset_runtime_variables(void) {                                            
   cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
   msa_button_pressed = false;
   msa_fake_status_counter = 0;
-  pdc_status = 0x80;
+  pdc_bus_status = 0x80;
   pdc_button_pressed = pdc_with_rvc_requested = false;
+  rvc_dipped = false;
   #if IMMOBILIZER_SEQ
     reset_key_cc();
   #endif

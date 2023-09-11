@@ -99,7 +99,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
       }
     #endif
   } else if (!ignition && ignition_) {
-    reset_runtime_variables();
+    reset_ignition_variables();
     scale_cpu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
     serial_log("Ignition OFF. Reset values.");
   }
@@ -669,5 +669,12 @@ void evaluate_comfort_exit(void) {
     serial_log("Moved driver's seat back for comfort exit.");
   } else {
     comfort_exit_ready = comfort_exit_done = false;
+  }
+}
+
+
+void store_rvc_settings(void) {
+  for (uint8_t i = 0; i < 4; i++) {
+    rvc_settings[i] = k_msg.buf[i];
   }
 }
