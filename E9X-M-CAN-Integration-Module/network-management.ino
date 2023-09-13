@@ -285,7 +285,7 @@ void kcan_write_msg(const CAN_message_t &msg) {
     if (msg.buf[0] == 0x41 && (msg.buf[2] == 0x30 || msg.buf[2] == 0x31)) {                                                         // Exception for alarm jobs.
     } else {
       #if DEBUG_MODE
-        serial_log("6F1 message not sent to KCAN due to OBD tool presence.");
+        serial_log("6F1 message not sent to KCAN due to OBD tool presence.", 2);
         can_debug_print_buffer(msg);
       #endif
       return;
@@ -299,11 +299,11 @@ void kcan_write_msg(const CAN_message_t &msg) {
       kcan_retry_counter++;
       #if DEBUG_MODE
         sprintf(serial_debug_string, "KCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
-        serial_log(serial_debug_string);
+        serial_log(serial_debug_string, 1);
         can_debug_print_buffer(msg);
       #endif
     } else {
-      serial_log("KCAN resend max counter exceeded.");
+      serial_log("KCAN resend max counter exceeded.", 1);
     }
     kcan_error_counter++;
   }
@@ -316,7 +316,7 @@ void ptcan_write_msg(const CAN_message_t &msg) {
     } else if (msg.buf[0] == 0xE) {                                                                                                  // Exception for SVT70 diag.
     } else {
       #if DEBUG_MODE
-        serial_log("6F1 message not sent to PTCAN due to OBD tool presence.");
+        serial_log("6F1 message not sent to PTCAN due to OBD tool presence.", 2);
         can_debug_print_buffer(msg);
       #endif
       return;
@@ -331,11 +331,11 @@ void ptcan_write_msg(const CAN_message_t &msg) {
       ptcan_retry_counter++;
       #if DEBUG_MODE
         sprintf(serial_debug_string, "PTCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
-        serial_log(serial_debug_string);
+        serial_log(serial_debug_string, 1);
         can_debug_print_buffer(msg);
       #endif
     } else {
-      serial_log("PTCAN resend max counter exceeded.");
+      serial_log("PTCAN resend max counter exceeded.", 1);
     }
     ptcan_error_counter++;
   }
@@ -351,11 +351,11 @@ void dcan_write_msg(const CAN_message_t &msg) {
       dcan_retry_counter++;
       #if DEBUG_MODE
         sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
-        serial_log(serial_debug_string);
+        serial_log(serial_debug_string, 1);
         can_debug_print_buffer(msg);
       #endif
     } else {
-      serial_log("DCAN resend max counter exceeded.");
+      serial_log("DCAN resend max counter exceeded.", 1);
     }
     dcan_error_counter++;
   }
@@ -389,10 +389,12 @@ void check_can_resend_queues(void) {
 
 #if DEBUG_MODE
 void can_debug_print_buffer(const CAN_message_t &msg) {
-  Serial.print(" Buffer: ");
-  for ( uint8_t i = 0; i < msg.len; i++ ) {
-    Serial.print(msg.buf[i], HEX); Serial.print(" ");
+  if (LOGLEVEL >= 1) {
+    Serial.print(" Buffer: ");
+    for ( uint8_t i = 0; i < msg.len; i++ ) {
+      Serial.print(msg.buf[i], HEX); Serial.print(" ");
+    }
+    Serial.println();
   }
-  Serial.println();
 }
 #endif

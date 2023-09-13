@@ -6,7 +6,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   if (!vehicle_awake) {
     vehicle_awake = true;    
     toggle_transceiver_standby(0);                                                                                                  // Re-activate the transceivers.                                                                                         
-    serial_log("Vehicle Awake.");
+    serial_log("Vehicle Awake.", 0);
     vehicle_awakened_time = 0;
   }
 
@@ -24,10 +24,10 @@ void evaluate_terminal_clutch_keyno_status(void) {
     if (clutch_pressed != clutch_pressed_can) {
       if (clutch_pressed_can) {
         clutch_pressed = true;
-        serial_log("Clutch pedal depressed.");
+        serial_log("Clutch pedal depressed.", 2);
       } else {
         clutch_pressed = false;
-        serial_log("Clutch pedal released.");
+        serial_log("Clutch pedal released.", 2);
       }
     }
   }
@@ -84,7 +84,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     #if USB_DISABLE
       activate_usb();                                                                                                               // If this fails to run, the program button will need to be pressed to recover.
     #endif
-    serial_log("Ignition ON.");
+    serial_log("Ignition ON.", 2);
 
     #if DIM_DRL                                                                                                                     // These resets are required if quickly (less than 15s) switching igniton 
       if (((millis() - last_drl_action_timer) < 15000)) {
@@ -101,11 +101,11 @@ void evaluate_terminal_clutch_keyno_status(void) {
   } else if (!ignition && ignition_) {
     reset_ignition_variables();
     scale_cpu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
-    serial_log("Ignition OFF. Reset values.");
+    serial_log("Ignition OFF. Reset values.", 2);
   }
 
   if (terminal_r && !terminal_r_) {
-    serial_log("Terminal R ON.");
+    serial_log("Terminal R ON.", 2);
     #if RTC
       if (!rtc_valid) {
         kcan_write_msg(set_time_cc_buf);                                                                                            // Warn that the time needs to be updated by the user.
@@ -118,7 +118,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
       comfort_exit_ready = false;
     #endif
   } else if (!terminal_r && terminal_r_) {
-    serial_log("Terminal R OFF.");
+    serial_log("Terminal R OFF.", 2);
     #if COMFORT_EXIT
       comfort_exit_ready = true;
     #endif
@@ -134,7 +134,7 @@ void evaluate_frm_consumer_shutdown(void) {
   if (k_msg.buf[0] == 0xFC) {
     if (!frm_consumer_shutdown) {
       frm_consumer_shutdown = true;
-      serial_log("FRM requested consumers OFF.");
+      serial_log("FRM requested consumers OFF.", 2);
       scale_cpu_speed();                                                                                                            // Reduce power consumption in this state.
       digitalWrite(DCAN_STBY_PIN, HIGH);
     }
@@ -184,7 +184,7 @@ void send_seat_heating_request_dr(void) {
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
           ambient_temperature_real, AUTO_SEAT_HEATING_TRESHOLD);
-    serial_log(serial_debug_string);
+    serial_log(serial_debug_string, 2);
   #endif
 }
 
@@ -237,7 +237,7 @@ void send_seat_heating_request_pas(void) {
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %.1fC, treshold %.1fC.", 
           ambient_temperature_real, AUTO_SEAT_HEATING_TRESHOLD);
-    serial_log(serial_debug_string);
+    serial_log(serial_debug_string, 2);
   #endif
 }
 
@@ -247,7 +247,7 @@ void evaluate_steering_heating_request(void) {
     if (!sent_steering_heating_request) {
       if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD) {
         digitalWrite(STEERING_HEATER_SWITCH_PIN, HIGH);
-        serial_log("Activated steering wheel heating.");
+        serial_log("Activated steering wheel heating.", 2);
         sent_steering_heating_request = transistor_active = true;
         transistor_active_timer = 0;
       }
@@ -270,7 +270,7 @@ void send_f_wakeup(void) {
       ptcan_write_msg(f_kombi_network_mgmt_buf);
     }
   #endif
-    //serial_log("Sent FXX wake-up message.");
+    //serial_log("Sent FXX wake-up message.", 2);
 }
 
 
@@ -303,7 +303,7 @@ void send_zbe_acknowledge(void) {
   kcan_write_msg(make_msg_buf(0x277, 4, zbe_response));
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent ZBE response to CIC with counter: 0x%X", k_msg.buf[7]);
-    serial_log(serial_debug_string);
+    serial_log(serial_debug_string, 2);
   #endif
 }
 
@@ -338,7 +338,7 @@ void check_console_buttons(void) {
           update_eeprom_checksum();
           #if DEBUG_MODE
             sprintf(serial_debug_string, "Anti theft now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
-            serial_log(serial_debug_string);
+            serial_log(serial_debug_string, 0);
           #endif
           both_console_buttons_timer = 0;                                                                                           // Reset to prevent multiple activations.
         }
@@ -356,17 +356,17 @@ void check_console_buttons(void) {
       if (!console_power_mode) {
         if (!mdrive_power_active) {
           console_power_mode = true;
-          serial_log("Console: POWER mode ON.");
+          serial_log("Console: POWER mode ON.", 2);
         } else {
           mdrive_power_active = false;                                                                                              // If POWER button was pressed while MDrive POWER is active, disable POWER.
-          serial_log("Deactivated MDrive POWER with console button press.");
+          serial_log("Deactivated MDrive POWER with console button press.", 2);
         }
       } else {
-        serial_log("Console: POWER mode OFF.");
+        serial_log("Console: POWER mode OFF.", 2);
         console_power_mode = false;
         if (mdrive_power_active) {
           mdrive_power_active = false;                                                                                              // If POWER button was pressed while MDrive POWER is active, disable POWER.
-          serial_log("Deactivated MDrive POWER with console button press.");
+          serial_log("Deactivated MDrive POWER with console button press.", 2);
         }
       }
       send_power_mode();
@@ -382,7 +382,7 @@ void check_console_buttons(void) {
     if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                            // DSC OFF sequence should only be sent after user holds button for a configured time.
       if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
         if (dsc_program_status != 2) {                                                                                              // If the button is held after DSC OFF, no more messages are sent until release.
-          serial_log("Console: DSC OFF button held.");
+          serial_log("Console: DSC OFF button held.", 2);
           send_dsc_mode(2);
         }
         dsc_off_button_debounce_timer = 0;
@@ -392,7 +392,7 @@ void check_console_buttons(void) {
     if (holding_dsc_off_console) {
       if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
         if (dsc_program_status != 0) {
-          serial_log("Console: DSC button tapped.");
+          serial_log("Console: DSC button tapped.", 2);
           send_dsc_mode(0);
         }
         dsc_off_button_debounce_timer = 0;
@@ -406,7 +406,7 @@ void check_console_buttons(void) {
 #if RTC
 void update_car_time_from_rtc(void) {
   if (rtc_valid) {                                                                                                                  // Make sure time in RTC is actually valid before forcing it.
-    serial_log("Vehicle date/time not set. Setting from RTC.");
+    serial_log("Vehicle date/time not set. Setting from RTC.", 2);
     time_t t = now();
     uint8_t rtc_hours = hour(t);
     uint8_t rtc_minutes = minute(t);
@@ -419,7 +419,7 @@ void update_car_time_from_rtc(void) {
     kcan_write_msg(make_msg_buf(0x39E, 8, date_time_can));
     kcan_write_msg(set_time_cc_off_buf);                                                                                            // Now that the time is fixed, cancel the CC.
   } else {
-    serial_log("Teensy RTC invalid. Cannot set car's clock.");
+    serial_log("Teensy RTC invalid. Cannot set car's clock.", 1);
   }
 }
 #endif
@@ -443,7 +443,7 @@ void send_volume_request_door(void) {
       if (volume_request_door_timer >= 500) {                                                                                       // Basic debounce to account for door not fully shut.
         kcan_write_msg(vol_request_buf);
         volume_request_door_timer = volume_request_periodic_timer = 0;
-        serial_log("Requested volume from iDrive with door status change.");
+        serial_log("Requested volume from iDrive with door status change.", 2);
       }
     }
   }
@@ -459,7 +459,7 @@ void evaluate_audio_volume(void) {
           peristent_volume = k_msg.buf[4];
           #if DEBUG_MODE
             sprintf(serial_debug_string, "Received new audio volume: 0x%X.", k_msg.buf[4]);
-            serial_log(serial_debug_string);
+            serial_log(serial_debug_string, 3);
           #endif
         }
         if (k_msg.buf[4] >= 5) {                                                                                                    // Don't reduce if already very low.
@@ -485,7 +485,7 @@ void evaluate_audio_volume(void) {
             volume_changed_to = volume_change[4];                                                                                   // Save this value to compare when door is closed back.
             #if DEBUG_MODE
               sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X.", volume_changed_to);
-              serial_log(serial_debug_string);
+              serial_log(serial_debug_string, 3);
             #endif
           }
         }
@@ -510,13 +510,13 @@ void evaluate_audio_volume(void) {
             idrive_txq.push(&m);
             #if DEBUG_MODE
               sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X.", volume_change[4]);
-              serial_log(serial_debug_string);
+              serial_log(serial_debug_string, 3);
             #endif
           } else {
             peristent_volume = k_msg.buf[4];                                                                                        // User changed volume while door was opened.
             #if DEBUG_MODE
               sprintf(serial_debug_string, "Volume changed by user while door was open to: 0x%X.", k_msg.buf[4]);
-              serial_log(serial_debug_string);
+              serial_log(serial_debug_string, 3);
             #endif
           }
           volume_reduced = false;
@@ -528,7 +528,7 @@ void evaluate_audio_volume(void) {
       initial_volume_set = true;
       #if DEBUG_MODE
         sprintf(serial_debug_string, "Sent saved initial volume (0x%X) to iDrive after receiving volume 0.", peristent_volume);     // 0 means that the vol knob wasn't used / initial job was not sent since iDrive boot.
-        serial_log(serial_debug_string);
+        serial_log(serial_debug_string, 2);
       #endif
     }
   }
@@ -550,7 +550,7 @@ void check_idrive_queue(void) {
         if (vehicle_awake) {
           kcan_write_msg(delayed_tx.tx_msg);
           if (delayed_tx.tx_msg.buf[3] == 0x23) {
-            serial_log("Sent volume change job to iDrive.");
+            serial_log("Sent volume change job to iDrive.", 2);
           }
         }
         idrive_txq.drop();
@@ -567,7 +567,7 @@ void check_idrive_alive_monitor(void) {
     if (idrive_alive_timer >= 4000) {                                                                                               // This message should be received every 2s.
       if (!idrive_died) {
         idrive_died = true;
-        serial_log("iDrive booting/rebooting.");
+        serial_log("iDrive booting/rebooting.", 2);
         initial_volume_set = false;
         vsw_initialized = false;
         asd_initialized = false;
@@ -588,7 +588,7 @@ void send_initial_volume(void) {
       kcan_write_msg(make_msg_buf(0x6F1, 8, restore_last_volume));                                                                  // Set iDrive volume to last volume before sleep. This must run before any set volumes.
       #if DEBUG_MODE
         sprintf(serial_debug_string, "Sent saved sleep volume (0x%X) to iDrive after boot/reboot.", peristent_volume);
-        serial_log(serial_debug_string);
+        serial_log(serial_debug_string, 2);
       #endif
       initial_volume_set = true;
     }
@@ -601,7 +601,7 @@ void send_nivi_button_press(void) {
   ptcan_write_msg(nivi_button_pressed_buf);
   ptcan_write_msg(nivi_button_released_buf);
   ptcan_write_msg(nivi_button_released_buf);
-  serial_log("Sent NiVi button press.");
+  serial_log("Sent NiVi button press.", 2);
 }
 
 
@@ -612,7 +612,7 @@ void vsw_switch_input(uint8_t input) {
   vsw_switch_counter == 0xFE ? vsw_switch_counter = 0xF1 : vsw_switch_counter++;
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Sent VSW/%d (%s) request.", input, vsw_positions[input]);
-    serial_log(serial_debug_string);
+    serial_log(serial_debug_string, 3);
   #endif
 }
 
@@ -639,7 +639,7 @@ void initialize_asd(void) {
   if (!asd_initialized) {
     if (diag_transmit) {
       kcan_write_msg(mute_asd_buf);
-      serial_log("Muted ASD on init.");
+      serial_log("Muted ASD on init.", 2);
       asd_initialized = true;
     }
   }
@@ -649,12 +649,12 @@ void initialize_asd(void) {
 void evaluate_dr_seat_ckm(void) {
   if (k_msg.buf[0] == 0xFC) {
     if (!auto_seat_ckm) {
-      serial_log("Automatic seat position CKM enabled.");
+      serial_log("Automatic seat position CKM enabled.", 2);
       auto_seat_ckm = true;
     }
   } else {
     if (auto_seat_ckm) {
-      serial_log("Automatic seat position CKM disabed.");
+      serial_log("Automatic seat position CKM disabed.", 2);
       auto_seat_ckm = false;
     }
   }
@@ -666,7 +666,7 @@ void evaluate_comfort_exit(void) {
     kcan_write_msg(dr_seat_move_back_buf);
     comfort_exit_done = true;
     comfort_exit_ready = false;
-    serial_log("Moved driver's seat back for comfort exit.");
+    serial_log("Moved driver's seat back for comfort exit.", 2);
   } else {
     comfort_exit_ready = comfort_exit_done = false;
   }

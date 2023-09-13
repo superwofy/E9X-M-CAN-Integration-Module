@@ -101,7 +101,7 @@ void loop() {
     if (vehicle_awake) {
       if (vehicle_awake_timer >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring .
-        serial_log("Vehicle Sleeping.");
+        serial_log("Vehicle Sleeping.", 0);
         toggle_transceiver_standby(1);
         scale_cpu_speed();
         reset_sleep_variables();
@@ -491,7 +491,7 @@ void loop() {
       #if SERVOTRONIC_SVT70
       // UIF read or ISTA/D module identification:
       else if (d_msg.buf[0] == 0xEF && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x1A && (d_msg.buf[3] == 0x80 || d_msg.buf[3] == 0x86)) {
-        serial_log("UIF being read. Skipping SVT.");
+        serial_log("UIF being read. Skipping SVT.", 0);
         uif_read = true;
       }
 

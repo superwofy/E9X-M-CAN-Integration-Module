@@ -22,6 +22,9 @@ CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                            
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
+#if DEBUG_MODE
+  int8_t LOGLEVEL = 4;                                                                                                              // 0 - critical, 1 - errors, 2 - info, 3 - extra_info, 4 = debug.
+#endif
 
 #define PDC_AUTO_OFF 1                                                                                                              // Deactivates PDC when handbrake is pulled.
 #define AUTO_DIP_RVC 1                                                                                                              // Turn on top down rear view camera option when close to an obstacle.

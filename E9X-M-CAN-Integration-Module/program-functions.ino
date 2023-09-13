@@ -6,7 +6,7 @@ void read_initialize_eeprom(void) {
   calculated_eeprom_checksum = eeprom_crc();
 
   if (stored_eeprom_checksum != calculated_eeprom_checksum){
-    serial_log("EEPROM data corrupted. Restoring defaults.");
+    serial_log("EEPROM data corrupted. Restoring defaults.", 1);
 
     // Defaults for when EEPROM is not initialized  
     mdrive_dsc = 0x13;
@@ -93,7 +93,7 @@ void read_initialize_eeprom(void) {
     #if DIM_DRL
       drl_ckm = EEPROM.read(19) == 1 ? true : false;
     #endif
-    serial_log("Loaded data from EEPROM.");
+    serial_log("Loaded data from EEPROM.", 2);
   }
 }
 
@@ -137,7 +137,7 @@ void update_data_in_eeprom(void) {
     EEPROM.update(19, drl_ckm);
   #endif
   update_eeprom_checksum();
-  serial_log("Saved data to EEPROM.");
+  serial_log("Saved data to EEPROM.", 2);
 }
 
 
@@ -158,7 +158,7 @@ void initialize_watchdog(void) {
 
 
 void wdt_callback(void) {
-  serial_log("Watchdog not fed. Program will reset in 3s!");
+  serial_log("Watchdog not fed. Program will reset in 3s!", 0);
   update_data_in_eeprom();
 }
 
@@ -403,10 +403,12 @@ void print_current_state(Stream &status_serial) {
 #endif
 
 
-void serial_log(const char message[]) {
+void serial_log(const char message[], int8_t level) {
   #if DEBUG_MODE
   if (!clearing_dtcs) {
-    Serial.println(message);
+    if (level <= LOGLEVEL) {
+      Serial.println(message);
+    }
   }
   #endif
 }

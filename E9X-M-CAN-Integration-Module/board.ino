@@ -275,14 +275,14 @@ void configure_can_controller(void) {
 void toggle_transceiver_standby(bool sleep) {
   if (sleep) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
-    serial_log("Deactivated PT-CAN transceiver.");
+    serial_log("Deactivated PT-CAN transceiver.", 0);
     digitalWrite(DCAN_STBY_PIN, HIGH);
-    serial_log("Deactivated D-CAN transceiver.");
+    serial_log("Deactivated D-CAN transceiver.", 0);
   } else {
     digitalWrite(PTCAN_STBY_PIN, LOW);
-    serial_log("Activated PT-CAN transceiver.");
+    serial_log("Activated PT-CAN transceiver.", 0);
     digitalWrite(DCAN_STBY_PIN, LOW);
-    serial_log("Activated D-CAN transceiver.");
+    serial_log("Activated D-CAN transceiver.", 0);
   }
 }
 
@@ -310,7 +310,7 @@ void check_teensy_cpu_temp_clock(void) {                                        
       if (cpu_temp >= MILD_THRESHOLD) {
         if (clock_mode != 1) {
           set_arm_clock(MILD_UNDERCLOCK);
-          serial_log("Processor temperature above mild overheat threshold. Underclocking.");
+          serial_log("Processor temperature above mild overheat threshold. Underclocking.", 0);
           clock_mode = 1;
           #if DEBUG_MODE
             max_loop_timer = 0;
@@ -319,7 +319,7 @@ void check_teensy_cpu_temp_clock(void) {                                        
       } else if (cpu_temp >= MEDIUM_THRESHOLD) {
         if (clock_mode != 2) {
           set_arm_clock(MEDIUM_UNDERCLOCK);
-          serial_log("Processor temperature above medium overheat threshold. Underclocking.");
+          serial_log("Processor temperature above medium overheat threshold. Underclocking.", 0);
           clock_mode = 2;
           #if DEBUG_MODE
             max_loop_timer = 0;
@@ -328,7 +328,7 @@ void check_teensy_cpu_temp_clock(void) {                                        
       } else if (cpu_temp >= HIGH_THRESHOLD) {
         if (clock_mode != 3) {
           set_arm_clock(HIGH_UNDERCLOCK);
-          serial_log("Processor temperature above high overheat threshold. Underclocking.");
+          serial_log("Processor temperature above high overheat threshold. Underclocking.", 0);
           clock_mode = 3;
           #if DEBUG_MODE
             max_loop_timer = 0;
@@ -337,7 +337,7 @@ void check_teensy_cpu_temp_clock(void) {                                        
       } else if (cpu_temp >= MAX_THRESHOLD) {
         if (clock_mode != 4) {
           set_arm_clock(MAX_UNDERCLOCK);
-          serial_log("Processor temperature above max overheat threshold. Underclocking.");
+          serial_log("Processor temperature above max overheat threshold. Underclocking.", 0);
           clock_mode = 4;
           #if DEBUG_MODE
             max_loop_timer = 0;
@@ -350,13 +350,13 @@ void check_teensy_cpu_temp_clock(void) {                                        
           dcdc |= DCDC_REG3_TRG(CRITICAL_UNDERVOLT);
           DCDC_REG3 = dcdc;
           while (!(DCDC_REG0 & DCDC_REG0_STS_DC_OK));
-          serial_log("Processor temperature above max specified Tj. Damage will occur.");
+          serial_log("Processor temperature above max specified Tj. Damage will occur.", 0);
           clock_mode = 5;
         }
       } else {
         if (clock_mode != 0) {
           set_arm_clock(STANDARD_CLOCK);
-          serial_log("Restored clock speed.");
+          serial_log("Restored clock speed.", 0);
           clock_mode = 0;
           #if DEBUG_MODE
             max_loop_timer = 0;
@@ -383,7 +383,7 @@ void update_rtc_from_idrive(void) {
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received time from iDrive: %s%d:%s%d", 
               idrive_hour > 9 ? "" : "0", idrive_hour, idrive_minutes > 9 ? "" : "0", idrive_minutes);
-      serial_log(serial_debug_string);
+      serial_log(serial_debug_string, 3);
     #endif
     setTime(idrive_hour, idrive_minutes, idrive_seconds, rtc_day, rtc_month, rtc_year);
     t = now();
@@ -399,7 +399,7 @@ void update_rtc_from_idrive(void) {
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received date from iDrive: %s%d/%s%d/%d", 
               idrive_day > 9 ? "" : "0", idrive_day, idrive_month > 9 ? "" : "0", idrive_month, idrive_year);
-      serial_log(serial_debug_string);
+      serial_log(serial_debug_string, 3);
     #endif
     setTime(rtc_hours, rtc_minutes, rtc_seconds, idrive_day, idrive_month, idrive_year); 
     t = now();
@@ -422,7 +422,7 @@ void update_rtc_from_dcan(void) {
       sprintf(serial_debug_string, "Received time from DCAN: %s%d:%s%d:%s%d", 
               dcan_hour > 9 ? "" : "0", dcan_hour, dcan_minutes > 9 ? "" : "0", dcan_minutes,
               dcan_seconds > 9 ? "" : "0", dcan_seconds);
-      serial_log(serial_debug_string);
+      serial_log(serial_debug_string, 3);
     #endif
     setTime(dcan_hour, dcan_minutes, dcan_seconds, rtc_day, rtc_month, rtc_year);
     t = now();
@@ -438,7 +438,7 @@ void update_rtc_from_dcan(void) {
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received date from DCAN: %s%d/%s%d/%d", 
               dcan_day > 9 ? "" : "0", dcan_day, dcan_month > 9 ? "" : "0", dcan_month, dcan_year);
-      serial_log(serial_debug_string);
+      serial_log(serial_debug_string, 3);
     #endif
     setTime(rtc_hours, rtc_minutes, rtc_seconds, dcan_day, dcan_month, dcan_year); 
     t = now();
@@ -457,13 +457,13 @@ void check_rtc_valid(void) {
   time_t t = now();
   // 2019-01-01 00:00:00 UTC to 2019-02-01 00:00:00 UTC (yyy-mm-dd hh:mm:ss)
   if (t >= 1546300800 && t <= 1548979200) {                                                                                         // See startup.c (1546300800). Will warn for the first month after failure if not fixed.
-    serial_log("Teensy RTC invalid. Check RTC battery.");
+    serial_log("Teensy RTC invalid. Check RTC battery.", 1);
     rtc_valid = false;
   } else {
     if (!rtc_valid) {
       rtc_valid = true;
       kcan_write_msg(set_time_cc_off_buf);                                                                                          // Now that the time is set, cancel the CC.
-      serial_log("Teensy RTC time set. Disabling set time CC.");
+      serial_log("Teensy RTC time set. Disabling set time CC.", 2);
     }
   }
 }
@@ -472,7 +472,7 @@ void check_rtc_valid(void) {
 
 void disable_diag_transmit_jobs(void) {                                                                                             // Without this, other KWP jobs sent by Ediabas will receive strange reponse codes.
   if (diag_transmit) {
-    serial_log("Detected OBD port diagnosis request. Pausing all diagnostic jobs.");
+    serial_log("Detected OBD port diagnosis request. Pausing all diagnostic jobs.", 0);
     diag_transmit = false;
     #if DOOR_VOLUME
       volume_changed_to = 0;
@@ -486,7 +486,7 @@ void check_diag_transmit_status(void) {
   if (!diag_transmit) {
     if (diag_deactivate_timer >= 60000) {                                                                                           // Re-activate after period of no DCAN requests.
       diag_transmit = true;
-      serial_log("Resuming diagnostic jobs after timeout.");
+      serial_log("Resuming diagnostic jobs after timeout.", 0);
     }
   }
 }

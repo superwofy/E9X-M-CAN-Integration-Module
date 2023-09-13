@@ -16,18 +16,18 @@ void evaluate_engine_rpm(void) {
       #if EXHAUST_FLAP_CONTROL
         exhaust_flap_action_timer = 0;                                                                                              // Start tracking the exhaust flap.
       #endif
-      serial_log("Engine started.");
+      serial_log("Engine started.", 2);
       #if IMMOBILIZER_SEQ_ALARM
         if (!immobilizer_released) {
           alarm_after_engine_stall = true;
-          serial_log("Immobilizer still active. Alarm will sound after stall.");      
+          serial_log("Immobilizer still active. Alarm will sound after stall.", 2);      
         }
       #endif
     }
   } else if (RPM < 200) {                                                                                                           // Less than 50 RPM. Engine stalled or was stopped.
     if (engine_running) {
       engine_running = false;
-      serial_log("Engine stopped.");
+      serial_log("Engine stopped.", 2);
       #if IMMOBILIZER_SEQ_ALARM
         trip_alarm_after_stall();
       #endif
@@ -38,18 +38,18 @@ void evaluate_engine_rpm(void) {
 
 void toggle_mdrive_message_active(void) {
   if (mdrive_status) {                                                                                                              // Turn OFF MDrive.
-    serial_log("Status MDrive OFF.");
+    serial_log("Status MDrive OFF.", 2);
     mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
     mdrive_message[4] -= 0x10;
     mdrive_status = mdrive_power_active = false;
     #if FRM_AHL_MODE
       kcan_write_msg(frm_ckm_ahl_komfort_buf);
-      serial_log("Set AHL back to comfort mode.");
+      serial_log("Set AHL back to comfort mode.", 2);
     #endif
     #if ASD
       if (diag_transmit) {
         kcan_write_msg(mute_asd_buf);
-        serial_log("Muted ASD.");
+        serial_log("Muted ASD.", 2);
       }
     #endif
     if (mdrive_power == 0x30) {
@@ -60,14 +60,14 @@ void toggle_mdrive_message_active(void) {
       console_power_mode = restore_console_power_mode;
     }                                                                                                                               // Else, POWER unchanged
   } else {                                                                                                                          // Turn ON MDrive.
-    serial_log("Status MDrive ON.");
+    serial_log("Status MDrive ON.", 2);
     if (mdrive_power == 0x20) {                                                                                                     // POWER in Sport.
       mdrive_power_active = true;
     } else if (mdrive_power == 0x30) {                                                                                              // POWER Sport+.
       #if ASD
         if (diag_transmit) {
           kcan_write_msg(demute_asd_buf);
-          serial_log("De-muted ASD.");
+          serial_log("De-muted ASD.", 2);
         }
       #endif
       #if EXHAUST_FLAP_CONTROL
@@ -82,7 +82,7 @@ void toggle_mdrive_message_active(void) {
     #if FRM_AHL_MODE
     if (mdrive_svt == 0xF1) {                                                                                                       // Headlights will move faster if Servotronic is set to Sport.
       kcan_write_msg(frm_ckm_ahl_sport_buf);
-      serial_log("Set AHL to sport mode.");
+      serial_log("Set AHL to sport mode.", 2);
     }
     #endif
 
@@ -177,7 +177,7 @@ void show_mdrive_settings_screen(void) {
     #if IMMOBILIZER_SEQ
     if (immobilizer_released) {
     #endif
-      serial_log("Steering wheel M button held. Showing settings screen.");
+      serial_log("Steering wheel M button held. Showing settings screen.", 2);
       kcan_write_msg(idrive_mdrive_settings_a_buf);                                                                                 // Send steuern_menu job to iDrive.
       kcan_write_msg(idrive_mdrive_settings_b_buf);
     #if IMMOBILIZER_SEQ
@@ -203,9 +203,9 @@ void send_mdrive_alive_message(uint16_t interval) {
   if (terminal_r) {
     if (mdrive_message_timer >= interval) {                                                                                         // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
       if (ignition) {
-        serial_log("Sending Ignition ON MDrive alive message.");
+        serial_log("Sending Ignition ON MDrive alive message.", 2);
       } else {
-        serial_log("Sending Vehicle Awake MDrive alive message.");
+        serial_log("Sending Vehicle Awake MDrive alive message.", 2);
       }
       send_mdrive_message();
     }
@@ -233,12 +233,12 @@ void update_mdrive_message_settings(void) {
       if (mdrive_power != 0x30) {
         if (diag_transmit) {
           kcan_write_msg(mute_asd_buf);
-          serial_log("Muted ASD.");
+          serial_log("Muted ASD.", 3);
         }
       } else {
         if (diag_transmit) {
           kcan_write_msg(demute_asd_buf);
-          serial_log("De-muted ASD with POWER setting of Sport+.");
+          serial_log("De-muted ASD with POWER setting of Sport+.", 3);
         }
       }
     }
@@ -251,7 +251,7 @@ void update_mdrive_message_settings(void) {
         mdrive_message[4] = 0x51;                                                                                                   // SVT normal, MDrive ON.
         #if FRM_AHL_MODE
           kcan_write_msg(frm_ckm_ahl_komfort_buf);
-          serial_log("Set AHL to comfort mode with SVT setting of Normal.");
+          serial_log("Set AHL to comfort mode with SVT setting of Normal.", 3);
         #endif
       }
     } else if (mdrive_svt == 0xF1) {
@@ -261,14 +261,14 @@ void update_mdrive_message_settings(void) {
         mdrive_message[4] = 0x91;                                                                                                   // SVT sport, MDrive ON.
         #if FRM_AHL_MODE
           kcan_write_msg(frm_ckm_ahl_sport_buf);
-          serial_log("Set AHL to sport mode with SVT setting of Sport.");
+          serial_log("Set AHL to sport mode with SVT setting of Sport.", 3);
         #endif
       }
     }
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
           mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
-      serial_log(serial_debug_string);
+      serial_log(serial_debug_string, 3);
     #endif
   }
   send_mdrive_message();
@@ -288,7 +288,7 @@ void reset_mdrive_settings(void) {
   #if EDC_CKM_FIX
     edc_ckm[cas_key_number] = 0xF1;                                                                                                 // Comfort
   #endif
-  serial_log("Reset MDrive settings.");
+  serial_log("Reset MDrive settings.", 3);
 }
 
 
@@ -333,7 +333,7 @@ void send_power_mode(void) {
 
 void send_dme_power_ckm(void) {
   kcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                  // This is sent by the DME to populate the M Key iDrive section
-  serial_log("Sent DME POWER CKM.");
+  serial_log("Sent DME POWER CKM.", 3);
 }
 
 
@@ -342,7 +342,7 @@ void update_dme_power_ckm(void) {
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Received new POWER CKM setting: %s for key number %d", 
             k_msg.buf[0] == 0xF1 ? "Normal" : "Sport", cas_key_number);
-    serial_log(serial_debug_string);
+    serial_log(serial_debug_string, 3);
   #endif
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
@@ -353,7 +353,7 @@ void update_edc_ckm(void) {
   #if DEBUG_MODE
     sprintf(serial_debug_string, "Received new EDC CKM setting: %s for key %d.", k_msg.buf[0] == 0xF1 ? "Comfort" : 
                                   k_msg.buf[0] == 0xF2 ? "Normal" : "Sport", cas_key_number);
-    serial_log(serial_debug_string);
+    serial_log(serial_debug_string, 3);
   #endif
 }
 
@@ -361,7 +361,7 @@ void update_edc_ckm(void) {
 void evaluate_edc_ckm_mismatch(void) {
   if (edc_mismatch_check_counter < 2) {
     if (pt_msg.buf[1] != edc_ckm[cas_key_number]) {
-      serial_log("EDC EEPROM CKM setting match the current value. Correcting.");
+      serial_log("EDC EEPROM CKM setting match the current value. Correcting.", 1);
       uint8_t edc_state = pt_msg.buf[1] == 0xFA ? 3 : pt_msg.buf[1] - 0xF0;                                                           // Normalize these values for easier comparison.
       uint8_t edc_memory = edc_ckm[cas_key_number] == 0xFA ? 3 : edc_ckm[cas_key_number] - 0xF0;
       if ((edc_memory == 1 && edc_state == 2) || (edc_memory == 2 && edc_state == 3) || (edc_memory == 3 && edc_state == 1)) {
@@ -397,7 +397,7 @@ void check_immobilizer_status(void) {
           if (!terminal_r && !alarm_led && !frm_consumer_shutdown && !lock_led) {
             kcan_write_msg(alarm_led_on_buf);                                                                                       // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
             alarm_led = true;                                                                                                       // Sending this multiple times keeps the car awake.
-            serial_log("Sent DWA LED ON with Terminal R off.");
+            serial_log("Sent DWA LED ON with Terminal R off.", 2);
             led_message_counter = 60;                                                                                               // Make sure we're ready once Terminal R cycles.
           }
         }
@@ -410,7 +410,7 @@ void check_immobilizer_status(void) {
           if (terminal_r) {
             if (engine_running && engine_runtime >= 2000) {                                                                         // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
               ptcan_write_msg(ekp_pwm_off_buf);
-              serial_log("EKP is disabled.");
+              serial_log("EKP is disabled.", 0);
             }
 
             // Visual indicators with Terminal R, 15.
@@ -473,7 +473,7 @@ void activate_immobilizer(void) {
     alarm_led = false;
   #endif
   immobilizer_activate_release_timer = 0;
-  serial_log("Immobilizer activated.");
+  serial_log("Immobilizer activated.", 2);
 }
 
 
@@ -483,7 +483,7 @@ void release_immobilizer(void) {
   EEPROM.update(13, immobilizer_released);                                                                                          // Save to EEPROM directly in case program crashes.
   update_eeprom_checksum();
   ptcan_write_msg(ekp_return_to_normal_buf);                                                                                        // KWP To EKP.
-  serial_log("Immobilizer released. EKP control restored to DME.");
+  serial_log("Immobilizer released. EKP control restored to DME.", 0);
   time_now = millis();
   #if IMMOBILIZER_SEQ_ALARM
     if (alarm_active) {
@@ -491,7 +491,7 @@ void release_immobilizer(void) {
       immobilizer_txq.push(&m);
       alarm_after_engine_stall = alarm_active = false;
       alarm_siren_txq.flush();
-      serial_log("Deactivated alarm.");
+      serial_log("Deactivated alarm.", 0);
     }
   #endif
   kcan_write_msg(key_cc_off_buf);                                                                                                   // CC to KCAN.
@@ -505,7 +505,7 @@ void release_immobilizer(void) {
   if (terminal_r) {
     m = {start_cc_on_buf, time_now + 500};                                                                                          // CC to KCAN.
     immobilizer_txq.push(&m);
-    serial_log("Sent start ready CC.");
+    serial_log("Sent start ready CC.", 2);
   }
   if (!terminal_r) {
     play_cc_gong();                                                                                                                 // KWP to KOMBI.
@@ -520,7 +520,7 @@ void release_immobilizer(void) {
 
 void trip_alarm_after_stall(void) {
   if (alarm_after_engine_stall) {
-    serial_log("Alarm siren and hazards ON.");
+    serial_log("Alarm siren and hazards ON.", 0);
     alarm_active = true;
     time_now = millis();
     for (uint8_t i = 0; i < 10; i++) {                                                                                              // Alarm test job times out after 30s. Make it blast for 5 min.

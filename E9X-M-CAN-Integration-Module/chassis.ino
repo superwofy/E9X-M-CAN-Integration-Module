@@ -8,19 +8,19 @@ void send_dsc_mode(uint8_t mode) {
     dsc_txq.push(&m);
     m = {dsc_on_buf, time_now + 20};
     dsc_txq.push(&m);
-    serial_log("Sending DSC ON.");
+    serial_log("Sending DSC ON.", 2);
   } else if (mode == 1) {
     m = {dsc_mdm_dtc_buf, time_now};
     dsc_txq.push(&m);
     m = {dsc_mdm_dtc_buf, time_now + 20};
     dsc_txq.push(&m);
-    serial_log("Sending DTC/MDM.");
+    serial_log("Sending DTC/MDM.", 2);
   } else {
     m = {dsc_off_buf, time_now};
     dsc_txq.push(&m);
     m = {dsc_off_buf, time_now + 20};
     dsc_txq.push(&m);
-    serial_log("Sending DSC OFF.");
+    serial_log("Sending DSC OFF.", 2);
   }
   dsc_program_status = mode;
 }
@@ -41,10 +41,10 @@ void evaluate_reverse_gear_status(void) {
   if (k_msg.buf[0] == 0xFE) {
     if (!reverse_gear_status) {
       reverse_gear_status = true;
-      serial_log("Reverse gear ON.");
+      serial_log("Reverse gear ON.", 2);
       #if FRONT_FOG_CORNER
         if ((left_fog_on || right_fog_on) && diag_transmit) {
-          serial_log("Resetting corner fogs with reverse ON.");
+          serial_log("Resetting corner fogs with reverse ON.", 2);
           kcan_write_msg(front_fogs_all_off_buf);
           left_fog_on = right_fog_on = false;
         }
@@ -53,7 +53,7 @@ void evaluate_reverse_gear_status(void) {
         if (pdc_bus_status == 0xA4) {
           if (diag_transmit) {
             kcan_write_msg(pdc_on_camera_on_buf);
-            serial_log("Activated full PDC and camera with reverse gear.");
+            serial_log("Activated full PDC and camera with reverse gear.", 2);
           }
         }
       #endif
@@ -61,10 +61,10 @@ void evaluate_reverse_gear_status(void) {
   } else {
     if (reverse_gear_status) {
       reverse_gear_status = false;
-      serial_log("Reverse gear OFF.");
+      serial_log("Reverse gear OFF.", 2);
       #if FRONT_FOG_CORNER
         if ((left_fog_on || right_fog_on) && diag_transmit) {
-          serial_log("Resetting corner fogs with reverse OFF.");
+          serial_log("Resetting corner fogs with reverse OFF.", 2);
           kcan_write_msg(front_fogs_all_off_buf);
           left_fog_on = right_fog_on = false;
         }
@@ -77,13 +77,13 @@ void evaluate_reverse_gear_status(void) {
           pdc_buttons_txq.push(&m);
           m = {pdc_button_released_buf, time_now + 200};
           pdc_buttons_txq.push(&m);
-          serial_log("Disabled PDC after reverse gear OFF and handbrake already up.");
+          serial_log("Disabled PDC after reverse gear OFF and handbrake already up.", 2);
         }
       #endif
       #if AUTO_DIP_RVC
         if (rvc_dipped) {
           bitWrite(rvc_settings[0], 3, 0);                                                                                              // Set tow hitch view to OFF.
-          serial_log("Disabled camera dip after reverse gear OFF.");
+          serial_log("Disabled camera dip after reverse gear OFF.", 2);
           kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
           rvc_dipped = false;
         }
@@ -97,11 +97,11 @@ void evaluate_vehicle_moving(void) {
   if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0xD0) {
     if (vehicle_moving) {
       vehicle_moving = false;
-      serial_log("Vehicle stationary.");
+      serial_log("Vehicle stationary.", 2);
     }
   } else if (!vehicle_moving) {
     vehicle_moving = true;
-    serial_log("Vehicle moving.");
+    serial_log("Vehicle moving.", 2);
   }
 }
 
@@ -116,7 +116,7 @@ void evaluate_indicated_speed(void) {
     #if HDC
       if (hdc_active) {
         if (indicated_speed > hdc_deactivate_speed) {
-          serial_log("HDC deactivated due to high vehicle speed.");
+          serial_log("HDC deactivated due to high vehicle speed.", 2);
           hdc_active = false;
           kcan_write_msg(hdc_cc_deactivated_on_buf);
           m = {hdc_cc_deactivated_off_buf, millis() + 2000};
@@ -253,14 +253,14 @@ void evaluate_hdc_button(void) {
           m = {set_hdc_cruise_control_buf, time_now + 20};
           hdc_txq.push(&m);
           hdc_requested = true;                                                                                                     // Send request. "HDC" will only activate if cruise control conditions permit.
-          serial_log("Sent HDC cruise control ON message.");
+          serial_log("Sent HDC cruise control ON message.", 2);
         } else if (!vehicle_moving) {
-          serial_log("Car must be moving for HDC.");
+          serial_log("Car must be moving for HDC.", 2);
         } else {
           kcan_write_msg(hdc_cc_unavailable_on_buf);
           m = {hdc_cc_unavailable_off_buf, millis() + 3000};
           ihk_extra_buttons_cc_txq.push(&m);
-          serial_log("Conditions not right for HDC. Sent CC.");
+          serial_log("Conditions not right for HDC. Sent CC.", 2);
         }
       } else {
         stalk_message_counter == 0xFF ? stalk_message_counter = 0xF0 : stalk_message_counter++;
@@ -271,7 +271,7 @@ void evaluate_hdc_button(void) {
         hdc_txq.push(&m);
         m = {cancel_hdc_cruise_control_buf, time_now + 20};
         hdc_txq.push(&m);
-        serial_log("Sent HDC cruise control OFF message.");
+        serial_log("Sent HDC cruise control OFF message.", 2);
       }
       hdc_button_pressed = true;
     }
@@ -290,25 +290,25 @@ void evaluate_cruise_control_status(void) {
         kcan_write_msg(hdc_cc_activated_on_buf);
         hdc_active = true;
         hdc_requested = false;
-        serial_log("HDC cruise control activated.");
+        serial_log("HDC cruise control activated.", 2);
       } else {
-        serial_log("Normal cruise control activated.");
+        serial_log("Normal cruise control activated.", 2);
       }
     }
   } else {
     if (cruise_control_status) {
       cruise_control_status = false;
       if (hdc_active) {
-        serial_log("HDC cruise control deactivated by user.");
+        serial_log("HDC cruise control deactivated by user.", 2);
         kcan_write_msg(hdc_cc_activated_off_buf);
         hdc_active = hdc_requested = false;
       } else {
-        serial_log("Normal cruise control deactivated.");
+        serial_log("Normal cruise control deactivated.", 2);
       }
     } else {
       if (hdc_requested) {
         hdc_active = hdc_requested = cruise_control_status = false;
-        serial_log("Cruise control did not activate when HDC was requested.");
+        serial_log("Cruise control did not activate when HDC was requested.", 2);
       }
     }
   }
