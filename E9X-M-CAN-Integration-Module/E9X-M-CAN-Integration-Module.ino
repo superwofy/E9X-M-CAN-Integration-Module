@@ -2,14 +2,22 @@
 
 
 void setup() {
-  if ( F_CPU_ACTUAL > STANDARD_CLOCK) {
-    set_arm_clock(STANDARD_CLOCK);                                                                                                  // Prevent accidental overclocks. Remove if needed.
+  if ( F_CPU_ACTUAL != STARTUP_CLOCK) {
+    set_arm_clock(STARTUP_CLOCK);                                                                                                   // Prevent accidental overclocks/underclocks. Remove if needed.
   }
   configure_can_controller();
+  #if DEBUG_MODE
+    #if !USB_DISABLE && !STARTUPC_MODIFIED
+      can_setup_time = micros() - 300000;
+    #else
+      can_setup_time = micros();
+    #endif
+  #endif
   initialize_watchdog();
   configure_IO();
   cache_can_message_buffers();
   read_initialize_eeprom();
+  initialize_mdrive();
   #if RTC
     check_rtc_valid();
   #endif
@@ -39,8 +47,8 @@ void loop() {
       control_exhaust_flap_user();
     #endif
     check_diag_transmit_status();
+    check_idrive_queue();
     #if DOOR_VOLUME
-      check_idrive_queue();
       send_volume_request_periodic();
     #endif
     #if NEEDLE_SWEEP
@@ -68,9 +76,13 @@ void loop() {
     check_can_resend_queues();
   }
 
+  check_teensy_cpu_temp();                                                                                                          // Monitor processor temperature.
+  if (terminal_r) {
+    check_teensy_cpu_clock();                                                                                                       // Dynamically scale clock with temperature to extend lifetime.
+  }
+
   if (ignition) {
     check_power_led_state();                                                                                                        // This delay function syncs the power button LED with EDC button LEDS.
-    check_teensy_cpu_temp_clock();                                                                                                  // Monitor processor temperature to extend lifetime.
     check_dsc_queue();
     check_console_buttons();
     send_mdrive_alive_message(10000);
@@ -152,7 +164,7 @@ void loop() {
         evaluate_indicated_speed();
       }
 
-      #if REVERSE_BEEP
+      #if REVERSE_BEEP || DOOR_VOLUME
       else if (k_msg.id == 0x1C6) {                                                                                                 // Monitor PDC warning.
         evaluate_pdc_warning();
       }
@@ -218,7 +230,7 @@ void loop() {
       }
       #endif
 
-      #if MSA_RVC || PDC_AUTO_OFF
+      #if MSA_RVC || PDC_AUTO_OFF || AUTO_DIP_RVC
       else if (k_msg.id == 0x3AF) {                                                                                                 // Monitor PDC bus status.
         evaluate_pdc_bus_status();
       }
@@ -363,6 +375,12 @@ void loop() {
     }
     #endif
 
+    #if DEBUG_MODE
+    else if (k_msg.id == 0x640) {
+      evaluate_power_down_response();
+    }
+    #endif
+
     #if F_VSW01
     else if (k_msg.id == 0x648) {
       dcan_write_msg(k_msg);
@@ -502,7 +520,8 @@ void loop() {
             uif_read = false;
           }
         } else {
-          ptcan_write_msg(d_msg);                                                                                                   // Forward Diagnostic requests to the SVT module from DCAN to PTCAN
+          ptcan_write_msg(d_msg);                                                                                                   // Forward Diagnostic requests to the SVT module from DCAN to PTCAN.
+          disable_diag_transmit_jobs();                                                                                             // Deactivate other 6F1 jobs now that the SVT is being diagnosed.
         }
       } 
       #endif
@@ -510,6 +529,7 @@ void loop() {
       #if F_VSW01
       else if (d_msg.buf[0] == 0x48) {                                                                                              // F_VSW01 address is 0x48
         kcan_write_msg(d_msg);
+        disable_diag_transmit_jobs();                                                                                               // Deactivate other 6F1 jobs now that the VSW is being diagnosed.
       }
       #endif
       
@@ -542,19 +562,20 @@ void loop() {
   
 /**********************************************************************************************************************************************************************************************************************************************/
 
-  #if DEBUG_MODE && CDC2_STATUS_INTERFACE == 2                                                                                      // Check if Dual Serial is set.
-    if (debug_print_timer >= 500) {
-      if (millis() >= 7000) {                                                                                                       // Make sure the main serial port gets recognized first.
-        print_current_state(SerialUSB1);                                                                                            // Print program status to the second Serial port.
-      }
-    }
-  #endif
   #if DEBUG_MODE
+    #if CDC2_STATUS_INTERFACE == 2                                                                                                  // Check if Dual Serial is set.
+      if (debug_print_timer >= 500) {
+        if (millis() >= 7000) {                                                                                                     // Make sure the main serial port gets recognized first.
+          print_current_state(SerialUSB1);                                                                                          // Print program status to the second Serial port.
+        }
+      }
+    #endif
+
     loop_timer = micros();
     while (Serial.available()) {
       serial_interpreter();
     }
-    check_serial_diag_queue();
+    check_serial_diag_actions();
   #endif
   
   wdt.feed();                                                                                                                       // Reset the watchdog timer.

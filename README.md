@@ -119,7 +119,7 @@ Arduino IDE settings
 
 Board: Teensy 4.0
 Optimize: Fastest with LTO
-CPU Speed: 528 MHz
+CPU Speed: 600 MHz
 USB Type: Dual Serial for debugging, Single for normal operation.
 
 

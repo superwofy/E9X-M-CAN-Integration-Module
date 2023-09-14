@@ -81,11 +81,11 @@ void evaluate_reverse_gear_status(void) {
         }
       #endif
       #if AUTO_DIP_RVC
-        if (rvc_dipped) {
+        if (rvc_dipped_by_module && !rvc_dipped_by_driver && pdc_bus_status == 0xA5) {
           bitWrite(rvc_settings[0], 3, 0);                                                                                              // Set tow hitch view to OFF.
           serial_log("Disabled camera dip after reverse gear OFF.", 2);
           kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
-          rvc_dipped = false;
+          rvc_dipped_by_module = false;
         }
       #endif
     }

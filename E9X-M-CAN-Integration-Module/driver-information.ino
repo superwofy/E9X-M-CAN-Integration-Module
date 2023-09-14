@@ -236,12 +236,16 @@ void evaluate_fog_status(void) {
 
 
 void evaluate_reverse_beep(void) {
-  if (reverse_gear_status) {
-    if (reverse_beep_resend_timer >= 3000) {
+  if (reverse_gear_status && engine_running) {
+    if (reverse_beep_resend_timer >= 2000) {
       if (!reverse_beep_sent) {
         if (!pdc_too_close) {
           serial_log("Sending reverse beep.", 2);
-          play_cc_gong();
+          if (!idrive_died) {
+            kcan_write_msg(cic_beep_sound_buf);
+          } else {
+            play_cc_gong();
+          }
           reverse_beep_sent = true;
         } else {
           reverse_beep_sent = true;                                                                                                 // Cancel beep if already too close.
@@ -352,6 +356,11 @@ void evaluate_pdc_bus_status(void) {
     } else {
       serial_log("PDC OFF.", 3);
     }
+    #if AUTO_DIP_RVC
+      if (pdc_bus_status != 0xA5) {
+        rvc_dipped_by_module = rvc_dipped_by_driver = false;
+      }
+    #endif
   }
 }
 
@@ -366,21 +375,38 @@ void evaluate_pdc_warning(void) {
   } else {
     pdc_too_close = false;
   }
+  #if DOOR_VOLUME
+    for (uint8_t i = 0; i < 4; i++) {
+      if (k_msg.buf[i] >= 7) {
+        pdc_tone_on = true;
+        return;
+      } else {
+        pdc_tone_on = false;
+      }
+    }
+  #endif
 }
 
 
 void evaluate_pdc_distance(void) {
-  uint8_t distance_threshold = 0x35;                                                                                                // There's a slight delay when changing modes. Pre-empt by switching earlier.
-  if (vehicle_moving) {
-    distance_threshold = 0x42;
-  }
+  if (!rvc_dipped_by_driver) {
+    uint8_t distance_threshold = 0x36;                                                                                              // There's a slight delay when changing modes. Preempt by switching earlier.
+    if (vehicle_moving) {
+      distance_threshold = 0x40;
+    }
 
-  if (k_msg.buf[2] <= distance_threshold || k_msg.buf[3] <= distance_threshold) {
-    if (reverse_gear_status && !rvc_dipped) {
-      bitWrite(rvc_settings[0], 3, 1);                                                                                              // Set tow hitch view to ON.
-      serial_log("Rear inner sensors RED, enabling camera dip.", 3);
+    if (k_msg.buf[2] <= distance_threshold && k_msg.buf[3] <= distance_threshold) {
+      if (reverse_gear_status && !rvc_dipped_by_module && pdc_bus_status == 0xA5) {
+        bitWrite(rvc_settings[0], 3, 1);                                                                                            // Set tow hitch view to ON.
+        serial_log("Rear inner sensors RED, enabling camera dip.", 3);
+        kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
+        rvc_dipped_by_module = true;
+      }
+    } else if (rvc_dipped_by_module && pdc_bus_status == 0xA5) {
+      bitWrite(rvc_settings[0], 3, 0);                                                                                              // Set tow hitch view to OFF.
+      serial_log("Disabled camera dip after inner sensors no longer RED.", 2);
       kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
-      rvc_dipped = true;
+      rvc_dipped_by_module = false;
     }
   }
 }

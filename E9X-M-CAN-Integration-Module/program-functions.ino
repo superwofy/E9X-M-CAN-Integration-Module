@@ -35,25 +35,18 @@ void read_initialize_eeprom(void) {
     EEPROM.update(12, 0);
     EEPROM.update(13, 1);
     EEPROM.update(14, 1);
-    EEPROM.update(15, 0);
+    EEPROM.update(15, 0xFF);
     EEPROM.update(16, 0x10);
     EEPROM.update(17, 0);
+    EEPROM.update(18, 0);
+    EEPROM.update(19, 1);
+    EEPROM.update(20, 0);
     update_eeprom_checksum();
   } else {
     mdrive_dsc = EEPROM.read(2);
     mdrive_power = EEPROM.read(3);
     mdrive_edc = EEPROM.read(4);
     mdrive_svt = EEPROM.read(5);
-    mdrive_message[1] = mdrive_dsc - 2;                                                                                             // Difference between iDrive settting and MDrive CAN message (OFF) is always 2.
-                                                                                                                                    // 1 unchanged, 5 OFF, 0x11 MDM, 9 On
-    mdrive_message[2] = mdrive_power;                                                                                               // Copy POWER as is.
-    mdrive_message[3] = mdrive_edc;                                                                                                 // Copy EDC as is.
-    if (mdrive_svt == 0xE9) {
-      mdrive_message[4] = 0x41;                                                                                                     // SVT normal, MDrive OFF.
-    } else if (mdrive_svt == 0xF1) {
-      mdrive_message[4] = 0x81;                                                                                                     // SVT sport, MDrive OFF.
-    }
-
     dme_ckm[0][0] = EEPROM.read(6);
     dme_ckm[1][0] = EEPROM.read(7);
     dme_ckm[2][0] = EEPROM.read(8);
@@ -74,7 +67,7 @@ void read_initialize_eeprom(void) {
     #endif
     max_cpu_temp = EEPROM.read(15);
     if (max_cpu_temp == 0xFF) {
-      max_cpu_temp = 0;
+      max_cpu_temp = -40.0;
     }
     #if DOOR_VOLUME
       peristent_volume = EEPROM.read(16);
@@ -93,6 +86,7 @@ void read_initialize_eeprom(void) {
     #if DIM_DRL
       drl_ckm = EEPROM.read(19) == 1 ? true : false;
     #endif
+    serial_commands_unlocked = EEPROM.read(20) == 1 ? true : false;
     serial_log("Loaded data from EEPROM.", 2);
   }
 }
@@ -100,7 +94,7 @@ void read_initialize_eeprom(void) {
 
 uint16_t eeprom_crc(void) {
   teensy_eeprom_crc.restart();
-  for (uint8_t i = 2; i < 20; i++) {
+  for (uint8_t i = 2; i < 21; i++) {
     teensy_eeprom_crc.add(EEPROM.read(i));
   }
   return teensy_eeprom_crc.calc();
@@ -165,7 +159,7 @@ void wdt_callback(void) {
 
 #if DEBUG_MODE
 void print_current_state(Stream &status_serial) {
-  status_serial.println("========================= Operation ========================");
+  status_serial.println(" ================================ Operation ===============================");
   sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "Active" : "Standby");
   status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " Terminal R: %s Ignition: %s", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF");
@@ -229,14 +223,14 @@ void print_current_state(Stream &status_serial) {
     status_serial.println(serial_debug_string);
   #endif
   #if IMMOBILIZER_SEQ
-    status_serial.println("========================= Immobilizer ========================");
+    status_serial.println(" ================================ Immobilizer ===============================");
     sprintf(serial_debug_string, " Immobilizer: %s, Persistent setting: %s", 
             immobilizer_released ? "OFF" : "Active", EEPROM.read(14) == 1 ? "Active" : "OFF");
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " Key detected: %s", key_valid ? "YES" : "NO");
     status_serial.println(serial_debug_string);
   #endif
-  status_serial.println("========================== MDrive ==========================");
+  status_serial.println(" ================================= MDrive =================================");
   sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
   status_serial.println(serial_debug_string);
   status_serial.print(" Settings: DSC-");
@@ -283,7 +277,7 @@ void print_current_state(Stream &status_serial) {
   sprintf(serial_debug_string, " Key profile number: %d", cas_key_number + 1);
   status_serial.println(serial_debug_string);
 
-  status_serial.println("======================= Body ========================");
+  status_serial.println(" ============================== Body ===============================");
   #if RTC
     time_t t = now();
     uint8_t rtc_hours = hour(t);
@@ -377,11 +371,26 @@ void print_current_state(Stream &status_serial) {
     }
   #endif
 
-  status_serial.println("========================== Debug ===========================");
-  uint8_t max_stored_temp = EEPROM.read(15);
-  sprintf(serial_debug_string, "CPU speed: %ld, MHz CPU temperature: %.2f, °C Max recorded: %.2f °C", 
-          F_CPU_ACTUAL / 1000000, tempmonGetTemp(), max_cpu_temp > max_stored_temp ? max_cpu_temp : max_stored_temp);
+  status_serial.println(" ================================= Debug ==================================");
+  int8_t max_stored_temp = EEPROM.read(15);
+  sprintf(serial_debug_string, " CPU speed: %ld, MHz CPU temperature: %.2f, °C Max recorded: %.2f °C", 
+          F_CPU_ACTUAL / 1000000, cpu_temp, max_cpu_temp > max_stored_temp ? max_cpu_temp : max_stored_temp);
   status_serial.println(serial_debug_string);
+  if (clock_mode == -1) {
+    status_serial.println(" Clock mode: STARTUP");
+  } else if (clock_mode == 0) {
+    status_serial.println(" Clock mode: STANDARD_CLOCK");
+  } else if (clock_mode == 1) {
+    status_serial.println(" Clock mode: MILD_UNDERCLOCK");
+  } else if (clock_mode == 2) {
+    status_serial.println(" Clock mode: MEDIUM_UNDERCLOCK");
+  } else if (clock_mode == 3) {
+    status_serial.println(" Clock mode: HIGH_UNDERCLOCK");
+  } else if (clock_mode == 4) {
+    status_serial.println(" Clock mode: MAX_UNDERCLOCK");
+  } else if (clock_mode == 5) {
+    status_serial.println(" Clock mode: CRITICAL");
+  }
   unsigned long loop_calc = micros() - loop_timer;
   if (loop_calc > max_loop_timer) {
     max_loop_timer = loop_calc;
@@ -392,12 +401,14 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Max loop execution time: %ld μSeconds", max_loop_timer);
   }
   status_serial.println(serial_debug_string);
+  sprintf(serial_debug_string, " CAN setup time: %ld μSeconds, total setup time: %ld μSeconds", can_setup_time, setup_time);
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " KCAN errors: %ld, PTCAN errors: %ld, DCAN errors: %ld", kcan_error_counter, ptcan_error_counter, dcan_error_counter);
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " EEPROM CRC: %X -> %s at boot", 
+  sprintf(serial_debug_string, " EEPROM CRC: 0x%X -> %s at boot", 
           stored_eeprom_checksum, calculated_eeprom_checksum == stored_eeprom_checksum ? "Matched" : "Mismatched");
   status_serial.println(serial_debug_string);
-  status_serial.println("============================================================");
+  status_serial.println(" ==========================================================================");
   debug_print_timer = 0;
 }
 #endif
@@ -433,6 +444,7 @@ void reset_ignition_variables(void) {                                           
   seat_heating_pas_txq.flush();
   reverse_beep_sent = pdc_too_close = false;
   reverse_beep_resend_timer = 0;
+  pdc_tone_on = false;
   ihk_extra_buttons_cc_txq.flush();
   hdc_txq.flush();
   pdc_buttons_txq.flush();
@@ -490,7 +502,7 @@ void reset_ignition_variables(void) {                                           
   msa_fake_status_counter = 0;
   pdc_bus_status = 0x80;
   pdc_button_pressed = pdc_with_rvc_requested = false;
-  rvc_dipped = false;
+  rvc_dipped_by_module = rvc_dipped_by_driver = false;
   #if IMMOBILIZER_SEQ
     reset_key_cc();
   #endif

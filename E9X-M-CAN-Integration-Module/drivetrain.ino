@@ -172,6 +172,19 @@ void evaluate_m_mfl_button_press(void) {
 }
 
 
+void initialize_mdrive(void) {
+  mdrive_message[1] = mdrive_dsc - 2;                                                                                               // Difference between iDrive settting and MDrive CAN message (OFF) is always 2.
+                                                                                                                                    // DSC: 1 unchanged, 5 OFF, 0x11 MDM, 9 On
+  mdrive_message[2] = mdrive_power;                                                                                                 // Copy POWER as is.
+  mdrive_message[3] = mdrive_edc;                                                                                                   // Copy EDC as is.
+  if (mdrive_svt == 0xE9) {
+    mdrive_message[4] = 0x41;                                                                                                       // SVT normal, MDrive OFF.
+  } else if (mdrive_svt == 0xF1) {
+    mdrive_message[4] = 0x81;                                                                                                       // SVT sport, MDrive OFF.
+  }
+}
+
+
 void show_mdrive_settings_screen(void) {
   if (diag_transmit) {
     #if IMMOBILIZER_SEQ
@@ -180,6 +193,11 @@ void show_mdrive_settings_screen(void) {
       serial_log("Steering wheel M button held. Showing settings screen.", 2);
       kcan_write_msg(idrive_mdrive_settings_a_buf);                                                                                 // Send steuern_menu job to iDrive.
       kcan_write_msg(idrive_mdrive_settings_b_buf);
+      if (!idrive_died) {
+        time_now = millis();
+        m = {cic_button_sound_buf, time_now + 500};
+        idrive_txq.push(&m);
+      }
     #if IMMOBILIZER_SEQ
     }
     #endif

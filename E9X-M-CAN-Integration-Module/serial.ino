@@ -1,13 +1,14 @@
 // Functions that allow the user to send commands to the program go here.
 
 
-#if DEBUG_MODE
 void serial_interpreter(void) {
   String cmd = Serial.readStringUntil('\n', 64);                                                                                    // Limit command the size to prevent overflow.
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
     if (cmd == "lock_serial") {
       serial_commands_unlocked = false;
-      serial_log("  Serial: Locked.", 0);
+      EEPROM.update(20, serial_commands_unlocked);
+      update_eeprom_checksum();
+      serial_log("  Serial: Commands locked.", 0);
     }
     else if (cmd == "loglevel_0") {
       LOGLEVEL = 0;
@@ -32,10 +33,13 @@ void serial_interpreter(void) {
     else if (cmd == "module_reboot") {
       serial_log("  Serial: Rebooting.", 0);
       if (LOGLEVEL >= 2) {
-        Serial.print("   Serial: ");
+        Serial.print("  Serial: ");
       } else {
         serial_log("  Serial: Saved data to EEPROM.", 0);
       }
+      serial_commands_unlocked = false;
+      EEPROM.update(20, serial_commands_unlocked);
+      delay(200);
       update_data_in_eeprom();
       delay(1000);
       module_reboot();
@@ -46,20 +50,28 @@ void serial_interpreter(void) {
       delay(1000);
       while(1);
     }
+    else if (cmd == "power_down") {
+      if (vehicle_awake) {
+        if (!terminal_r) {
+          if (diag_transmit) {
+            power_down_requested = true;
+            kcan_write_msg(power_down_cmd_a_buf);
+          } else {
+            serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+          }
+        } else {
+          serial_log("  Serial: Terminal R must be OFF.", 0);
+        }
+      } else {
+        serial_log("  Serial: Wake vehicle first.", 0);
+      }
+    }
     else if (cmd == "print_status") {
       print_current_state(Serial);
     }
     else if (cmd == "print_setup_time") {
       sprintf(serial_debug_string, "  Serial: %.2f ms", setup_time / 1000.0);
       serial_log(serial_debug_string, 0);
-    }
-    else if (cmd == "print_voltage") {
-      if (battery_voltage > 0) {
-        sprintf(serial_debug_string, " Serial: %.2f V", battery_voltage);
-        serial_log(serial_debug_string, 0);
-      } else {
-        serial_log("  Serial: voltage unavailable.", 0);
-      }
     }
     else if (cmd == "clear_all_dtcs") {                                                                                             // Should take around 6s to complete.
       if (ignition) {
@@ -113,12 +125,6 @@ void serial_interpreter(void) {
       toggle_mdrive_message_active();
       send_mdrive_message();
       toggle_mdrive_dsc_mode(); 
-    }
-    else if (cmd == "reset_max_temp") {
-      max_cpu_temp = 0;
-      EEPROM.update(15, max_cpu_temp);
-      update_eeprom_checksum();
-      serial_log("  Serial: Reset max recorded CPU temp.", 0);
     }
     else if (cmd == "reset_eeprom") {
       for (uint8_t i = 0; i < 1024; i++) {
@@ -376,9 +382,13 @@ void serial_interpreter(void) {
     else if (cmd == "help") {
       print_help();
     }
+    serial_unlocked_timer = 0;
   } else {
     if (cmd == serial_password) {
+      serial_unlocked_timer = 0;
       serial_commands_unlocked = true;
+      EEPROM.update(20, serial_commands_unlocked);
+      update_eeprom_checksum();
       serial_log("  Serial: Commands unlocked.", 0);
     } else {
       serial_log("  Serial: Locked.", 0);
@@ -403,9 +413,9 @@ void print_help(void) {
   "  loglevel_4 - Sets LOGLEVEL to 4 - debug.\r\n"
   "  module_reboot - Saves EEPROM data and restarts the program.\r\n"
   "  test_watchdog - Create an infinite loop to test the watchdog reset.\r\n"
+  "  power_down - Assume sleep mode immediately.\r\n"
   "  print_status - Prints a set of current runtime variables.\r\n"
   "  print_setup_time - Prints the time it took for the program to complete setup().\r\n"
-  "  print_voltage - Prints the battery voltage.\r\n"
   "  clear_all_dtcs - Clear the error memories of every module on the bus.\r\n"
   "  cc_gong - Create an audible check-control gong.", 0);
   #if EXHAUST_FLAP_CONTROL
@@ -413,7 +423,6 @@ void print_help(void) {
     "  close_exhaust_flap - Release the exhaust solenoid to close the flap.", 0);
   #endif
   serial_log("  toggle_mdrive - Change MDrive state ON-OFF.\r\n"
-    "  reset_max_temp - Sets max recorded CPU temperature to 0 in RAM and EEPROM.\r\n"
     "  reset_eeprom - Sets EEPROM bytes to 0xFF and reboots. EEPROM will be rebuilt on reboot.\r\n"
     "  reset_mdrive - Reset MDrive settings to defaults.\r\n"
     "  sleep_ptcan - Deactivates the PT-CAN transceiver.\r\n"
@@ -467,8 +476,8 @@ void print_help(void) {
 }
 
 
-void check_serial_diag_queue(void) {
-if (!serial_diag_txq.isEmpty()) {
+void check_serial_diag_actions(void) {
+  if (!serial_diag_txq.isEmpty()) {
     serial_diag_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       dcan_write_msg(delayed_tx.tx_msg);
@@ -481,5 +490,35 @@ if (!serial_diag_txq.isEmpty()) {
       serial_log("  Serial: Error memories cleared. Cycle Terminal R ON/OFF.", 0);
     }
   }
+
+  if (serial_commands_unlocked && serial_unlocked_timer >= 480000) {
+    serial_commands_unlocked = false;
+    EEPROM.update(20, serial_commands_unlocked);
+    update_eeprom_checksum();
+    serial_log("  Serial: Locked after timeout.", 0);
+  }
 }
-#endif
+
+
+void evaluate_power_down_response(void) {
+  if (power_down_requested) {
+    if (diag_transmit) {
+      if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
+        kcan_write_msg(power_down_cmd_b_buf);
+      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x21) {                                                                    // Ignore.
+      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {                                                                    // Ignore.
+      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x23) {
+        kcan_write_msg(power_down_cmd_c_buf);
+      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 3 && k_msg.buf[2] == 0x71 && k_msg.buf[3] == 5) {
+        serial_log("  Serial: Power-down command sent successfully.", 0);
+        power_down_requested = false;
+      } else {
+        power_down_requested = false;
+        serial_log("  Serial: Power-down command aborted due to error.", 0);
+      }
+    } else {
+      power_down_requested = false;
+      serial_log("  Serial: Power-down command aborted due to OBD tool presence.", 0);
+    }
+  }
+}

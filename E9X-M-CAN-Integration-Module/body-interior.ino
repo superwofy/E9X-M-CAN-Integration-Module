@@ -332,7 +332,7 @@ void check_console_buttons(void) {
         holding_both_console = true;
       } else {
         if (both_console_buttons_timer >= 10000) {                                                                                  // Hold both buttons for more than 10s.
-          play_cc_gong();                                                                                                           // Acknowledge Immobilizer persist ON-OFF with Gong.
+          kcan_write_msg(cic_button_sound_buf);                                                                                     // Acknowledge Immobilizer persist ON-OFF with Gong.
           immobilizer_persist = !immobilizer_persist;
           EEPROM.update(15, immobilizer_persist);
           update_eeprom_checksum();
@@ -462,6 +462,9 @@ void evaluate_audio_volume(void) {
             serial_log(serial_debug_string, 3);
           #endif
         }
+        if (pdc_tone_on) {                                                                                                        // If PDC beeps are active, volume change has no effect.
+          return;
+        }
         if (k_msg.buf[4] >= 5) {                                                                                                    // Don't reduce if already very low.
           if (left_door_open || right_door_open) {
             volume_change[4] = floor(k_msg.buf[4] * 0.75);                                                                          // Softer decrease.
@@ -549,9 +552,11 @@ void check_idrive_queue(void) {
       if (millis() >= delayed_tx.transmit_time) {
         if (vehicle_awake) {
           kcan_write_msg(delayed_tx.tx_msg);
-          if (delayed_tx.tx_msg.buf[3] == 0x23) {
-            serial_log("Sent volume change job to iDrive.", 2);
-          }
+          #if DOOR_VOLUME
+            if (delayed_tx.tx_msg.buf[3] == 0x23) {
+              serial_log("Sent volume change job to iDrive.", 2);
+            }
+          #endif
         }
         idrive_txq.drop();
       }
@@ -676,5 +681,10 @@ void evaluate_comfort_exit(void) {
 void store_rvc_settings(void) {
   for (uint8_t i = 0; i < 4; i++) {
     rvc_settings[i] = k_msg.buf[i];
+  }
+
+  if (!rvc_dipped_by_driver && (rvc_dipped_by_module != bitRead(k_msg.buf[0], 3)) && pdc_bus_status == 0xA5) {                      // If the driver changed this setting, do not interfere during this cycle.
+    rvc_dipped_by_driver = true;
+    serial_log("Driver changed RVC dip manually.", 3);
   }
 }

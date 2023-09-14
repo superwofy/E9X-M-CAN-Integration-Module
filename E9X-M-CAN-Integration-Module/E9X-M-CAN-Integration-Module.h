@@ -9,7 +9,7 @@
 #include "src/queue/cppQueue.h"                                                                                                     // https://github.com/SMFSW/Queue
 #include "usb_dev.h"
 extern "C" uint32_t set_arm_clock(uint32_t frequency);
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_64> KCAN;                                                                                     // RX: 32 messages with length 8, TX: 8 messages with length 8.
+FlexCAN_T4<CAN1, RX_SIZE_512, TX_SIZE_64> KCAN;                                                                                     // RX: 64/32 messages with length 8, TX: 8 messages with length 8.
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_64> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_64> DCAN;
 WDT_T4<WDT1> wdt;
@@ -40,8 +40,8 @@ CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                            
 #define COMFORT_EXIT 1                                                                                                              // Move driver's seat back when exiting car.
 #define INDICATE_TRUNK_OPENED 1                                                                                                     // Flash hazards when remote opens trunk.
 #define IMMOBILIZER_SEQ 1                                                                                                           // Disable fuel pump until the steering wheel M button is pressed a number of times.
-#if __has_include ("src/secrets.h")                                                                                                 // Optionally, create this file to store sensitive settings.
-  #include "src/secrets.h"
+#if __has_include ("src/custom-settings.h")                                                                                         // Optionally, create this file to store sensitive settings.
+  #include "src/custom-settings.h"
 #endif
 #define IMMOBILIZER_SEQ_ALARM 1                                                                                                     // Sound the alarm if engine is started without disabling immobilizer.
 #if SECRETS
@@ -97,6 +97,7 @@ const unsigned long MEDIUM_UNDERCLOCK_ = 396 * 1000000;
 unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 const unsigned long MILD_UNDERCLOCK_ = 450 * 1000000;
 const unsigned long STANDARD_CLOCK = 528 * 1000000;
+const unsigned long STARTUP_CLOCK = 600 * 1000000;
 const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;                                                                 // Desired voltage - 0.8...  DCDC range is from 0.8 to 1.575V. Safe range is 0.925 to 1.25V
 
 
@@ -124,9 +125,6 @@ const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;             
   These features are *very* implementation specific - usually requiring fabrication. As such they are disabled by default since they're unlikely to be used by anyone except me.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#if __has_include ("src/custom-settings.h")
-  #include "src/custom-settings.h"
-#endif
 #if !DEBUG_MODE
   #ifndef USB_DISABLE
     #define USB_DISABLE 0                                                                                                           // USB can be disabled if not using serial for security reasons. Use caution when enabling this.
@@ -244,9 +242,9 @@ const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hol
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms;
 elapsedMillis dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
 bool ignore_m_press = false, ignore_m_hold = false, holding_both_console = false;
-uint8_t clock_mode = 0;
-float last_cpu_temp = 0, max_cpu_temp = 0;
-CAN_message_t cc_gong_buf;
+int8_t clock_mode = -1;
+float cpu_temp = 0, last_cpu_temp = 0, max_cpu_temp = 0;
+CAN_message_t cc_gong_buf, cic_button_sound_buf, cic_beep_sound_buf;
 bool uif_read = false;
 uint8_t servotronic_message[] = {0, 0xFF};
 CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf;
@@ -333,7 +331,7 @@ CAN_message_t alarm_led_on_buf, alarm_led_off_buf;
 CAN_message_t alarm_siren_on_buf, alarm_siren_off_buf;
 cppQueue alarm_siren_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool reverse_beep_sent = false, pdc_too_close = false;
-elapsedMillis reverse_beep_resend_timer = 3000;
+elapsedMillis reverse_beep_resend_timer = 2000;
 bool reverse_gear_status = false;
 uint8_t f_terminal_status_alive_counter = 0;
 uint8_t f_terminal_status[] = {0, 0, 0, 0xFF, 0, 0, 0x3F, 0xFF};                                                                    // These messages do not exist in BN2000.
@@ -392,7 +390,7 @@ CAN_message_t seat_heating_button_pressed_pas_buf, seat_heating_button_released_
 cppQueue seat_heating_pas_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool sent_steering_heating_request = false, transistor_active = false;
 elapsedMillis transistor_active_timer;
-bool volume_reduced = false, initial_volume_set = false;
+bool volume_reduced = false, initial_volume_set = false, pdc_tone_on = false;
 uint8_t volume_restore_offset = 0, volume_changed_to, peristent_volume = 0;
 elapsedMillis volume_request_periodic_timer = 3000, volume_request_door_timer = 500;
 CAN_message_t vol_request_buf, door_open_cc_off_buf;
@@ -418,7 +416,7 @@ CAN_message_t camera_off_buf, camera_on_buf, pdc_off_camera_on_buf, pdc_on_camer
 CAN_message_t pdc_button_presssed_buf, pdc_button_released_buf;
 cppQueue pdc_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t rvc_settings[] = {0, 0, 0, 0};
-bool rvc_dipped = false;
+bool rvc_dipped_by_module = false, rvc_dipped_by_driver = false;
 bool msa_button_pressed = false;
 uint8_t msa_fake_status_counter = 0;
 CAN_message_t msa_fake_status_buf;
@@ -429,7 +427,7 @@ CAN_message_t mute_asd_buf, demute_asd_buf;
 extern float tempmonGetTemp(void);
 char serial_debug_string[512];
 elapsedMillis debug_print_timer = 500;
-unsigned long max_loop_timer = 0, loop_timer = 0, setup_time = 0;
+unsigned long max_loop_timer = 0, loop_timer = 0, setup_time = 0, can_setup_time = 0;
 uint32_t kcan_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;
 #if SECRETS
@@ -438,5 +436,6 @@ bool serial_commands_unlocked = false;
   String serial_password = "coldboot";                                                                                              // Default password.
 #endif
 cppQueue serial_diag_txq(sizeof(delayed_can_tx_msg), 384, queue_FIFO);
-bool diag_transmit = true;
-elapsedMillis diag_deactivate_timer;
+CAN_message_t power_down_cmd_a_buf, power_down_cmd_b_buf, power_down_cmd_c_buf;
+bool diag_transmit = true, power_down_requested = false;
+elapsedMillis diag_deactivate_timer, serial_unlocked_timer = 0;

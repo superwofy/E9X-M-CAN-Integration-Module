@@ -93,7 +93,7 @@ void configure_can_controller(void) {
   filter_count++;
   KCAN.setFIFOFilter(filter_count, 0x1B4, STD);                                                                                     // Kombi status (indicated speed, handbrake):                   Cycle time 100ms (terminal R ON).
   filter_count++;
-  #if REVERSE_BEEP
+  #if REVERSE_BEEP || DOOR_VOLUME
     KCAN.setFIFOFilter(filter_count, 0x1C6, STD);                                                                                   // PDC acoustic message
     filter_count++;
   #endif
@@ -159,7 +159,7 @@ void configure_can_controller(void) {
   #endif
   KCAN.setFIFOFilter(filter_count, 0x3A8, STD);                                                                                     // M Key (CKM) POWER setting from iDrive:                       Sent when changed.
   filter_count++;
-  #if MSA_RVC || PDC_AUTO_OFF
+  #if MSA_RVC || PDC_AUTO_OFF || AUTO_DIP_RVC
     KCAN.setFIFOFilter(filter_count, 0x3AF, STD);                                                                                   // PDC bus status:                                              Cycle time 2s (idle). Sent when changed.
     filter_count++;
   #endif
@@ -191,6 +191,10 @@ void configure_can_controller(void) {
   #endif
   #if DOOR_VOLUME
     KCAN.setFIFOFilter(filter_count, 0x5C0, STD);                                                                                   // CAS CC notifications:                                        Sent when changed.
+    filter_count++;
+  #endif
+  #if DEBUG_MODE
+    KCAN.setFIFOFilter(filter_count, 0x640, STD);                                                                                   // CAS diagnostic responses:                                    Sent when response is requested.
     filter_count++;
   #endif
   #if F_VSW01
@@ -287,85 +291,86 @@ void toggle_transceiver_standby(bool sleep) {
 }
 
 
-void check_teensy_cpu_temp_clock(void) {                                                                                            // Underclock the processor if it starts to heat up.
-  if (ignition) {                                                                                                                   // If ignition is OFF, the processor will already be underclocked.
-    float cpu_temp = tempmonGetTemp();
-
-    if (cpu_temp > max_cpu_temp) {
-      max_cpu_temp = cpu_temp;
-    }
-
-    if (+(cpu_temp - last_cpu_temp) > HYSTERESIS) {
-
-      if (ambient_temperature_real >= 32 && ambient_temperature_real != 87.5) {                                                     // Make underclock more aggressive at higher ambient temperatures. Ignore if not yet initialized.
-        HIGH_UNDERCLOCK = MAX_UNDERCLOCK;
-        MEDIUM_UNDERCLOCK = HIGH_UNDERCLOCK_;
-        MILD_UNDERCLOCK = MEDIUM_UNDERCLOCK_;
-      } else {
-        HIGH_UNDERCLOCK = HIGH_UNDERCLOCK_;
-        MEDIUM_UNDERCLOCK = MEDIUM_UNDERCLOCK_;
-        MILD_UNDERCLOCK = MILD_UNDERCLOCK_;
-      }
-
-      if (cpu_temp >= MILD_THRESHOLD) {
-        if (clock_mode != 1) {
-          set_arm_clock(MILD_UNDERCLOCK);
-          serial_log("Processor temperature above mild overheat threshold. Underclocking.", 0);
-          clock_mode = 1;
-          #if DEBUG_MODE
-            max_loop_timer = 0;
-          #endif
-        }
-      } else if (cpu_temp >= MEDIUM_THRESHOLD) {
-        if (clock_mode != 2) {
-          set_arm_clock(MEDIUM_UNDERCLOCK);
-          serial_log("Processor temperature above medium overheat threshold. Underclocking.", 0);
-          clock_mode = 2;
-          #if DEBUG_MODE
-            max_loop_timer = 0;
-          #endif
-        }
-      } else if (cpu_temp >= HIGH_THRESHOLD) {
-        if (clock_mode != 3) {
-          set_arm_clock(HIGH_UNDERCLOCK);
-          serial_log("Processor temperature above high overheat threshold. Underclocking.", 0);
-          clock_mode = 3;
-          #if DEBUG_MODE
-            max_loop_timer = 0;
-          #endif
-        }
-      } else if (cpu_temp >= MAX_THRESHOLD) {
-        if (clock_mode != 4) {
-          set_arm_clock(MAX_UNDERCLOCK);
-          serial_log("Processor temperature above max overheat threshold. Underclocking.", 0);
-          clock_mode = 4;
-          #if DEBUG_MODE
-            max_loop_timer = 0;
-          #endif
-        }
-      } else if (cpu_temp >= 90.0) {                                                                                                // This should never happen!
-        if (clock_mode != 5) {
-          uint32_t dcdc = DCDC_REG3;                                                                                                // From clockspeed.c
-          dcdc &= ~DCDC_REG3_TRG_MASK;
-          dcdc |= DCDC_REG3_TRG(CRITICAL_UNDERVOLT);
-          DCDC_REG3 = dcdc;
-          while (!(DCDC_REG0 & DCDC_REG0_STS_DC_OK));
-          serial_log("Processor temperature above max specified Tj. Damage will occur.", 0);
-          clock_mode = 5;
-        }
-      } else {
-        if (clock_mode != 0) {
-          set_arm_clock(STANDARD_CLOCK);
-          serial_log("Restored clock speed.", 0);
-          clock_mode = 0;
-          #if DEBUG_MODE
-            max_loop_timer = 0;
-          #endif
-        }
-      }
-    }
-    last_cpu_temp = cpu_temp;
+void check_teensy_cpu_temp(void) {
+  cpu_temp = tempmonGetTemp();
+  if (cpu_temp > max_cpu_temp) {
+    max_cpu_temp = cpu_temp;
   }
+}
+
+
+void check_teensy_cpu_clock(void) {                                                                                                 // Underclock the processor if it starts to heat up.
+  // If ignition is OFF, the processor will already be underclocked.
+  if (+(cpu_temp - last_cpu_temp) > HYSTERESIS) {
+
+    if (ambient_temperature_real >= 32 && ambient_temperature_real != 87.5) {                                                     // Make underclock more aggressive at higher ambient temperatures. Ignore if not yet initialized.
+      HIGH_UNDERCLOCK = MAX_UNDERCLOCK;
+      MEDIUM_UNDERCLOCK = HIGH_UNDERCLOCK_;
+      MILD_UNDERCLOCK = MEDIUM_UNDERCLOCK_;
+    } else {
+      HIGH_UNDERCLOCK = HIGH_UNDERCLOCK_;
+      MEDIUM_UNDERCLOCK = MEDIUM_UNDERCLOCK_;
+      MILD_UNDERCLOCK = MILD_UNDERCLOCK_;
+    }
+
+    if (cpu_temp >= MILD_THRESHOLD) {
+      if (clock_mode != 1) {
+        set_arm_clock(MILD_UNDERCLOCK);
+        serial_log("Processor temperature above mild overheat threshold. Underclocking.", 0);
+        clock_mode = 1;
+        #if DEBUG_MODE
+          max_loop_timer = 0;
+        #endif
+      }
+    } else if (cpu_temp >= MEDIUM_THRESHOLD) {
+      if (clock_mode != 2) {
+        set_arm_clock(MEDIUM_UNDERCLOCK);
+        serial_log("Processor temperature above medium overheat threshold. Underclocking.", 0);
+        clock_mode = 2;
+        #if DEBUG_MODE
+          max_loop_timer = 0;
+        #endif
+      }
+    } else if (cpu_temp >= HIGH_THRESHOLD) {
+      if (clock_mode != 3) {
+        set_arm_clock(HIGH_UNDERCLOCK);
+        serial_log("Processor temperature above high overheat threshold. Underclocking.", 0);
+        clock_mode = 3;
+        #if DEBUG_MODE
+          max_loop_timer = 0;
+        #endif
+      }
+    } else if (cpu_temp >= MAX_THRESHOLD) {
+      if (clock_mode != 4) {
+        set_arm_clock(MAX_UNDERCLOCK);
+        serial_log("Processor temperature above max overheat threshold. Underclocking.", 0);
+        clock_mode = 4;
+        #if DEBUG_MODE
+          max_loop_timer = 0;
+        #endif
+      }
+    } else if (cpu_temp >= 90.0) {                                                                                                // This should never happen!
+      if (clock_mode != 5) {
+        uint32_t dcdc = DCDC_REG3;                                                                                                // From clockspeed.c
+        dcdc &= ~DCDC_REG3_TRG_MASK;
+        dcdc |= DCDC_REG3_TRG(CRITICAL_UNDERVOLT);
+        DCDC_REG3 = dcdc;
+        while (!(DCDC_REG0 & DCDC_REG0_STS_DC_OK));
+        serial_log("Processor temperature above max specified Tj. Damage will occur.", 0);
+        clock_mode = 5;
+      }
+    } else {
+      if (clock_mode != 0) {
+        set_arm_clock(STANDARD_CLOCK);
+        serial_log("Restored standard clock speed.", 0);
+        clock_mode = 0;
+        #if DEBUG_MODE
+          max_loop_timer = 0;
+        #endif
+      }
+    }
+  }
+  last_cpu_temp = cpu_temp;
 }
 
 
