@@ -118,7 +118,7 @@ void check_kombi_needle_queue(void) {
 
 void needle_sweep_animation(void) {
   if (diag_transmit) {
-    time_now = millis();
+    unsigned long time_now = millis();
     m = {speedo_needle_max_buf, time_now + 100};
     kombi_needle_txq.push(&m);
     m = {tacho_needle_max_buf, time_now + 200};
@@ -420,7 +420,7 @@ void evaluate_handbrake_status(void) {
         serial_log("Handbrake ON.", 2);
         #if PDC_AUTO_OFF
           if (!reverse_gear_status && !vehicle_moving && pdc_bus_status > 0x80) {
-            time_now = millis();
+            unsigned long time_now = millis();
             kcan_write_msg(pdc_button_presssed_buf);
             m = {pdc_button_released_buf, time_now + 100};
             pdc_buttons_txq.push(&m);

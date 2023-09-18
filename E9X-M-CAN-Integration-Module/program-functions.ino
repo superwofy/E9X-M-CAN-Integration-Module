@@ -41,6 +41,8 @@ void read_initialize_eeprom(void) {
     EEPROM.update(18, 0);
     EEPROM.update(19, 1);
     EEPROM.update(20, 0);
+    EEPROM.update(21, 0);
+    EEPROM.update(22, 0);
     update_eeprom_checksum();
   } else {
     mdrive_dsc = EEPROM.read(2);
@@ -77,9 +79,7 @@ void read_initialize_eeprom(void) {
         peristent_volume = 0x10;
       }
     #endif
-    #if INDICATE_TRUNK_OPENED
-      visual_signal_ckm = EEPROM.read(17) == 1 ? true : false;
-    #endif
+    visual_signal_ckm = EEPROM.read(17) == 1 ? true : false;
     #if COMFORT_EXIT
       auto_seat_ckm = EEPROM.read(18) == 1 ? true : false;
     #endif
@@ -87,6 +87,8 @@ void read_initialize_eeprom(void) {
       drl_ckm = EEPROM.read(19) == 1 ? true : false;
     #endif
     serial_commands_unlocked = EEPROM.read(20) == 1 ? true : false;
+    doors_locked = EEPROM.read(21) == 1 ? true : false;
+    doors_alarmed = EEPROM.read(22) == 1 ? true : false;
     serial_log("Loaded data from EEPROM.", 2);
   }
 }
@@ -94,7 +96,7 @@ void read_initialize_eeprom(void) {
 
 uint16_t eeprom_crc(void) {
   teensy_eeprom_crc.restart();
-  for (uint8_t i = 2; i < 21; i++) {
+  for (uint8_t i = 2; i < 23; i++) {
     teensy_eeprom_crc.add(EEPROM.read(i));
   }
   return teensy_eeprom_crc.calc();
@@ -121,15 +123,15 @@ void update_data_in_eeprom(void) {
   #if DOOR_VOLUME
     EEPROM.update(16, peristent_volume);
   #endif
-  #if INDICATE_TRUNK_OPENED
-    EEPROM.update(17, visual_signal_ckm);
-  #endif
+  EEPROM.update(17, visual_signal_ckm);
   #if COMFORT_EXIT
     EEPROM.update(18, auto_seat_ckm);
   #endif
   #if DIM_DRL
     EEPROM.update(19, drl_ckm);
   #endif
+  EEPROM.update(21, doors_locked);
+  EEPROM.update(22, doors_alarmed);
   update_eeprom_checksum();
   serial_log("Saved data to EEPROM.", 2);
 }
@@ -144,9 +146,9 @@ void update_eeprom_checksum(void) {
 
 void initialize_watchdog(void) {
   WDT_timings_t config;
-  config.trigger = wdt_timeout_sec;
+  config.trigger = 10;
   config.callback = wdt_callback;
-  config.timeout = wdt_timeout_sec + 3;                                                                                             // If the watchdog timer is not reset within 10s, re-start the program.
+  config.timeout = 13;                                                                                                              // If the watchdog timer is not reset within 10s, re-start the program.
   wdt.begin(config);
 }
 
@@ -157,14 +159,13 @@ void wdt_callback(void) {
 }
 
 
-#if DEBUG_MODE
 void print_current_state(Stream &status_serial) {
   status_serial.println(" ================================ Operation ===============================");
   sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "Active" : "Standby");
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " Terminal R: %s Ignition: %s", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF");
+  sprintf(serial_debug_string, " Terminal R: %s, Ignition: %s", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " Engine: %s RPM: %d", engine_running ? "ON" : "OFF", RPM / 4);
+  sprintf(serial_debug_string, " Engine: %s, RPM: %d", engine_running ? "ON" : "OFF", RPM / 4);
   status_serial.println(serial_debug_string);
   #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
     sprintf(serial_debug_string, " Indicated speed: %d %s", indicated_speed, speed_mph ? "MPH" : "KPH");
@@ -324,6 +325,8 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Hood: %s", last_hood_status ? "Open" : "Closed");
     status_serial.println(serial_debug_string);
   #endif
+  sprintf(serial_debug_string, " Door locks: %s, alarm: %s", doors_locked ? "ON" : "OFF", doors_alarmed ? "ON" : "OFF");
+  status_serial.println(serial_debug_string);
   #if DOOR_VOLUME
     #if RHD
       sprintf(serial_debug_string, " Passenger's door: %s, Driver's door: %s", 
@@ -388,20 +391,18 @@ void print_current_state(Stream &status_serial) {
     status_serial.println(" Clock mode: HIGH_UNDERCLOCK");
   } else if (clock_mode == 4) {
     status_serial.println(" Clock mode: MAX_UNDERCLOCK");
-  } else if (clock_mode == 5) {
-    status_serial.println(" Clock mode: CRITICAL");
   }
   unsigned long loop_calc = micros() - loop_timer;
   if (loop_calc > max_loop_timer) {
     max_loop_timer = loop_calc;
   }
   if (max_loop_timer > 1000) {
-    sprintf(serial_debug_string, " Max loop execution time: %ld mSeconds", max_loop_timer / 1000);
+    sprintf(serial_debug_string, " Max loop execution time: %.2f ms", max_loop_timer / 1000.0);
   } else {
-    sprintf(serial_debug_string, " Max loop execution time: %ld μSeconds", max_loop_timer);
+    sprintf(serial_debug_string, " Max loop execution time: %ld μs", max_loop_timer);
   }
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " CAN setup time: %ld μSeconds, total setup time: %ld μSeconds", can_setup_time, setup_time);
+  sprintf(serial_debug_string, " CAN setup time: %.2f ms, total setup time: %.2f ms", can_setup_time / 1000.0, setup_time / 1000.0);
   status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " KCAN errors: %ld, PTCAN errors: %ld, DCAN errors: %ld", kcan_error_counter, ptcan_error_counter, dcan_error_counter);
   status_serial.println(serial_debug_string);
@@ -411,7 +412,6 @@ void print_current_state(Stream &status_serial) {
   status_serial.println(" ==========================================================================");
   debug_print_timer = 0;
 }
-#endif
 
 
 void serial_log(const char message[], int8_t level) {
@@ -529,7 +529,9 @@ void reset_sleep_variables(void) {
   wipe_scheduled = false;
   frm_mirror_status_requested = false;
   frm_ahl_flc_status_requested = false;
-  lock_button_pressed  = unlock_button_pressed = false;
+  fold_lock_button_pressed = fold_unlock_button_pressed = false;
+  lock_button_pressed = false;
+  lock_button_pressed_counter = 0;
   mirror_status_retry = 0;
   mirror_fold_txq.flush();
   last_lock_status_can = 0;
@@ -538,6 +540,7 @@ void reset_sleep_variables(void) {
   vsw_switch_counter = 0xF1;
   asd_initialized = false;
   comfort_exit_done = false;
+  full_indicator = false;
   #if IMMOBILIZER_SEQ
     if (immobilizer_persist) {
       if (immobilizer_released) {
@@ -545,6 +548,7 @@ void reset_sleep_variables(void) {
       }
     }
   #endif
+  hazards_flash_txq.flush();
   update_data_in_eeprom();
   kcan_retry_counter = ptcan_retry_counter = dcan_retry_counter = 0;
   kcan_resend_txq.flush();

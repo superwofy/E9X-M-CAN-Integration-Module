@@ -2,7 +2,7 @@
 
 
 void send_dsc_mode(uint8_t mode) {
-  time_now = millis();
+  unsigned long time_now = millis();
   if (mode == 0) {
     m = {dsc_on_buf, time_now};
     dsc_txq.push(&m);
@@ -71,7 +71,7 @@ void evaluate_reverse_gear_status(void) {
       #endif
       #if PDC_AUTO_OFF
         if (handbrake_status && pdc_bus_status > 0x80) {
-          time_now = millis();
+          unsigned long time_now = millis();
           kcan_write_msg(pdc_button_presssed_buf);
           m = {pdc_button_released_buf, time_now + 100};
           pdc_buttons_txq.push(&m);
@@ -132,9 +132,10 @@ void evaluate_indicated_speed(void) {
 
 void send_f_road_inclination(void) {
   if (f_chassis_inclination_timer >= 98) {
+    uint8_t f_road_inclination[] = {0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF};                                                      // Angle formula simlar to 56.1.2.
     f_road_inclination[2] = f_vehicle_angle & 0xFF;                                                                                 // Send in LE.
     f_road_inclination[3] = 0x20 | f_vehicle_angle >> 8;                                                                            // Byte3 lower 4 bits fixed to 2 - QU_AVL_LOGR_RW Signal value is valid, permanent.
-    f_road_inclination_buf = make_msg_buf(0x163, 8, f_road_inclination);
+    CAN_message_t f_road_inclination_buf = make_msg_buf(0x163, 8, f_road_inclination);
     ptcan_write_msg(f_road_inclination_buf);
     f_chassis_inclination_timer = 0;
   }
@@ -143,6 +144,7 @@ void send_f_road_inclination(void) {
 
 void send_f_longitudinal_acceleration(void) {
   if (f_chassis_longitudinal_timer >= 100) {
+    uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                         // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
     uint16_t raw_value = 0;
     // Combine the second half (LTR) of byte3 with byte2 to form 12-bit signed integer.
     if (pt_msg.buf[2] > 0xF) {
@@ -163,7 +165,7 @@ void send_f_longitudinal_acceleration(void) {
                                                     : f_longitudinal_acceleration_alive_counter++;
     f_longitudinal_acceleration[2] = longitudinal_acceleration & 0xFF;                                                              // Convert and transmit in LE.
     f_longitudinal_acceleration[3] = longitudinal_acceleration >> 8;
-    f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
+    CAN_message_t f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
     ptcan_write_msg(f_longitudinal_acceleration_buf);
     f_chassis_longitudinal_timer = 0;
   }
@@ -172,6 +174,7 @@ void send_f_longitudinal_acceleration(void) {
 
 void send_f_yaw_rate(void) {
   if (f_chassis_yaw_timer >= 102) {
+    uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                                          // M4 (VYAW_VEH) 56.0.2. Byte5 fixed 0x2F - Signal value is valid QU_VYAW_VEH.
     uint16_t raw_value = 0;
     if (pt_msg.buf[5] > 0xF) {
       raw_value = ((pt_msg.buf[6] & 0xF) << 8 | pt_msg.buf[5]);
@@ -191,7 +194,7 @@ void send_f_yaw_rate(void) {
     f_yaw_rate[2] = yaw_rate;
     f_yaw_rate[2] = yaw_rate & 0xFF;                                                                                                // Convert and transmit in LE.
     f_yaw_rate[3] = yaw_rate >> 8;
-    f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
+    CAN_message_t f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
     ptcan_write_msg(f_yaw_rate_buf);
     f_chassis_yaw_timer = 0;
   }
@@ -200,6 +203,7 @@ void send_f_yaw_rate(void) {
 
 void send_f_speed_status(void) {
   if (f_chassis_speed_timer >= 104) {
+    uint8_t f_speed[] = {0, 0, 0, 0, 0};                                                                                            // Message is the same format as Flexray 55.3.4.
     if (pt_msg.buf[0] > 0xF) {
       real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                       // KM/h
     } else {
@@ -232,7 +236,7 @@ void send_f_speed_status(void) {
       f_speed_crc.add(f_speed[i]);
     }
     f_speed[0] = f_speed_crc.calc();
-    f_speed_buf = make_msg_buf(0x1A1, 5, f_speed);
+    CAN_message_t f_speed_buf = make_msg_buf(0x1A1, 5, f_speed);
     ptcan_write_msg(f_speed_buf);
     f_chassis_speed_timer = 0;
   }
@@ -243,30 +247,35 @@ void evaluate_hdc_button(void) {
   if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
     if (!hdc_button_pressed) {
       if (!hdc_active) {
-        if (!cruise_control_status && vehicle_moving && indicated_speed <= max_hdc_speed) {
-          stalk_message_counter == 0xFF ? stalk_message_counter = 0xF0 : stalk_message_counter++;
-          uint8_t set_hdc_cruise_control[] = {set_hdc_checksums[stalk_message_counter - 0xF0], stalk_message_counter, 8, 0xFC};
-          set_hdc_cruise_control_buf = make_msg_buf(0x194, 4, set_hdc_cruise_control);
-          time_now = millis();
-          m = {set_hdc_cruise_control_buf, time_now};
-          hdc_txq.push(&m);
-          m = {set_hdc_cruise_control_buf, time_now + 20};
-          hdc_txq.push(&m);
-          hdc_requested = true;                                                                                                     // Send request. "HDC" will only activate if cruise control conditions permit.
-          serial_log("Sent HDC cruise control ON message.", 2);
-        } else if (!vehicle_moving) {
-          serial_log("Car must be moving for HDC.", 2);
+        if (vehicle_moving) {
+          if (indicated_speed <= max_hdc_speed) {
+            if (!cruise_control_status) {
+              stalk_message_counter == 0xFF ? stalk_message_counter = 0xF0 : stalk_message_counter++;
+              uint8_t set_hdc_checksums[] = {0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF, 0, 2, 3, 4};
+              uint8_t set_hdc_cruise_control[] = {set_hdc_checksums[stalk_message_counter - 0xF0], stalk_message_counter, 8, 0xFC};
+              set_hdc_cruise_control_buf = make_msg_buf(0x194, 4, set_hdc_cruise_control);
+              unsigned long time_now = millis();
+              m = {set_hdc_cruise_control_buf, time_now};
+              hdc_txq.push(&m);
+              m = {set_hdc_cruise_control_buf, time_now + 20};
+              hdc_txq.push(&m);
+              hdc_requested = true;                                                                                                 // Send request. "HDC" will only activate if cruise control conditions permit.
+              serial_log("Sent HDC cruise control ON message.", 2);
+            } else {
+              hdc_active = true;
+              kcan_write_msg(hdc_cc_activated_on_buf);
+              serial_log("HDC activated with cruise control already ON.", 2);
+            }
+          }
         } else {
-          kcan_write_msg(hdc_cc_unavailable_on_buf);
-          m = {hdc_cc_unavailable_off_buf, millis() + 3000};
-          ihk_extra_buttons_cc_txq.push(&m);
-          serial_log("Conditions not right for HDC. Sent CC.", 2);
+          serial_log("Car must be moving for HDC.", 2);
         }
       } else {
         stalk_message_counter == 0xFF ? stalk_message_counter = 0xF0 : stalk_message_counter++;
+        uint8_t cancel_hdc_checksums[] = {0xFD, 0xFE, 0xFF, 0, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC};
         uint8_t cancel_hdc_cruise_control[] = {cancel_hdc_checksums[stalk_message_counter - 0xF0], stalk_message_counter, 0x10, 0xFC};
         cancel_hdc_cruise_control_buf = make_msg_buf(0x194, 4, cancel_hdc_cruise_control);
-        time_now = millis();
+        unsigned long time_now = millis();
         m = {cancel_hdc_cruise_control_buf, time_now};
         hdc_txq.push(&m);
         m = {cancel_hdc_cruise_control_buf, time_now + 20};

@@ -19,12 +19,12 @@ void evaluate_drl_status(void) {
 void evaluate_drl_ckm(void) {
   if (k_msg.buf[2] == 0xFE) {
     if (!drl_ckm) {
-      serial_log("DRL CKM enabled.", 2);
+      serial_log("DRL CKM ON.", 2);
       drl_ckm = true;
     }
   } else {
     if (drl_ckm) {
-      serial_log("DRL CKM disabed.", 2);
+      serial_log("DRL CKM OFF.", 2);
       drl_ckm = false;
     }
   }
@@ -51,7 +51,7 @@ void evaluate_indicator_status_dim(void) {
   if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                                // Off or Hazards
     #if DIM_DRL
       if (drl_ckm && drl_status && diag_transmit) {
-        time_now = millis();
+        unsigned long time_now = millis();
         if (right_dimmed) {
           m = {right_drl_bright_buf, time_now + 100};
           dim_drl_txq.push(&m);
@@ -65,18 +65,16 @@ void evaluate_indicator_status_dim(void) {
         }
       }
     #endif
-    #if INDICATE_TRUNK_OPENED
-      if (k_msg.buf[0] == 0xB1) {
-        hazards_on = true;
-      } else {
-        hazards_on = false;
-      }
-    #endif
+    if (k_msg.buf[0] == 0xB1) {
+      hazards_on = true;
+    } else {
+      hazards_on = false;
+    }
     indicators_on = false;
   } else if (k_msg.buf[0] == 0x91) {                                                                                                // Left indicator
     #if DIM_DRL
       if (drl_ckm && drl_status && diag_transmit) {
-        time_now = millis();
+        unsigned long time_now = millis();
         if (right_dimmed) {
           m = {right_drl_bright_buf, time_now + 100};
           dim_drl_txq.push(&m);
@@ -98,7 +96,7 @@ void evaluate_indicator_status_dim(void) {
   } else if (k_msg.buf[0] == 0xA1) {                                                                                                // Right indicator
     #if DIM_DRL
       if (drl_ckm && drl_status && diag_transmit) {
-        time_now = millis();
+        unsigned long time_now = millis();
         if (left_dimmed) {
           m = {left_drl_bright_buf, time_now + 100};
           dim_drl_txq.push(&m);
@@ -123,20 +121,24 @@ void evaluate_indicator_status_dim(void) {
 
 void undim_mirrors_with_indicators(void) {
   // Makes it easier to see cyclists at night in the city when turning...
-  if (indicators_on && rls_time_of_day == 2 && frm_undim_timer >= 10000) {
-    if (engine_running && indicated_speed <= 30) {
-      kcan_write_msg(frm_mirror_undim_buf);
-      frm_undim_timer = 0;
-      serial_log("Undimmed exterior mirrors with indicator.", 2);
+  if (full_indicator) {
+    if (rls_time_of_day == 2 && frm_undim_timer >= 10000) {
+      if (engine_running && indicated_speed <= 30) {
+        kcan_write_msg(frm_mirror_undim_buf);
+        frm_undim_timer = 0;
+        serial_log("Undimmed exterior mirrors with indicator.", 2);
+      }
     }
   }
 }
 
 
-void indicate_trunk_opened(void) {
+void indicate_trunk_opened(uint16_t boot_delay) {
   if (visual_signal_ckm && !engine_running && !hazards_on && !indicators_on) {
     serial_log("Remote trunk button pressed. Flashing hazards.", 2);
-    kcan_write_msg(flash_hazards_buf);
+    unsigned long time_now = millis();
+    m = {flash_hazards_single_buf, boot_delay + time_now};
+    hazards_flash_txq.push(&m);
   }
 }
 
@@ -254,9 +256,9 @@ void control_exhaust_flap_user(void) {
     }
   } else {
     #if QUIET_START
-      if (ignition || terminal_r || terminal_50) {
+      if (terminal_r && !exhaust_flap_sport) {                                                                                      // Close the flap when Terminal R activates, allow bypass with MDrive.
         if (exhaust_flap_open) {
-          actuate_exhaust_solenoid(HIGH);                                                                                           // Close the flap (if vacuum still available)
+          actuate_exhaust_solenoid(HIGH);                                                                                           // Close the flap (if vacuum still available).
           serial_log("Quiet start enabled. Exhaust flap closed.", 2);
         }
       } else {
@@ -335,66 +337,107 @@ void check_key_changed(void) {
 
 
 void evaluate_remote_button(void) {
-  if (!engine_running) {                                                                                                            // Ignore if locking car while running.
-    if (k_msg.buf[2] != last_lock_status_can) {                                                                                     // Lock/Unlock messages are sent many times. Should only react to the first.
-      if (k_msg.buf[1] == 0x30 || k_msg.buf[1] == 0x33) {
-        time_now = millis();
-        if (k_msg.buf[2] == 4) {
-          if (!left_door_open && !right_door_open) {
-            lock_button_pressed = true;
-            serial_log("Remote lock button pressed.", 2);
-            #if AUTO_MIRROR_FOLD
-              if (diag_transmit) {
-                serial_log("Checking mirror status.", 2);
-                kcan_write_msg(frm_mirror_status_request_a_buf);
-                frm_mirror_status_requested = true;
-              }
-            #endif
+  if (k_msg.buf[2] != last_lock_status_can) {                                                                                       // Lock/Unlock messages are sent many times. Should only react to the first.
+    if (k_msg.buf[2] == 4 && !engine_running) {                                                                                     // Ignore if locking car while running.
+      if (!left_door_open && !right_door_open) {
+        if (!doors_locked || !doors_alarmed) {                                                                                      // This code should only run when the car is locked. Alarm armed/unarmed.
+          serial_log("Remote lock button pressed.", 2);
+          fold_lock_button_pressed = true;
+          #if AUTO_MIRROR_FOLD
+            if (diag_transmit) {
+              serial_log("Checking mirror status.", 2);
+              kcan_write_msg(frm_mirror_status_request_a_buf);
+              frm_mirror_status_requested = true;
+            }
             #if UNFOLD_WITH_DOOR
               unfold_with_door_open = false;
             #endif
-            #if IMMOBILIZER_SEQ_ALARM
-              m = {alarm_led_off_buf, time_now + 100};                                                                            // Release control of the LED so that alarm can control it.
-              immobilizer_txq.push(&m);
-              m = {alarm_led_off_buf, time_now + 500};
-              immobilizer_txq.push(&m);
-              alarm_led = false;
-              lock_led = true;
-              led_message_counter = 60;                                                                                           // Make sure we're ready once Terminal R cycles.
-              serial_log("Deactivated DWA LED when door locked.", 2);
-            #endif
-            #if COMFORT_EXIT
-              comfort_exit_done = false;
-            #endif
-          }
-        }
-        
-        else if (k_msg.buf[2] == 1) {
-          unlock_button_pressed = true;
-          serial_log("Remote unlock button pressed.", 2);
-          #if AUTO_MIRROR_FOLD
-          if (diag_transmit) {
-            serial_log("Checking mirror status.", 2);
-            kcan_write_msg(frm_mirror_status_request_a_buf);
-            frm_mirror_status_requested = true;
-          }
           #endif
           #if IMMOBILIZER_SEQ_ALARM
-            lock_led = false;
+            unsigned long time_now = millis();
+            m = {alarm_led_return_control_buf, time_now + 100};                                                                     // Release control of the LED so that alarm can control it.
+            immobilizer_txq.push(&m);
+            m = {alarm_led_return_control_buf, time_now + 500};
+            immobilizer_txq.push(&m);
+            alarm_led = false;
+            lock_led = true;
+            led_message_counter = 60;                                                                                               // Make sure we're ready once Terminal R cycles.
+            serial_log("Deactivated DWA LED when door locked.", 2);
           #endif
-        }
-
-        #if INDICATE_TRUNK_OPENED
-        else if (k_msg.buf[2] == 0x10) {
-          indicate_trunk_opened();
-        }
-        #endif
-
-        else if (k_msg.buf[2] == 0) {
-          serial_log("Remote buttons released.", 2);
+          #if COMFORT_EXIT
+            comfort_exit_done = false;
+          #endif
+        } 
+        
+        if (doors_alarmed) {                                                                                                        // Car fully locked.
+          // For remote range see: https://www.spoolstreet.com/threads/e92-key-remote-range-one-solution.9072/
+          if (vehicle_awakened_time >= 10000) {                                                                                     // Car was already awake.
+            if (doors_armed_timer >= 10000) {                                                                                       // Must be at least 10s to avoid interference with DWA lock button disable sensors.
+              indicate_car_locked(0);
+            }
+          } else {                                                                                                                  // Car woke up just now with the remote.
+            indicate_car_locked(100);
+          }
         }
       }
-      last_lock_status_can = k_msg.buf[2];
+
+      lock_button_pressed = true;
+      lock_button_pressed_counter = 1;
+    }
+    
+    else if (k_msg.buf[2] == 1 && !engine_running) {                                                                                // Ignore if unlocking car while running.
+      if (doors_locked || doors_alarmed) {                                                                                          // Only run once when unlocking the car.
+        serial_log("Remote unlock button pressed.", 2);
+        #if AUTO_MIRROR_FOLD
+        fold_unlock_button_pressed = true;
+        if (diag_transmit) {
+          serial_log("Checking mirror status.", 2);
+          kcan_write_msg(frm_mirror_status_request_a_buf);
+          frm_mirror_status_requested = true;
+        }
+        #endif
+        #if IMMOBILIZER_SEQ_ALARM
+          lock_led = false;
+        #endif
+      }
+
+      lock_button_pressed = false;
+      hazards_flash_txq.flush();
+    }
+
+    else if (k_msg.buf[2] == 0x10) {
+      lock_button_pressed = false;
+      if (millis() >= 10000) {
+        indicate_trunk_opened(0);
+      } else {                                                                                                                      // Car just woke up from deep sleep.
+        indicate_trunk_opened(100);
+      }
+    }
+
+    else if (k_msg.buf[2] == 0) {
+      serial_log("Remote buttons released.", 2);
+      lock_button_pressed = false;
+      lock_button_pressed_counter = 0;
+    }
+    last_lock_status_can = k_msg.buf[2];
+  } else {                                                                                                                          // A button is being held, or they're all released.
+    if (lock_button_pressed) {
+      if (!terminal_r) {
+        if (lock_button_pressed_counter < 199) {                                                                                    // While the lock message is being received increment counter. Around 20s.
+          lock_button_pressed_counter++;
+        } else {
+          if (diag_transmit) {
+            kcan_write_msg(flash_hazards_single_buf);
+            lock_button_pressed_counter = 0;
+            serial_log("Sending power_down command after holding button for 20s.", 2);
+            power_down_requested = true;
+            kcan_write_msg(power_down_cmd_a_buf);
+          }
+        }
+      } else {
+        serial_log("Cannot run power_down with terminal R ON.", 2);
+        lock_button_pressed_counter = 0;
+      }
     }
   }
 }
@@ -417,7 +460,7 @@ void evaluate_mirror_fold_status(void) {
       frm_mirror_status_requested = false;
       mirror_status_retry = 0;
 
-      if (lock_button_pressed) {
+      if (fold_lock_button_pressed) {
         if (!mirrors_folded) {
           serial_log("Folding mirrors after lock button pressed.", 2);
           toggle_mirror_fold();
@@ -425,8 +468,8 @@ void evaluate_mirror_fold_status(void) {
             unfold_with_door_open = true;
           #endif
         }
-        lock_button_pressed = false;
-      } else if (unlock_button_pressed) {
+        fold_lock_button_pressed = false;
+      } else if (fold_unlock_button_pressed) {
         if (mirrors_folded) {
           serial_log("Will un-fold mirrors when door is opened after unlock button pressed.", 2);
           #if UNFOLD_WITH_DOOR
@@ -434,7 +477,7 @@ void evaluate_mirror_fold_status(void) {
           #else
             toggle_mirror_fold();
           #endif
-          unlock_button_pressed = false;
+          fold_unlock_button_pressed = false;
         }
       }
     } else {                                                                                                                        // Try again. This will only work if the FRM first sent an error code.
@@ -454,7 +497,7 @@ void evaluate_mirror_fold_status(void) {
 
 
 void toggle_mirror_fold(void) {
-  time_now = millis();
+  unsigned long time_now = millis();
   m = {frm_toggle_fold_mirror_a_buf, time_now + 300};
   mirror_fold_txq.push(&m);
   m = {frm_toggle_fold_mirror_b_buf, time_now + 310};
@@ -516,7 +559,7 @@ void evaluate_dipped_beam_status(void) {
       #if FRONT_FOG_CORNER_AHL_SYNC
         frm_ahl_flc_status_requested = true;
         kcan_write_msg(frm_ahl_flc_status_request_buf);
-        time_now = millis();
+        unsigned long time_now = millis();
         m = {frm_ahl_flc_status_request_buf, time_now + 5000};                                                                      // Send a delayed message as this job can return 0 right after startup.
         fog_corner_right_txq.push(&m);
       #endif
@@ -657,7 +700,7 @@ void evaluate_corner_fog_activation(void) {
 
 void left_fog_soft(bool on) {
   fog_corner_left_txq.flush();
-  time_now = millis();
+  unsigned long time_now = millis();
   if (on) {
     m = {front_left_fog_on_a_buf, time_now};
     fog_corner_left_txq.push(&m);
@@ -694,7 +737,7 @@ void left_fog_soft(bool on) {
 
 void right_fog_soft(bool on) {
   fog_corner_right_txq.flush();
-  time_now = millis();
+  unsigned long time_now = millis();
   if (on) {
     m = {front_right_fog_on_a_buf, time_now};
     fog_corner_right_txq.push(&m);
@@ -830,8 +873,9 @@ void evaluate_vehicle_tilt_angle(void) {                                        
 
 void send_f_brightness_status(void) {
   if (f_outside_brightness_timer >= 500) {
+    uint8_t f_outside_brightness[] = {0xFE, 0xFE};                                                                                  // Daytime?. The two bytes may represent the two photosensors (driver's/passenger's side in FXX).
     f_outside_brightness[0] = f_outside_brightness[1] = rls_brightness;
-    f_outside_brightness_buf = make_msg_buf(0x2A5, 2, f_outside_brightness);
+    CAN_message_t f_outside_brightness_buf = make_msg_buf(0x2A5, 2, f_outside_brightness);
     ptcan_write_msg(f_outside_brightness_buf);
     f_outside_brightness_timer = 0;
   }
@@ -841,13 +885,74 @@ void send_f_brightness_status(void) {
 void evaluate_door_lock_ckm(void) {
   if (bitRead(k_msg.buf[0], 0) == 0 && bitRead(k_msg.buf[0], 1) == 1) {
     if (!visual_signal_ckm) {
-      serial_log("Visual signal CKM enabled.", 2);
+      serial_log("Visual signal CKM ON.", 2);
       visual_signal_ckm = true;
     }
   } else {
     if (visual_signal_ckm) {
-      serial_log("Visual signal CKM disabed.", 2);
+      serial_log("Visual signal CKM OFF.", 2);
       visual_signal_ckm = false;
+    }
+  }
+}
+
+
+void evaluate_drivers_door_status(void) {                                                                                           // The car won't lock fully with driver's door open, this should be enough.
+  if (k_msg.buf[3] == 0xFC) {                                                                                                       // Door closed.
+    if (k_msg.buf[0] == 0x83) {                                                                                                     // Deadlock ON.
+      if (!doors_locked || !doors_alarmed) {
+        doors_armed_timer = 0;
+        serial_log("Doors locked and alarmed.", 2);
+        #if DEBUG_MODE
+          if (serial_commands_unlocked) {
+            serial_commands_unlocked = false;
+            EEPROM.update(20, serial_commands_unlocked);
+            update_eeprom_checksum();
+            serial_log("Locked serial interface.", 0);
+          }
+        #endif
+        doors_locked = doors_alarmed = true;
+      }
+    } else if (k_msg.buf[0] == 0x82) {
+      if (!doors_locked) {
+        serial_log("Doors locked, alarm not set.", 2);
+        doors_locked = true;
+        doors_alarmed = false;
+      }
+    } else {
+      if (doors_locked || doors_alarmed) {
+        serial_log("Doors unlocked.", 2);
+        doors_locked = doors_alarmed = false;
+      }
+    }
+  } else {
+    if (doors_locked || doors_alarmed) {
+      serial_log("Doors unlocked.", 2);
+      doors_locked = doors_alarmed = false;
+    }
+  }
+}
+
+
+void indicate_car_locked(uint16_t boot_delay) {
+  if (visual_signal_ckm && !hazards_on && !indicators_on) {
+    serial_log("Car finder triggered. Flashing hazards 4 times.", 2);
+    hazards_flash_txq.flush();                                                                                                      // Cancel pending flashes.
+    unsigned long time_now = millis();
+    m = {flash_hazards_double_buf, boot_delay + time_now + 50};                                                                     // Minimum time between messages is 1.3s.
+    hazards_flash_txq.push(&m);
+    m = {flash_hazards_double_buf, boot_delay + time_now + 1350};
+    hazards_flash_txq.push(&m);
+  }
+}
+
+
+void check_hazards_queue(void) {
+  if (!hazards_flash_txq.isEmpty()) {
+    hazards_flash_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      hazards_flash_txq.drop();
     }
   }
 }

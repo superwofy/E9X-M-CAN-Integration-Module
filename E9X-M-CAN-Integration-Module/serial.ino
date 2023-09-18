@@ -54,6 +54,7 @@ void serial_interpreter(void) {
       if (vehicle_awake) {
         if (!terminal_r) {
           if (diag_transmit) {
+            serial_log("  Serial: Sending power down command.", 0);
             power_down_requested = true;
             kcan_write_msg(power_down_cmd_a_buf);
           } else {
@@ -77,7 +78,7 @@ void serial_interpreter(void) {
       if (ignition) {
         if (diag_transmit) {
           serial_log("  Serial: Clearing error and shadow memories.", 0);
-          time_now = millis();
+          unsigned long time_now = millis();
           uint8_t clear_fs_job[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0}, i;
           for (i = 0; i < 0x8C; i++) {
             clear_fs_job[0] = i;
@@ -249,7 +250,7 @@ void serial_interpreter(void) {
     }
     else if (cmd == "mirror_fold_status") {
       if (diag_transmit) {
-        lock_button_pressed = unlock_button_pressed = false;
+        fold_lock_button_pressed = fold_unlock_button_pressed = false;
         frm_mirror_status_requested = true;
         kcan_write_msg(frm_mirror_status_request_a_buf);
         if (LOGLEVEL >= 2) {
@@ -413,7 +414,7 @@ void print_help(void) {
   "  loglevel_4 - Sets LOGLEVEL to 4 - debug.\r\n"
   "  module_reboot - Saves EEPROM data and restarts the program.\r\n"
   "  test_watchdog - Create an infinite loop to test the watchdog reset.\r\n"
-  "  power_down - Assume sleep mode immediately.\r\n"
+  "  power_down - Assume sleep mode immediately. KL30G will be turned OFF.\r\n"
   "  print_status - Prints a set of current runtime variables.\r\n"
   "  print_setup_time - Prints the time it took for the program to complete setup().\r\n"
   "  clear_all_dtcs - Clear the error memories of every module on the bus.\r\n"
@@ -496,29 +497,5 @@ void check_serial_diag_actions(void) {
     EEPROM.update(20, serial_commands_unlocked);
     update_eeprom_checksum();
     serial_log("  Serial: Locked after timeout.", 0);
-  }
-}
-
-
-void evaluate_power_down_response(void) {
-  if (power_down_requested) {
-    if (diag_transmit) {
-      if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
-        kcan_write_msg(power_down_cmd_b_buf);
-      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x21) {                                                                    // Ignore.
-      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {                                                                    // Ignore.
-      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x23) {
-        kcan_write_msg(power_down_cmd_c_buf);
-      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 3 && k_msg.buf[2] == 0x71 && k_msg.buf[3] == 5) {
-        serial_log("  Serial: Power-down command sent successfully.", 0);
-        power_down_requested = false;
-      } else {
-        power_down_requested = false;
-        serial_log("  Serial: Power-down command aborted due to error.", 0);
-      }
-    } else {
-      power_down_requested = false;
-      serial_log("  Serial: Power-down command aborted due to OBD tool presence.", 0);
-    }
   }
 }

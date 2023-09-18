@@ -2,17 +2,7 @@
 
 
 void setup() {
-  if ( F_CPU_ACTUAL != STARTUP_CLOCK) {
-    set_arm_clock(STARTUP_CLOCK);                                                                                                   // Prevent accidental overclocks/underclocks. Remove if needed.
-  }
-  configure_can_controller();
-  #if DEBUG_MODE
-    #if !USB_DISABLE && !STARTUPC_MODIFIED
-      can_setup_time = micros() - 300000;
-    #else
-      can_setup_time = micros();
-    #endif
-  #endif
+  configure_flexcan();
   initialize_watchdog();
   configure_IO();
   cache_can_message_buffers();
@@ -28,12 +18,9 @@ void setup() {
       usb_init();
     }
   #endif
+  tempmon_init();                                                                                                                   // If startup.c is modified, initalize tempmon now.
   #if DEBUG_MODE
-    #if !USB_DISABLE && !STARTUPC_MODIFIED
-      setup_time = micros() - 300000;
-    #else
-      setup_time = micros();
-    #endif
+    setup_time = micros();                                                                                                          // If startup.c is not modified this is wrong by 300ms.
   #endif
 }
 
@@ -73,6 +60,7 @@ void loop() {
     #if F_ZBE_WAKE || F_VSW01 || F_NIVI
       send_f_vehicle_mode();
     #endif
+    check_hazards_queue();
     check_can_resend_queues();
   }
 
@@ -170,6 +158,12 @@ void loop() {
       }
       #endif
 
+      #if MIRROR_UNDIM
+      else if (k_msg.id == 0x1EE) {
+        evaluate_indicator_stalk();
+      }
+      #endif
+
       else if (k_msg.id == 0x1F6) {                                                                                                 // Monitor indicator status
         evaluate_indicator_status_dim();
       }
@@ -264,7 +258,11 @@ void loop() {
       #endif
     }
 
-    if (k_msg.id == 0x130) {                                                                                                        // Monitor terminal, clutch and key number.
+    if (k_msg.id == 0xEA) {                                                                                                         // Driver's door status.
+      evaluate_drivers_door_status();
+    }
+
+    else if (k_msg.id == 0x130) {                                                                                                   // Monitor terminal, clutch and key number.
       evaluate_terminal_clutch_keyno_status();
     }
 
@@ -273,9 +271,7 @@ void loop() {
     }
 
     else if (k_msg.id == 0x23A) {                                                                                                   // Monitor remote function status
-      #if AUTO_MIRROR_FOLD || INDICATE_TRUNK_OPENED || IMMOBILIZER_SEQ_ALARM
-        evaluate_remote_button();
-      #endif
+      evaluate_remote_button();
       evaluate_key_number_remote();
     }
 
@@ -331,11 +327,9 @@ void loop() {
       evaluate_frm_consumer_shutdown();
     }
 
-    #if INDICATE_TRUNK_OPENED
     else if (k_msg.id == 0x3D7) {                                                                                                   // Received CKM setting for door locks.
       evaluate_door_lock_ckm();
     }
-    #endif
 
     #if COMFORT_EXIT
     else if (k_msg.id == 0x3DB) {                                                                                                   // Received CKM setting for driver's seat.

@@ -16,17 +16,19 @@ void cache_can_message_buffers(void) {                                          
   dsc_on_buf = make_msg_buf(0x398, 2, dsc_on);
   dsc_mdm_dtc_buf = make_msg_buf(0x398, 2, dsc_mdm_dtc);
   dsc_off_buf = make_msg_buf(0x398, 2, dsc_off);
-  uint8_t idrive_mdrive_settings_a[] = {0x63, 0x10, 0xA, 0x31, 0x52, 0, 0, 6},
-          idrive_mdrive_settings_b[] = {0x63, 0x21, 0x5C, 0, 0, 0, 0, 0};
-  idrive_mdrive_settings_a_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_a);
-  idrive_mdrive_settings_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_b);
+  uint8_t idrive_mdrive_settings_menu_a[] = {0x63, 0x10, 0xA, 0x31, 0x52, 0, 0, 6},
+          idrive_mdrive_settings_menu_b[] = {0x63, 0x21, 0x5C, 0, 0, 0, 0, 0};
+  idrive_mdrive_settings_menu_a_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_a);
+  idrive_mdrive_settings_menu_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_b);
   uint8_t cc_gong[] = {0x60, 3, 0x31, 0x22, 2, 0, 0, 0};
   cc_gong_buf = make_msg_buf(0x6F1, 8, cc_gong);
 
   uint8_t cic_button_sound[] = {0x63, 3, 0x31, 0x21, 7},
-          cic_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x12};
+          cic_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x12},
+          cic_double_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x10};
   cic_button_sound_buf = make_msg_buf(0x6F1, 5, cic_button_sound);
   cic_beep_sound_buf = make_msg_buf(0x6F1, 5, cic_beep_sound);
+  cic_double_beep_sound_buf = make_msg_buf(0x6F1, 5, cic_double_beep_sound);
 
   uint8_t edc_button_press[] = {0, 5, 0x30, 1, 7, 0x1A, 0, 0};
   edc_button_press_buf = make_msg_buf(0x6F1, 8, edc_button_press);
@@ -55,17 +57,19 @@ void cache_can_message_buffers(void) {                                          
   uint8_t frm_mirror_undim[] = {0x72, 5, 0x30, 0x11, 7, 0, 0x90, 0};
   frm_mirror_undim_buf = make_msg_buf(0x6F1, 8, frm_mirror_undim);
   
-  uint8_t flash_hazards[] = {0, 0xF1};
-  flash_hazards_buf = make_msg_buf(0x2B4, 2, flash_hazards);
+  uint8_t flash_hazards_single[] = {0, 0xF1};
+  uint8_t flash_hazards_double[] = {0, 0xF2};
+  flash_hazards_single_buf = make_msg_buf(0x2B4, 2, flash_hazards_single);
+  flash_hazards_double_buf = make_msg_buf(0x2B4, 2, flash_hazards_double);
 
   uint8_t alarm_siren_on[] = {0x41, 3, 0x31, 4, 2, 0, 0, 0},
           alarm_siren_off[] = {0x41, 3, 0x31, 4, 3, 0, 0, 0},
           alarm_led_on[] = {0x41, 4, 0x30, 2, 7, 1, 0, 0},
-          alarm_led_off[] = {0x41, 3, 0x30, 2, 0, 0, 0, 0};
+          alarm_led_return_control[] = {0x41, 3, 0x30, 2, 0, 0, 0, 0};
   alarm_siren_on_buf = make_msg_buf(0x6F1, 8, alarm_siren_on);
   alarm_siren_off_buf = make_msg_buf(0x6F1, 8, alarm_siren_off);
   alarm_led_on_buf = make_msg_buf(0x6F1, 8, alarm_led_on);
-  alarm_led_off_buf = make_msg_buf(0x6F1, 8, alarm_led_off);
+  alarm_led_return_control_buf = make_msg_buf(0x6F1, 8, alarm_led_return_control);
 
   uint8_t ekp_pwm_off[] = {0x17, 4, 0x30, 6, 4, 0, 0, 0},
           ekp_return_to_normal[] = {0x17, 2, 0x30, 0, 0, 0, 0, 0},

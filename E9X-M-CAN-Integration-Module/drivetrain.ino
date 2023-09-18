@@ -20,7 +20,9 @@ void evaluate_engine_rpm(void) {
       #if IMMOBILIZER_SEQ_ALARM
         if (!immobilizer_released) {
           alarm_after_engine_stall = true;
-          serial_log("Immobilizer still active. Alarm will sound after stall.", 2);      
+          serial_log("Immobilizer still active. Alarm will sound after stall.", 2);    
+          kcan_write_msg(key_cc_on_buf);
+          kcan_write_msg(cic_double_beep_sound_buf);                                                                                // Try to audibly alert that stall is impeding.
         }
       #endif
     }
@@ -191,10 +193,10 @@ void show_mdrive_settings_screen(void) {
     if (immobilizer_released) {
     #endif
       serial_log("Steering wheel M button held. Showing settings screen.", 2);
-      kcan_write_msg(idrive_mdrive_settings_a_buf);                                                                                 // Send steuern_menu job to iDrive.
-      kcan_write_msg(idrive_mdrive_settings_b_buf);
+      kcan_write_msg(idrive_mdrive_settings_menu_a_buf);                                                                            // Send steuern_menu job to iDrive.
+      kcan_write_msg(idrive_mdrive_settings_menu_b_buf);
       if (!idrive_died) {
-        time_now = millis();
+        unsigned long time_now = millis();
         m = {cic_button_sound_buf, time_now + 500};
         idrive_txq.push(&m);
       }
@@ -245,23 +247,31 @@ void update_mdrive_message_settings(void) {
     mdrive_message[1] = mdrive_dsc - 2 + mdrive_status;                                                                             // DSC message is 2 less than iDrive setting. 1 is added if MDrive is ON.
     mdrive_message[2] = mdrive_power;                                                                                               // Copy POWER as is.
     mdrive_message[3] = mdrive_edc;                                                                                                 // Copy EDC as is.
-    
-    #if ASD
+
     if (mdrive_status) {
       if (mdrive_power != 0x30) {
-        if (diag_transmit) {
-          kcan_write_msg(mute_asd_buf);
-          serial_log("Muted ASD.", 3);
-        }
+        #if EXHAUST_FLAP_CONTROL
+          exhaust_flap_sport = false;
+        #endif
+        #if ASD
+          if (diag_transmit) {
+            kcan_write_msg(mute_asd_buf);
+            serial_log("Muted ASD.", 3);
+          }
+        #endif
       } else {
-        if (diag_transmit) {
-          kcan_write_msg(demute_asd_buf);
-          serial_log("De-muted ASD with POWER setting of Sport+.", 3);
-        }
+        #if EXHAUST_FLAP_CONTROL
+          exhaust_flap_sport = true;                                                                                                // Exhaust flap should open in Sport+.
+        #endif
+        #if ASD
+          if (diag_transmit) {
+            kcan_write_msg(demute_asd_buf);
+            serial_log("De-muted ASD with POWER setting of Sport+.", 3);
+          }
+        #endif
       }
     }
-    #endif
-    
+   
     if (mdrive_svt == 0xE9) {
       if (!mdrive_status) {
         mdrive_message[4] = 0x41;                                                                                                   // SVT normal, MDrive OFF.
@@ -306,7 +316,7 @@ void reset_mdrive_settings(void) {
   #if EDC_CKM_FIX
     edc_ckm[cas_key_number] = 0xF1;                                                                                                 // Comfort
   #endif
-  serial_log("Reset MDrive settings.", 3);
+  serial_log("Reset MDrive settings to defaults.", 3);
 }
 
 
@@ -383,7 +393,7 @@ void evaluate_edc_ckm_mismatch(void) {
       uint8_t edc_state = pt_msg.buf[1] == 0xFA ? 3 : pt_msg.buf[1] - 0xF0;                                                           // Normalize these values for easier comparison.
       uint8_t edc_memory = edc_ckm[cas_key_number] == 0xFA ? 3 : edc_ckm[cas_key_number] - 0xF0;
       if ((edc_memory == 1 && edc_state == 2) || (edc_memory == 2 && edc_state == 3) || (edc_memory == 3 && edc_state == 1)) {
-        time_now = millis();
+        unsigned long time_now = millis();
         kcan_write_msg(edc_button_press_buf);
         m = {edc_button_press_buf, time_now + 1200};
         edc_ckm_txq.push(&m);
@@ -502,7 +512,7 @@ void release_immobilizer(void) {
   update_eeprom_checksum();
   ptcan_write_msg(ekp_return_to_normal_buf);                                                                                        // KWP To EKP.
   serial_log("Immobilizer released. EKP control restored to DME.", 0);
-  time_now = millis();
+  unsigned long time_now = millis();
   #if IMMOBILIZER_SEQ_ALARM
     if (alarm_active) {
       m = {alarm_siren_off_buf, time_now};                                                                                          // KWP to DWA.
@@ -514,9 +524,9 @@ void release_immobilizer(void) {
   #endif
   kcan_write_msg(key_cc_off_buf);                                                                                                   // CC to KCAN.
   #if IMMOBILIZER_SEQ_ALARM
-    m = {alarm_led_off_buf, time_now + 100};                                                                                        // KWP to DWA.
+    m = {alarm_led_return_control_buf, time_now + 100};                                                                             // KWP to DWA.
     immobilizer_txq.push(&m);
-    m = {alarm_led_off_buf, time_now + 500};
+    m = {alarm_led_return_control_buf, time_now + 500};
     immobilizer_txq.push(&m);
     alarm_led = false;
   #endif
@@ -540,7 +550,7 @@ void trip_alarm_after_stall(void) {
   if (alarm_after_engine_stall) {
     serial_log("Alarm siren and hazards ON.", 0);
     alarm_active = true;
-    time_now = millis();
+    unsigned long time_now = millis();
     for (uint8_t i = 0; i < 10; i++) {                                                                                              // Alarm test job times out after 30s. Make it blast for 5 min.
       m = {alarm_siren_on_buf, time_now + 30000 * i};
       alarm_siren_txq.push(&m);
@@ -551,6 +561,7 @@ void trip_alarm_after_stall(void) {
 
 void send_f_powertrain_2_status(void) {
   if (f_data_powertrain_2_timer >= 1000) {
+    uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                    // Byte7 max rpm: 50 * 8C = 7000.
 
     f_data_powertrain_2[1] = 1 << 4 | f_data_powertrain_2_alive_counter;                                                            // Combine ST_ECU_DT_PT_2 (0001 - State of normal operation) and ALIV_DT_PT_2.
     f_data_powertrain_2_alive_counter == 0xE ? f_data_powertrain_2_alive_counter = 0 
@@ -600,7 +611,7 @@ void send_f_powertrain_2_status(void) {
       f_data_powertrain_2_crc.add(f_data_powertrain_2[i]);
     }
     f_data_powertrain_2[0] = f_data_powertrain_2_crc.calc();
-    f_data_powertrain_2_buf = make_msg_buf(0x3F9, 8, f_data_powertrain_2);
+    CAN_message_t f_data_powertrain_2_buf = make_msg_buf(0x3F9, 8, f_data_powertrain_2);
     ptcan_write_msg(f_data_powertrain_2_buf);
     f_data_powertrain_2_timer = 0;
   }

@@ -59,9 +59,13 @@ I use it to:
 * Undim electrochromic exterior mirrors when indicating at night.
 * Move driver's seat back when exiting car.
 * Indicate when the trunk is opened by remote (flash hazards).
+	* Visual signal for locking/unlocking must be ON.
+* Indicate when the car is locked and the lock button is pressed (flash hazards).
+	* Car must be locked for at least 10s and Visual signal for locking/unlocking must be ON.
+* Force sleep mode (KL30G OFF) by holding remote lock button for 20s.
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 	* If engine is started without releasing this immobilizer, alarm will sound once engine stalls.
-	* Can be disabled persistently by first deactivating then, holding the POWER and DSC OFF buttons for 10s.
+	* Can be disabled persistently by first deactivating then, holding the POWER and DSC OFF buttons for 10s with the ignition ON.
 * Display Front fog lights ON (for M3 clusters that lack the symbol).
 * Audibly warn when reverse gear is engaged.
 * Audibly warn when the hood is opened.
@@ -119,8 +123,19 @@ Arduino IDE settings
 
 Board: Teensy 4.0
 Optimize: Fastest with LTO
-CPU Speed: 600 MHz
+CPU Speed: 528 MHz
 USB Type: Dual Serial for debugging, Single for normal operation.
+
+
+To make some startup time critical functions work, the following changes need to be made to startup.c 
+(Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/startup.c)
+Comment these lines:
+	set_arm_clock(F_CPU);
+	tempmon_init();
+	usb_pll_start();
+	while (millis() < TEENSY_INIT_USB_DELAY_BEFORE) ;
+	usb_init();
+	while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
 
 
 

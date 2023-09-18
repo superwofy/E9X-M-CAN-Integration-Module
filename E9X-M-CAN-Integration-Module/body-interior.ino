@@ -36,6 +36,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   check_key_changed();
 
   #if F_ZBE_WAKE || F_VSW01 || F_NIVI                                                                                               // Translate 0x130 to 0x12F for F-series modules.
+    uint8_t f_terminal_status[] = {0, 0, 0, 0xFF, 0, 0, 0x3F, 0xFF};
     f_terminal_status[2] = 0xF << 4;                                                                                                // Set ST_KL
     if (terminal_50) {
       f_terminal_status[1] = 0xB;
@@ -60,7 +61,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     }
     f_terminal_status[0] = f_terminal_status_crc.calc();
 
-    f_terminal_status_buf = make_msg_buf(0x12F, 8, f_terminal_status);
+    CAN_message_t f_terminal_status_buf = make_msg_buf(0x12F, 8, f_terminal_status);
     #if F_ZBE_WAKE || F_VSW01
       kcan_write_msg(f_terminal_status_buf);
     #endif
@@ -172,7 +173,7 @@ void evaluate_seat_heating_status(void) {
 
 
 void send_seat_heating_request_dr(void) {
-  time_now = millis();
+  unsigned long time_now = millis();
   kcan_write_msg(seat_heating_button_pressed_dr_buf);
   driver_sent_seat_heating_request = true;
   m = {seat_heating_button_released_dr_buf, time_now + 100};
@@ -225,7 +226,7 @@ void evaluate_passenger_seat_status(void) {
 
 
 void send_seat_heating_request_pas(void) {
-  time_now = millis();
+  unsigned long time_now = millis();
   kcan_write_msg(seat_heating_button_pressed_pas_buf);
   passenger_sent_seat_heating_request = true;
   m = {seat_heating_button_released_pas_buf, time_now + 100};
@@ -276,6 +277,7 @@ void send_f_wakeup(void) {
 
 void send_f_vehicle_mode(void) {
   if (f_vehicle_mode_timer >= 5000) {
+    uint8_t f_vehicle_mode[] = {0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0};
     if (battery_voltage < 12.00 && battery_voltage > 11.60) {
       f_vehicle_mode[2] = 0xF1;                                                                                                     // Energy OK.
     } else if (battery_voltage < 11.60 && battery_voltage > 11.20) {
@@ -285,7 +287,7 @@ void send_f_vehicle_mode(void) {
     } else {
       f_vehicle_mode[2] = 0xF0;                                                                                                     // Energy good.
     }
-    f_vehicle_mode_buf = make_msg_buf(0x3A0, 8, f_vehicle_mode);
+    CAN_message_t f_vehicle_mode_buf = make_msg_buf(0x3A0, 8, f_vehicle_mode);
     kcan_write_msg(f_vehicle_mode_buf);
     #if F_NIVI
       if (ignition) {                                                                                                               // NiVi is powered by Terminal 15.
@@ -299,6 +301,7 @@ void send_f_vehicle_mode(void) {
 
 
 void send_zbe_acknowledge(void) {
+  uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
   zbe_response[2] = k_msg.buf[7];
   kcan_write_msg(make_msg_buf(0x277, 4, zbe_response));
   #if DEBUG_MODE
@@ -462,7 +465,7 @@ void evaluate_audio_volume(void) {
             serial_log(serial_debug_string, 3);
           #endif
         }
-        if (pdc_tone_on) {                                                                                                        // If PDC beeps are active, volume change has no effect.
+        if (pdc_tone_on) {                                                                                                          // If PDC beeps are active, volume change has no effect.
           return;
         }
         if (k_msg.buf[4] >= 5) {                                                                                                    // Don't reduce if already very low.
@@ -471,7 +474,7 @@ void evaluate_audio_volume(void) {
             if (volume_change[4] > 0x33) {
               volume_change[4] = 0x33;
             }
-            time_now = millis();
+            unsigned long time_now = millis();
             m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 200};
             idrive_txq.push(&m);
             volume_restore_offset = (k_msg.buf[4] % 2) == 0 ? 0 : 1;                                                                // Volumes adjusted from faceplate go up by 1 while MFL goes up by 2.
@@ -500,7 +503,7 @@ void evaluate_audio_volume(void) {
             if (volume_change[4] > 0x33) {
               volume_change[4] = 0x33;
             }
-            time_now = millis();
+            unsigned long time_now = millis();
             m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 200};
             idrive_txq.push(&m);
             volume_change[4] = k_msg.buf[4] * 2 + volume_restore_offset;
@@ -654,12 +657,12 @@ void initialize_asd(void) {
 void evaluate_dr_seat_ckm(void) {
   if (k_msg.buf[0] == 0xFC) {
     if (!auto_seat_ckm) {
-      serial_log("Automatic seat position CKM enabled.", 2);
+      serial_log("Automatic seat position CKM ON.", 2);
       auto_seat_ckm = true;
     }
   } else {
     if (auto_seat_ckm) {
-      serial_log("Automatic seat position CKM disabed.", 2);
+      serial_log("Automatic seat position CKM OFF.", 2);
       auto_seat_ckm = false;
     }
   }
@@ -686,5 +689,42 @@ void store_rvc_settings(void) {
   if (!rvc_dipped_by_driver && (rvc_dipped_by_module != bitRead(k_msg.buf[0], 3)) && pdc_bus_status == 0xA5) {                      // If the driver changed this setting, do not interfere during this cycle.
     rvc_dipped_by_driver = true;
     serial_log("Driver changed RVC dip manually.", 3);
+  }
+}
+
+
+void evaluate_indicator_stalk(void) {
+  if (k_msg.buf[0] == 1 || k_msg.buf[0] == 4) {
+    full_indicator = false;
+  } else if (k_msg.buf[0] == 2 || k_msg.buf[0] == 8) {
+    if (!full_indicator) {
+      full_indicator = true;
+      serial_log("Indicator stalk pushed fully.", 3);
+      undim_mirrors_with_indicators();
+    }
+  }
+}
+
+
+void evaluate_power_down_response(void) {
+  if (power_down_requested) {
+    if (diag_transmit) {
+      if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
+        kcan_write_msg(power_down_cmd_b_buf);
+      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x21) {                                                                    // Ignore.
+      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {                                                                    // Ignore.
+      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x23) {
+        kcan_write_msg(power_down_cmd_c_buf);
+      } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 3 && k_msg.buf[2] == 0x71 && k_msg.buf[3] == 5) {
+        serial_log("Power-down command sent successfully. Car will assume deep sleep in ~15s.", 0);
+        power_down_requested = false;
+      } else {
+        power_down_requested = false;
+        serial_log("Power-down command aborted due to error.", 0);
+      }
+    } else {
+      power_down_requested = false;
+      serial_log("Power-down command aborted due to OBD tool presence.", 0);
+    }
   }
 }

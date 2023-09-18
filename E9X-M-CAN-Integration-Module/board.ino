@@ -65,7 +65,7 @@ void scale_cpu_speed(void) {
 }
 
 
-void configure_can_controller(void) {
+void configure_flexcan(void) {
   uint8_t filter_count = 0;
 
   // KCAN
@@ -78,6 +78,8 @@ void configure_can_controller(void) {
   KCAN.setFIFOFilter(REJECT_ALL);                                                                                                   // Reject unfiltered messages
 
   KCAN.setFIFOFilter(filter_count, 0xAA, STD);                                                                                      // RPM, throttle pos:                                           Cycle time 100ms (KCAN).
+  filter_count++;
+  KCAN.setFIFOFilter(filter_count, 0xEA, STD);                                                                                      // Driver's door status.
   filter_count++;
   KCAN.setFIFOFilter(filter_count, 0x130, STD);                                                                                     // Key/ignition status:                                         Cycle time 100ms.
   filter_count++;
@@ -95,6 +97,10 @@ void configure_can_controller(void) {
   filter_count++;
   #if REVERSE_BEEP || DOOR_VOLUME
     KCAN.setFIFOFilter(filter_count, 0x1C6, STD);                                                                                   // PDC acoustic message
+    filter_count++;
+  #endif
+  #if MIRROR_UNDIM
+    KCAN.setFIFOFilter(filter_count, 0x1EE, STD);                                                                                   // Indicator stalk status from FRM (KCAN only).
     filter_count++;
   #endif
   KCAN.setFIFOFilter(filter_count, 0x1F6, STD);                                                                                     // Indicator status:                                            Cycle time 1s. Sent when changed.
@@ -173,10 +179,8 @@ void configure_can_controller(void) {
   #endif
   KCAN.setFIFOFilter(filter_count, 0x3CA, STD);                                                                                     // CIC MDrive settings:                                         Sent when changed.
   filter_count++;
-  #if INDICATE_TRUNK_OPENED
-    KCAN.setFIFOFilter(filter_count, 0x3D7, STD);                                                                                   // Door lock CKM settings from DWA:                             Sent when changed.
-    filter_count++;
-  #endif
+  KCAN.setFIFOFilter(filter_count, 0x3D7, STD);                                                                                     // Door lock CKM settings from DWA:                             Sent when changed.
+  filter_count++;
   #if COMFORT_EXIT
     KCAN.setFIFOFilter(filter_count, 0x3DB, STD);                                                                                   // Seat CKM settings:                                           Sent when changed.
     filter_count++;
@@ -257,7 +261,7 @@ void configure_can_controller(void) {
   #if SERVOTRONIC_SVT70
     PTCAN.setFIFOFilter(filter_count, 0x58E, STD);                                                                                  // Forward SVT CC to KCAN for KOMBI to display:                 Cycle time 10s.
     filter_count++;
-    PTCAN.setFIFOFilter(filter_count, 0x60E, STD);                                                                                  // Receive diagnostic messages from SVT module to forward.
+    PTCAN.setFIFOFilter(filter_count, 0x60E, STD);                                                                                  // Diagnostic messages from SVT module to forward.
   #endif
 
 
@@ -268,11 +272,15 @@ void configure_can_controller(void) {
   DCAN.enableFIFO();
   DCAN.setFIFOFilter(REJECT_ALL);
 
-  DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                                                // Receive diagnostic queries from DCAN tool to forward.
+  DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                                                // Diagnostic queries from DCAN tool to forward.
 
 
   pinMode(PTCAN_STBY_PIN, OUTPUT); 
   pinMode(DCAN_STBY_PIN, OUTPUT);
+
+  #if DEBUG_MODE
+    can_setup_time = micros();                                                                                                      // If startup.c is not modified this is wrong by 300ms.
+  #endif
 }
 
 
@@ -301,18 +309,7 @@ void check_teensy_cpu_temp(void) {
 
 void check_teensy_cpu_clock(void) {                                                                                                 // Underclock the processor if it starts to heat up.
   // If ignition is OFF, the processor will already be underclocked.
-  if (+(cpu_temp - last_cpu_temp) > HYSTERESIS) {
-
-    if (ambient_temperature_real >= 32 && ambient_temperature_real != 87.5) {                                                     // Make underclock more aggressive at higher ambient temperatures. Ignore if not yet initialized.
-      HIGH_UNDERCLOCK = MAX_UNDERCLOCK;
-      MEDIUM_UNDERCLOCK = HIGH_UNDERCLOCK_;
-      MILD_UNDERCLOCK = MEDIUM_UNDERCLOCK_;
-    } else {
-      HIGH_UNDERCLOCK = HIGH_UNDERCLOCK_;
-      MEDIUM_UNDERCLOCK = MEDIUM_UNDERCLOCK_;
-      MILD_UNDERCLOCK = MILD_UNDERCLOCK_;
-    }
-
+  if (+(cpu_temp - last_cpu_temp) > 2.0) {
     if (cpu_temp >= MILD_THRESHOLD) {
       if (clock_mode != 1) {
         set_arm_clock(MILD_UNDERCLOCK);
@@ -348,16 +345,6 @@ void check_teensy_cpu_clock(void) {                                             
         #if DEBUG_MODE
           max_loop_timer = 0;
         #endif
-      }
-    } else if (cpu_temp >= 90.0) {                                                                                                // This should never happen!
-      if (clock_mode != 5) {
-        uint32_t dcdc = DCDC_REG3;                                                                                                // From clockspeed.c
-        dcdc &= ~DCDC_REG3_TRG_MASK;
-        dcdc |= DCDC_REG3_TRG(CRITICAL_UNDERVOLT);
-        DCDC_REG3 = dcdc;
-        while (!(DCDC_REG0 & DCDC_REG0_STS_DC_OK));
-        serial_log("Processor temperature above max specified Tj. Damage will occur.", 0);
-        clock_mode = 5;
       }
     } else {
       if (clock_mode != 0) {
@@ -534,7 +521,6 @@ void usb_pll_start() {                                                          
 }
 
 
-#if USB_DISABLE
 void activate_usb() {
   if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){
     usb_pll_start();
@@ -542,4 +528,3 @@ void activate_usb() {
     usb_init();
   }
 }
-#endif

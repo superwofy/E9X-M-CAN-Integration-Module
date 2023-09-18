@@ -13,7 +13,6 @@ FlexCAN_T4<CAN1, RX_SIZE_512, TX_SIZE_64> KCAN;                                 
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_64> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_64> DCAN;
 WDT_T4<WDT1> wdt;
-const uint8_t wdt_timeout_sec = 10;
 CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                                                                                // XMODEM
 
 
@@ -22,9 +21,7 @@ CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                            
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
-#if DEBUG_MODE
-  int8_t LOGLEVEL = 4;                                                                                                              // 0 - critical, 1 - errors, 2 - info, 3 - extra_info, 4 = debug.
-#endif
+int8_t LOGLEVEL = 4;                                                                                                                // 0 - critical, 1 - errors, 2 - info, 3 - extra_info, 4 = debug.
 
 #define PDC_AUTO_OFF 1                                                                                                              // Deactivates PDC when handbrake is pulled.
 #define AUTO_DIP_RVC 1                                                                                                              // Turn on top down rear view camera option when close to an obstacle.
@@ -35,15 +32,18 @@ CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                            
 #define FRM_AHL_MODE 1                                                                                                              // Switches FRM AHL mode from Komfort and Sport.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold mirrors when locking. Can be done with coding but this integrates nicer.
-#define UNFOLD_WITH_DOOR 1                                                                                                          // Un-fold with door open event instead of unlock button.
+#if AUTO_MIRROR_FOLD
+  #define UNFOLD_WITH_DOOR 1                                                                                                        // Un-fold with door open event instead of remote unlock button.
+#endif
 #define MIRROR_UNDIM 1                                                                                                              // Undim electrochromic exterior mirrors when indicating at night.
 #define COMFORT_EXIT 1                                                                                                              // Move driver's seat back when exiting car.
-#define INDICATE_TRUNK_OPENED 1                                                                                                     // Flash hazards when remote opens trunk.
 #define IMMOBILIZER_SEQ 1                                                                                                           // Disable fuel pump until the steering wheel M button is pressed a number of times.
 #if __has_include ("src/custom-settings.h")                                                                                         // Optionally, create this file to store sensitive settings.
   #include "src/custom-settings.h"
 #endif
-#define IMMOBILIZER_SEQ_ALARM 1                                                                                                     // Sound the alarm if engine is started without disabling immobilizer.
+#if IMMOBILIZER_SEQ
+  #define IMMOBILIZER_SEQ_ALARM 1                                                                                                   // Sound the alarm if engine is started without disabling immobilizer.
+#endif
 #if SECRETS
   uint8_t IMMOBILIZER_SEQ_NUMBER = SECRET_IMMOBILIZER_SEQ;
   uint8_t IMMOBILIZER_SEQ_ALARM_NUMBER = SECRET_IMMOBILIZER_SEQ_ALARM_NUMBER;
@@ -85,20 +85,14 @@ const uint16_t LC_RPM = 3700 * 4;                                               
 const uint16_t LC_RPM_MIN = LC_RPM - (250 * 4);                                                                                     // RPM hysteresis when bouncing off the limiter.
 const uint16_t LC_RPM_MAX = LC_RPM + (250 * 4);
 const float MAX_THRESHOLD = 72.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
-const float HIGH_THRESHOLD = 68.0;
+const float HIGH_THRESHOLD = 69.0;
 const float MEDIUM_THRESHOLD = 66.0;
 const float MILD_THRESHOLD = 62.0;
-const float HYSTERESIS = 2.0;
 const unsigned long MAX_UNDERCLOCK = 24 * 1000000;                                                                                  // temperature <= 90 (Tj) should be ok for more than 100,000 Power on Hours at 1.15V (freq <= 528 MHz).
-unsigned long HIGH_UNDERCLOCK = 150 * 1000000;
-const unsigned long HIGH_UNDERCLOCK_ = 150 * 1000000;
-unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
-const unsigned long MEDIUM_UNDERCLOCK_ = 396 * 1000000;
-unsigned long MILD_UNDERCLOCK = 450 * 1000000;
-const unsigned long MILD_UNDERCLOCK_ = 450 * 1000000;
+const unsigned long HIGH_UNDERCLOCK = 150 * 1000000;
+const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
+const unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 const unsigned long STANDARD_CLOCK = 528 * 1000000;
-const unsigned long STARTUP_CLOCK = 600 * 1000000;
-const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;                                                                 // Desired voltage - 0.8...  DCDC range is from 0.8 to 1.575V. Safe range is 0.925 to 1.25V
 
 
 /***********************************************************************************************************************************************************************************************************************************************
@@ -128,14 +122,7 @@ const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;             
 #if !DEBUG_MODE
   #ifndef USB_DISABLE
     #define USB_DISABLE 0                                                                                                           // USB can be disabled if not using serial for security reasons. Use caution when enabling this.
-      // USB can be re-activated by holding POWER while turning on ignition.
-      // To make this work, the following changes need to be made to startup.c 
-      // (Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/startup.c)
-      // Comment these lines:
-      // usb_pll_start();
-      // while (millis() < TEENSY_INIT_USB_DELAY_BEFORE) ;
-      // usb_init();
-      // while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
+      // startup.c must be modified. See README.md
   #endif
 #endif
 #ifndef EDC_CKM_FIX
@@ -183,20 +170,12 @@ const unsigned long CRITICAL_UNDERVOLT = ((0.9 - 0.8) * 1000) / 25;             
 /***********************************************************************************************************************************************************************************************************************************************
 ***********************************************************************************************************************************************************************************************************************************************/
 
-
-#if !USB_DISABLE && !STARTUPC_MODIFIED                                                                                              // Not needed if startup.c is modified.
-  extern "C" void startup_middle_hook(void);
-  extern "C" volatile uint32_t systick_millis_count;
-  void startup_middle_hook(void) {
-    // Force millis() to be 300 to skip USB startup delays. The module needs to boot very quickly to receive the unlock message.
-    systick_millis_count = 300;
-  }
-#endif
 #if RTC
   #include <TimeLib.h>
-  CAN_message_t set_time_cc_buf, set_time_cc_off_buf;
-  bool rtc_valid = true, pc_time_incoming = false;
 #endif
+
+CAN_message_t set_time_cc_buf, set_time_cc_off_buf;
+bool rtc_valid = true, pc_time_incoming = false;
 
 CAN_message_t pt_msg, k_msg, d_msg;
 typedef struct delayed_can_tx_msg {
@@ -207,9 +186,8 @@ cppQueue kcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue ptcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue dcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t kcan_retry_counter = 0, ptcan_retry_counter = 0, dcan_retry_counter = 0;
-uint16_t stored_eeprom_checksum = 0xFFFF, calculated_eeprom_checksum = 0;
+uint16_t stored_eeprom_checksum, calculated_eeprom_checksum;
 delayed_can_tx_msg delayed_tx, m;
-unsigned long time_now;
 bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = false, vehicle_moving = false;
 bool terminal_50 = false, engine_running = false, clutch_pressed = false, frm_consumer_shutdown = false;
 bool clearing_dtcs = false;
@@ -227,9 +205,8 @@ uint8_t edc_mismatch_check_counter = 0;
 CAN_message_t edc_button_press_buf;
 cppQueue edc_ckm_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t cas_key_number = 0;                                                                                                         // 0 = Key 1, 1 = Key 2...
-uint8_t mdrive_dsc = 3, mdrive_power = 0, mdrive_edc = 0x20, mdrive_svt = 0xE9;
-bool mdrive_status = false, mdrive_power_active = false;
-bool console_power_mode, restore_console_power_mode = false;
+uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
+bool mdrive_status = false, mdrive_power_active = false, console_power_mode, restore_console_power_mode = false;
 bool power_led_delayed_off_action = false;
 unsigned long power_led_delayed_off_action_time;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
@@ -237,14 +214,14 @@ uint8_t dsc_program_status = 0;                                                 
 bool holding_dsc_off_console = false;
 elapsedMillis mdrive_message_timer = 0;
 uint8_t m_mfl_held_count = 0;
-CAN_message_t idrive_mdrive_settings_a_buf, idrive_mdrive_settings_b_buf;
+CAN_message_t idrive_mdrive_settings_menu_a_buf, idrive_mdrive_settings_menu_b_buf;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms;
 elapsedMillis dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
 bool ignore_m_press = false, ignore_m_hold = false, holding_both_console = false;
 int8_t clock_mode = -1;
 float cpu_temp = 0, last_cpu_temp = 0, max_cpu_temp = 0;
-CAN_message_t cc_gong_buf, cic_button_sound_buf, cic_beep_sound_buf;
+CAN_message_t cc_gong_buf, cic_button_sound_buf, cic_beep_sound_buf, cic_double_beep_sound_buf;
 bool uif_read = false;
 uint8_t servotronic_message[] = {0, 0xFF};
 CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf;
@@ -259,15 +236,14 @@ bool engine_coolant_warmed_up = false;
 uint16_t var_redline_position = 0;
 uint8_t last_var_rpm_can = 0;
 #if CONTROL_SHIFTLIGHTS
-  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                   // Byte5: shiftlights always on
+  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x97};                                                                                 // Byte5: shiftlights always on
 #else
-  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                   // Byte5: shiftlights always off
+  uint8_t mdrive_message[] = {0, 0, 0, 0, 0, 0x87};                                                                                 // Byte5: shiftlights always off
 #endif
 CAN_message_t speedo_needle_max_buf, speedo_needle_min_buf, speedo_needle_release_buf;
 CAN_message_t tacho_needle_max_buf, tacho_needle_min_buf, tacho_needle_release_buf;
 CAN_message_t fuel_needle_max_buf, fuel_needle_min_buf, fuel_needle_release_buf;
 CAN_message_t oil_needle_max_buf, oil_needle_min_buf, oil_needle_release_buf;
-CAN_message_t any_needle_max_b_buf;
 cppQueue kombi_needle_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
 bool front_fog_status = false;
 bool indicators_on = false;
@@ -303,17 +279,21 @@ CAN_message_t wipe_single_buf;
 cppQueue wiper_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t mirror_status_retry = 0;
 bool mirrors_folded = false, frm_mirror_status_requested = false;
-bool lock_button_pressed  = false, unlock_button_pressed = false;
+bool fold_lock_button_pressed = false, fold_unlock_button_pressed = false;
+bool lock_button_pressed = false;
+int16_t lock_button_pressed_counter = 0;
 CAN_message_t frm_mirror_status_request_a_buf, frm_mirror_status_request_b_buf;
 CAN_message_t frm_toggle_fold_mirror_a_buf, frm_toggle_fold_mirror_b_buf;
 CAN_message_t frm_mirror_undim_buf;
+bool full_indicator = false;
 cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 elapsedMillis frm_undim_timer = 10000;
 bool auto_seat_ckm, comfort_exit_ready = false, comfort_exit_done = false;
 CAN_message_t dr_seat_move_back_buf;
 uint8_t last_lock_status_can = 0;
 bool unfold_with_door_open = false;
-CAN_message_t flash_hazards_buf;
+CAN_message_t flash_hazards_single_buf, flash_hazards_double_buf;
+cppQueue hazards_flash_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool visual_signal_ckm, hazards_on = false;
 bool immobilizer_released = false, immobilizer_persist = true;
 uint16_t theft_max_speed = 20;
@@ -327,19 +307,16 @@ cppQueue immobilizer_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue ekp_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool alarm_after_engine_stall = false, alarm_active = false, alarm_led = false, lock_led = false;
 uint8_t led_message_counter = 60;
-CAN_message_t alarm_led_on_buf, alarm_led_off_buf;
+CAN_message_t alarm_led_on_buf, alarm_led_return_control_buf;
 CAN_message_t alarm_siren_on_buf, alarm_siren_off_buf;
 cppQueue alarm_siren_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool reverse_beep_sent = false, pdc_too_close = false;
 elapsedMillis reverse_beep_resend_timer = 2000;
 bool reverse_gear_status = false;
 uint8_t f_terminal_status_alive_counter = 0;
-uint8_t f_terminal_status[] = {0, 0, 0, 0xFF, 0, 0, 0x3F, 0xFF};                                                                    // These messages do not exist in BN2000.
-uint8_t f_vehicle_mode[] = {0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0};
 elapsedMillis f_vehicle_mode_timer = 5000;
-CAN_message_t f_kombi_network_mgmt_buf, f_terminal_status_buf, f_vehicle_mode_buf;
+CAN_message_t f_kombi_network_mgmt_buf;
 CRC8 f_terminal_status_crc(0x1D, 0, 0xB1, false, false);                                                                            // SAE J1850 POLY, 0 init and XOR-OUT 0xB1 for ARB-ID 0x12F.
-uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
 bool vsw_initialized = false;
 uint8_t vsw_current_input = 0, vsw_switch_counter = 0xF1;
 uint16_t idrive_current_menu;
@@ -347,29 +324,21 @@ CAN_message_t idrive_menu_request_a_buf, idrive_menu_request_b_buf;
 float sine_tilt_angle = 0;
 bool sine_angle_requested = false;
 int f_vehicle_angle = 0x500;                                                                                                        // 0 deg.
-uint8_t f_road_inclination[] = {0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF};                                                          // Angle formula simlar to 56.1.2.
 float e_longitudinal_acceleration = 0;
 uint16_t longitudinal_acceleration = 0x7EF4;                                                                                        // 32500 * 0.002 - 65 = 0 m/s^2.
-uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                             // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
 uint8_t f_longitudinal_acceleration_alive_counter = 0;
 float e_yaw_rate = 0;
 uint16_t yaw_rate = 0x7FFE;                                                                                                         // 32766 * 0.005 - 163.83 = 0 deg/sec.
-uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                                              // M4 (VYAW_VEH) 56.0.2. Byte5 fixed 0x2F - Signal value is valid QU_VYAW_VEH.
 uint8_t f_yaw_alive_counter = 0;
 uint16_t real_speed = 0;
 uint8_t vehicle_direction = 0;
-uint8_t f_speed[] = {0, 0, 0, 0, 0};                                                                                                // Message is the same format as Flexray 55.3.4.
 uint8_t f_speed_alive_counter = 0;
 uint8_t rls_brightness = 0xFE, rls_time_of_day = 0;
-uint8_t f_outside_brightness[] = {0xFE, 0xFE};                                                                                      // Daytime?. The two bytes may represent the two photosensors (driver's/passenger's side in FXX).
 uint8_t f_data_powertrain_2_alive_counter = 0;
-uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                        // Byte7 max rpm: 50 * 8C = 7000.
 elapsedMillis sine_angle_request_timer = 333, f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000;
 elapsedMillis f_chassis_inclination_timer = 98, f_chassis_longitudinal_timer = 100, f_chassis_yaw_timer = 102;
 elapsedMillis f_chassis_speed_timer = 104;
 CAN_message_t sine_angle_request_a_buf, sine_angle_request_b_buf;
-CAN_message_t f_road_inclination_buf, f_longitudinal_acceleration_buf, f_yaw_rate_buf;
-CAN_message_t f_speed_buf, f_outside_brightness_buf, f_data_powertrain_2_buf;
 CAN_message_t nivi_button_pressed_buf, nivi_button_released_buf;
 CRC8 f_speed_crc(0x1D, 0, 0xF, false, false);                                                                                       // SAE J1850 POLY, 0 init and XOR-OUT 0xF for ARB-ID 0x1A1.
 CRC8 f_data_powertrain_2_crc(0x1D, 0, 4, false, false);                                                                             // SAE J1850 POLY, 0 init and XOR-OUT 4 for ARB-ID 0x3F9.
@@ -379,13 +348,11 @@ unsigned long exhaust_flap_action_interval = 1000;
 CAN_message_t lc_cc_on_buf, lc_cc_off_buf;
 bool lc_cc_active = false, mdm_with_lc = false;
 float ambient_temperature_real = 87.5;
-bool driver_seat_heating_status = false;
-bool driver_sent_seat_heating_request = false;
+bool driver_seat_heating_status = false, driver_sent_seat_heating_request = false;
 CAN_message_t seat_heating_button_pressed_dr_buf, seat_heating_button_released_dr_buf;
 cppQueue seat_heating_dr_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-bool passenger_seat_heating_status = false;
+bool passenger_seat_heating_status = false, passenger_sent_seat_heating_request = false;
 uint8_t passenger_seat_status = 0;                                                                                                  // 0 - Not occupied not belted, 1 - not occupied and belted, 8 - occupied not belted, 9 - occupied and belted
-bool passenger_sent_seat_heating_request = false;
 CAN_message_t seat_heating_button_pressed_pas_buf, seat_heating_button_released_pas_buf;
 cppQueue seat_heating_pas_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool sent_steering_heating_request = false, transistor_active = false;
@@ -395,15 +362,14 @@ uint8_t volume_restore_offset = 0, volume_changed_to, peristent_volume = 0;
 elapsedMillis volume_request_periodic_timer = 3000, volume_request_door_timer = 500;
 CAN_message_t vol_request_buf, door_open_cc_off_buf;
 cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-bool left_door_open = false, right_door_open = false;
+bool left_door_open = false, right_door_open = false, doors_locked = false, doors_alarmed = false;
+elapsedMillis doors_armed_timer = 0;
 uint8_t last_door_status = 0;
 elapsedMillis idrive_alive_timer = 0;
 bool idrive_died = false;
 uint16_t indicated_speed = 0;
 bool speed_mph = false;
 uint8_t max_hdc_speed = 35, hdc_deactivate_speed = 60, stalk_message_counter = 0;
-uint8_t set_hdc_checksums[] = {0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF, 0, 2, 3, 4};
-uint8_t cancel_hdc_checksums[] = {0xFD, 0xFE, 0xFF, 0, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, 0xB, 0xC};
 bool cruise_control_status = false, hdc_button_pressed = false, hdc_requested = false, hdc_active = false;
 CAN_message_t set_hdc_cruise_control_buf, cancel_hdc_cruise_control_buf;
 CAN_message_t hdc_cc_activated_on_buf, hdc_cc_unavailable_on_buf, hdc_cc_deactivated_on_buf;
