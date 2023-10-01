@@ -42,9 +42,6 @@ void cache_can_message_buffers(void) {                                          
   frm_ckm_ahl_komfort_buf = make_msg_buf(0x3F0, 2, frm_ckm_ahl_komfort);
   frm_ckm_ahl_sport_buf = make_msg_buf(0x3F0, 2, frm_ckm_ahl_sport);
 
-  uint8_t wipe_single[] = {8, 0xF8};
-  wipe_single_buf = make_msg_buf(0x2A6, 2, wipe_single);
-
   uint8_t frm_toggle_fold_mirror_a[] = {0x72, 0x10, 7, 0x30, 0x10, 7, 1, 5},
           frm_toggle_fold_mirror_b[] = {0x72, 0x21, 0, 1, 0, 0, 0, 0},
           frm_mirror_status_request_a[] = {0x72, 3, 0x30, 0x16, 1, 0, 0, 0},
@@ -63,11 +60,11 @@ void cache_can_message_buffers(void) {                                          
   flash_hazards_double_buf = make_msg_buf(0x2B4, 2, flash_hazards_double);
 
   uint8_t alarm_siren_on[] = {0x41, 3, 0x31, 4, 2, 0, 0, 0},
-          alarm_siren_off[] = {0x41, 3, 0x31, 4, 3, 0, 0, 0},
+          alarm_siren_return_control[] = {0x41, 3, 0x31, 4, 3, 0, 0, 0},
           alarm_led_on[] = {0x41, 4, 0x30, 2, 7, 1, 0, 0},
           alarm_led_return_control[] = {0x41, 3, 0x30, 2, 0, 0, 0, 0};
   alarm_siren_on_buf = make_msg_buf(0x6F1, 8, alarm_siren_on);
-  alarm_siren_off_buf = make_msg_buf(0x6F1, 8, alarm_siren_off);
+  alarm_siren_return_control_buf = make_msg_buf(0x6F1, 8, alarm_siren_return_control);
   alarm_led_on_buf = make_msg_buf(0x6F1, 8, alarm_led_on);
   alarm_led_return_control_buf = make_msg_buf(0x6F1, 8, alarm_led_return_control);
 

@@ -5,12 +5,12 @@ void setup() {
   configure_flexcan();
   initialize_watchdog();
   configure_IO();
-  cache_can_message_buffers();
-  read_initialize_eeprom();
-  initialize_mdrive();
   #if RTC
     check_rtc_valid();
   #endif
+  read_initialize_eeprom();
+  initialize_mdrive();
+  cache_can_message_buffers();
   #if !USB_DISABLE
     // This code ensures compatibility with unmodified Teensy cores. Do not enable USB_DISABLE without modifying startup.c!
     if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){                                                                              // Check if USB is already ON.
@@ -67,6 +67,9 @@ void loop() {
   check_teensy_cpu_temp();                                                                                                          // Monitor processor temperature.
   if (terminal_r) {
     check_teensy_cpu_clock();                                                                                                       // Dynamically scale clock with temperature to extend lifetime.
+    #if INTERMITTENT_WIPERS
+      check_intermittent_wipers();
+    #endif
   }
 
   if (ignition) {
@@ -105,8 +108,15 @@ void loop() {
         toggle_transceiver_standby(1);
         scale_cpu_speed();
         reset_sleep_variables();
+      } else {                                                                                                                      // Ignition OFF, Terminal R ON/OFF, vehicle_awake.
+        send_mdrive_alive_message(15000);                                                                                           // Send this message while car is awake (but with ignition OFF) to populate the fields in iDrive.
+        if (eeprom_update_timer >= 60000) {                                                                                         // Periodically update EEPROM while ingition is OFF.
+          if (eeprom_unsaved) {
+            update_data_in_eeprom();
+          }
+          eeprom_update_timer = 0;
+        }
       }
-      send_mdrive_alive_message(15000);                                                                                             // Send this message while car is awake (but with ignition OFF) to populate the fields in iDrive.
     }
   }
 
@@ -214,7 +224,7 @@ void loop() {
       }
       #endif
 
-      #if AUTO_DIP_RVC
+      #if AUTO_TOW_VIEW_RVC
       else if (k_msg.id == 0x36D) {
         evaluate_pdc_distance();
       }
@@ -224,7 +234,7 @@ void loop() {
       }
       #endif
 
-      #if MSA_RVC || PDC_AUTO_OFF || AUTO_DIP_RVC
+      #if MSA_RVC || PDC_AUTO_OFF || AUTO_TOW_VIEW_RVC
       else if (k_msg.id == 0x3AF) {                                                                                                 // Monitor PDC bus status.
         evaluate_pdc_bus_status();
       }
@@ -410,9 +420,9 @@ void loop() {
       }
       #endif
 
-      #if WIPE_AFTER_WASH
+      #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
       else if (pt_msg.id == 0x2A6) {
-        evaluate_wiping_request();
+        evaluate_wiper_stalk_status();
       }
       #endif
      

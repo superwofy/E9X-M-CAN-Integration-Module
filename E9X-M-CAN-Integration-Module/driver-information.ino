@@ -247,16 +247,14 @@ void evaluate_reverse_beep(void) {
             play_cc_gong();
           }
           reverse_beep_sent = true;
+          reverse_beep_resend_timer = 0;
         } else {
           reverse_beep_sent = true;                                                                                                 // Cancel beep if already too close.
         }
       }
-      reverse_beep_resend_timer = 0;
     } else {
       reverse_beep_sent = true;                                                                                                     // Cancel beep if reverse engaged again quickly.
     }
-  } else {
-    reverse_beep_sent = false;
   }
 }
 
@@ -356,9 +354,9 @@ void evaluate_pdc_bus_status(void) {
     } else {
       serial_log("PDC OFF.", 3);
     }
-    #if AUTO_DIP_RVC
+    #if AUTO_TOW_VIEW_RVC
       if (pdc_bus_status != 0xA5) {
-        rvc_dipped_by_module = rvc_dipped_by_driver = false;
+        rvc_tow_view_by_module = rvc_tow_view_by_driver = false;
       }
     #endif
   }
@@ -389,24 +387,28 @@ void evaluate_pdc_warning(void) {
 
 
 void evaluate_pdc_distance(void) {
-  if (!rvc_dipped_by_driver) {
+  if (!rvc_tow_view_by_driver) {
     uint8_t distance_threshold = 0x36;                                                                                              // There's a slight delay when changing modes. Preempt by switching earlier.
     if (vehicle_moving) {
       distance_threshold = 0x40;
     }
 
     if (k_msg.buf[2] <= distance_threshold && k_msg.buf[3] <= distance_threshold) {
-      if (reverse_gear_status && !rvc_dipped_by_module && pdc_bus_status == 0xA5) {
+      if (reverse_gear_status && !rvc_tow_view_by_module && pdc_bus_status == 0xA5) {
         bitWrite(rvc_settings[0], 3, 1);                                                                                            // Set tow hitch view to ON.
-        serial_log("Rear inner sensors RED, enabling camera dip.", 3);
+        serial_log("Rear inner sensors RED, enabling camera tow view.", 3);
         kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
-        rvc_dipped_by_module = true;
+        rvc_tow_view_by_module = true;
+        rvc_action_timer = 0;
       }
-    } else if (rvc_dipped_by_module && pdc_bus_status == 0xA5) {
-      bitWrite(rvc_settings[0], 3, 0);                                                                                              // Set tow hitch view to OFF.
-      serial_log("Disabled camera dip after inner sensors no longer RED.", 2);
-      kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
-      rvc_dipped_by_module = false;
+    } else if (rvc_tow_view_by_module && pdc_bus_status == 0xA5) {
+      if (rvc_action_timer >= 500) {
+        bitWrite(rvc_settings[0], 3, 0);                                                                                            // Set tow hitch view to OFF.
+        serial_log("Disabled camera tow view after inner sensors no longer RED.", 2);
+        kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
+        rvc_tow_view_by_module = false;
+        rvc_action_timer = 0;
+      }
     }
   }
 }

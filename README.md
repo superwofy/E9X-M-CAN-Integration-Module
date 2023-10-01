@@ -74,6 +74,9 @@ I use it to:
   OR
 * Switch on the reversing camera when pressing the Auto Start-stop button.
 * Carry out one more wipe cycle after washing the windscreen.
+* Have intermittent wipers work alongside rain sensing.
+	* Push the stalk down three times in quick succession / hold for 1s to turn on intermittent mode.
+	* AUTO, stalk pushed up 1 and stalk pushed up 2 disable intermittent mode.
 * Enable use of FXX KCAN1 CIC controller.
 * Enable use of FXX VSW01 (VideoSWitch) module.
 * Enable use of FXX NIVI2/3 module.

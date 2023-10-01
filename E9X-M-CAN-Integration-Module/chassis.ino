@@ -80,13 +80,16 @@ void evaluate_reverse_gear_status(void) {
           serial_log("Disabled PDC after reverse gear OFF and handbrake already up.", 2);
         }
       #endif
-      #if AUTO_DIP_RVC
-        if (rvc_dipped_by_module && !rvc_dipped_by_driver && pdc_bus_status == 0xA5) {
+      #if AUTO_TOW_VIEW_RVC
+        if (rvc_tow_view_by_module && !rvc_tow_view_by_driver && pdc_bus_status == 0xA5) {
           bitWrite(rvc_settings[0], 3, 0);                                                                                              // Set tow hitch view to OFF.
-          serial_log("Disabled camera dip after reverse gear OFF.", 2);
+          serial_log("Disabled camera tow view after reverse gear OFF.", 2);
           kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
-          rvc_dipped_by_module = false;
+          rvc_tow_view_by_module = false;
         }
+      #endif
+      #if REVERSE_BEEP
+        reverse_beep_sent = false;                                                                                                      // Reset the beep flag.
       #endif
     }
   }

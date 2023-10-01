@@ -18,14 +18,16 @@ void evaluate_drl_status(void) {
 
 void evaluate_drl_ckm(void) {
   if (k_msg.buf[2] == 0xFE) {
-    if (!drl_ckm) {
+    if (!drl_ckm[cas_key_number]) {
       serial_log("DRL CKM ON.", 2);
-      drl_ckm = true;
+      drl_ckm[cas_key_number] = true;
+      eeprom_unsaved = true;
     }
   } else {
-    if (drl_ckm) {
+    if (drl_ckm[cas_key_number]) {
       serial_log("DRL CKM OFF.", 2);
-      drl_ckm = false;
+      drl_ckm[cas_key_number] = false;
+      eeprom_unsaved = true;
     }
   }
 }
@@ -50,7 +52,7 @@ void check_drl_queue(void) {
 void evaluate_indicator_status_dim(void) {
   if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                                // Off or Hazards
     #if DIM_DRL
-      if (drl_ckm && drl_status && diag_transmit) {
+      if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
         unsigned long time_now = millis();
         if (right_dimmed) {
           m = {right_drl_bright_buf, time_now + 100};
@@ -73,7 +75,7 @@ void evaluate_indicator_status_dim(void) {
     indicators_on = false;
   } else if (k_msg.buf[0] == 0x91) {                                                                                                // Left indicator
     #if DIM_DRL
-      if (drl_ckm && drl_status && diag_transmit) {
+      if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
         unsigned long time_now = millis();
         if (right_dimmed) {
           m = {right_drl_bright_buf, time_now + 100};
@@ -95,7 +97,7 @@ void evaluate_indicator_status_dim(void) {
     #endif
   } else if (k_msg.buf[0] == 0xA1) {                                                                                                // Right indicator
     #if DIM_DRL
-      if (drl_ckm && drl_status && diag_transmit) {
+      if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
         unsigned long time_now = millis();
         if (left_dimmed) {
           m = {left_drl_bright_buf, time_now + 100};
@@ -134,10 +136,10 @@ void undim_mirrors_with_indicators(void) {
 
 
 void indicate_trunk_opened(uint16_t boot_delay) {
-  if (visual_signal_ckm && !engine_running && !hazards_on && !indicators_on) {
+  if (visual_signal_ckm[cas_key_number] && !engine_running && !hazards_on && !indicators_on) {
     serial_log("Remote trunk button pressed. Flashing hazards.", 2);
     unsigned long time_now = millis();
-    m = {flash_hazards_single_buf, boot_delay + time_now};
+    m = {flash_hazards_single_buf, boot_delay + time_now + 100};
     hazards_flash_txq.push(&m);
   }
 }
@@ -149,31 +151,37 @@ void evaluate_door_status(void) {
       if (!right_door_open) {
         right_door_open = true;
         #if RHD
-          serial_log("Driver's door open.", 2);
-          #if UNFOLD_WITH_DOOR
+          serial_log("Driver's front door open.", 2);
+          #if AUTO_MIRROR_FOLD
             if (unfold_with_door_open) {
-              toggle_mirror_fold();
-              unfold_with_door_open = false;
+              toggle_mirror_fold(false);
             }
           #endif
           #if COMFORT_EXIT
             evaluate_comfort_exit();
           #endif
         #else
-          serial_log("Passenger's door open.", 2);
+          serial_log("Passenger's front door open.", 2);
+        #endif
+      }
+      if (left_door_open) {
+        left_door_open = false;
+        #if RHD
+          serial_log("Passenger's front door closed.", 2);
+        #else
+          serial_log("Driver's front door closed.", 2);
         #endif
       }
     } else if (k_msg.buf[1] == 4) {
       if (!left_door_open) {
         left_door_open = true;
         #if RHD
-          serial_log("Passenger's door open.", 2);
+          serial_log("Passenger's front door open.", 2);
         #else
-          serial_log("Driver's door open.", 2);
-          #if UNFOLD_WITH_DOOR
+          serial_log("Driver's front door open.", 2);
+          #if AUTO_MIRROR_FOLD
             if (unfold_with_door_open) {
-              toggle_mirror_fold();
-              unfold_with_door_open = false;
+              toggle_mirror_fold(false);
             }
           #endif
           #if COMFORT_EXIT
@@ -181,30 +189,40 @@ void evaluate_door_status(void) {
           #endif
         #endif
       }
+      if (right_door_open) {
+        right_door_open = false;
+        #if RHD
+          serial_log("Driver's front door closed.", 2);
+        #else
+          serial_log("Passenger's front door closed.", 2);
+        #endif
+      }
     } else if (k_msg.buf[1] == 5) {
       left_door_open = right_door_open = true;
       serial_log("Both front doors open.", 2);
-      #if UNFOLD_WITH_DOOR
+      #if AUTO_MIRROR_FOLD
         if (unfold_with_door_open) {
-          toggle_mirror_fold();
-          unfold_with_door_open = false;
+          toggle_mirror_fold(false);
         }
+      #endif
+      #if COMFORT_EXIT
+        evaluate_comfort_exit();
       #endif
     } else if (k_msg.buf[1] == 0) {
       if (left_door_open) {
         left_door_open = false;
         #if RHD
-          serial_log("Passenger's door closed.", 2);
+          serial_log("Passenger's front door closed.", 2);
         #else
-          serial_log("Driver's door closed.", 2);
+          serial_log("Driver's front door closed.", 2);
         #endif
       }
       if (right_door_open) {
         right_door_open = false;
         #if RHD
-          serial_log("Driver's door closed.", 2);
+          serial_log("Driver's front door closed.", 2);
         #else
-          serial_log("Passenger's door closed.", 2);
+          serial_log("Passenger's front door closed.", 2);
         #endif
       }
     }
@@ -301,37 +319,25 @@ void actuate_exhaust_solenoid(bool activate) {
 
 
 void evaluate_key_number_remote(void) {
-  if (k_msg.buf[0] / 11 != cas_key_number) {
-    cas_key_number = k_msg.buf[0] / 11;                                                                                             // Key 1 = 0, Key 2 = 11, Key 3 = 22...
-    if (cas_key_number > 2) {
-      serial_log("Received wrong key personalisation number. Assuming default", 1);
-      cas_key_number = 3;                                                                                                           // Default / Key "4".
+  uint8_t cas_key_number_can = k_msg.buf[0] / 0x11;
+  if (cas_key_number_can != cas_key_number) {
+    if (cas_key_number_can > 2) {
+      if (cas_key_number != 3) {
+        serial_log("Received invalid / Guest key personalisation number.", 1);
+        cas_key_number = 3;
+        key_guest_profile = true;
+      }
     }
     #if DEBUG_MODE
     else {
+      cas_key_number = cas_key_number_can;                                                                                          // Key 1 = 0, Key 2 = 0x11, Key 3 = 0x22..., Guest = 0xAA.
       sprintf(serial_debug_string, "Received remote key number: %d.", cas_key_number + 1);
       serial_log(serial_debug_string, 2);
     }
     #endif
+    key_guest_profile = false;
     console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
-  }
-}
-
-
-void check_key_changed(void) {
-  uint8_t cas_key_number_can = k_msg.buf[1] & 0b1111;
-  if (cas_key_number_can != cas_key_number) {
-    if (cas_key_number_can > 2) {
-      // Ignore. This should only happen if the key is lost by the PGS. We should still have the number from when the car was unlocked.
-    } else {
-      cas_key_number = cas_key_number_can;
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Received new key number after unlock: %d.", cas_key_number + 1);
-        serial_log(serial_debug_string, 2);
-      #endif
-      console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
-      send_dme_power_ckm();                                                                                                         // Update iDrive in case key remote changed
-    }
+    send_dme_power_ckm();                                                                                                           // Update iDrive in case key remote changed
   }
 }
 
@@ -349,9 +355,6 @@ void evaluate_remote_button(void) {
               kcan_write_msg(frm_mirror_status_request_a_buf);
               frm_mirror_status_requested = true;
             }
-            #if UNFOLD_WITH_DOOR
-              unfold_with_door_open = false;
-            #endif
           #endif
           #if IMMOBILIZER_SEQ_ALARM
             unsigned long time_now = millis();
@@ -371,12 +374,12 @@ void evaluate_remote_button(void) {
         
         if (doors_alarmed) {                                                                                                        // Car fully locked.
           // For remote range see: https://www.spoolstreet.com/threads/e92-key-remote-range-one-solution.9072/
-          if (vehicle_awakened_time >= 10000) {                                                                                     // Car was already awake.
-            if (doors_armed_timer >= 10000) {                                                                                       // Must be at least 10s to avoid interference with DWA lock button disable sensors.
+          if (vehicle_awakened_timer >= 10000) {                                                                                    // Car was already awake.
+            if (doors_locked_timer >= 10000) {                                                                                      // Must be at least 10s to avoid interference with DWA lock button disable sensors.
               indicate_car_locked(0);
             }
           } else {                                                                                                                  // Car woke up just now with the remote.
-            indicate_car_locked(100);
+            indicate_car_locked(200);
           }
         }
       }
@@ -407,10 +410,10 @@ void evaluate_remote_button(void) {
 
     else if (k_msg.buf[2] == 0x10) {
       lock_button_pressed = false;
-      if (millis() >= 10000) {
+      if (vehicle_awakened_timer >= 10000) {
         indicate_trunk_opened(0);
       } else {                                                                                                                      // Car just woke up from deep sleep.
-        indicate_trunk_opened(100);
+        indicate_trunk_opened(200);
       }
     }
 
@@ -435,7 +438,6 @@ void evaluate_remote_button(void) {
           }
         }
       } else {
-        serial_log("Cannot run power_down with terminal R ON.", 2);
         lock_button_pressed_counter = 0;
       }
     }
@@ -463,20 +465,13 @@ void evaluate_mirror_fold_status(void) {
       if (fold_lock_button_pressed) {
         if (!mirrors_folded) {
           serial_log("Folding mirrors after lock button pressed.", 2);
-          toggle_mirror_fold();
-          #if UNFOLD_WITH_DOOR
-            unfold_with_door_open = true;
-          #endif
+          toggle_mirror_fold(true);
         }
         fold_lock_button_pressed = false;
       } else if (fold_unlock_button_pressed) {
         if (mirrors_folded) {
           serial_log("Will un-fold mirrors when door is opened after unlock button pressed.", 2);
-          #if UNFOLD_WITH_DOOR
-            unfold_with_door_open = true;
-          #else
-            toggle_mirror_fold();
-          #endif
+          unfold_with_door_open = true;
           fold_unlock_button_pressed = false;
         }
       }
@@ -496,12 +491,14 @@ void evaluate_mirror_fold_status(void) {
 }
 
 
-void toggle_mirror_fold(void) {
+void toggle_mirror_fold(bool persist_state) {
   unsigned long time_now = millis();
   m = {frm_toggle_fold_mirror_a_buf, time_now + 300};
   mirror_fold_txq.push(&m);
   m = {frm_toggle_fold_mirror_b_buf, time_now + 310};
   mirror_fold_txq.push(&m);
+  unfold_with_door_open = persist_state;
+  eeprom_unsaved = true;
 }
 
 
@@ -793,47 +790,6 @@ void evaluate_ahl_flc_status(void) {
 }
 
 
-void evaluate_wiping_request(void) {
-  if (terminal_r) {
-    if (pt_msg.buf[0] == 0x10) {
-      if (wash_message_counter >= 2 || wipe_scheduled) {
-        serial_log("Washing cycle started.", 2);
-        wiper_txq.flush();
-        m = {wipe_single_buf, millis() + 7000};
-        wiper_txq.push(&m);
-        wipe_scheduled = true;                                                                                                      // If a quick pull is detected after the main one, re-schedule the wipe.
-      } else {
-        wash_message_counter++;
-      }
-    } else {
-      if (pt_msg.buf[0] == 1 || pt_msg.buf[0] == 2 || pt_msg.buf[0] == 3 || pt_msg.buf[0] == 8) {                                   // Abort if wipers are used in the meantime.
-        if (!wiper_txq.isEmpty()) {
-          serial_log("Wipe after wash aborted.", 2);
-          wiper_txq.flush();
-          wipe_scheduled = false;
-        }
-      }
-      wash_message_counter = 0;
-    }
-  }
-}
-
-
-void check_wiper_queue(void) {
-  if (terminal_r) {
-    if (!wiper_txq.isEmpty()) {
-      wiper_txq.peek(&delayed_tx);
-      if (millis() >= delayed_tx.transmit_time) {
-        serial_log("Wiping windscreen after washing.", 2);
-        ptcan_write_msg(delayed_tx.tx_msg);
-        wiper_txq.drop();
-        wipe_scheduled = false;
-      }
-    }
-  }
-}
-
-
 void evaluate_ambient_temperature(void) {
   ambient_temperature_real = (k_msg.buf[0] - 80) / 2.0;
 }
@@ -846,7 +802,7 @@ void evaluate_rls_light_status(void) {
 
 
 void request_vehicle_tilt_angle(void) {
-  if (sine_angle_request_timer >= 333) {
+  if (sine_angle_request_timer >= 500 && immobilizer_released) {
     if (diag_transmit) {
       kcan_write_msg(sine_angle_request_a_buf);
       sine_angle_requested = true;
@@ -884,14 +840,16 @@ void send_f_brightness_status(void) {
 
 void evaluate_door_lock_ckm(void) {
   if (bitRead(k_msg.buf[0], 0) == 0 && bitRead(k_msg.buf[0], 1) == 1) {
-    if (!visual_signal_ckm) {
+    if (!visual_signal_ckm[cas_key_number]) {
       serial_log("Visual signal CKM ON.", 2);
-      visual_signal_ckm = true;
+      visual_signal_ckm[cas_key_number] = true;
+      eeprom_unsaved = true;
     }
   } else {
-    if (visual_signal_ckm) {
+    if (visual_signal_ckm[cas_key_number]) {
       serial_log("Visual signal CKM OFF.", 2);
-      visual_signal_ckm = false;
+      visual_signal_ckm[cas_key_number] = false;
+      eeprom_unsaved = true;
     }
   }
 }
@@ -901,47 +859,51 @@ void evaluate_drivers_door_status(void) {                                       
   if (k_msg.buf[3] == 0xFC) {                                                                                                       // Door closed.
     if (k_msg.buf[0] == 0x83) {                                                                                                     // Deadlock ON.
       if (!doors_locked || !doors_alarmed) {
-        doors_armed_timer = 0;
+        doors_locked_timer = 0;
         serial_log("Doors locked and alarmed.", 2);
         #if DEBUG_MODE
           if (serial_commands_unlocked) {
             serial_commands_unlocked = false;
-            EEPROM.update(20, serial_commands_unlocked);
+            EEPROM.update(26, serial_commands_unlocked);
             update_eeprom_checksum();
             serial_log("Locked serial interface.", 0);
           }
         #endif
         doors_locked = doors_alarmed = true;
+        eeprom_unsaved = true;
       }
     } else if (k_msg.buf[0] == 0x82) {
       if (!doors_locked) {
         serial_log("Doors locked, alarm not set.", 2);
         doors_locked = true;
         doors_alarmed = false;
+        eeprom_unsaved = true;
       }
     } else {
       if (doors_locked || doors_alarmed) {
         serial_log("Doors unlocked.", 2);
         doors_locked = doors_alarmed = false;
+        eeprom_unsaved = true;
       }
     }
   } else {
     if (doors_locked || doors_alarmed) {
       serial_log("Doors unlocked.", 2);
       doors_locked = doors_alarmed = false;
+      eeprom_unsaved = true;
     }
   }
 }
 
 
 void indicate_car_locked(uint16_t boot_delay) {
-  if (visual_signal_ckm && !hazards_on && !indicators_on) {
+  if (visual_signal_ckm[cas_key_number] && !hazards_on && !indicators_on) {
     serial_log("Car finder triggered. Flashing hazards 4 times.", 2);
     hazards_flash_txq.flush();                                                                                                      // Cancel pending flashes.
     unsigned long time_now = millis();
-    m = {flash_hazards_double_buf, boot_delay + time_now + 50};                                                                     // Minimum time between messages is 1.3s.
+    m = {flash_hazards_double_buf, boot_delay + time_now + 100};                                                                    // Minimum time between messages is 1.3s.
     hazards_flash_txq.push(&m);
-    m = {flash_hazards_double_buf, boot_delay + time_now + 1350};
+    m = {flash_hazards_double_buf, boot_delay + time_now + 1450};
     hazards_flash_txq.push(&m);
   }
 }
@@ -953,6 +915,57 @@ void check_hazards_queue(void) {
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
       hazards_flash_txq.drop();
+    }
+  }
+}
+
+
+void activate_intermittent_wipers(void) {
+  intermittent_wipe_active = true;
+  serial_log("Intermittent wiping ON.", 2);
+  intermittent_wipe_timer = 0;
+  kcan_write_msg(cic_button_sound_buf);                                                                                             // Acoustic indicator.
+}
+
+
+void disable_intermittent_wipers(void) {
+  intermittent_wipe_active = false;
+  serial_log("Intermittent wiping OFF.", 2);
+  intermittent_wipe_timer = 0;
+  kcan_write_msg(cic_button_sound_buf);                                                                                             // Acoustic indicator.
+}
+
+
+void check_intermittent_wipers(void) {
+  if (intermittent_wipe_active) {
+    if (intermittent_wipe_timer >= intermittent_intervals[intermittent_setting]) {
+      uint8_t single_wipe[] = {8, intermittent_setting_can};
+      ptcan_write_msg(make_msg_buf(0x2A6, 2, single_wipe));
+      intermittent_wipe_timer = 0;
+    }
+  }
+}
+
+
+void abort_wipe_after_wash(void) {
+  if (!wiper_txq.isEmpty()) {
+    serial_log("Wipe after wash aborted.", 2);
+    wiper_txq.flush();
+    wipe_scheduled = false;
+  }
+}
+
+
+void check_wiper_queue(void) {
+  if (terminal_r) {
+    if (!wiper_txq.isEmpty()) {
+      wiper_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        serial_log("Wiping windscreen after washing.", 2);
+        ptcan_write_msg(delayed_tx.tx_msg);
+        wiper_txq.drop();
+        wipe_scheduled = false;
+      }
     }
   }
 }

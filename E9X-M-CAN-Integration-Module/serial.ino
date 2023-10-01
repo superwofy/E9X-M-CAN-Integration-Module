@@ -6,7 +6,7 @@ void serial_interpreter(void) {
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
     if (cmd == "lock_serial") {
       serial_commands_unlocked = false;
-      EEPROM.update(20, serial_commands_unlocked);
+      EEPROM.update(26, serial_commands_unlocked);
       update_eeprom_checksum();
       serial_log("  Serial: Commands locked.", 0);
     }
@@ -37,8 +37,6 @@ void serial_interpreter(void) {
       } else {
         serial_log("  Serial: Saved data to EEPROM.", 0);
       }
-      serial_commands_unlocked = false;
-      EEPROM.update(20, serial_commands_unlocked);
       delay(200);
       update_data_in_eeprom();
       delay(1000);
@@ -242,7 +240,10 @@ void serial_interpreter(void) {
     #if AUTO_MIRROR_FOLD
     else if (cmd == "toggle_mirror_fold") {
       if (diag_transmit) {
-        toggle_mirror_fold();
+        bool unfold_with_door_open_ = unfold_with_door_open, eeprom_unsaved_ = eeprom_unsaved;                                      // Back these values up.
+        toggle_mirror_fold(false);
+        unfold_with_door_open = unfold_with_door_open_;
+        eeprom_unsaved = eeprom_unsaved_;
         serial_log("  Serial: Sent mirror fold/unfold request.", 0);
       } else {
         serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
@@ -290,15 +291,29 @@ void serial_interpreter(void) {
       serial_log("  Serial: Alarm siren ON.", 0);
     }
     else if (cmd == "alarm_siren_off") {
-      kcan_write_msg(alarm_siren_off_buf);
+      kcan_write_msg(alarm_siren_return_control_buf);
       serial_log("  Serial: Alarm siren OFF.", 0);
     }
     else if (cmd == "test_trip_stall_alarm") {
       if (ignition) {
-        activate_immobilizer();
-        alarm_after_engine_stall = true;
-        trip_alarm_after_stall();
-        serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.", 0);
+        if (!engine_running) {
+          Serial.print("  Serial: ");
+          activate_immobilizer();
+          Serial.print("  Serial: ");
+          enable_alarm_after_stall();
+          while (!immobilizer_txq.isEmpty()) {                                                                                      // Simulate engine stalling and execute warning sounds
+            immobilizer_txq.peek(&delayed_tx);
+            if (millis() >= delayed_tx.transmit_time) {
+              kcan_write_msg(delayed_tx.tx_msg);
+              immobilizer_txq.drop();
+            }
+          }
+          idrive_alive_timer = 0;
+          execute_alarm_after_stall();
+          serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.", 0);
+        } else {
+          serial_log("  Serial: Shut down engine first.", 0);
+        }
       } else {
         serial_log("  Serial: Activate ignition first.", 0);
       }
@@ -388,7 +403,7 @@ void serial_interpreter(void) {
     if (cmd == serial_password) {
       serial_unlocked_timer = 0;
       serial_commands_unlocked = true;
-      EEPROM.update(20, serial_commands_unlocked);
+      EEPROM.update(26, serial_commands_unlocked);
       update_eeprom_checksum();
       serial_log("  Serial: Commands unlocked.", 0);
     } else {
@@ -494,7 +509,7 @@ void check_serial_diag_actions(void) {
 
   if (serial_commands_unlocked && serial_unlocked_timer >= 480000) {
     serial_commands_unlocked = false;
-    EEPROM.update(20, serial_commands_unlocked);
+    EEPROM.update(26, serial_commands_unlocked);
     update_eeprom_checksum();
     serial_log("  Serial: Locked after timeout.", 0);
   }

@@ -8,20 +8,6 @@ void read_initialize_eeprom(void) {
   if (stored_eeprom_checksum != calculated_eeprom_checksum){
     serial_log("EEPROM data corrupted. Restoring defaults.", 1);
 
-    // Defaults for when EEPROM is not initialized  
-    mdrive_dsc = 0x13;
-    mdrive_power = 0x30;
-    mdrive_edc = 0x2A;
-    mdrive_svt = 0xF1;
-    dme_ckm[0][0] = 0xF1;
-    dme_ckm[1][0] = 0xF1;
-    dme_ckm[2][0] = 0xF1;
-    #if EDC_CKM_FIX
-      edc_ckm[0] = 0xF1;
-      edc_ckm[1] = 0xF1;
-      edc_ckm[2] = 0xF1;
-    #endif
-
     EEPROM.update(2, mdrive_dsc);                                                                           
     EEPROM.update(3, mdrive_power);
     EEPROM.update(4, mdrive_edc);
@@ -39,10 +25,17 @@ void read_initialize_eeprom(void) {
     EEPROM.update(16, 0x10);
     EEPROM.update(17, 0);
     EEPROM.update(18, 0);
-    EEPROM.update(19, 1);
+    EEPROM.update(19, 0);
     EEPROM.update(20, 0);
     EEPROM.update(21, 0);
     EEPROM.update(22, 0);
+    EEPROM.update(23, 1);
+    EEPROM.update(24, 1);
+    EEPROM.update(25, 1);
+    EEPROM.update(26, 0);
+    EEPROM.update(27, 0);
+    EEPROM.update(28, 0);
+
     update_eeprom_checksum();
   } else {
     mdrive_dsc = EEPROM.read(2);
@@ -57,7 +50,7 @@ void read_initialize_eeprom(void) {
       edc_ckm[1] = EEPROM.read(10);
       edc_ckm[2] = EEPROM.read(11);
     #endif
-    #if UNFOLD_WITH_DOOR
+    #if AUTO_MIRROR_FOLD
       unfold_with_door_open = EEPROM.read(12) == 1 ? true : false;
     #endif
     #if IMMOBILIZER_SEQ
@@ -79,16 +72,22 @@ void read_initialize_eeprom(void) {
         peristent_volume = 0x10;
       }
     #endif
-    visual_signal_ckm = EEPROM.read(17) == 1 ? true : false;
+    visual_signal_ckm[0] = EEPROM.read(17) == 1 ? true : false;
+    visual_signal_ckm[1] = EEPROM.read(18) == 1 ? true : false;
+    visual_signal_ckm[2] = EEPROM.read(19) == 1 ? true : false;
     #if COMFORT_EXIT
-      auto_seat_ckm = EEPROM.read(18) == 1 ? true : false;
+      auto_seat_ckm[0] = EEPROM.read(20) == 1 ? true : false;
+      auto_seat_ckm[1] = EEPROM.read(21) == 1 ? true : false;
+      auto_seat_ckm[2] = EEPROM.read(22) == 1 ? true : false;
     #endif
     #if DIM_DRL
-      drl_ckm = EEPROM.read(19) == 1 ? true : false;
+      drl_ckm[0] = EEPROM.read(23) == 1 ? true : false;
+      drl_ckm[1] = EEPROM.read(24) == 1 ? true : false;
+      drl_ckm[2] = EEPROM.read(25) == 1 ? true : false;
     #endif
-    serial_commands_unlocked = EEPROM.read(20) == 1 ? true : false;
-    doors_locked = EEPROM.read(21) == 1 ? true : false;
-    doors_alarmed = EEPROM.read(22) == 1 ? true : false;
+    serial_commands_unlocked = EEPROM.read(26) == 1 ? true : false;
+    doors_locked = EEPROM.read(27) == 1 ? true : false;
+    doors_alarmed = EEPROM.read(28) == 1 ? true : false;
     serial_log("Loaded data from EEPROM.", 2);
   }
 }
@@ -96,18 +95,20 @@ void read_initialize_eeprom(void) {
 
 uint16_t eeprom_crc(void) {
   teensy_eeprom_crc.restart();
-  for (uint8_t i = 2; i < 23; i++) {
+  for (uint8_t i = 2; i < 29; i++) {
     teensy_eeprom_crc.add(EEPROM.read(i));
   }
   return teensy_eeprom_crc.calc();
 }
 
 
-void update_data_in_eeprom(void) {
-  EEPROM.update(2, mdrive_dsc);                                                                                                     // EEPROM lifetime approx. 100k writes. Always update, never write()!                                                                                          
-  EEPROM.update(3, mdrive_power);
-  EEPROM.update(4, mdrive_edc);
-  EEPROM.update(5, mdrive_svt);
+void update_data_in_eeprom(void) {                                                                                                  // EEPROM lifetime approx. 100k writes. Always update, never write()!
+  if (!key_guest_profile) {
+    EEPROM.update(2, mdrive_dsc);
+    EEPROM.update(3, mdrive_power);
+    EEPROM.update(4, mdrive_edc);
+    EEPROM.update(5, mdrive_svt);
+  }
   EEPROM.update(6, dme_ckm[0][0]);
   EEPROM.update(7, dme_ckm[1][0]);
   EEPROM.update(8, dme_ckm[2][0]);
@@ -123,15 +124,21 @@ void update_data_in_eeprom(void) {
   #if DOOR_VOLUME
     EEPROM.update(16, peristent_volume);
   #endif
-  EEPROM.update(17, visual_signal_ckm);
+  EEPROM.update(17, visual_signal_ckm[0]);
+  EEPROM.update(18, visual_signal_ckm[1]);
+  EEPROM.update(19, visual_signal_ckm[2]);
   #if COMFORT_EXIT
-    EEPROM.update(18, auto_seat_ckm);
+    EEPROM.update(20, auto_seat_ckm[0]);
+    EEPROM.update(21, auto_seat_ckm[1]);
+    EEPROM.update(22, auto_seat_ckm[2]);
   #endif
   #if DIM_DRL
-    EEPROM.update(19, drl_ckm);
+    EEPROM.update(23, drl_ckm[0]);
+    EEPROM.update(24, drl_ckm[1]);
+    EEPROM.update(25, drl_ckm[2]);
   #endif
-  EEPROM.update(21, doors_locked);
-  EEPROM.update(22, doors_alarmed);
+  EEPROM.update(27, doors_locked);
+  EEPROM.update(28, doors_alarmed);
   update_eeprom_checksum();
   serial_log("Saved data to EEPROM.", 2);
 }
@@ -146,9 +153,9 @@ void update_eeprom_checksum(void) {
 
 void initialize_watchdog(void) {
   WDT_timings_t config;
-  config.trigger = 10;
+  config.trigger = 15;
   config.callback = wdt_callback;
-  config.timeout = 13;                                                                                                              // If the watchdog timer is not reset within 10s, re-start the program.
+  config.timeout = 18;                                                                                                              // If the watchdog timer is not reset within 15s, re-start the program.
   wdt.begin(config);
 }
 
@@ -315,10 +322,8 @@ void print_current_state(Stream &status_serial) {
     status_serial.println(serial_debug_string);
   #endif
   #if AUTO_SEAT_HEATING_PASS
-    sprintf(serial_debug_string, " Passenger's seat heating: %s", passenger_seat_heating_status ? "ON" : "OFF");
-    status_serial.println(serial_debug_string);
-    sprintf(serial_debug_string, " Passenger's seat occupied: %s, seatbelt fastened: %s",
-            passenger_seat_status >= 8 ? "YES" : "NO", passenger_seat_status & 1 ? "YES" : "NO");
+    sprintf(serial_debug_string, " Passenger's seat heating: %s, occupied: %s, seatbelt fastened: %s", 
+            passenger_seat_heating_status ? "ON" : "OFF", passenger_seat_status >= 8 ? "YES" : "NO", passenger_seat_status & 1 ? "YES" : "NO");
     status_serial.println(serial_debug_string);
   #endif
   #if HOOD_OPEN_GONG
@@ -502,7 +507,7 @@ void reset_ignition_variables(void) {                                           
   msa_fake_status_counter = 0;
   pdc_bus_status = 0x80;
   pdc_button_pressed = pdc_with_rvc_requested = false;
-  rvc_dipped_by_module = rvc_dipped_by_driver = false;
+  rvc_tow_view_by_module = rvc_tow_view_by_driver = false;
   #if IMMOBILIZER_SEQ
     reset_key_cc();
   #endif
@@ -521,12 +526,13 @@ void reset_sleep_variables(void) {
   volume_reduced = false;                                                                                                           // In case the car falls asleep with the door open.
   volume_restore_offset = 0;
   initial_volume_set = false;
+  key_guest_profile = false;
   idrive_txq.flush();
   kombi_needle_txq.flush();
   vehicle_moving = false;
   wiper_txq.flush();
-  wash_message_counter = 0;
-  wipe_scheduled = false;
+  wash_message_counter = stalk_down_message_counter = stalk_down_last_press_time = 0;
+  wipe_scheduled = intermittent_wipe_active = false, auto_wipe_active = false;
   frm_mirror_status_requested = false;
   frm_ahl_flc_status_requested = false;
   fold_lock_button_pressed = fold_unlock_button_pressed = false;

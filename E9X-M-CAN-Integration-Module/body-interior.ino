@@ -7,7 +7,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     vehicle_awake = true;    
     toggle_transceiver_standby(0);                                                                                                  // Re-activate the transceivers.                                                                                         
     serial_log("Vehicle Awake.", 0);
-    vehicle_awakened_time = 0;
+    vehicle_awakened_timer = 0;
   }
 
   bool ignition_ = ignition, terminal_r_ = terminal_r;
@@ -32,8 +32,6 @@ void evaluate_terminal_clutch_keyno_status(void) {
     }
   }
   #endif
-
-  check_key_changed();
 
   #if F_ZBE_WAKE || F_VSW01 || F_NIVI                                                                                               // Translate 0x130 to 0x12F for F-series modules.
     uint8_t f_terminal_status[] = {0, 0, 0, 0xFF, 0, 0, 0x3F, 0xFF};
@@ -122,6 +120,9 @@ void evaluate_terminal_clutch_keyno_status(void) {
     serial_log("Terminal R OFF.", 2);
     #if COMFORT_EXIT
       comfort_exit_ready = true;
+    #endif
+    #if INTERMITTENT_WIPERS
+      intermittent_wipe_active = false;
     #endif
   }
 }
@@ -337,7 +338,7 @@ void check_console_buttons(void) {
         if (both_console_buttons_timer >= 10000) {                                                                                  // Hold both buttons for more than 10s.
           kcan_write_msg(cic_button_sound_buf);                                                                                     // Acknowledge Immobilizer persist ON-OFF with Gong.
           immobilizer_persist = !immobilizer_persist;
-          EEPROM.update(15, immobilizer_persist);
+          EEPROM.update(14, immobilizer_persist);
           update_eeprom_checksum();
           #if DEBUG_MODE
             sprintf(serial_debug_string, "Anti theft now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
@@ -430,7 +431,7 @@ void update_car_time_from_rtc(void) {
 
 void send_volume_request_periodic(void) {
   if (terminal_r) {
-    if (initial_volume_set && !volume_reduced && volume_request_periodic_timer >= 3000) {
+    if (idrive_txq.isEmpty() && initial_volume_set && !volume_reduced && volume_request_periodic_timer >= 3000) {
       if (diag_transmit) {
         kcan_write_msg(vol_request_buf);
         volume_request_periodic_timer = 0;
@@ -443,10 +444,15 @@ void send_volume_request_periodic(void) {
 void send_volume_request_door(void) {
   if (terminal_r) {
     if (diag_transmit) {
-      if (volume_request_door_timer >= 500) {                                                                                       // Basic debounce to account for door not fully shut.
-        kcan_write_msg(vol_request_buf);
-        volume_request_door_timer = volume_request_periodic_timer = 0;
-        serial_log("Requested volume from iDrive with door status change.", 2);
+      if (!idrive_txq.isEmpty()) {                                                                                                  // If there are pending volume change actions we need to wait for them to complete.                                                                                           
+        m = {vol_request_buf, millis() + 900};
+        idrive_txq.push(&m);
+      } else {
+        if (volume_request_door_timer >= 300) {                                                                                     // Basic debounce to account for door not fully shut.
+          kcan_write_msg(vol_request_buf);
+          volume_request_door_timer = volume_request_periodic_timer = 0;
+          serial_log("Requested volume from iDrive with door status change.", 2);
+        }
       }
     }
   }
@@ -529,6 +535,9 @@ void evaluate_audio_volume(void) {
         }
       }
     } else {
+      #if RTC
+        check_rtc_night_volume();
+      #endif
       uint8_t restore_last_volume[] = {0x63, 4, 0x31, 0x23, peristent_volume, 0, 0, 0};
       kcan_write_msg(make_msg_buf(0x6F1, 8, restore_last_volume));
       initial_volume_set = true;
@@ -592,6 +601,9 @@ void check_idrive_alive_monitor(void) {
 void send_initial_volume(void) {
   if (k_msg.buf[7] >= 3) {                                                                                                          // 0x273 has been transmitted X times according to the counter.
     if (!initial_volume_set && diag_transmit) {
+      #if RTC
+        check_rtc_night_volume();
+      #endif
       uint8_t restore_last_volume[] = {0x63, 4, 0x31, 0x23, peristent_volume, 0, 0, 0};
       kcan_write_msg(make_msg_buf(0x6F1, 8, restore_last_volume));                                                                  // Set iDrive volume to last volume before sleep. This must run before any set volumes.
       #if DEBUG_MODE
@@ -600,6 +612,15 @@ void send_initial_volume(void) {
       #endif
       initial_volume_set = true;
     }
+  }
+}
+
+
+void check_rtc_night_volume(void) {
+  time_t t = now();                                                                                                                 // Reduce the startup volume at night time.
+  uint8_t rtc_hours = hour(t);
+  if (rtc_valid && (rtc_hours >= 21 || rtc_hours <= 6)) {
+    peristent_volume = 8;
   }
 }
 
@@ -656,21 +677,23 @@ void initialize_asd(void) {
 
 void evaluate_dr_seat_ckm(void) {
   if (k_msg.buf[0] == 0xFC) {
-    if (!auto_seat_ckm) {
+    if (!auto_seat_ckm[cas_key_number]) {
       serial_log("Automatic seat position CKM ON.", 2);
-      auto_seat_ckm = true;
+      auto_seat_ckm[cas_key_number] = true;
+      eeprom_unsaved = true;
     }
   } else {
-    if (auto_seat_ckm) {
+    if (auto_seat_ckm[cas_key_number]) {
       serial_log("Automatic seat position CKM OFF.", 2);
-      auto_seat_ckm = false;
+      auto_seat_ckm[cas_key_number] = false;
+      eeprom_unsaved = true;
     }
   }
 }
 
 
 void evaluate_comfort_exit(void) {
-  if (comfort_exit_ready && auto_seat_ckm) {
+  if (comfort_exit_ready && auto_seat_ckm[cas_key_number]) {
     kcan_write_msg(dr_seat_move_back_buf);
     comfort_exit_done = true;
     comfort_exit_ready = false;
@@ -686,9 +709,9 @@ void store_rvc_settings(void) {
     rvc_settings[i] = k_msg.buf[i];
   }
 
-  if (!rvc_dipped_by_driver && (rvc_dipped_by_module != bitRead(k_msg.buf[0], 3)) && pdc_bus_status == 0xA5) {                      // If the driver changed this setting, do not interfere during this cycle.
-    rvc_dipped_by_driver = true;
-    serial_log("Driver changed RVC dip manually.", 3);
+  if (!rvc_tow_view_by_driver && (rvc_tow_view_by_module != bitRead(k_msg.buf[0], 3)) && pdc_bus_status == 0xA5) {                  // If the driver changed this setting, do not interfere during this cycle.
+    rvc_tow_view_by_driver = true;
+    serial_log("Driver changed RVC tow view manually.", 3);
   }
 }
 
@@ -726,5 +749,114 @@ void evaluate_power_down_response(void) {
       power_down_requested = false;
       serial_log("Power-down command aborted due to OBD tool presence.", 0);
     }
+  }
+}
+
+
+void evaluate_wiper_stalk_status(void) {
+  if (terminal_r) {
+    if (pt_msg.buf[0] == 0x10) {
+      #if WIPE_AFTER_WASH
+        if (wash_message_counter >= 2 || wipe_scheduled) {
+          serial_log("Washing cycle started.", 2);
+          wiper_txq.flush();
+          uint8_t single_wipe[] = {8, intermittent_setting_can};
+          m = {make_msg_buf(0x2A6, 2, single_wipe), millis() + 7000};
+          wiper_txq.push(&m);
+          wipe_scheduled = true;                                                                                                    // If a quick pull is detected after the main one, re-schedule the wipe.
+          wash_message_counter = 0;
+        } else {
+          wash_message_counter++;
+        }
+      #endif
+      #if INTERMITTENT_WIPERS
+        stalk_down_message_counter = 0;
+      #endif
+    } 
+
+    else if (pt_msg.buf[0] == 0) {                                                                                                  // Wiping completely OFF.
+      #if WIPE_AFTER_WASH
+        wash_message_counter = 0;
+      #endif
+    }
+    
+    else if (pt_msg.buf[0] == 1) {                                                                                                  // AUTO button pressed.
+      #if WIPE_AFTER_WASH
+        abort_wipe_after_wash();
+        wash_message_counter = 0;
+      #endif
+      #if INTERMITTENT_WIPERS
+        if (intermittent_wipe_active) {
+          disable_intermittent_wipers();
+        }
+        stalk_down_message_counter = 0;
+      #endif
+    }
+
+    else if (pt_msg.buf[0] == 2 || pt_msg.buf[0] == 3) {                                                                            // Stalk pushed up once / twice.
+      #if WIPE_AFTER_WASH
+        abort_wipe_after_wash();
+        wash_message_counter = 0;
+      #endif
+      #if INTERMITTENT_WIPERS
+        if (intermittent_wipe_active) {
+          disable_intermittent_wipers();
+        }
+        stalk_down_message_counter = 0;
+      #endif
+    }
+
+    else if (pt_msg.buf[0] == 8) {                                                                                                  // Stalk pushed down. 9 = stalk pushed down with AUTO ON.
+      #if WIPE_AFTER_WASH
+        abort_wipe_after_wash();
+        wash_message_counter = 0;
+      #endif
+      #if INTERMITTENT_WIPERS
+        if (millis() - stalk_down_last_press_time >= 800) {
+          stalk_down_message_counter = 0;
+        }
+
+        stalk_down_last_press_time = millis();
+        stalk_down_message_counter++;
+
+        intermittent_wipe_timer = 0;
+
+        if (stalk_down_message_counter >= 3) {
+          if (!intermittent_wipe_active) {
+            activate_intermittent_wipers();
+            intermittent_wipe_timer = intermittent_intervals[intermittent_setting];
+          } else {
+            disable_intermittent_wipers();
+          }
+          stalk_down_message_counter = 0;
+        }
+      #endif
+    }
+
+    #if INTERMITTENT_WIPERS || WIPE_AFTER_WASH
+      if (pt_msg.buf[1] != intermittent_setting_can) {                                                                              // Position of the speed wheel changed.
+        intermittent_setting_can = pt_msg.buf[1];
+        uint8_t new_intermittent_setting = 0;
+        if (!vehicle_moving && intermittent_setting_can == 0xF8) {                                                                  // Slow down wipe speed if car is not moving.
+          new_intermittent_setting = 0;
+        } else {
+          new_intermittent_setting = intermittent_setting_can - 0xF7;
+        }
+        #if DEBUG_MODE && INTERMITTENT_WIPERS
+          if (intermittent_wipe_active) {
+            sprintf(serial_debug_string, "New wiper speed setting %d%s.", new_intermittent_setting,
+                    new_intermittent_setting == 0 ? " [not moving]" : "");
+            serial_log(serial_debug_string, 3);
+          }
+        #endif
+        stalk_down_message_counter = 0;
+        if (new_intermittent_setting > intermittent_setting) {                                                                      // If wheel moved up, wipe immediately. Else, wait until next interval.
+          intermittent_wipe_timer = intermittent_intervals[intermittent_setting] + 200;
+        } else {
+          intermittent_wipe_timer = 0;
+        }
+        intermittent_setting = new_intermittent_setting;
+      }
+    #endif
   }
 }

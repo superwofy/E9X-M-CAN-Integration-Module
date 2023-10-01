@@ -73,7 +73,7 @@ void configure_flexcan(void) {
   KCAN.setClock(CLK_60MHz);                                                                                                         // Increase from the default 24MHz clock. Run before setBaudRate.
   KCAN.setBaudRate(100000);                                                                                                         // 100k
   KCAN.enableFIFO();                                                                                                                // Activate FIFO mode.
-  KCAN.setMaxMB(48);                                                                                                                // Increase max filters
+  KCAN.setMaxMB(48);                                                                                                                // Increase max filters. Max is 128.
   KCAN.setRFFN(RFFN_48);
   KCAN.setFIFOFilter(REJECT_ALL);                                                                                                   // Reject unfiltered messages
 
@@ -153,7 +153,7 @@ void configure_flexcan(void) {
     KCAN.setFIFOFilter(filter_count, 0x34F, STD);                                                                                   // Handbrake status sent by JBBFE:                              Sent when changed.
     filter_count++;
   #endif
-  #if AUTO_DIP_RVC
+  #if AUTO_TOW_VIEW_RVC
     KCAN.setFIFOFilter(filter_count, 0x36D, STD);                                                                                   // Distance status sent by PDC:                                 Sent when active.
     filter_count++;
     KCAN.setFIFOFilter(filter_count, 0x38F, STD);                                                                                   // Camera settings sent by CIC:                                 Sent when activating camera and when changed.
@@ -165,7 +165,7 @@ void configure_flexcan(void) {
   #endif
   KCAN.setFIFOFilter(filter_count, 0x3A8, STD);                                                                                     // M Key (CKM) POWER setting from iDrive:                       Sent when changed.
   filter_count++;
-  #if MSA_RVC || PDC_AUTO_OFF || AUTO_DIP_RVC
+  #if MSA_RVC || PDC_AUTO_OFF || AUTO_TOW_VIEW_RVC
     KCAN.setFIFOFilter(filter_count, 0x3AF, STD);                                                                                   // PDC bus status:                                              Cycle time 2s (idle). Sent when changed.
     filter_count++;
   #endif
@@ -242,7 +242,7 @@ void configure_flexcan(void) {
   #endif
   PTCAN.setFIFOFilter(filter_count, 0x1D6, STD);                                                                                    // MFL button status:                                           Cycle time 1s (idle), 100ms (pressed).
   filter_count++;
-  #if WIPE_AFTER_WASH
+  #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
     PTCAN.setFIFOFilter(filter_count, 0x2A6, STD);                                                                                  // Wiper stalk status from SZL.
     filter_count++;
   #endif
@@ -264,6 +264,8 @@ void configure_flexcan(void) {
     PTCAN.setFIFOFilter(filter_count, 0x60E, STD);                                                                                  // Diagnostic messages from SVT module to forward.
   #endif
 
+  pinMode(PTCAN_STBY_PIN, OUTPUT); 
+
 
   // DCAN
   DCAN.begin();
@@ -274,8 +276,6 @@ void configure_flexcan(void) {
 
   DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                                                // Diagnostic queries from DCAN tool to forward.
 
-
-  pinMode(PTCAN_STBY_PIN, OUTPUT); 
   pinMode(DCAN_STBY_PIN, OUTPUT);
 
   #if DEBUG_MODE

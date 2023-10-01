@@ -9,8 +9,8 @@
 #include "src/queue/cppQueue.h"                                                                                                     // https://github.com/SMFSW/Queue
 #include "usb_dev.h"
 extern "C" uint32_t set_arm_clock(uint32_t frequency);
-FlexCAN_T4<CAN1, RX_SIZE_512, TX_SIZE_64> KCAN;                                                                                     // RX: 64/32 messages with length 8, TX: 8 messages with length 8.
-FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_64> PTCAN;
+FlexCAN_T4<CAN1, RX_SIZE_1024, TX_SIZE_128> KCAN;
+FlexCAN_T4<CAN2, RX_SIZE_512, TX_SIZE_128> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_64> DCAN;
 WDT_T4<WDT1> wdt;
 CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                                                                                // XMODEM
@@ -24,17 +24,15 @@ CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                            
 int8_t LOGLEVEL = 4;                                                                                                                // 0 - critical, 1 - errors, 2 - info, 3 - extra_info, 4 = debug.
 
 #define PDC_AUTO_OFF 1                                                                                                              // Deactivates PDC when handbrake is pulled.
-#define AUTO_DIP_RVC 1                                                                                                              // Turn on top down rear view camera option when close to an obstacle.
+#define AUTO_TOW_VIEW_RVC 1                                                                                                         // Turn on top down (tow view) rear view camera option when close to an obstacle.
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Also disables the door open with ignition warning CC.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster. Do not use with RDC.
 #define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood.
 #define FRM_AHL_MODE 1                                                                                                              // Switches FRM AHL mode from Komfort and Sport.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
-#define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold mirrors when locking. Can be done with coding but this integrates nicer.
-#if AUTO_MIRROR_FOLD
-  #define UNFOLD_WITH_DOOR 1                                                                                                        // Un-fold with door open event instead of remote unlock button.
-#endif
+#define INTERMITTENT_WIPERS 1                                                                                                       // Inermittent wiping alongside auto wipers when pushing the stalk down three times quickly / holding it down.
+#define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold mirrors when locking. Un-fold with door open event instead of remote unlock button.
 #define MIRROR_UNDIM 1                                                                                                              // Undim electrochromic exterior mirrors when indicating at night.
 #define COMFORT_EXIT 1                                                                                                              // Move driver's seat back when exiting car.
 #define IMMOBILIZER_SEQ 1                                                                                                           // Disable fuel pump until the steering wheel M button is pressed a number of times.
@@ -187,25 +185,28 @@ cppQueue ptcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue dcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t kcan_retry_counter = 0, ptcan_retry_counter = 0, dcan_retry_counter = 0;
 uint16_t stored_eeprom_checksum, calculated_eeprom_checksum;
+bool eeprom_unsaved = false;
+elapsedMillis eeprom_update_timer = 0;
 delayed_can_tx_msg delayed_tx, m;
 bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = false, vehicle_moving = false;
 bool terminal_50 = false, engine_running = false, clutch_pressed = false, frm_consumer_shutdown = false;
 bool clearing_dtcs = false;
 elapsedMillis engine_runtime = 0;
 float battery_voltage = 0;
-elapsedMillis vehicle_awake_timer = 0, vehicle_awakened_time = 0;
+elapsedMillis vehicle_awake_timer = 0, vehicle_awakened_timer = 0;
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint16_t RPM = 0;
 bool handbrake_status = true;
 elapsedMillis handbrake_status_debounce_timer = 300;
-uint8_t dme_ckm[4][2] = {{0, 0xFF}, {0, 0xFF}, {0, 0xFF}, {0xF1, 0xFF}};
-uint8_t edc_ckm[] = {0, 0, 0, 0xF1};
+uint8_t dme_ckm[4][2] = {{0xF1, 0xFF}, {0xF1, 0xFF}, {0xF1, 0xFF}, {0xF1, 0xFF}};
+uint8_t edc_ckm[] = {0xF1, 0xF1, 0xF1, 0xF1};
 uint8_t edc_mismatch_check_counter = 0;
 CAN_message_t edc_button_press_buf;
 cppQueue edc_ckm_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-uint8_t cas_key_number = 0;                                                                                                         // 0 = Key 1, 1 = Key 2...
-uint8_t mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt;
+uint8_t cas_key_number = 3;                                                                                                         // 0 = Key 1, 1 = Key 2...
+bool key_guest_profile = false;
+uint8_t mdrive_dsc = 0x13, mdrive_power = 0x30, mdrive_edc = 0x2A, mdrive_svt = 0xF1;                                               // Defaults for when EEPROM is not initialized.
 bool mdrive_status = false, mdrive_power_active = false, console_power_mode, restore_console_power_mode = false;
 bool power_led_delayed_off_action = false;
 unsigned long power_led_delayed_off_action_time;
@@ -265,7 +266,8 @@ CAN_message_t front_left_fog_off_buf, front_right_fog_off_buf, front_fogs_all_of
 cppQueue fog_corner_left_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue fog_corner_right_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 unsigned long last_drl_action_timer = 15000;
-bool drl_ckm, drl_status = false, left_dimmed = false, right_dimmed = false;
+uint8_t drl_ckm[4] = {1, 1, 1, 1};
+bool drl_status = false, left_dimmed = false, right_dimmed = false;
 CAN_message_t left_drl_dim_off, left_drl_dim_buf, left_drl_bright_buf;
 CAN_message_t right_drl_dim_off, right_drl_dim_buf, right_drl_bright_buf;
 cppQueue dim_drl_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -274,8 +276,13 @@ CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf;
 uint8_t last_hood_status = 0, last_trunk_status = 0;
 CAN_message_t frm_ckm_ahl_komfort_buf, frm_ckm_ahl_sport_buf;
 bool wipe_scheduled = false;
-uint8_t wash_message_counter = 0;
+uint8_t wash_message_counter = 0, stalk_down_message_counter = 0;
+unsigned long stalk_down_last_press_time = 0;
 CAN_message_t wipe_single_buf;
+uint8_t intermittent_setting = 1, intermittent_setting_can;
+uint16_t intermittent_intervals[] = {4000, 3000, 2500, 2000, 0, 1700};                                                              // Not moving, setting 1, setting 2, setting 3, n/a and setting 4. 1000ms needed for a cycle
+elapsedMillis intermittent_wipe_timer = 3000;
+bool intermittent_wipe_active = false, auto_wipe_active = false;
 cppQueue wiper_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t mirror_status_retry = 0;
 bool mirrors_folded = false, frm_mirror_status_requested = false;
@@ -288,13 +295,15 @@ CAN_message_t frm_mirror_undim_buf;
 bool full_indicator = false;
 cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 elapsedMillis frm_undim_timer = 10000;
-bool auto_seat_ckm, comfort_exit_ready = false, comfort_exit_done = false;
+uint8_t auto_seat_ckm[4] = {0, 0, 0, 0};
+bool comfort_exit_ready = false, comfort_exit_done = false;
 CAN_message_t dr_seat_move_back_buf;
 uint8_t last_lock_status_can = 0;
 bool unfold_with_door_open = false;
 CAN_message_t flash_hazards_single_buf, flash_hazards_double_buf;
 cppQueue hazards_flash_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-bool visual_signal_ckm, hazards_on = false;
+uint8_t visual_signal_ckm[4] = {0, 0, 0, 0};
+bool hazards_on = false;
 bool immobilizer_released = false, immobilizer_persist = true;
 uint16_t theft_max_speed = 20;
 unsigned long immobilizer_send_interval = 0;                                                                                        // Skip the first interval delay.
@@ -308,7 +317,7 @@ cppQueue ekp_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool alarm_after_engine_stall = false, alarm_active = false, alarm_led = false, lock_led = false;
 uint8_t led_message_counter = 60;
 CAN_message_t alarm_led_on_buf, alarm_led_return_control_buf;
-CAN_message_t alarm_siren_on_buf, alarm_siren_off_buf;
+CAN_message_t alarm_siren_on_buf, alarm_siren_return_control_buf;
 cppQueue alarm_siren_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool reverse_beep_sent = false, pdc_too_close = false;
 elapsedMillis reverse_beep_resend_timer = 2000;
@@ -335,7 +344,7 @@ uint8_t vehicle_direction = 0;
 uint8_t f_speed_alive_counter = 0;
 uint8_t rls_brightness = 0xFE, rls_time_of_day = 0;
 uint8_t f_data_powertrain_2_alive_counter = 0;
-elapsedMillis sine_angle_request_timer = 333, f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000;
+elapsedMillis sine_angle_request_timer = 500, f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000;
 elapsedMillis f_chassis_inclination_timer = 98, f_chassis_longitudinal_timer = 100, f_chassis_yaw_timer = 102;
 elapsedMillis f_chassis_speed_timer = 104;
 CAN_message_t sine_angle_request_a_buf, sine_angle_request_b_buf;
@@ -359,11 +368,11 @@ bool sent_steering_heating_request = false, transistor_active = false;
 elapsedMillis transistor_active_timer;
 bool volume_reduced = false, initial_volume_set = false, pdc_tone_on = false;
 uint8_t volume_restore_offset = 0, volume_changed_to, peristent_volume = 0;
-elapsedMillis volume_request_periodic_timer = 3000, volume_request_door_timer = 500;
+elapsedMillis volume_request_periodic_timer = 3000, volume_request_door_timer = 300;
 CAN_message_t vol_request_buf, door_open_cc_off_buf;
 cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool left_door_open = false, right_door_open = false, doors_locked = false, doors_alarmed = false;
-elapsedMillis doors_armed_timer = 0;
+elapsedMillis doors_locked_timer = 0;
 uint8_t last_door_status = 0;
 elapsedMillis idrive_alive_timer = 0;
 bool idrive_died = false;
@@ -382,7 +391,8 @@ CAN_message_t camera_off_buf, camera_on_buf, pdc_off_camera_on_buf, pdc_on_camer
 CAN_message_t pdc_button_presssed_buf, pdc_button_released_buf;
 cppQueue pdc_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t rvc_settings[] = {0, 0, 0, 0};
-bool rvc_dipped_by_module = false, rvc_dipped_by_driver = false;
+bool rvc_tow_view_by_module = false, rvc_tow_view_by_driver = false;
+elapsedMillis rvc_action_timer = 500;
 bool msa_button_pressed = false;
 uint8_t msa_fake_status_counter = 0;
 CAN_message_t msa_fake_status_buf;
