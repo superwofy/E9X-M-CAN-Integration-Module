@@ -1,2 +1,4 @@
 secrets.h
 custom-settings.h
+build/
+.directory

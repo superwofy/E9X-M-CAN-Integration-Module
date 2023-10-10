@@ -2,26 +2,24 @@
 
 
 void setup() {
-  configure_flexcan();
-  initialize_watchdog();
+  if (F_CPU_ACTUAL != MEDIUM_UNDERCLOCK) {                                                                                          // Prevent accidental overclocks/underclocks. Remove if needed.
+    serial_log("CPU clock is not set to startup value, correcting.", 2);
+    set_arm_clock(MEDIUM_UNDERCLOCK);
+  }
+  initialize_watchdog();                                                                                                            // systick: 880 +/- 20 μs is when this function completes. If clock speed is wrong, this takes longer.
+  initialize_mdrive();
+  configure_flexcan();                                                                                                              // systick: 1.25 +/- 0.05 ms is when the CAN subsystem is fully ready.
   configure_IO();
-  #if RTC
-    check_rtc_valid();
+  #if !USB_DISABLE
+    activate_usb(0);                                                                                                                // This code ensures compatibility with unmodified Teensy cores since USB init will work anyway.
   #endif
-  read_initialize_eeprom();
+  #if RTC
+    check_rtc_valid();                                                                                                              // systick: 1.30 +/- 0.01 ms is when the RTC is validated.
+  #endif
+  read_initialize_eeprom();                                                                                                         // systick: 1.60 +/- 0.01 ms is when the EEPROM is read. If EEPROM is corrupt, this takes longer.
   initialize_mdrive();
   cache_can_message_buffers();
-  #if !USB_DISABLE
-    // This code ensures compatibility with unmodified Teensy cores. Do not enable USB_DISABLE without modifying startup.c!
-    if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){                                                                              // Check if USB is already ON.
-      usb_pll_start();
-      usb_init();
-    }
-  #endif
-  tempmon_init();                                                                                                                   // If startup.c is modified, initalize tempmon now.
-  #if DEBUG_MODE
-    setup_time = micros();                                                                                                          // If startup.c is not modified this is wrong by 300ms.
-  #endif
+  serial_log("Setup complete.", 2);                                                                                                 // systick: 1.60 ms, setup() is complete.
 }
 
 
@@ -29,6 +27,9 @@ void loop() {
 /***********************************************************************************************************************************************************************************************************************************************
   General section.
 ***********************************************************************************************************************************************************************************************************************************************/
+
+  check_teensy_cpu_temp();                                                                                                          // Monitor processor temperature.
+
   if (vehicle_awake) {
     #if EXHAUST_FLAP_CONTROL
       control_exhaust_flap_user();
@@ -62,54 +63,51 @@ void loop() {
     #endif
     check_hazards_queue();
     check_can_resend_queues();
-  }
 
-  check_teensy_cpu_temp();                                                                                                          // Monitor processor temperature.
-  if (terminal_r) {
-    check_teensy_cpu_clock();                                                                                                       // Dynamically scale clock with temperature to extend lifetime.
-    #if INTERMITTENT_WIPERS
-      check_intermittent_wipers();
-    #endif
-  }
+    if (terminal_r) {
+      check_teensy_cpu_clock();                                                                                                     // Dynamically scale clock with temperature to extend lifetime.
+      #if INTERMITTENT_WIPERS
+        check_intermittent_wipers();
+      #endif
+    }
 
-  if (ignition) {
-    check_power_led_state();                                                                                                        // This delay function syncs the power button LED with EDC button LEDS.
-    check_dsc_queue();
-    check_console_buttons();
-    send_mdrive_alive_message(10000);
-    #if AUTO_SEAT_HEATING
-      check_seatheating_queue();
-    #endif
-    #if AUTO_STEERING_HEATER
-      evaluate_steering_heating_request();
-    #endif
-    #if HDC || FAKE_MSA
-      check_ihk_buttons_cc_queue();
-    #endif
-    #if HDC
-      check_hdc_queue();
-    #endif
-    #if PDC_AUTO_OFF
-      check_pdc_button_queue();
-    #endif
-    #if EDC_CKM_FIX
-      check_edc_ckm_queue();
-    #endif
-    #if F_NIVI
-      request_vehicle_tilt_angle();
-      send_f_brightness_status();
-      send_f_powertrain_2_status();
-    #endif
-  } else {
-    if (vehicle_awake) {
+    if (ignition) {
+      check_power_led_state();                                                                                                      // This delay function syncs the power button LED with EDC button LEDS.
+      check_dsc_queue();
+      check_console_buttons();
+      send_mdrive_alive_message(10000);
+      #if AUTO_SEAT_HEATING
+        check_seatheating_queue();
+      #endif
+      #if AUTO_STEERING_HEATER
+        evaluate_steering_heating_request();
+      #endif
+      #if HDC || FAKE_MSA
+        check_ihk_buttons_cc_queue();
+      #endif
+      #if HDC
+        check_hdc_queue();
+      #endif
+      #if PDC_AUTO_OFF
+        check_pdc_button_queue();
+      #endif
+      #if EDC_CKM_FIX
+        check_edc_ckm_queue();
+      #endif
+      #if F_NIVI
+        request_vehicle_tilt_angle();
+        send_f_brightness_status();
+        send_f_powertrain_2_status();
+      #endif
+    } else {
       if (vehicle_awake_timer >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring .
         serial_log("Vehicle Sleeping.", 0);
-        toggle_transceiver_standby(1);
+        toggle_transceiver_standby(true);
         scale_cpu_speed();
         reset_sleep_variables();
       } else {                                                                                                                      // Ignition OFF, Terminal R ON/OFF, vehicle_awake.
-        send_mdrive_alive_message(15000);                                                                                           // Send this message while car is awake (but with ignition OFF) to populate the fields in iDrive.
+        send_mdrive_alive_message(15000);                                                                                           // Send this message with Terminal R to populate the fields in iDrive.
         if (eeprom_update_timer >= 60000) {                                                                                         // Periodically update EEPROM while ingition is OFF.
           if (eeprom_unsaved) {
             update_data_in_eeprom();
@@ -229,8 +227,12 @@ void loop() {
         evaluate_pdc_distance();
       }
 
-      else if (k_msg.id == 0x38F) {
-        store_rvc_settings();
+      else if (k_msg.id == 0x38F) {                                                                                                 // Camera settings request from CIC.
+        store_rvc_settings_cic();
+      }
+
+      else if (k_msg.id == 0x39B) {                                                                                                 // Camera settings/acknowledge from TRSVC.
+        store_rvc_settings_trsvc();
       }
       #endif
 
@@ -281,8 +283,8 @@ void loop() {
     }
 
     else if (k_msg.id == 0x23A) {                                                                                                   // Monitor remote function status
+      evaluate_key_number_remote();                                                                                                 // Get the key number first (for CKM states).
       evaluate_remote_button();
-      evaluate_key_number_remote();
     }
 
     else if (k_msg.id == 0x273) {
@@ -450,14 +452,16 @@ void loop() {
         }
         #endif
 
-        #if F_NIVI
+        
         else if (pt_msg.id == 0x1A0) {
-          send_f_road_inclination();
-          send_f_longitudinal_acceleration();
-          send_f_yaw_rate();
-          send_f_speed_status();
+          evaluate_real_speed();
+          #if F_NIVI
+            send_f_road_inclination();
+            send_f_longitudinal_acceleration();
+            send_f_yaw_rate();
+            send_f_speed_status();
+          #endif
         }
-        #endif
 
         #if !IMMOBILIZER_SEQ
         else if (pt_msg.id == 0x1D6) {
@@ -489,78 +493,79 @@ void loop() {
         #endif
       }
     }
-  }
 
 
 /***********************************************************************************************************************************************************************************************************************************************
   D-CAN section.
 ***********************************************************************************************************************************************************************************************************************************************/
     
-  if (DCAN.read(d_msg)) {
-    if (d_msg.id == 0x6F1) {
-      if (clearing_dtcs) {}                                                                                                         // Ignore 6F1s while this module is clearing DTCs.
+    if (DCAN.read(d_msg)) {
+      if (d_msg.id == 0x6F1) {
+        if (clearing_dtcs) {}                                                                                                       // Ignore 6F1s while this module is clearing DTCs.
 
-      // MHD monitoring exceptions:
-      else if (d_msg.buf[0] == 0x12){
-        if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                       // SID 34h requestDownload Service
+        // MHD monitoring exceptions:
+        else if (d_msg.buf[0] == 0x12){
+          if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                     // SID 34h requestDownload Service
+            disable_diag_transmit_jobs();
+          }
+        }
+        else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+        else if (d_msg.buf[0] == 0x40 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+        // End MHD exceptions.
+
+        #if SERVOTRONIC_SVT70
+        // UIF read or ISTA/D module identification:
+        else if (d_msg.buf[0] == 0xEF && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x1A 
+                  && (d_msg.buf[3] == 0x80 || d_msg.buf[3] == 0x86)) {
+          serial_log("UIF being read. Skipping SVT.", 0);
+          uif_read = true;
+        }
+
+        else if (d_msg.buf[0] == 0xE) {                                                                                             // SVT_70 address is 0xE
+          if (uif_read) {
+            if (d_msg.buf[1] == 0x30) {
+              // Ignore this KWP continue message as the JBE forwards it anyway.
+              uif_read = false;
+            }
+          } else {
+            ptcan_write_msg(d_msg);                                                                                                 // Forward Diagnostic requests to the SVT module from DCAN to PTCAN.
+            disable_diag_transmit_jobs();                                                                                           // Deactivate other 6F1 jobs now that the SVT is being diagnosed.
+          }
+        } 
+        #endif
+
+        #if F_VSW01
+        else if (d_msg.buf[0] == 0x48) {                                                                                            // F_VSW01 address is 0x48
+          kcan_write_msg(d_msg);
+          disable_diag_transmit_jobs();                                                                                             // Deactivate other 6F1 jobs now that the VSW is being diagnosed.
+        }
+        #endif
+        
+        #if RTC
+        else if (d_msg.buf[0] == 0x60 && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x21 && d_msg.buf[3] == 0x20) {                       // KWP job to set time used by BMW PC software.
+          pc_time_incoming = true;
           disable_diag_transmit_jobs();
         }
-      }
-      else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
-      else if (d_msg.buf[0] == 0x40 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
-      // End MHD exceptions.
 
-      #if SERVOTRONIC_SVT70
-      // UIF read or ISTA/D module identification:
-      else if (d_msg.buf[0] == 0xEF && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x1A && (d_msg.buf[3] == 0x80 || d_msg.buf[3] == 0x86)) {
-        serial_log("UIF being read. Skipping SVT.", 0);
-        uif_read = true;
-      }
-
-      else if (d_msg.buf[0] == 0xE) {                                                                                               // SVT_70 address is 0xE
-        if (uif_read) {
-          if (d_msg.buf[1] == 0x30) {
-            // Ignore this KWP continue message as the JBE forwards it anyway.
-            uif_read = false;
-          }
-        } else {
-          ptcan_write_msg(d_msg);                                                                                                   // Forward Diagnostic requests to the SVT module from DCAN to PTCAN.
-          disable_diag_transmit_jobs();                                                                                             // Deactivate other 6F1 jobs now that the SVT is being diagnosed.
+        else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x30) {                                                // KOMBI is at address 0x60. BMW PC software sets time by sending it to KOMBI.
+          // Ignore the continue message.
         }
-      } 
-      #endif
 
-      #if F_VSW01
-      else if (d_msg.buf[0] == 0x48) {                                                                                              // F_VSW01 address is 0x48
-        kcan_write_msg(d_msg);
-        disable_diag_transmit_jobs();                                                                                               // Deactivate other 6F1 jobs now that the VSW is being diagnosed.
-      }
-      #endif
-      
-      #if RTC
-      else if (d_msg.buf[0] == 0x60 && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x21 && d_msg.buf[3] == 0x20) {                         // KWP job to set time used by BMW PC software.
-        pc_time_incoming = true;
-        disable_diag_transmit_jobs();
-      }
+        else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x10) {                                                // Time.
+          update_rtc_from_dcan();
+        }
 
-      else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x30) {                                                  // KOMBI is at address 0x60. BMW PC software sets time by sending it to KOMBI.
-        // Ignore the continue message.
-      }
+        else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x21) {                                                // Date.
+          update_rtc_from_dcan();
+          pc_time_incoming = false;
+        }
+        #endif
 
-      else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x10) {                                                  // Time.
-        update_rtc_from_dcan();
+        else {
+          disable_diag_transmit_jobs();                                                                                             // Implement a check so as to not interfere with other DCAN jobs sent to the car by an OBD tool.    
+        }
+        diag_deactivate_timer = 0;
       }
-
-      else if (pc_time_incoming && d_msg.buf[0] == 0x60 && d_msg.buf[1] == 0x21) {                                                  // Date.
-        update_rtc_from_dcan();
-        pc_time_incoming = false;
-      }
-      #endif
-
-      else {
-        disable_diag_transmit_jobs();                                                                                               // Implement a check so as to not interfere with other DCAN jobs sent to the car by an OBD tool.    
-      }
-      diag_deactivate_timer = 0;
     }
   }
   
@@ -569,7 +574,7 @@ void loop() {
   #if DEBUG_MODE
     #if CDC2_STATUS_INTERFACE == 2                                                                                                  // Check if Dual Serial is set.
       if (debug_print_timer >= 500) {
-        if (millis() >= 7000) {                                                                                                     // Make sure the main serial port gets recognized first.
+        if (millis() >= 1000) {
           print_current_state(SerialUSB1);                                                                                          // Print program status to the second Serial port.
         }
       }

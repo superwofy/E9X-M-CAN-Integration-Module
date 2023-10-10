@@ -5,8 +5,8 @@ void evaluate_terminal_clutch_keyno_status(void) {
   vehicle_awake_timer = 0;
   if (!vehicle_awake) {
     vehicle_awake = true;    
-    toggle_transceiver_standby(0);                                                                                                  // Re-activate the transceivers.                                                                                         
     serial_log("Vehicle Awake.", 0);
+    toggle_transceiver_standby(false);                                                                                              // Re-activate the transceivers.                                                                                         
     vehicle_awakened_timer = 0;
   }
 
@@ -64,7 +64,9 @@ void evaluate_terminal_clutch_keyno_status(void) {
       kcan_write_msg(f_terminal_status_buf);
     #endif
     #if F_NIVI
-      ptcan_write_msg(f_terminal_status_buf);
+      if (!frm_consumer_shutdown) {
+        ptcan_write_msg(f_terminal_status_buf);
+      }
     #endif
   #endif
 
@@ -81,7 +83,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   if (ignition && !ignition_) {                                                                                                     // Ignition changed from OFF to ON.
     scale_cpu_speed();
     #if USB_DISABLE
-      activate_usb();                                                                                                               // If this fails to run, the program button will need to be pressed to recover.
+      activate_usb(100);                                                                                                            // If this fails to run, the program button will need to be pressed to recover.
     #endif
     serial_log("Ignition ON.", 2);
 
@@ -133,17 +135,19 @@ void evaluate_frm_consumer_shutdown(void) {
   // This can be observed when the car wakes up and turns off the interior lights. It then goes to deep sleep.
   // OR
   // If the car is locked, FC is sent immediately.
+  // OR
+  // If the car is half-woken with the remote trunk button or lock button while locked, FC is sent immediately.
   if (k_msg.buf[0] == 0xFC) {
     if (!frm_consumer_shutdown) {
       frm_consumer_shutdown = true;
       serial_log("FRM requested consumers OFF.", 2);
       scale_cpu_speed();                                                                                                            // Reduce power consumption in this state.
-      digitalWrite(DCAN_STBY_PIN, HIGH);
+      toggle_transceiver_standby(frm_consumer_shutdown);                                                                            // KCAN is all that's needed to resume operation later.
     }
   } else if (k_msg.buf[0] == 0xFD) {
     if (frm_consumer_shutdown) {
       frm_consumer_shutdown = false;
-      digitalWrite(DCAN_STBY_PIN, LOW);
+      toggle_transceiver_standby(frm_consumer_shutdown);
     }
   }
 }
@@ -153,8 +157,12 @@ void evaluate_seat_heating_status(void) {
   if (k_msg.id == 0x232) {
     driver_seat_heating_status = !k_msg.buf[0] ? false : true;
     if (!driver_seat_heating_status) {                                                                                              // Check if seat heating is already ON.
-      if (!driver_sent_seat_heating_request && (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD)) {
-        send_seat_heating_request_dr();
+      if (!driver_sent_seat_heating_request) { 
+        if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {
+          send_seat_heating_request_dr(false);
+        } else if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_MEDIUM) {
+          send_seat_heating_request_dr(true);
+        }
       }
     } else {
       driver_sent_seat_heating_request = true;                                                                                      // Seat heating already ON. No need to request anymore.
@@ -163,17 +171,25 @@ void evaluate_seat_heating_status(void) {
   #if AUTO_SEAT_HEATING_PASS
   else {                                                                                                                            // Passenger's seat heating status message is only sent with ignition ON.
     passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
-    if (!passenger_sent_seat_heating_request && (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD)) {
-      if (passenger_seat_status == 9) {
-        send_seat_heating_request_pas();
+    if (!passenger_seat_heating_status) {
+      if (!passenger_sent_seat_heating_request) {
+        if (bitRead(passenger_seat_status, 0) && bitRead(passenger_seat_status, 3)) {                                               // Occupied and belted.
+          if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {
+            send_seat_heating_request_pas(false);
+          } else if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_MEDIUM) {
+            send_seat_heating_request_pas(true);
+          }
+        }
       }
+    } else {
+      passenger_sent_seat_heating_request = true;
     }
   }
   #endif
 }
 
 
-void send_seat_heating_request_dr(void) {
+void send_seat_heating_request_dr(bool medium) {
   unsigned long time_now = millis();
   kcan_write_msg(seat_heating_button_pressed_dr_buf);
   driver_sent_seat_heating_request = true;
@@ -183,9 +199,19 @@ void send_seat_heating_request_dr(void) {
   seat_heating_dr_txq.push(&m);
   m = {seat_heating_button_released_dr_buf, time_now + 400};
   seat_heating_dr_txq.push(&m);
+  if (medium) {
+    m = {seat_heating_button_pressed_dr_buf, time_now + 600};
+    seat_heating_dr_txq.push(&m);
+    m = {seat_heating_button_released_dr_buf, time_now + 700};
+    seat_heating_dr_txq.push(&m);
+    m = {seat_heating_button_released_dr_buf, time_now + 900};
+    seat_heating_dr_txq.push(&m);
+    m = {seat_heating_button_released_dr_buf, time_now + 1100};
+    seat_heating_dr_txq.push(&m);
+  }
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent driver's seat heating request at ambient %.1fC, treshold %.1fC.", 
-          ambient_temperature_real, AUTO_SEAT_HEATING_TRESHOLD);
+    sprintf(serial_debug_string, "Sent [%s] driver's seat heating request at ambient temp: %.1fC.",
+            medium ? "medium" : "high", ambient_temperature_real);
     serial_log(serial_debug_string, 2);
   #endif
 }
@@ -214,9 +240,13 @@ void evaluate_passenger_seat_status(void) {
   if (ignition) {
     if (!passenger_seat_heating_status) {                                                                                           // Check if seat heating is already ON.
       //This will be ignored if already ON and cycling ignition. Press message will be ignored by IHK anyway.
-      if (!passenger_sent_seat_heating_request && (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD)) { 
-        if (passenger_seat_status == 9) {                                                                                           // Passenger sitting and their seatbelt is ON
-          send_seat_heating_request_pas();                                                                                          // Execute heating request here so we don't have to wait 15s for the next 0x22A.
+      if (!passenger_sent_seat_heating_request) {
+        if (bitRead(passenger_seat_status, 0) && bitRead(passenger_seat_status, 3)) {                                               // Occupied and belted.
+          if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {                                                        // Execute heating requests here so we don't have to wait 15s for the next 0x22A.
+            send_seat_heating_request_pas(false);
+          } else if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_MEDIUM) {
+            send_seat_heating_request_pas(true);
+          }
         }
       }
     } else {
@@ -226,7 +256,7 @@ void evaluate_passenger_seat_status(void) {
 }
 
 
-void send_seat_heating_request_pas(void) {
+void send_seat_heating_request_pas(bool medium) {
   unsigned long time_now = millis();
   kcan_write_msg(seat_heating_button_pressed_pas_buf);
   passenger_sent_seat_heating_request = true;
@@ -236,22 +266,39 @@ void send_seat_heating_request_pas(void) {
   seat_heating_pas_txq.push(&m);
   m = {seat_heating_button_released_pas_buf, time_now + 400};
   seat_heating_pas_txq.push(&m);
+  if (medium) {
+    m = {seat_heating_button_pressed_pas_buf, time_now + 600};
+    seat_heating_pas_txq.push(&m);
+    m = {seat_heating_button_released_pas_buf, time_now + 700};
+    seat_heating_pas_txq.push(&m);
+    m = {seat_heating_button_released_pas_buf, time_now + 900};
+    seat_heating_pas_txq.push(&m);
+    m = {seat_heating_button_released_pas_buf, time_now + 1100};
+    seat_heating_pas_txq.push(&m);
+  }
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent passenger's seat heating request at ambient %.1fC, treshold %.1fC.", 
-          ambient_temperature_real, AUTO_SEAT_HEATING_TRESHOLD);
+    sprintf(serial_debug_string, "Sent [%s] passenger's seat heating request at ambient temp: %.1fC.",
+            medium ? "medium" : "high", ambient_temperature_real);
     serial_log(serial_debug_string, 2);
   #endif
 }
 
 
 void evaluate_steering_heating_request(void) {
-  if (engine_running && engine_runtime >= AUTO_HEATING_START_DELAY) {                                                               // Wait for supply voltage to stabilize.
+  // Wait for supply voltage to stabilize.
+  // Also limit the time the request can be sent after as the driver may already have eanbled the heater.
+  // The temperature may also have dropped below the threshold while the driver already enabled the heater.
+  // There is no way to track the steering heater via CAN.
+
+  if (engine_runtime >= AUTO_HEATING_START_DELAY && engine_runtime <= 8000) {                                                               
     if (!sent_steering_heating_request) {
-      if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD) {
+      if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {
         digitalWrite(STEERING_HEATER_SWITCH_PIN, HIGH);
         serial_log("Activated steering wheel heating.", 2);
         sent_steering_heating_request = transistor_active = true;
         transistor_active_timer = 0;
+      } else {
+        sent_steering_heating_request = true;                                                                                       // If the conditions aren't right, cancel activation for this wake cycle.
       }
     } else {
       if (transistor_active) {
@@ -704,7 +751,7 @@ void evaluate_comfort_exit(void) {
 }
 
 
-void store_rvc_settings(void) {
+void store_rvc_settings_cic(void) {
   for (uint8_t i = 0; i < 4; i++) {
     rvc_settings[i] = k_msg.buf[i];
   }
@@ -713,6 +760,12 @@ void store_rvc_settings(void) {
     rvc_tow_view_by_driver = true;
     serial_log("Driver changed RVC tow view manually.", 3);
   }
+}
+
+
+void store_rvc_settings_trsvc(void) {
+  rvc_settings[1] = k_msg.buf[1];                                                                                                   // These values are the same as sent by CIC or TRSVC.
+  rvc_settings[2] = k_msg.buf[2];
 }
 
 
@@ -778,6 +831,9 @@ void evaluate_wiper_stalk_status(void) {
       #if WIPE_AFTER_WASH
         wash_message_counter = 0;
       #endif
+      #if INTERMITTENT_WIPERS
+        stalk_down_message_counter = 0;
+      #endif
     }
     
     else if (pt_msg.buf[0] == 1) {                                                                                                  // AUTO button pressed.
@@ -812,7 +868,7 @@ void evaluate_wiper_stalk_status(void) {
         wash_message_counter = 0;
       #endif
       #if INTERMITTENT_WIPERS
-        if (millis() - stalk_down_last_press_time >= 800) {
+        if (millis() - stalk_down_last_press_time >= 1100) {                                                                        // If more than 1100ms passed, stalk must have been released.
           stalk_down_message_counter = 0;
         }
 
@@ -821,7 +877,7 @@ void evaluate_wiper_stalk_status(void) {
 
         intermittent_wipe_timer = 0;
 
-        if (stalk_down_message_counter >= 3) {
+        if (stalk_down_message_counter >= 4) {
           if (!intermittent_wipe_active) {
             activate_intermittent_wipers();
             intermittent_wipe_timer = intermittent_intervals[intermittent_setting];
@@ -837,15 +893,11 @@ void evaluate_wiper_stalk_status(void) {
       if (pt_msg.buf[1] != intermittent_setting_can) {                                                                              // Position of the speed wheel changed.
         intermittent_setting_can = pt_msg.buf[1];
         uint8_t new_intermittent_setting = 0;
-        if (!vehicle_moving && intermittent_setting_can == 0xF8) {                                                                  // Slow down wipe speed if car is not moving.
-          new_intermittent_setting = 0;
-        } else {
-          new_intermittent_setting = intermittent_setting_can - 0xF7;
-        }
+        new_intermittent_setting = intermittent_setting_can - 0xF8;
         #if DEBUG_MODE && INTERMITTENT_WIPERS
           if (intermittent_wipe_active) {
-            sprintf(serial_debug_string, "New wiper speed setting %d%s.", new_intermittent_setting,
-                    new_intermittent_setting == 0 ? " [not moving]" : "");
+            sprintf(serial_debug_string, "New wiper speed setting %d%s.", new_intermittent_setting + 1,
+                    !vehicle_moving ? " [not moving]" : "");
             serial_log(serial_debug_string, 3);
           }
         #endif

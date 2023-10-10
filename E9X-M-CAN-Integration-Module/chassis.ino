@@ -82,14 +82,14 @@ void evaluate_reverse_gear_status(void) {
       #endif
       #if AUTO_TOW_VIEW_RVC
         if (rvc_tow_view_by_module && !rvc_tow_view_by_driver && pdc_bus_status == 0xA5) {
-          bitWrite(rvc_settings[0], 3, 0);                                                                                              // Set tow hitch view to OFF.
+          bitWrite(rvc_settings[0], 3, 0);                                                                                          // Set tow hitch view to OFF.
           serial_log("Disabled camera tow view after reverse gear OFF.", 2);
           kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
           rvc_tow_view_by_module = false;
         }
       #endif
       #if REVERSE_BEEP
-        reverse_beep_sent = false;                                                                                                      // Reset the beep flag.
+        reverse_beep_sent = false;                                                                                                  // Reset the beep flag.
       #endif
     }
   }
@@ -105,6 +105,12 @@ void evaluate_vehicle_moving(void) {
   } else if (!vehicle_moving) {
     vehicle_moving = true;
     serial_log("Vehicle moving.", 2);
+    #if INTERMITTENT_WIPERS
+      if (intermittent_wipe_active) {
+        intermittent_wipe_timer = intermittent_intervals[intermittent_setting];                                                     // Wipe immediately once car is moving.
+        serial_log("Intermittent wiping sped up.", 2);
+      }
+    #endif
   }
 }
 
@@ -204,14 +210,18 @@ void send_f_yaw_rate(void) {
 }
 
 
+void evaluate_real_speed(void) {
+  if (pt_msg.buf[0] > 0xF) {
+    real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                         // KM/h
+  } else {
+    real_speed = round(((pt_msg.buf[1] & 0xF) << 4 | pt_msg.buf[0]) * 0.1);
+  }
+}
+
+
 void send_f_speed_status(void) {
   if (f_chassis_speed_timer >= 104) {
     uint8_t f_speed[] = {0, 0, 0, 0, 0};                                                                                            // Message is the same format as Flexray 55.3.4.
-    if (pt_msg.buf[0] > 0xF) {
-      real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                       // KM/h
-    } else {
-      real_speed = round(((pt_msg.buf[1] & 0xF) << 4 | pt_msg.buf[0]) * 0.1);
-    }
     vehicle_direction = pt_msg.buf[1] >> 4;
     if (vehicle_direction == 8) {                                                                                                   // Not moving.
       f_speed[4] = 0x81;
@@ -348,11 +358,11 @@ void evaluate_speed_units(void) {
   if (speed_mph) {
     max_hdc_speed = 22;
     hdc_deactivate_speed = 37;
-    theft_max_speed = 12;
+    immobilizer_max_speed = 12;
   } else {
     max_hdc_speed = 35;
     hdc_deactivate_speed = 60;
-    theft_max_speed = 20;
+    immobilizer_max_speed = 20;
   }
 }
 

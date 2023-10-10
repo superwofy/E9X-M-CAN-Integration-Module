@@ -136,8 +136,8 @@ void undim_mirrors_with_indicators(void) {
 
 
 void indicate_trunk_opened(uint16_t boot_delay) {
-  if (visual_signal_ckm[cas_key_number] && !engine_running && !hazards_on && !indicators_on) {
-    serial_log("Remote trunk button pressed. Flashing hazards.", 2);
+  if (visual_signal_ckm[cas_key_number] && !engine_running && !hazards_on) {
+    serial_log("Flashing trunk hazards.", 2);
     unsigned long time_now = millis();
     m = {flash_hazards_single_buf, boot_delay + time_now + 100};
     hazards_flash_txq.push(&m);
@@ -327,17 +327,19 @@ void evaluate_key_number_remote(void) {
         cas_key_number = 3;
         key_guest_profile = true;
       }
-    }
-    #if DEBUG_MODE
-    else {
+    } else {
       cas_key_number = cas_key_number_can;                                                                                          // Key 1 = 0, Key 2 = 0x11, Key 3 = 0x22..., Guest = 0xAA.
-      sprintf(serial_debug_string, "Received remote key number: %d.", cas_key_number + 1);
-      serial_log(serial_debug_string, 2);
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Received remote key number: %d.", cas_key_number + 1);
+        serial_log(serial_debug_string, 2);
+      #endif
     }
-    #endif
+    
     key_guest_profile = false;
     console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
-    send_dme_power_ckm();                                                                                                           // Update iDrive in case key remote changed
+    if (vehicle_awake_timer >= 10000) {                                                                                             // Make sure the car was awake first...
+      send_dme_power_ckm();                                                                                                         // Update iDrive in case key remote changed
+    }
   }
 }
 
@@ -356,14 +358,14 @@ void evaluate_remote_button(void) {
               frm_mirror_status_requested = true;
             }
           #endif
-          #if IMMOBILIZER_SEQ_ALARM
+          #if IMMOBILIZER_SEQ
             unsigned long time_now = millis();
             m = {alarm_led_return_control_buf, time_now + 100};                                                                     // Release control of the LED so that alarm can control it.
-            immobilizer_txq.push(&m);
+            alarm_led_txq.push(&m);
             m = {alarm_led_return_control_buf, time_now + 500};
-            immobilizer_txq.push(&m);
-            alarm_led = false;
-            lock_led = true;
+            alarm_led_txq.push(&m);
+            alarm_led_active = false;
+            alarm_led_disable_on_lock = true;
             led_message_counter = 60;                                                                                               // Make sure we're ready once Terminal R cycles.
             serial_log("Deactivated DWA LED when door locked.", 2);
           #endif
@@ -379,7 +381,7 @@ void evaluate_remote_button(void) {
               indicate_car_locked(0);
             }
           } else {                                                                                                                  // Car woke up just now with the remote.
-            indicate_car_locked(200);
+            indicate_car_locked(100);
           }
         }
       }
@@ -399,8 +401,8 @@ void evaluate_remote_button(void) {
           frm_mirror_status_requested = true;
         }
         #endif
-        #if IMMOBILIZER_SEQ_ALARM
-          lock_led = false;
+        #if IMMOBILIZER_SEQ
+          alarm_led_disable_on_lock = false;
         #endif
       }
 
@@ -410,10 +412,11 @@ void evaluate_remote_button(void) {
 
     else if (k_msg.buf[2] == 0x10) {
       lock_button_pressed = false;
+      serial_log("Remote trunk button pressed.", 2);
       if (vehicle_awakened_timer >= 10000) {
         indicate_trunk_opened(0);
       } else {                                                                                                                      // Car just woke up from deep sleep.
-        indicate_trunk_opened(200);
+        indicate_trunk_opened(100);
       }
     }
 
@@ -802,12 +805,16 @@ void evaluate_rls_light_status(void) {
 
 
 void request_vehicle_tilt_angle(void) {
+  #if IMMOBILIZER_SEQ
   if (sine_angle_request_timer >= 500 && immobilizer_released) {
+  #else
+  if (sine_angle_request_timer >= 500) {
+  #endif
     if (diag_transmit) {
       kcan_write_msg(sine_angle_request_a_buf);
+      sine_angle_request_timer = 0;
       sine_angle_requested = true;
     }
-    sine_angle_request_timer = 0;
   }
 }
 
@@ -897,7 +904,7 @@ void evaluate_drivers_door_status(void) {                                       
 
 
 void indicate_car_locked(uint16_t boot_delay) {
-  if (visual_signal_ckm[cas_key_number] && !hazards_on && !indicators_on) {
+  if (visual_signal_ckm[cas_key_number] && !hazards_on) {
     serial_log("Car finder triggered. Flashing hazards 4 times.", 2);
     hazards_flash_txq.flush();                                                                                                      // Cancel pending flashes.
     unsigned long time_now = millis();
@@ -938,7 +945,11 @@ void disable_intermittent_wipers(void) {
 
 void check_intermittent_wipers(void) {
   if (intermittent_wipe_active) {
-    if (intermittent_wipe_timer >= intermittent_intervals[intermittent_setting]) {
+    uint16_t calculated_interval = intermittent_intervals[intermittent_setting];
+    if (!vehicle_moving) {
+      calculated_interval += intermittent_intervals_offset_stopped[intermittent_setting];
+    }
+    if (intermittent_wipe_timer >= calculated_interval) {
       uint8_t single_wipe[] = {8, intermittent_setting_can};
       ptcan_write_msg(make_msg_buf(0x2A6, 2, single_wipe));
       intermittent_wipe_timer = 0;

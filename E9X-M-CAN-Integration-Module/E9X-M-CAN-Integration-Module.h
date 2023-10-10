@@ -1,9 +1,9 @@
 // Program settings and global variables go here.
 
 
-#include <FlexCAN_T4.h>
 #include <EEPROM.h>
 #include "src/CRC/src/CRC8.h"                                                                                                       // https://github.com/RobTillaart/CRC
+#include "src/FlexCAN_T4/FlexCAN_T4.h"
 #include "src/CRC/src/CRC16.h"
 #include "src/wdt4/Watchdog_t4.h"                                                                                                   // https://github.com/tonton81/WDT_T4
 #include "src/queue/cppQueue.h"                                                                                                     // https://github.com/SMFSW/Queue
@@ -31,16 +31,13 @@ int8_t LOGLEVEL = 4;                                                            
 #define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood.
 #define FRM_AHL_MODE 1                                                                                                              // Switches FRM AHL mode from Komfort and Sport.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
-#define INTERMITTENT_WIPERS 1                                                                                                       // Inermittent wiping alongside auto wipers when pushing the stalk down three times quickly / holding it down.
+#define INTERMITTENT_WIPERS 1                                                                                                       // Inermittent wiping alongside auto wipers when holding the stalk down for 1.3s.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold mirrors when locking. Un-fold with door open event instead of remote unlock button.
 #define MIRROR_UNDIM 1                                                                                                              // Undim electrochromic exterior mirrors when indicating at night.
 #define COMFORT_EXIT 1                                                                                                              // Move driver's seat back when exiting car.
-#define IMMOBILIZER_SEQ 1                                                                                                           // Disable fuel pump until the steering wheel M button is pressed a number of times.
+#define IMMOBILIZER_SEQ 1                                                                                                           // Disable EKP until the M button is pressed X times. Sound the alarm if engine ON without disabling immobilizer.
 #if __has_include ("src/custom-settings.h")                                                                                         // Optionally, create this file to store sensitive settings.
   #include "src/custom-settings.h"
-#endif
-#if IMMOBILIZER_SEQ
-  #define IMMOBILIZER_SEQ_ALARM 1                                                                                                   // Sound the alarm if engine is started without disabling immobilizer.
 #endif
 #if SECRETS
   uint8_t IMMOBILIZER_SEQ_NUMBER = SECRET_IMMOBILIZER_SEQ;
@@ -60,6 +57,7 @@ int8_t LOGLEVEL = 4;                                                            
 #define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as Terminal R is turned ON.
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline of M3 KOMBI.
+#define KOMBI_SPORT_DISPLAY 0                                                                                                       // Display "SPORT" on KOMBI instead of green MDrive LED. Specific coding required. Use with non-M KOMBI.
 #define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine ON. Calibrated for M3 speedo with 335i tacho.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver at low temperatures.
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
@@ -71,8 +69,9 @@ const int8_t FOG_CORNER_STEERTING_ANGLE_INDICATORS = 45;
 const int8_t STEERTING_ANGLE_HYSTERESIS_INDICATORS = 15;
 const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                     // New CAN-ID replacing 0x326 in SVT70 firmware bin. This stops it from changing modes together with EDC.
 const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
-const double AUTO_SEAT_HEATING_TRESHOLD = 10.0;                                                                                     // Degrees Celsius temperature.
-const uint16_t AUTO_HEATING_START_DELAY = 5 * 1000;                                                                                 // Time to wait for battery voltage to catch up after starting (time in seconds * 1000)
+const double AUTO_SEAT_HEATING_TRESHOLD_HIGH = 9.0;                                                                                 // Degrees Celcius temperature, heater fully on.
+const double AUTO_SEAT_HEATING_TRESHOLD_MEDIUM = 12.0;                                                                              // Degrees Celcius temperature, heater on middle position.
+const uint16_t AUTO_HEATING_START_DELAY = 3 * 1000;                                                                                 // Time to wait for battery voltage to catch up after starting (time in seconds * 1000)
 const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                   // RPM setpoints when warmed up (warning = desired RPM * 4).
 const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
 const uint16_t MAX_UPSHIFT_WARN_RPM = 6500 * 4;
@@ -82,27 +81,20 @@ const uint16_t EXHAUST_FLAP_QUIET_RPM = 3000 * 4;                               
 const uint16_t LC_RPM = 3700 * 4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
 const uint16_t LC_RPM_MIN = LC_RPM - (250 * 4);                                                                                     // RPM hysteresis when bouncing off the limiter.
 const uint16_t LC_RPM_MAX = LC_RPM + (250 * 4);
-const float MAX_THRESHOLD = 72.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
-const float HIGH_THRESHOLD = 69.0;
-const float MEDIUM_THRESHOLD = 66.0;
-const float MILD_THRESHOLD = 62.0;
-const unsigned long MAX_UNDERCLOCK = 24 * 1000000;                                                                                  // temperature <= 90 (Tj) should be ok for more than 100,000 Power on Hours at 1.15V (freq <= 528 MHz).
+const float MAX_THRESHOLD = 75.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
+const float HIGH_THRESHOLD = 70.0;
+const float MEDIUM_THRESHOLD = 67.0;
+const float MILD_THRESHOLD = 64.0;
+const unsigned long MAX_UNDERCLOCK = 24 * 1000000;                                                                                  // Temperature <= 90 (Tj) should be ok for more than 100,000 Power on Hours at 1.15V (freq <= 528 MHz).
 const unsigned long HIGH_UNDERCLOCK = 150 * 1000000;
 const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
 const unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 const unsigned long STANDARD_CLOCK = 528 * 1000000;
 
-
 /***********************************************************************************************************************************************************************************************************************************************
   Board configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#define POWER_BUTTON_PIN 2
-#define POWER_LED_PIN 3
-#define FOG_LED_PIN 4
-#define DCAN_STBY_PIN 14
-#define PTCAN_STBY_PIN 15                                                                                                           // STBY pins are optional but recommended to save power when the car prepares to deep sleep.
-#define DSC_BUTTON_PIN 16
 #define POWER_BUTTON_PIN 2
 #define POWER_LED_PIN 3
 #define FOG_LED_PIN 4
@@ -119,8 +111,7 @@ const unsigned long STANDARD_CLOCK = 528 * 1000000;
 
 #if !DEBUG_MODE
   #ifndef USB_DISABLE
-    #define USB_DISABLE 0                                                                                                           // USB can be disabled if not using serial for security reasons. Use caution when enabling this.
-      // startup.c must be modified. See README.md
+    #define USB_DISABLE 0                                                                                                           // USB can be disabled if not using Serial, for security reasons. Do not enable without modifying startup.c!
   #endif
 #endif
 #ifndef EDC_CKM_FIX
@@ -158,7 +149,7 @@ const unsigned long STANDARD_CLOCK = 528 * 1000000;
   #define F_NIVI 0                                                                                                                  // Enable/disable FXX NVE diagnosis, wakeup and BN2000->BN2010 message translation.
 #endif
 #ifndef ASD
-  #define ASD 0                                                                                                                     // Enable / Disable control of E89 ASD modules with MDrive.
+  #define ASD 0                                                                                                                     // Enable / Disable mute control of E89 ASD modules with MDrive.
 #endif
 #if F_VSW01
   const char *vsw_positions[] = {"Disabled", "TV/VM", "", "", "", "", "", ""};
@@ -184,7 +175,6 @@ cppQueue kcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue ptcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue dcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t kcan_retry_counter = 0, ptcan_retry_counter = 0, dcan_retry_counter = 0;
-uint16_t stored_eeprom_checksum, calculated_eeprom_checksum;
 bool eeprom_unsaved = false;
 elapsedMillis eeprom_update_timer = 0;
 delayed_can_tx_msg delayed_tx, m;
@@ -216,6 +206,7 @@ bool holding_dsc_off_console = false;
 elapsedMillis mdrive_message_timer = 0;
 uint8_t m_mfl_held_count = 0;
 CAN_message_t idrive_mdrive_settings_menu_a_buf, idrive_mdrive_settings_menu_b_buf;
+CAN_message_t kombi_sport_on_buf, kombi_sport_off_buf;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms;
 elapsedMillis dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
@@ -280,7 +271,9 @@ uint8_t wash_message_counter = 0, stalk_down_message_counter = 0;
 unsigned long stalk_down_last_press_time = 0;
 CAN_message_t wipe_single_buf;
 uint8_t intermittent_setting = 1, intermittent_setting_can;
-uint16_t intermittent_intervals[] = {4000, 3000, 2500, 2000, 0, 1700};                                                              // Not moving, setting 1, setting 2, setting 3, n/a and setting 4. 1000ms needed for a cycle
+uint16_t intermittent_intervals[] = {3000, 2500, 2000, 0, 1700};                                                                    // setting 1, setting 2, setting 3, n/a and setting 5 (max). 1000ms needed for a cycle
+uint16_t intermittent_intervals_offset_stopped[] = {2000, 500, 0, 0, 0, 0};
+
 elapsedMillis intermittent_wipe_timer = 3000;
 bool intermittent_wipe_active = false, auto_wipe_active = false;
 cppQueue wiper_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -305,16 +298,17 @@ cppQueue hazards_flash_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t visual_signal_ckm[4] = {0, 0, 0, 0};
 bool hazards_on = false;
 bool immobilizer_released = false, immobilizer_persist = true;
-uint16_t theft_max_speed = 20;
+uint16_t immobilizer_max_speed = 20;
 unsigned long immobilizer_send_interval = 0;                                                                                        // Skip the first interval delay.
 elapsedMillis immobilizer_timer = 0, both_console_buttons_timer, immobilizer_activate_release_timer = 0;
 uint8_t immobilizer_pressed_release_count = 0, immobilizer_pressed_activate_count = 0;
 CAN_message_t key_cc_on_buf, key_cc_off_buf;
 CAN_message_t start_cc_on_buf, start_cc_off_buf;
 CAN_message_t ekp_pwm_off_buf, ekp_return_to_normal_buf;
-cppQueue immobilizer_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+cppQueue alarm_led_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+cppQueue alarm_warnings_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 cppQueue ekp_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-bool alarm_after_engine_stall = false, alarm_active = false, alarm_led = false, lock_led = false;
+bool alarm_after_engine_stall = false, alarm_active = false, alarm_led_active = false, alarm_led_disable_on_lock = false;
 uint8_t led_message_counter = 60;
 CAN_message_t alarm_led_on_buf, alarm_led_return_control_buf;
 CAN_message_t alarm_siren_on_buf, alarm_siren_return_control_buf;
@@ -390,7 +384,7 @@ bool pdc_button_pressed = false, pdc_with_rvc_requested = false;
 CAN_message_t camera_off_buf, camera_on_buf, pdc_off_camera_on_buf, pdc_on_camera_on_buf, pdc_off_camera_off_buf;
 CAN_message_t pdc_button_presssed_buf, pdc_button_released_buf;
 cppQueue pdc_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-uint8_t rvc_settings[] = {0, 0, 0, 0};
+uint8_t rvc_settings[] = {0xE5, 0x4B, 0x2D, 0xE1};                                                                                  // Camera OFF, Brightness 50%, Contrast 50%, Parking lines OFF, Obstacle marking ON, Tow view OFF.
 bool rvc_tow_view_by_module = false, rvc_tow_view_by_driver = false;
 elapsedMillis rvc_action_timer = 500;
 bool msa_button_pressed = false;
@@ -402,8 +396,9 @@ CAN_message_t mute_asd_buf, demute_asd_buf;
 
 extern float tempmonGetTemp(void);
 char serial_debug_string[512];
+char boot_debug_string[8192];
 elapsedMillis debug_print_timer = 500;
-unsigned long max_loop_timer = 0, loop_timer = 0, setup_time = 0, can_setup_time = 0;
+unsigned long max_loop_timer = 0, loop_timer = 0;
 uint32_t kcan_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;
 #if SECRETS

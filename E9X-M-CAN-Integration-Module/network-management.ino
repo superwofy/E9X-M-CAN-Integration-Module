@@ -20,6 +20,12 @@ void cache_can_message_buffers(void) {                                          
           idrive_mdrive_settings_menu_b[] = {0x63, 0x21, 0x5C, 0, 0, 0, 0, 0};
   idrive_mdrive_settings_menu_a_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_a);
   idrive_mdrive_settings_menu_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_b);
+
+  uint8_t kombi_sport_on[] = {0, 0, 0, 4, 0, 0, 0},
+          kombi_sport_off[] = {0, 0, 0, 0, 0, 0, 0};
+  kombi_sport_on_buf = make_msg_buf(0x1D2, 6, kombi_sport_on);
+  kombi_sport_off_buf = make_msg_buf(0x1D2, 6, kombi_sport_off);
+
   uint8_t cc_gong[] = {0x60, 3, 0x31, 0x22, 2, 0, 0, 0};
   cc_gong_buf = make_msg_buf(0x6F1, 8, cc_gong);
 
@@ -184,13 +190,15 @@ void cache_can_message_buffers(void) {                                          
   set_time_cc_buf = make_msg_buf(0x5E0, 8, set_time_cc);
   set_time_cc_off_buf = make_msg_buf(0x5E0, 8, set_time_cc_off);
 
-  uint8_t shiftlights_start[] = {0x86, 0x3E}, shiftlights_mid_buildup[] = {0xF6, 0};
+  uint8_t shiftlights_start[] = {0x86, 0x3E}, 
+          shiftlights_mid_buildup[] = {0xF6, 0},
   #if NEEDLE_SWEEP
-    uint8_t shiftlights_startup_buildup[] = {0x86, 0};
+          shiftlights_startup_buildup[] = {0x86, 0},
   #else
-    uint8_t shiftlights_startup_buildup[] = {0x56, 0};                                                                              // Faster sequential buildup. First 8 bits: 0-0xF (0xF - slowest).
+          shiftlights_startup_buildup[] = {0x56, 0},                                                                                // Faster sequential buildup. First 8 bits: 0-0xF (0xF - slowest).
   #endif
-  uint8_t shiftlights_max_flash[] = {0xA, 0}, shiftlights_off[] = {5, 0};
+          shiftlights_max_flash[] = {0xA, 0},
+          shiftlights_off[] = {5, 0};
   shiftlights_start_buf = make_msg_buf(0x206, 2, shiftlights_start);
   shiftlights_mid_buildup_buf = make_msg_buf(0x206, 2, shiftlights_mid_buildup);
   shiftlights_startup_buildup_buf = make_msg_buf(0x206, 2, shiftlights_startup_buildup);
@@ -321,8 +329,8 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 void ptcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
-    if (msg.buf[0] == 0x17 && msg.buf[2] == 0x30 && (msg.buf[1] == 4 || msg.buf[1] == 2)) {                                          // Exception for EKP disable.
-    } else if (msg.buf[0] == 0xE) {                                                                                                  // Exception for SVT70 diag.
+    if (msg.buf[0] == 0x17 && msg.buf[2] == 0x30 && (msg.buf[1] == 4 || msg.buf[1] == 2)) {                                         // Exception for EKP disable.
+    } else if (msg.buf[0] == 0xE) {                                                                                                 // Exception for SVT70 diag.
     } else {
       #if DEBUG_MODE
         serial_log("6F1 message not sent to PTCAN due to OBD tool presence.", 2);
@@ -352,22 +360,30 @@ void ptcan_write_msg(const CAN_message_t &msg) {
 
 
 void dcan_write_msg(const CAN_message_t &msg) {
-  uint8_t result = DCAN.write(msg);
-  if (result != 1) {
-    if (dcan_retry_counter < 100) {                                                                                                 // Safeguard to avoid polluting the network in case of unrecoverable issue.
-      m = {msg, millis() + 100};
-      dcan_resend_txq.push(&m);
-      dcan_retry_counter++;
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
-        serial_log(serial_debug_string, 1);
-        can_debug_print_buffer(msg);
-      #endif
-    } else {
-      serial_log("DCAN resend max counter exceeded.", 1);
+  if (vehicle_awake) {
+    uint8_t result = DCAN.write(msg);
+    if (result != 1) {
+      if (dcan_retry_counter < 100) {                                                                                               // Safeguard to avoid polluting the network in case of unrecoverable issue.
+        m = {msg, millis() + 100};
+        dcan_resend_txq.push(&m);
+        dcan_retry_counter++;
+        #if DEBUG_MODE
+          sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
+          serial_log(serial_debug_string, 1);
+          can_debug_print_buffer(msg);
+        #endif
+      } else {
+        serial_log("DCAN resend max counter exceeded.", 1);
+      }
+      dcan_error_counter++;
     }
-    dcan_error_counter++;
   }
+  #if DEBUG_MODE
+  else {
+    sprintf(serial_debug_string, "DCAN write failed for ID: %lX because vehicle is asleep.", msg.id);
+    serial_log(serial_debug_string, 1);
+  }
+  #endif
 }
 
 

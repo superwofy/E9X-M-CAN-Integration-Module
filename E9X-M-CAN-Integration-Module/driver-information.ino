@@ -169,7 +169,7 @@ void evaluate_lc_display(void) {
           serial_log("Launch Control request DSC ON -> MDM/DTC.", 2);
           send_dsc_mode(1);
         }
-        serial_log("Displayed LC flag CC.", 2);
+        serial_log("Displayed Launch Control flag CC.", 2);
         #if CONTROL_SHIFTLIGHTS
           activate_shiftlight_segments(shiftlights_max_flash_buf);
         #endif
@@ -195,7 +195,7 @@ void deactivate_lc_display(void) {
   if (lc_cc_active) {
     kcan_write_msg(lc_cc_off_buf);
     lc_cc_active = false;
-    serial_log("Deactivated LC flag CC.", 2);
+    serial_log("Deactivated Launch Control flag CC.", 2);
     #if CONTROL_SHIFTLIGHTS
       deactivate_shiftlights();
     #endif
@@ -389,7 +389,7 @@ void evaluate_pdc_warning(void) {
 void evaluate_pdc_distance(void) {
   if (!rvc_tow_view_by_driver) {
     uint8_t distance_threshold = 0x36;                                                                                              // There's a slight delay when changing modes. Preempt by switching earlier.
-    if (vehicle_moving) {
+    if (real_speed >= 1) {
       distance_threshold = 0x40;
     }
 

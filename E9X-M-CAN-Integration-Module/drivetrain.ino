@@ -17,7 +17,7 @@ void evaluate_engine_rpm(void) {
         exhaust_flap_action_timer = 0;                                                                                              // Start tracking the exhaust flap.
       #endif
       serial_log("Engine started.", 2);
-      #if IMMOBILIZER_SEQ_ALARM
+      #if IMMOBILIZER_SEQ
         enable_alarm_after_stall();
       #endif
     }
@@ -25,7 +25,7 @@ void evaluate_engine_rpm(void) {
     if (engine_running) {
       engine_running = false;
       serial_log("Engine stopped.", 2);
-      #if IMMOBILIZER_SEQ_ALARM
+      #if IMMOBILIZER_SEQ
         execute_alarm_after_stall();
       #endif
     }
@@ -39,6 +39,9 @@ void toggle_mdrive_message_active(void) {
     mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
     mdrive_message[4] -= 0x10;
     mdrive_status = mdrive_power_active = false;
+    #if KOMBI_SPORT_DISPLAY
+      kcan_write_msg(kombi_sport_off_buf);
+    #endif
     #if FRM_AHL_MODE
       kcan_write_msg(frm_ckm_ahl_komfort_buf);
       serial_log("Set AHL back to comfort mode.", 2);
@@ -85,7 +88,10 @@ void toggle_mdrive_message_active(void) {
 
     mdrive_message[1] += 1;
     mdrive_message[4] += 0x10;
-    mdrive_status = true;   
+    mdrive_status = true;
+    #if KOMBI_SPORT_DISPLAY
+      kcan_write_msg(kombi_sport_on_buf);
+    #endif
   }
 }
 
@@ -143,9 +149,7 @@ void evaluate_m_mfl_button_press(void) {
     #if IMMOBILIZER_SEQ
     uint8_t activate_release_counter = IMMOBILIZER_SEQ_NUMBER - 1;
     if (!immobilizer_released) {
-      #if IMMOBILIZER_SEQ_ALARM
-        activate_release_counter = alarm_active ? IMMOBILIZER_SEQ_ALARM_NUMBER - 1 : IMMOBILIZER_SEQ_NUMBER - 1;
-      #endif
+      activate_release_counter = alarm_active ? IMMOBILIZER_SEQ_ALARM_NUMBER - 1 : IMMOBILIZER_SEQ_NUMBER - 1;
 
       if (immobilizer_pressed_release_count < activate_release_counter) {
         immobilizer_pressed_release_count++;
@@ -419,20 +423,20 @@ void check_edc_ckm_queue(void) {
 void check_immobilizer_status(void) {
   if (vehicle_awakened_timer >= 2000) {                                                                                             // Delay ensures that time passed after Teensy (re)started to receive messages.
     if (!immobilizer_released) {
-      #if IMMOBILIZER_SEQ_ALARM
-        if (vehicle_awakened_timer >= 10000) {                                                                                      // Delay so we don't interfere with normal DWA behavior indicating alarm faults. Also when doing 30G reset.
-          if (!terminal_r && !alarm_led && !frm_consumer_shutdown && !lock_led) {
-            kcan_write_msg(alarm_led_on_buf);                                                                                       // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
-            alarm_led = true;                                                                                                       // Sending this multiple times keeps the car awake.
-            serial_log("Sent DWA LED ON with Terminal R off.", 2);
-            led_message_counter = 60;                                                                                               // Make sure we're ready once Terminal R cycles.
-          }
+      if (vehicle_awakened_timer >= 10000) {                                                                                        // Delay so we don't interfere with normal DWA behavior indicating alarm faults. Also when doing 30G reset.
+
+        // Check frm_consumer_shutdown so that we don't activate when half-waking. Open trunk, lock button while locked...
+        if (!terminal_r && !alarm_led_active && !frm_consumer_shutdown && !alarm_led_disable_on_lock) {
+          kcan_write_msg(alarm_led_on_buf);                                                                                         // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
+          alarm_led_active = true;                                                                                                  // Sending this multiple times keeps the car awake.
+          serial_log("Sent DWA LED ON with Terminal R off.", 2);
+          led_message_counter = 60;                                                                                                 // Make sure we're ready once Terminal R cycles.
         }
-      #endif
+      }
 
       // This could be temporarily bypassed if the car is started and driven very very quickly?
-      // It will reactivate once indicated_speed <= theft_max_speed. Think Speed (1994)...
-      if (!vehicle_moving || indicated_speed <= theft_max_speed) {                                                                  // Make sure we don't cut this OFF while the car is in (quick) motion!!!
+      // It will reactivate once indicated_speed <= immobilizer_max_speed. Think Speed (1994)...
+      if (!vehicle_moving || (indicated_speed <= immobilizer_max_speed)) {                                                          // Make sure we don't cut this OFF while the car is in (quick) motion!!!
         if (immobilizer_timer >= immobilizer_send_interval) {
           if (terminal_r) {
             if (engine_running && engine_runtime >= 2000) {                                                                         // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
@@ -442,15 +446,13 @@ void check_immobilizer_status(void) {
 
             // Visual indicators with Terminal R, 15.
             kcan_write_msg(key_cc_on_buf);                                                                                          // Keep sending this message so that CC is ON until disabled.
-            #if IMMOBILIZER_SEQ_ALARM
-              if (led_message_counter > 56) {                                                                                       // Send LED message every 112s to keep it ON.
-                kcan_write_msg(alarm_led_on_buf);
-                alarm_led = true;
-                led_message_counter = 0;
-              } else {
-                led_message_counter++;
-              }
-            #endif
+            if (led_message_counter > 56) {                                                                                         // Send LED message every 112s to keep it ON.
+              kcan_write_msg(alarm_led_on_buf);
+              alarm_led_active = true;
+              led_message_counter = 0;
+            } else {
+              led_message_counter++;
+            }
           }
           immobilizer_timer = 0;
           immobilizer_send_interval = 2000;
@@ -465,22 +467,27 @@ void check_immobilizer_status(void) {
       ekp_txq.drop();
     }
   }
-  if (!immobilizer_txq.isEmpty()) {
-    immobilizer_txq.peek(&delayed_tx);
+  if (!alarm_led_txq.isEmpty()) {
+    alarm_led_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
-      immobilizer_txq.drop();
+      alarm_led_txq.drop();
     }
   }
-  #if IMMOBILIZER_SEQ_ALARM
-    if (!alarm_siren_txq.isEmpty()) {
-      alarm_siren_txq.peek(&delayed_tx);
-      if (millis() >= delayed_tx.transmit_time) {
-        kcan_write_msg(delayed_tx.tx_msg);
-        alarm_siren_txq.drop();
-      }
+  if (!alarm_warnings_txq.isEmpty()) {
+    alarm_warnings_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      alarm_warnings_txq.drop();
     }
-  #endif
+  }
+  if (!alarm_siren_txq.isEmpty()) {
+    alarm_siren_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      alarm_siren_txq.drop();
+    }
+  }
 }
 
 
@@ -492,13 +499,11 @@ void reset_key_cc(void) {
 void activate_immobilizer(void) {
   immobilizer_released = false;
   immobilizer_pressed_release_count = 0;
-  immobilizer_txq.flush();
+  alarm_led_txq.flush();
   ekp_txq.flush();
   EEPROM.update(13, immobilizer_released);
   update_eeprom_checksum();                                                                                                         // Update now in case we lose power before sleep.
-  #if IMMOBILIZER_SEQ_ALARM
-    alarm_led = false;
-  #endif
+  alarm_led_active = false;
   immobilizer_activate_release_timer = 0;
   serial_log("Immobilizer activated.", 2);
 }
@@ -511,37 +516,38 @@ void release_immobilizer(void) {
   update_eeprom_checksum();
   ptcan_write_msg(ekp_return_to_normal_buf);
   unsigned long time_now = millis();
-  m = {ekp_return_to_normal_buf, time_now + 800};                                                                                   // Make sure these messages are received.
+  ekp_txq.flush();
+  m = {ekp_return_to_normal_buf, time_now + 100};                                                                                   // Make sure these messages are received.
   ekp_txq.push(&m);
-  immobilizer_txq.flush();
+  m = {ekp_return_to_normal_buf, time_now + 300};
+  ekp_txq.push(&m);
   serial_log("Immobilizer released. EKP control restored to DME.", 0);
-  #if IMMOBILIZER_SEQ_ALARM
-    if (alarm_active) {
-      alarm_siren_txq.flush();                                                                                                      // Clear pending siren requests.
-      m = {alarm_siren_return_control_buf, time_now};
-      alarm_siren_txq.push(&m);
-      m = {alarm_siren_return_control_buf, time_now + 500};
-      alarm_siren_txq.push(&m);
-      alarm_after_engine_stall = alarm_active = false;
-      serial_log("Deactivated alarm.", 0);
-    }
-  #endif
-  kcan_write_msg(key_cc_off_buf);                                                                                                   // CC to KCAN.
-  #if IMMOBILIZER_SEQ_ALARM
-    m = {alarm_led_return_control_buf, time_now};
-    immobilizer_txq.push(&m);
-    m = {alarm_led_return_control_buf, time_now + 500};
-    immobilizer_txq.push(&m);
-    alarm_led = false;
-  #endif
+  if (alarm_active) {
+    kcan_write_msg(alarm_siren_return_control_buf);
+    alarm_siren_txq.flush();                                                                                                        // Clear pending siren requests.
+    m = {alarm_siren_return_control_buf, time_now + 100};
+    alarm_siren_txq.push(&m);
+    m = {alarm_siren_return_control_buf, time_now + 200};
+    alarm_siren_txq.push(&m);
+    alarm_after_engine_stall = alarm_active = false;
+    serial_log("Alarm OFF.", 0);
+  }
+  kcan_write_msg(alarm_led_return_control_buf);
+  alarm_led_txq.flush();
+  m = {alarm_led_return_control_buf, time_now + 200};                                                                               // Delay 100ms since we already sent a 6F1 to DWA.
+  alarm_led_txq.push(&m);
+  m = {alarm_led_return_control_buf, time_now + 300};
+  alarm_led_txq.push(&m);
+  alarm_led_active = false;
+  kcan_write_msg(key_cc_off_buf);
   if (terminal_r) {
-    m = {start_cc_on_buf, time_now + 500};                                                                                          // CC to KCAN.
-    immobilizer_txq.push(&m);
-    m = {start_cc_off_buf, time_now + 1000};                                                                                          // CC to KCAN
-    immobilizer_txq.push(&m);
+    m = {start_cc_on_buf, time_now + 500};
+    alarm_warnings_txq.push(&m);
+    m = {start_cc_off_buf, time_now + 1000};
+    alarm_warnings_txq.push(&m);
     serial_log("Sent start ready CC.", 2);
   } else {
-    play_cc_gong();                                                                                                                 // KWP to KOMBI.
+    play_cc_gong();                                                                                                                 // 6F1 to KOMBI.
   }
   immobilizer_activate_release_timer = 0;
 }
@@ -550,12 +556,13 @@ void release_immobilizer(void) {
 void enable_alarm_after_stall(void) {
   if (!immobilizer_released) {
     alarm_after_engine_stall = true;
-    serial_log("Immobilizer still active. Alarm will sound after stall.", 2);    
+    serial_log("Immobilizer still active. Alarm will sound after engine stalls.", 2);    
     kcan_write_msg(key_cc_on_buf);
     if (diag_transmit) {
+      kcan_write_msg(alarm_led_on_buf);
       unsigned long time_now = millis();
       m = {cc_gong_buf, time_now + 1500};                                                                                           // Audible alert of impending stall.
-      immobilizer_txq.push(&m);
+      alarm_warnings_txq.push(&m);
     }
   }
 }
@@ -563,14 +570,14 @@ void enable_alarm_after_stall(void) {
 
 void execute_alarm_after_stall(void) {
   if (alarm_after_engine_stall) {
-    immobilizer_txq.flush();                                                                                                        // Clear pending gongs.
+    alarm_led_txq.flush();                                                                                                        // Clear pending gongs.
     unsigned long time_now = millis();
     m = {alarm_siren_on_buf, time_now};
     alarm_siren_txq.push(&m);
     m = {alarm_siren_on_buf, time_now + 500};                                                                                       // Make sure the alarm request is received.
     alarm_siren_txq.push(&m);
     for (uint8_t i = 1; i < 10; i++) {                                                                                              // Alarm test job times out after 30s. Make it blast for 5 min.
-      m = {alarm_siren_on_buf, time_now + 30000 * i};
+      m = {alarm_siren_on_buf, time_now + 29900 * i};
       alarm_siren_txq.push(&m);
     }
     serial_log("Alarm siren and hazards ON.", 0);

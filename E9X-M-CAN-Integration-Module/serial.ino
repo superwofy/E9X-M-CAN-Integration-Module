@@ -40,7 +40,7 @@ void serial_interpreter(void) {
       delay(200);
       update_data_in_eeprom();
       delay(1000);
-      module_reboot();
+      wdt.reset();
     }
     else if (cmd == "test_watchdog") {
       serial_log("  Serial: Will reboot after watchdog timeout.", 0);
@@ -68,8 +68,23 @@ void serial_interpreter(void) {
     else if (cmd == "print_status") {
       print_current_state(Serial);
     }
-    else if (cmd == "print_setup_time") {
-      sprintf(serial_debug_string, "  Serial: %.2f ms", setup_time / 1000.0);
+    else if (cmd == "print_boot_log") {
+      Serial.println("======================== Boot Log ========================");
+      Serial.print(boot_debug_string);
+      Serial.println("==========================================================");
+    }
+    else if (cmd == "print_can_config") {
+      serial_log("========================== KCAN ==========================", 0);
+      KCAN.mailboxStatus();
+      serial_log("", 0);
+      serial_log("========================= PT-CAN =========================", 0);
+      PTCAN.mailboxStatus();
+      serial_log("", 0);
+      serial_log("========================== DCAN ==========================", 0);
+      DCAN.mailboxStatus();
+      serial_log("", 0);
+      uint8_t clocksrc[4] = {60, 24, 80, 0};
+      sprintf(serial_debug_string, "  Serial: FlexCAN clock speed is %d MHz.", clocksrc[(CCM_CSCMR2 & 0x300) >> 8]);
       serial_log(serial_debug_string, 0);
     }
     else if (cmd == "clear_all_dtcs") {                                                                                             // Should take around 6s to complete.
@@ -131,10 +146,10 @@ void serial_interpreter(void) {
       }
       serial_log("  Serial: Reset EEPROM values. Rebooting", 0);
       delay(1000);
-      module_reboot();
+      wdt.reset();
     } 
     else if (cmd == "reset_mdrive") {
-      if (LOGLEVEL >=2) {
+      if (LOGLEVEL >= 2) {
         Serial.print("  Serial: ");
       } else {
         serial_log("  Serial: Reset MDrive settings.", 0);
@@ -285,40 +300,54 @@ void serial_interpreter(void) {
       activate_immobilizer();
       serial_log("  Serial: Locked EKP anti theft.", 0);
     }
-    #if IMMOBILIZER_SEQ_ALARM
     else if (cmd == "alarm_siren_on") {
+      alarm_siren_txq.flush();
       kcan_write_msg(alarm_siren_on_buf);
       serial_log("  Serial: Alarm siren ON.", 0);
     }
     else if (cmd == "alarm_siren_off") {
+      alarm_siren_txq.flush();
       kcan_write_msg(alarm_siren_return_control_buf);
       serial_log("  Serial: Alarm siren OFF.", 0);
     }
+    else if (cmd == "alarm_led_on") {
+      alarm_led_txq.flush();
+      kcan_write_msg(alarm_led_on_buf);
+      serial_log("  Serial: Alarm LED ON.", 0);
+    }
+    else if (cmd == "alarm_led_off") {
+      alarm_led_txq.flush();
+      kcan_write_msg(alarm_led_return_control_buf);
+      serial_log("  Serial: Alarm LED OFF.", 0);
+    }
     else if (cmd == "test_trip_stall_alarm") {
-      if (ignition) {
-        if (!engine_running) {
-          Serial.print("  Serial: ");
-          activate_immobilizer();
-          Serial.print("  Serial: ");
-          enable_alarm_after_stall();
-          while (!immobilizer_txq.isEmpty()) {                                                                                      // Simulate engine stalling and execute warning sounds
-            immobilizer_txq.peek(&delayed_tx);
-            if (millis() >= delayed_tx.transmit_time) {
-              kcan_write_msg(delayed_tx.tx_msg);
-              immobilizer_txq.drop();
+      if (diag_transmit) {
+        if (ignition) {
+          if (!engine_running) {
+            Serial.print("  Serial: ");
+            activate_immobilizer();
+            Serial.print("  Serial: ");
+            enable_alarm_after_stall();
+            while (!alarm_warnings_txq.isEmpty()) {                                                                                 // Simulate engine stall by waiting and executing warning sound.
+              alarm_warnings_txq.peek(&delayed_tx);
+              if (millis() >= delayed_tx.transmit_time) {
+                kcan_write_msg(delayed_tx.tx_msg);
+                alarm_warnings_txq.drop();
+              }
             }
+            idrive_alive_timer = 0;
+            execute_alarm_after_stall();
+            serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.", 0);
+          } else {
+            serial_log("  Serial: Shut down engine first.", 0);
           }
-          idrive_alive_timer = 0;
-          execute_alarm_after_stall();
-          serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.", 0);
         } else {
-          serial_log("  Serial: Shut down engine first.", 0);
+          serial_log("  Serial: Activate ignition first.", 0);
         }
       } else {
-        serial_log("  Serial: Activate ignition first.", 0);
+        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
       }
     }
-    #endif
     #endif
     #if RTC
     else if (cmd == "reset_rtc") {
@@ -413,11 +442,6 @@ void serial_interpreter(void) {
 }
 
 
-void module_reboot(void) {
-  wdt.reset();
-}
-
-
 void print_help(void) {
   serial_log("  ========================== Help ==========================\r\n"
   "  Commands:\r\n"
@@ -431,7 +455,8 @@ void print_help(void) {
   "  test_watchdog - Create an infinite loop to test the watchdog reset.\r\n"
   "  power_down - Assume sleep mode immediately. KL30G will be turned OFF.\r\n"
   "  print_status - Prints a set of current runtime variables.\r\n"
-  "  print_setup_time - Prints the time it took for the program to complete setup().\r\n"
+  "  print_boot_log - Prints the first 10s of serial messages and timing information.\r\n"
+  "  print_can_config - Prints the configuration of the FlexCAN module.\r\n"
   "  clear_all_dtcs - Clear the error memories of every module on the bus.\r\n"
   "  cc_gong - Create an audible check-control gong.", 0);
   #if EXHAUST_FLAP_CONTROL
@@ -468,11 +493,11 @@ void print_help(void) {
   #if IMMOBILIZER_SEQ
     serial_log("  release_immobilizer - Deactivates the EKP immobilizer.\r\n"
     "  lock_immobilizer - Activates the EKP immobilizer.", 0);
-    #if IMMOBILIZER_SEQ_ALARM
-      serial_log("  alarm_siren_on - Activates the Alarm siren.\r\n"
-      "  alarm_siren_off - Deactivates the Alarm siren.\r\n"
-      "  test_trip_stall_alarm - Simulates tripping the EKP immobilizer without disabling it first.", 0);
-    #endif
+    serial_log("  alarm_siren_on - Activates the Alarm siren.\r\n"
+    "  alarm_siren_off - Deactivates the Alarm siren.\r\n"
+    "  alarm_led_on - Activates the Alarm interior mirror LED.\r\n"
+    "  alarm_led_off - Deactivates the Alarm interior mirror LED.\r\n"
+    "  test_trip_stall_alarm - Simulates tripping the EKP immobilizer without disabling it first.", 0);
   #endif
   #if RTC
     serial_log("  reset_rtc - Sets teensy's RTC to 01/01/2019 00:00:00 UTC.", 0);

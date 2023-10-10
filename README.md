@@ -75,7 +75,7 @@ I use it to:
 * Switch on the reversing camera when pressing the Auto Start-stop button.
 * Carry out one more wipe cycle after washing the windscreen.
 * Have intermittent wipers work alongside rain sensing.
-	* Push the stalk down three times in quick succession / hold for 1s to turn on intermittent mode.
+	* Push the stalk down and hold for 1.3s to turn on intermittent mode.
 	* AUTO, stalk pushed up 1 and stalk pushed up 2 disable intermittent mode.
 * Enable use of FXX KCAN1 CIC controller.
 * Enable use of FXX VSW01 (VideoSWitch) module.
@@ -126,19 +126,23 @@ Arduino IDE settings
 
 Board: Teensy 4.0
 Optimize: Fastest with LTO
-CPU Speed: 528 MHz
+CPU Speed: 396 MHz
 USB Type: Dual Serial for debugging, Single for normal operation.
 
 
-To make some startup time critical functions work, the following changes need to be made to startup.c 
+Teensy core modifications:
+
+To make some startup time critical functions work, the following changes should be made to startup.c
 (Linux path: /home/**Username**/.arduino15/packages/teensy/hardware/avr/**Version**/cores/teensy4/startup.c)
 Comment these lines:
-	set_arm_clock(F_CPU);
-	tempmon_init();
 	usb_pll_start();
 	while (millis() < TEENSY_INIT_USB_DELAY_BEFORE) ;
 	usb_init();
 	while (millis() < TEENSY_INIT_USB_DELAY_AFTER + TEENSY_INIT_USB_DELAY_BEFORE) ; // wait
+
+Optionally, modify usb.c:
+Comment:
+	delay(25);
 
 
 

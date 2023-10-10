@@ -2,11 +2,13 @@
 
 
 void read_initialize_eeprom(void) {
-  stored_eeprom_checksum = EEPROM.read(0) << 8 | EEPROM.read(1);
-  calculated_eeprom_checksum = eeprom_crc();
+  uint16_t stored_eeprom_checksum = EEPROM.read(0) << 8 | EEPROM.read(1);
+  uint16_t calculated_eeprom_checksum = eeprom_crc();
 
   if (stored_eeprom_checksum != calculated_eeprom_checksum){
-    serial_log("EEPROM data corrupted. Restoring defaults.", 1);
+    sprintf(serial_debug_string, "EEPROM data corrupted. Loaded checksum: 0x%X, calculated: 0x%X. Restoring defaults.",
+            stored_eeprom_checksum, calculated_eeprom_checksum);
+    serial_log(serial_debug_string, 1);
 
     EEPROM.update(2, mdrive_dsc);                                                                           
     EEPROM.update(3, mdrive_power);
@@ -157,6 +159,7 @@ void initialize_watchdog(void) {
   config.callback = wdt_callback;
   config.timeout = 18;                                                                                                              // If the watchdog timer is not reset within 15s, re-start the program.
   wdt.begin(config);
+  serial_log("WDT initialized.", 2);
 }
 
 
@@ -167,21 +170,15 @@ void wdt_callback(void) {
 
 
 void print_current_state(Stream &status_serial) {
-  status_serial.println(" ================================ Operation ===============================");
-  sprintf(serial_debug_string, " Vehicle PTCAN: %s", vehicle_awake ? "Active" : "Standby");
+  sprintf(serial_debug_string, " ================================ Operation ===============================\r\n"
+          " Vehicle PTCAN: %s\r\n"
+          " Terminal R: %s, Ignition: %s\r\n"
+          " Engine: %s, RPM: %d\r\n"
+          " Indicated speed: %d, Real speed: %d %s",
+          vehicle_awake ? "Active" : "Standby", terminal_r ? "ON" : "OFF",
+          ignition ? "ON" : "OFF", engine_running ? "ON" : "OFF", RPM / 4,
+          indicated_speed, real_speed, speed_mph ? "MPH" : "KPH");
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " Terminal R: %s, Ignition: %s", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF");
-  status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " Engine: %s, RPM: %d", engine_running ? "ON" : "OFF", RPM / 4);
-  status_serial.println(serial_debug_string);
-  #if HDC || IMMOBILIZER_SEQ || FRONT_FOG_CORNER || F_NIVI
-    sprintf(serial_debug_string, " Indicated speed: %d %s", indicated_speed, speed_mph ? "MPH" : "KPH");
-    status_serial.println(serial_debug_string);
-  #endif
-  #if F_NIVI
-    sprintf(serial_debug_string, " Real speed: %d %s", real_speed, speed_mph ? "MPH" : "KPH");
-    status_serial.println(serial_debug_string);
-  #endif
   #if HDC
     sprintf(serial_debug_string, " Cruise Control: %s", cruise_control_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
@@ -203,9 +200,9 @@ void print_current_state(Stream &status_serial) {
   } else {
     status_serial.println(" DSC: Asleep");
   }
-  sprintf(serial_debug_string, " Clutch: %s", clutch_pressed ? "Depressed" : "Released");
-  status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " Car is: %s", vehicle_moving ? "Moving" : "Stationary");
+  sprintf(serial_debug_string, " Clutch: %s\r\n Car is: %s",
+          clutch_pressed ? "Depressed" : "Released",
+          vehicle_moving ? "Moving" : "Stationary");
   status_serial.println(serial_debug_string);
   #if F_NIVI
     if (vehicle_direction == 8) {
@@ -217,12 +214,12 @@ void print_current_state(Stream &status_serial) {
     } else {
       status_serial.println(" Direction: Unknown");
     }
-    sprintf(serial_debug_string, " Sine Tilt: %.1f, FXX-Converted: %.1f deg", sine_tilt_angle, f_vehicle_angle * 0.05 - 64.0);
-    status_serial.println(serial_debug_string);
-    sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2", 
-            e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0);
-    status_serial.println(serial_debug_string);
-    sprintf(serial_debug_string, " Yaw rate FXX-Converted: %.2f deg/s", yaw_rate * 0.005 - 163.83);
+    sprintf(serial_debug_string, " Sine Tilt: %.1f, FXX-Converted: %.1f deg\r\n"
+            " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
+            " Yaw rate FXX-Converted: %.2f deg/s",
+            sine_tilt_angle, f_vehicle_angle * 0.05 - 64.0, 
+            e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0, 
+            yaw_rate * 0.005 - 163.83);
     status_serial.println(serial_debug_string);
   #endif
   #if F_NIVI || MIRROR_UNDIM
@@ -231,15 +228,15 @@ void print_current_state(Stream &status_serial) {
     status_serial.println(serial_debug_string);
   #endif
   #if IMMOBILIZER_SEQ
-    status_serial.println(" ================================ Immobilizer ===============================");
-    sprintf(serial_debug_string, " Immobilizer: %s, Persistent setting: %s", 
-            immobilizer_released ? "OFF" : "Active", EEPROM.read(14) == 1 ? "Active" : "OFF");
-    status_serial.println(serial_debug_string);
-    sprintf(serial_debug_string, " Key detected: %s", key_valid ? "YES" : "NO");
+    sprintf(serial_debug_string, " ================================ Immobilizer ===============================\r\n"
+            " Immobilizer: %s, Persistent setting: %s\r\n"
+            " Key detected: %s",
+            immobilizer_released ? "OFF" : "Active", EEPROM.read(14) == 1 ? "Active" : "OFF",
+            key_valid ? "YES" : "NO");
     status_serial.println(serial_debug_string);
   #endif
-  status_serial.println(" ================================= MDrive =================================");
-  sprintf(serial_debug_string, " Active: %s", mdrive_status ? "YES" : "NO");
+  sprintf(serial_debug_string, " ================================= MDrive =================================\r\n"
+          " Active: %s", mdrive_status ? "YES" : "NO");
   status_serial.println(serial_debug_string);
   status_serial.print(" Settings: DSC-");
   if (mdrive_dsc == 3) {
@@ -278,14 +275,16 @@ void print_current_state(Stream &status_serial) {
     status_serial.print("Sport");
   }
   status_serial.println();
-  sprintf(serial_debug_string, " Console POWER: %s", console_power_mode ? "ON" : "OFF");
-  status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " POWER CKM: %s", dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport");
-  status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " Key profile number: %d", cas_key_number + 1);
+  sprintf(serial_debug_string, " Console POWER: %s\r\n"
+          " POWER CKM: %s\r\n"
+          " Key profile number: %d\r\n"
+          " ============================== Body ===============================",
+          console_power_mode ? "ON" : "OFF",
+          dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport",
+          cas_key_number + 1);
   status_serial.println(serial_debug_string);
 
-  status_serial.println(" ============================== Body ===============================");
+  status_serial.println();
   #if RTC
     time_t t = now();
     uint8_t rtc_hours = hour(t);
@@ -323,7 +322,8 @@ void print_current_state(Stream &status_serial) {
   #endif
   #if AUTO_SEAT_HEATING_PASS
     sprintf(serial_debug_string, " Passenger's seat heating: %s, occupied: %s, seatbelt fastened: %s", 
-            passenger_seat_heating_status ? "ON" : "OFF", passenger_seat_status >= 8 ? "YES" : "NO", passenger_seat_status & 1 ? "YES" : "NO");
+            passenger_seat_heating_status ? "ON" : "OFF", bitRead(passenger_seat_status, 0) ? "YES" : "NO",
+            bitRead(passenger_seat_status, 3) ? "YES" : "NO");
     status_serial.println(serial_debug_string);
   #endif
   #if HOOD_OPEN_GONG
@@ -379,14 +379,12 @@ void print_current_state(Stream &status_serial) {
     }
   #endif
 
-  status_serial.println(" ================================= Debug ==================================");
   int8_t max_stored_temp = EEPROM.read(15);
-  sprintf(serial_debug_string, " CPU speed: %ld, MHz CPU temperature: %.2f, °C Max recorded: %.2f °C", 
+  sprintf(serial_debug_string, " ================================= Debug ==================================\r\n"
+          " CPU speed: %ld, MHz CPU temperature: %.2f, °C Max recorded: %.2f °C", 
           F_CPU_ACTUAL / 1000000, cpu_temp, max_cpu_temp > max_stored_temp ? max_cpu_temp : max_stored_temp);
   status_serial.println(serial_debug_string);
-  if (clock_mode == -1) {
-    status_serial.println(" Clock mode: STARTUP");
-  } else if (clock_mode == 0) {
+  if (clock_mode == 0) {
     status_serial.println(" Clock mode: STANDARD_CLOCK");
   } else if (clock_mode == 1) {
     status_serial.println(" Clock mode: MILD_UNDERCLOCK");
@@ -396,6 +394,8 @@ void print_current_state(Stream &status_serial) {
     status_serial.println(" Clock mode: HIGH_UNDERCLOCK");
   } else if (clock_mode == 4) {
     status_serial.println(" Clock mode: MAX_UNDERCLOCK");
+  } else {
+    status_serial.println(" Clock mode: STARTUP_CLOCK");
   }
   unsigned long loop_calc = micros() - loop_timer;
   if (loop_calc > max_loop_timer) {
@@ -407,25 +407,33 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Max loop execution time: %ld μs", max_loop_timer);
   }
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " CAN setup time: %.2f ms, total setup time: %.2f ms", can_setup_time / 1000.0, setup_time / 1000.0);
+  sprintf(serial_debug_string, " KCAN errors: %ld, PTCAN errors: %ld, DCAN errors: %ld\r\n"
+          " ==========================================================================",
+          kcan_error_counter, ptcan_error_counter, dcan_error_counter);
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " KCAN errors: %ld, PTCAN errors: %ld, DCAN errors: %ld", kcan_error_counter, ptcan_error_counter, dcan_error_counter);
-  status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " EEPROM CRC: 0x%X -> %s at boot", 
-          stored_eeprom_checksum, calculated_eeprom_checksum == stored_eeprom_checksum ? "Matched" : "Mismatched");
-  status_serial.println(serial_debug_string);
-  status_serial.println(" ==========================================================================");
+  status_serial.println();
   debug_print_timer = 0;
 }
 
 
 void serial_log(const char message[], int8_t level) {
   #if DEBUG_MODE
-  if (!clearing_dtcs) {
-    if (level <= LOGLEVEL) {
-      Serial.println(message);
+    if (!clearing_dtcs) {
+      if (level <= LOGLEVEL) {
+        Serial.println(message);
+      }
     }
-  }
+    if (millis() <= 10000) {                                                                                                        // Store early messages that won't be on the Serial monitor.
+      char buffer[128];
+      if (micros() < 1000) {
+        sprintf(buffer, " %ld μs: %s\r\n", micros(), message);
+      } else if (millis() < 100) {
+        sprintf(buffer, " %.2f ms: %s\r\n", micros() / 1000.0, message);
+      } else {
+        sprintf(buffer, " %ld ms: %s\r\n", millis(), message);
+      }
+      strcat(boot_debug_string, buffer);
+    }
   #endif
 }
 
