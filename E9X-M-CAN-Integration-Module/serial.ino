@@ -427,6 +427,11 @@ void serial_interpreter(void) {
     else if (cmd == "help") {
       print_help();
     }
+    else {
+      sprintf(serial_debug_string, "  Serial: command '%s' not recognized. "
+              "Use 'help' to see a list of available commands.", cmd.c_str());
+      serial_log(serial_debug_string, 0);
+    }
     serial_unlocked_timer = 0;
   } else {
     if (cmd == serial_password) {
@@ -528,7 +533,7 @@ void check_serial_diag_actions(void) {
     if (clearing_dtcs) {
       clearing_dtcs = false;
       diag_transmit = true;
-      serial_log("  Serial: Error memories cleared. Cycle Terminal R ON/OFF.", 0);
+      serial_log("  Serial: Error memories cleared. Cycle Terminal R OFF/ON.", 0);
     }
   }
 

@@ -19,7 +19,7 @@ void setup() {
   read_initialize_eeprom();                                                                                                         // systick: 1.60 +/- 0.01 ms is when the EEPROM is read. If EEPROM is corrupt, this takes longer.
   initialize_mdrive();
   cache_can_message_buffers();
-  serial_log("Setup complete.", 2);                                                                                                 // systick: 1.60 ms, setup() is complete.
+  log_setup_complete();                                                                                                             // systick: 1.60 ms, setup() is complete.
 }
 
 

@@ -1,0 +1,85 @@
+Byte0: 2x CD sent when wipers start moving, 2 x CE sent when they finish the cycle. CE is also sent while the engine is cranking.
+
+Intermittent times:
+
+Car stopped:
+20:23:15.920 -> New wiper speed setting 1.
+20:23:18.400 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:23:18.464 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:23:19.750 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:23:19.814 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:23:43.910 -> Wiper state KCAN:  ID: 252 Buffer: CD FF  					// Interval 25s
+20:23:43.974 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:23:45.260 -> Wiper state KCAN:  ID: 252 Buffer: CE FF
+20:23:45.324 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+
+20:23:54.999 -> New wiper speed setting 2.
+20:23:55.191 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:23:55.256 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:23:56.544 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:23:56.576 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:24:12.202 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 					// Interval 17s
+20:24:12.266 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:24:13.553 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:24:13.586 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+
+20:24:19.983 -> New wiper speed setting 3.
+20:24:20.142 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:24:20.206 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:24:21.529 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:24:21.558 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:24:30.176 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 					// Interval 10s
+20:24:30.208 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:24:31.493 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:24:31.558 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+
+20:24:38.245 -> New wiper speed setting 5.
+20:24:38.439 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:24:38.504 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:24:39.788 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:24:39.853 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:24:43.451 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 					// Interval 5s
+20:24:43.515 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:24:44.801 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:24:44.833 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+
+
+
+
+Car moving slowly:
+20:31:02.973 -> New wiper speed setting 1.
+20:32:57.615 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:32:57.679 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:32:58.838 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:32:58.903 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:16.614 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 					// Interval 19s
+20:33:16.680 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:33:17.804 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:17.836 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:20.248 -> New wiper speed setting 2.
+20:33:20.410 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:33:20.441 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:33:21.567 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:21.632 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:32.413 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 					// Interval 12s
+20:33:32.477 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:33:33.573 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:33.638 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:43.527 -> New wiper speed setting 3.
+20:33:45.168 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:33:45.232 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:33:46.391 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:46.455 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:51.189 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 					// Interval 6s
+20:33:51.222 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:33:52.381 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:52.413 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:33:58.981 -> New wiper speed setting 5.
+20:33:59.142 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:33:59.206 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:34:00.334 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:34:00.366 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:34:02.172 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 					// Interval 3s
+20:34:02.235 -> Wiper state KCAN:  ID: 252 Buffer: CD FF 
+20:34:03.330 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 
+20:34:03.394 -> Wiper state KCAN:  ID: 252 Buffer: CE FF 

@@ -57,7 +57,7 @@ int8_t LOGLEVEL = 4;                                                            
 #define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as Terminal R is turned ON.
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline of M3 KOMBI.
-#define KOMBI_SPORT_DISPLAY 0                                                                                                       // Display "SPORT" on KOMBI instead of green MDrive LED. Specific coding required. Use with non-M KOMBI.
+#define GWS_SPORT_MODE 1                                                                                                            // Emulates transmission SPORT mode. Use with 6MT only.
 #define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine ON. Calibrated for M3 speedo with 335i tacho.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver at low temperatures.
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
@@ -206,7 +206,7 @@ bool holding_dsc_off_console = false;
 elapsedMillis mdrive_message_timer = 0;
 uint8_t m_mfl_held_count = 0;
 CAN_message_t idrive_mdrive_settings_menu_a_buf, idrive_mdrive_settings_menu_b_buf;
-CAN_message_t kombi_sport_on_buf, kombi_sport_off_buf;
+CAN_message_t gws_sport_on_buf, gws_sport_off_buf;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms;
 elapsedMillis dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
@@ -270,9 +270,9 @@ bool wipe_scheduled = false;
 uint8_t wash_message_counter = 0, stalk_down_message_counter = 0;
 unsigned long stalk_down_last_press_time = 0;
 CAN_message_t wipe_single_buf;
-uint8_t intermittent_setting = 1, intermittent_setting_can;
-uint16_t intermittent_intervals[] = {3000, 2500, 2000, 0, 1700};                                                                    // setting 1, setting 2, setting 3, n/a and setting 5 (max). 1000ms needed for a cycle
-uint16_t intermittent_intervals_offset_stopped[] = {2000, 500, 0, 0, 0, 0};
+uint8_t intermittent_setting = 0, intermittent_setting_can = 0;
+uint16_t intermittent_intervals[] = {13100, 9100, 5100, 0, 2100};                                                                   // Settings: 1 (12s), 2 (8s), 3 (4s), n/a and 5 (max, 1s). 1100ms is needed for a cycle.
+uint16_t intermittent_intervals_offset_stopped[] = {3000, 2000, 1000, 0, 0, 1500};
 
 elapsedMillis intermittent_wipe_timer = 3000;
 bool intermittent_wipe_active = false, auto_wipe_active = false;

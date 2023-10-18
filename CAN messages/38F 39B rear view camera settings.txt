@@ -1,17 +1,17 @@
 Camera settings status sent by TRSVC:
 
-10:13:49.502 ->  KCAN:  ID: 39B Buffer: D1 3C 23 B 			// Hitch ON
+10:13:49.502 ->  KCAN:  ID: 39B Buffer: D1 3C 23 B 			// Tow view ON
 10:13:49.664 ->  KCAN:  ID: 39B Buffer: D1 3C 23 B 
 10:13:49.825 ->  KCAN:  ID: 39B Buffer: D1 3C 23 B 
-10:13:50.984 ->  KCAN:  ID: 39B Buffer: D1 3C 23 9 			// Hitch OFF
+10:13:50.984 ->  KCAN:  ID: 39B Buffer: D1 3C 23 9 			// Tow view OFF
 10:13:51.145 ->  KCAN:  ID: 39B Buffer: D1 3C 23 9 
 10:13:51.305 ->  KCAN:  ID: 39B Buffer: D1 3C 23 9 
 
 
 Camera settings change request sent by CIC:
 
-10:20:48.568 ->  KCAN:  ID: 38F Buffer: ED 3C 23 E1 		// Hitch ON  Byte0 [11101101]
-10:20:50.082 ->  KCAN:  ID: 38F Buffer: E5 3C 23 E1 		// Hitch OFF Byte0 [11100101]
+10:20:48.568 ->  KCAN:  ID: 38F Buffer: ED 3C 23 E1 		// Tow view ON  Byte0 [11101101]
+10:20:50.082 ->  KCAN:  ID: 38F Buffer: E5 3C 23 E1 		// Tow view OFF Byte0 [11100101]
 
 19:39:18.156 ->  KCAN:  ID: 38F Buffer: E6 3C 23 E1 		// Camera OFF
 
@@ -23,10 +23,10 @@ Examples:
 
 // Camera ON, Brightness 50%, Contrast 50%, Parking lines OFF, Obstacle marking ON, Tow view OFF
 
-22:27:19.817 ->  KCAN:  ID: 39B Buffer: D1 4B 2D 9 				// Ingition ON
+22:27:19.817 ->  KCAN:  ID: 39B Buffer: D1 4B 2D 9 			// Ingition ON
 22:27:19.945 ->  KCAN:  ID: 39B Buffer: D1 4B 2D 9 
 22:27:20.106 ->  KCAN:  ID: 39B Buffer: D1 4B 2D 9 
-22:27:20.653 ->  KCAN:  ID: 38F Buffer: E5 4B 2D E1 			// Reverse engaged activating camera.
+22:27:20.653 ->  KCAN:  ID: 38F Buffer: E5 4B 2D E1 		// Reverse engaged activating camera.
 22:27:20.815 ->  KCAN:  ID: 38F Buffer: E5 4B 2D E1 
 22:27:20.815 ->  KCAN:  ID: 38F Buffer: E5 4B 2D E1 
 

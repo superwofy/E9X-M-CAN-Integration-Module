@@ -39,8 +39,8 @@ void toggle_mdrive_message_active(void) {
     mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
     mdrive_message[4] -= 0x10;
     mdrive_status = mdrive_power_active = false;
-    #if KOMBI_SPORT_DISPLAY
-      kcan_write_msg(kombi_sport_off_buf);
+    #if GWS_SPORT_MODE
+      kcan_write_msg(gws_sport_off_buf);
     #endif
     #if FRM_AHL_MODE
       kcan_write_msg(frm_ckm_ahl_komfort_buf);
@@ -64,6 +64,9 @@ void toggle_mdrive_message_active(void) {
     if (mdrive_power == 0x20) {                                                                                                     // POWER in Sport.
       mdrive_power_active = true;
     } else if (mdrive_power == 0x30) {                                                                                              // POWER Sport+.
+      #if GWS_SPORT_MODE
+        kcan_write_msg(gws_sport_on_buf);
+      #endif
       #if ASD
         if (diag_transmit) {
           kcan_write_msg(demute_asd_buf);
@@ -89,9 +92,6 @@ void toggle_mdrive_message_active(void) {
     mdrive_message[1] += 1;
     mdrive_message[4] += 0x10;
     mdrive_status = true;
-    #if KOMBI_SPORT_DISPLAY
-      kcan_write_msg(kombi_sport_on_buf);
-    #endif
   }
 }
 
@@ -259,6 +259,9 @@ void update_mdrive_message_settings(void) {
             serial_log("Muted ASD.", 3);
           }
         #endif
+        #if GWS_SPORT_MODE
+          kcan_write_msg(gws_sport_off_buf);
+        #endif
       } else {
         #if EXHAUST_FLAP_CONTROL
           exhaust_flap_sport = true;                                                                                                // Exhaust flap should open in Sport+.
@@ -268,6 +271,9 @@ void update_mdrive_message_settings(void) {
             kcan_write_msg(demute_asd_buf);
             serial_log("De-muted ASD with POWER setting of Sport+.", 3);
           }
+        #endif
+        #if GWS_SPORT_MODE
+          kcan_write_msg(gws_sport_on_buf);
         #endif
       }
     }
@@ -361,8 +367,10 @@ void send_power_mode(void) {
 
 
 void send_dme_power_ckm(void) {
-  kcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                  // This is sent by the DME to populate the M Key iDrive section
-  serial_log("Sent DME POWER CKM.", 3);
+  if (!frm_consumer_shutdown) {
+    kcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                // This is sent by the DME to populate the M Key iDrive section
+    serial_log("Sent DME POWER CKM.", 3);
+  }
 }
 
 

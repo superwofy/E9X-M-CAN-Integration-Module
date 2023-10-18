@@ -60,14 +60,14 @@ void evaluate_terminal_clutch_keyno_status(void) {
     f_terminal_status[0] = f_terminal_status_crc.calc();
 
     CAN_message_t f_terminal_status_buf = make_msg_buf(0x12F, 8, f_terminal_status);
-    #if F_ZBE_WAKE || F_VSW01
-      kcan_write_msg(f_terminal_status_buf);
-    #endif
-    #if F_NIVI
-      if (!frm_consumer_shutdown) {
+    if (!frm_consumer_shutdown) {
+      #if F_ZBE_WAKE || F_VSW01
+        kcan_write_msg(f_terminal_status_buf);
+      #endif
+      #if F_NIVI
         ptcan_write_msg(f_terminal_status_buf);
-      }
-    #endif
+      #endif
+    }
   #endif
 
   #if FAKE_MSA || MSA_RVC
@@ -147,6 +147,7 @@ void evaluate_frm_consumer_shutdown(void) {
   } else if (k_msg.buf[0] == 0xFD) {
     if (frm_consumer_shutdown) {
       frm_consumer_shutdown = false;
+      serial_log("FRM requested consumers back ON.", 2);
       toggle_transceiver_standby(frm_consumer_shutdown);
     }
   }
@@ -752,11 +753,17 @@ void evaluate_comfort_exit(void) {
 
 
 void store_rvc_settings_cic(void) {
-  for (uint8_t i = 0; i < 4; i++) {
+  if (k_msg.buf[0] == 0xE6) {                                                                                                       // Camera OFF.
+    rvc_settings[0] = 0xE5;                                                                                                         // Store Camera ON, Two view OFF instead.
+  } else {
+    rvc_settings[0] = k_msg.buf[0];
+  }
+
+  for (uint8_t i = 1; i < 4; i++) {
     rvc_settings[i] = k_msg.buf[i];
   }
 
-  if (!rvc_tow_view_by_driver && (rvc_tow_view_by_module != bitRead(k_msg.buf[0], 3)) && pdc_bus_status == 0xA5) {                  // If the driver changed this setting, do not interfere during this cycle.
+  if (!rvc_tow_view_by_driver && !rvc_tow_view_by_module && bitRead(k_msg.buf[0], 3) && pdc_bus_status == 0xA5) {                   // If the driver changed this setting, do not interfere during this cycle.
     rvc_tow_view_by_driver = true;
     serial_log("Driver changed RVC tow view manually.", 3);
   }
@@ -766,6 +773,13 @@ void store_rvc_settings_cic(void) {
 void store_rvc_settings_trsvc(void) {
   rvc_settings[1] = k_msg.buf[1];                                                                                                   // These values are the same as sent by CIC or TRSVC.
   rvc_settings[2] = k_msg.buf[2];
+  if (k_msg.buf[3] == 1) {                                                                                                          // Parking lines OFF, Obstacle marking OFF, Tow view OFF.
+    rvc_settings[3] = 0xE0;
+  } else if (k_msg.buf[3] == 9) {                                                                                                   // Parking lines OFF, Obstacle marking ON, Tow view OFF.
+    rvc_settings[3] = 0xE1;
+  } else if (k_msg.buf[3] == 0x39) {                                                                                                // Parking lines ON, Obstacle marking ON, Tow view OFF.
+    rvc_settings[3] = 0xE7;
+  }
 }
 
 
@@ -903,7 +917,10 @@ void evaluate_wiper_stalk_status(void) {
         #endif
         stalk_down_message_counter = 0;
         if (new_intermittent_setting > intermittent_setting) {                                                                      // If wheel moved up, wipe immediately. Else, wait until next interval.
-          intermittent_wipe_timer = intermittent_intervals[intermittent_setting] + 200;
+          intermittent_wipe_timer = intermittent_intervals[intermittent_setting] + 100;
+          if (!vehicle_moving) {
+            intermittent_wipe_timer += intermittent_intervals_offset_stopped[intermittent_setting];
+          }
         } else {
           intermittent_wipe_timer = 0;
         }

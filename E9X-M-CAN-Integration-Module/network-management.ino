@@ -21,10 +21,10 @@ void cache_can_message_buffers(void) {                                          
   idrive_mdrive_settings_menu_a_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_a);
   idrive_mdrive_settings_menu_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_b);
 
-  uint8_t kombi_sport_on[] = {0, 0, 0, 4, 0, 0, 0},
-          kombi_sport_off[] = {0, 0, 0, 0, 0, 0, 0};
-  kombi_sport_on_buf = make_msg_buf(0x1D2, 6, kombi_sport_on);
-  kombi_sport_off_buf = make_msg_buf(0x1D2, 6, kombi_sport_off);
+  uint8_t gws_sport_on[] = {0, 0, 0, 4, 0, 0, 0},
+          gws_sport_off[] = {0, 0, 0, 0, 0, 0, 0};
+  gws_sport_on_buf = make_msg_buf(0x1D2, 6, gws_sport_on);
+  gws_sport_off_buf = make_msg_buf(0x1D2, 6, gws_sport_off);
 
   uint8_t cc_gong[] = {0x60, 3, 0x31, 0x22, 2, 0, 0, 0};
   cc_gong_buf = make_msg_buf(0x6F1, 8, cc_gong);

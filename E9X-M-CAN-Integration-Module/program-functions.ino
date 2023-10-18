@@ -170,12 +170,12 @@ void wdt_callback(void) {
 
 
 void print_current_state(Stream &status_serial) {
-  sprintf(serial_debug_string, " ================================ Operation ===============================\r\n"
+  sprintf(serial_debug_string, "\r\n ================================ Operation ===============================\r\n"
           " Vehicle PTCAN: %s\r\n"
           " Terminal R: %s, Ignition: %s\r\n"
           " Engine: %s, RPM: %d\r\n"
           " Indicated speed: %d, Real speed: %d %s",
-          vehicle_awake ? "Active" : "Standby", terminal_r ? "ON" : "OFF",
+          vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF",
           ignition ? "ON" : "OFF", engine_running ? "ON" : "OFF", RPM / 4,
           indicated_speed, real_speed, speed_mph ? "MPH" : "KPH");
   status_serial.println(serial_debug_string);
@@ -229,8 +229,7 @@ void print_current_state(Stream &status_serial) {
   #endif
   #if IMMOBILIZER_SEQ
     sprintf(serial_debug_string, " ================================ Immobilizer ===============================\r\n"
-            " Immobilizer: %s, Persistent setting: %s\r\n"
-            " Key detected: %s",
+            " Immobilizer: %s, Persistent setting: %s, Key detected: %s",
             immobilizer_released ? "OFF" : "Active", EEPROM.read(14) == 1 ? "Active" : "OFF",
             key_valid ? "YES" : "NO");
     status_serial.println(serial_debug_string);
@@ -283,8 +282,6 @@ void print_current_state(Stream &status_serial) {
           dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport",
           cas_key_number + 1);
   status_serial.println(serial_debug_string);
-
-  status_serial.println();
   #if RTC
     time_t t = now();
     uint8_t rtc_hours = hour(t);
@@ -435,6 +432,29 @@ void serial_log(const char message[], int8_t level) {
       strcat(boot_debug_string, buffer);
     }
   #endif
+}
+
+
+void log_setup_complete(void) {
+  if (rtc_valid) {
+    time_t t = now();
+    uint8_t rtc_hours = hour(t);
+    uint8_t rtc_minutes = minute(t);
+    uint8_t rtc_seconds = second(t);
+    uint8_t rtc_day = day(t);
+    uint8_t rtc_month = month(t);
+    uint16_t rtc_year = year(t);
+    sprintf(serial_debug_string, "Setup complete at RTC: %s%d:%s%d:%s%d %s%d/%s%d/%d.",
+            rtc_hours > 9 ? "" : "0", rtc_hours,
+            rtc_minutes > 9 ? "" : "0", rtc_minutes,
+            rtc_seconds > 9 ? "" : "0", rtc_seconds,
+            rtc_day > 9 ? "" : "0", rtc_day,
+            rtc_month > 9 ? "" : "0", rtc_month,
+            rtc_year);
+    serial_log(serial_debug_string, 2);
+  } else {
+    serial_log("Setup complete.", 2);
+  }
 }
 
 
