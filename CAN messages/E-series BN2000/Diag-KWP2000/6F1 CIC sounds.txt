@@ -6,5 +6,5 @@ ARG: 0x07 (faceplate save button noise)
 ARG: 0x10 (double beep from collision warning)
 00:05:54.511 ->  DCAN:  ID: 6F1 Buffer: 63 3 31 21 10 
 
-ARG: 0x12 (single beep from ETC)
+ARG: 0x12 (single beep from Japan ETC)
 00:06:00.711 ->  DCAN:  ID: 6F1 Buffer: 63 3 31 21 12 

@@ -1,0 +1,35 @@
+ Indicated speed: 00 Moving: No
+1A0 Buffer: 00 80 00 B0 00 FF 8F 00
+ Indicated speed: 00 Moving: No
+1A0 Buffer: 00 80 00 B0 00 FF 9F 00 
+ Indicated speed: 00 Moving: No
+1A0 Buffer: 00 80 00 A0 00 FF AF 00
+ Indicated speed: 00 Moving: No
+
+
+ Indicated speed: 18 Moving: Yes
+1A0 Buffer: 9E 90 E4 8F 00 E9 7F 00                          // Real speed = 0x09E * 00.1 = 15.8
+ Indicated speed: 18 Moving: Yes
+1A0 Buffer: 9F 90 EC 7F 00 EC 8F 00
+ Indicated speed: 18 Moving: Yes
+1A0 Buffer: 9E 90 E8 EF FF F2 9F 00
+ Indicated speed: 18 Moving: Yes
+1A0 Buffer: 9E 90 F0 EF FF F2 AF 00
+
+
+
+ Indicated speed: 6 Moving: Yes
+1A0 Buffer: 31 A0 00 E0 00 CF 2F 00
+ Indicated speed: 6 Moving: Yes
+1A0 Buffer: 31 A0 00 80 1 D2 3F 00
+ Indicated speed: 6 Moving: Yes
+1A0 Buffer: 32 A0 8 80 1 D2 4F 00
+
+
+
+PTCAN:  ID: 1A0 Buffer: 00 80 00 E0 FF 13 E0 F6 
+PTCAN:  ID: 1A0 Buffer: 00 80 00 E0 FF 13 50 66 
+PTCAN:  ID: 1A0 Buffer: 00 80 00 E0 FF 13 B0 C6 
+PTCAN:  ID: 1A0 Buffer: 00 80 00 E0 FF 13 20 36 
+PTCAN:  ID: 1A0 Buffer: 00 80 00 E0 FF 13 80 96 
+PTCAN:  ID: 1A0 Buffer: 00 80 00 C0 FF 13 E0 D6

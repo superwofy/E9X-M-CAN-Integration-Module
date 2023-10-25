@@ -93,23 +93,23 @@ I use it to:
 * Turn on corresponding front fog light when steering angle threshold is exceeded.
 
 
-![settings](img/idrive-settings.jpg "idrive-settings")
+![settings](Images/idrive-settings.jpg "idrive-settings")
 
-![key-settings](img/m-key-settings.jpg "key-settings")
+![key-settings](Images/m-key-settings.jpg "key-settings")
 
-![kombi-m](img/kombi-m.jpg "kombi-m")
+![kombi-m](Images/kombi-m.jpg "kombi-m")
 
-![shiftlights](img/shiftlight.jpg "shiftlights")
+![shiftlights](Images/shiftlight.jpg "shiftlights")
 
-![launchcontrol](img/launch-control/kombi.jpg "launchcontrol")
+![launchcontrol](Images/launch-control/kombi.jpg "launchcontrol")
 
-![fog](img/Fog/indicatoron.jpg "fog")
+![fog](Images/Fog/indicatoron.jpg "fog")
 
-![buttons](img/hdc-msa-buttons.jpg "buttons")
+![buttons](Images/hdc-msa-buttons.jpg "buttons")
 
-![case](img/case.jpg "case")
+![case](Images/case.jpg "case")
 
-![board](img/board/board-anotated.jpg "board")
+![board](Images/board/board-anotated.jpg "board")
 
 
 
