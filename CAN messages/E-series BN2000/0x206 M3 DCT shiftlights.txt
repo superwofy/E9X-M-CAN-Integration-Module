@@ -1,0 +1,22 @@
+16:19:27.844 -> Standard ID: 0x206       DLC: 2  Data: 0x86 0x3E		// Each one of these messages turns on one segment including reds
+16:19:28.013 -> Standard ID: 0x206       DLC: 2  Data: 0x86 0x3E
+16:19:28.115 -> Standard ID: 0x206       DLC: 2  Data: 0xB6 0x00		// Turns on segments sequentially all the way
+16:19:28.251 -> Standard ID: 0x206       DLC: 2  Data: 0xB6 0x00
+16:19:28.421 -> Standard ID: 0x206       DLC: 2  Data: 0xB6 0x00
+16:19:28.930 -> Standard ID: 0x206       DLC: 2  Data: 0x05 0x00		// OFF
+16:19:29.099 -> Standard ID: 0x206       DLC: 2  Data: 0x05 0x00
+16:19:29.235 -> Standard ID: 0x206       DLC: 2  Data: 0x05 0x00
+
+
+
+First nibble of the byte specifies speed of operation. 0-F, F slowest
+Second nibble is the operation.
+
+Operations:
+2, 6, 0xE Sequence, 
+5 OFF
+0xA Flash
+
+Sequential:  0xB6, time between segments (higher number, slower actuation)
+
+

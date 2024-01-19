@@ -1,0 +1,38 @@
+Byte0 - DSC
+Byte1 first half - Engine
+Byte2 second half - Chassis
+Byte2 first half - Steering
+
+
+DSC
+18:19:51.808 ->  KCAN2:  ID: 42F Buffer: 2 0 0 0 C8 			// DSC ON
+18:19:55.954 ->  KCAN2:  ID: 42F Buffer: 3 0 0 0 C8 			// MDM
+18:19:59.395 ->  KCAN2:  ID: 42F Buffer: 1 0 0 0 C8 			// DSC OFF
+
+
+Engine
+18:20:41.566 ->  KCAN2:  ID: 42F Buffer: 0 10 0 0 C8 			// Efficient
+18:20:44.942 ->  KCAN2:  ID: 42F Buffer: 0 20 0 0 C8 			// Sport
+18:20:48.256 ->  KCAN2:  ID: 42F Buffer: 0 30 0 0 C8 			// Sport+
+
+
+Chassis/EDC
+18:21:34.140 ->  KCAN2:  ID: 42F Buffer: 0 0 1 0 C8 			// Comfort
+18:21:37.490 ->  KCAN2:  ID: 42F Buffer: 0 0 2 0 C8 			// Sport
+18:21:40.673 ->  KCAN2:  ID: 42F Buffer: 0 0 3 0 C8 			// Sport+
+
+
+Steering
+18:22:12.381 ->  KCAN2:  ID: 42F Buffer: 0 0 10 0 C8 			// Comfort
+18:22:15.216 ->  KCAN2:  ID: 42F Buffer: 0 0 20 0 C8 			// Sport
+18:22:17.994 ->  KCAN2:  ID: 42F Buffer: 0 0 30 0 C8 			// Sport+
+
+
+Reset
+18:19:10.648 ->  KCAN2:  ID: 42F Buffer: 0 0 0 0 E0 
+
+
+Alive ping sent when the M Drive menu appears. Used to request 0x42E status?
+18:26:54.413 ->  KCAN2:  ID: 42F Buffer: F0 0 0 0 C8 
+or
+20:29:47.422 ->  KCAN2:  ID: 42F Buffer: F0 0 0 0 F8 

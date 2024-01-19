@@ -1,0 +1,4 @@
+01:14:43.876 ->  KCAN:  ID: 317 Buffer: FD FF 			// Press
+01:14:43.876 ->  KCAN:  ID: 317 Buffer: FD FF 
+01:14:43.972 ->  KCAN:  ID: 317 Buffer: FC FF 			// Released
+01:14:43.972 ->  KCAN:  ID: 317 Buffer: FC FF

@@ -1,7 +1,0 @@
-20:00:12.405 ->  KCAN:  ID: 314 Buffer: 31 1 FF 			Headlight ON requested. Byte[1] = 1 : Twilight. 2 : Darkness.
-20:00:13.941 ->  KCAN:  ID: 314 Buffer: 31 1 FF 
-20:00:15.996 ->  KCAN:  ID: 314 Buffer: 31 1 FF 
-20:00:18.052 ->  KCAN:  ID: 314 Buffer: 31 1 FF 
-20:00:20.107 ->  KCAN:  ID: 314 Buffer: 31 1 FF 
-20:00:22.131 ->  KCAN:  ID: 314 Buffer: 31 1 FF 
-20:00:24.186 ->  KCAN:  ID: 314 Buffer: 31 1 FF 

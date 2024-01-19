@@ -1,0 +1,19 @@
+ICs on board:
+
+QT110A-ISG: touch sensor IC, 2.5V ~ 5.5V.
+ATMEGA88-15MT1: 8 bit MCU, 2.7V ~ 5.5V.
+
+
+Pinout:
+[10 pin TE Micro Match]
+
+1 - GND
+2 - Eject
+4 - Faceplate TX
+7 - Power/Mute
+9 - 58G
+10 - VCC 3.3V (CIC). 5V ok also.
+
+
+UART settings:
+38400 baud, 8 data bits, one stop bit, even parity (8E1).

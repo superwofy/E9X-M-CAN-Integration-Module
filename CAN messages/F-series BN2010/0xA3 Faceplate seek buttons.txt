@@ -1,0 +1,49 @@
+Released.
+
+21:34:32.938 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:34:33.968 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:34:34.967 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:34:35.966 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:34:36.964 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:34:37.964 ->  KCAN2:  ID: A3 Buffer: FC FF 
+
+
+Left, single press:
+21:35:18.408 ->  KCAN2:  ID: A3 Buffer: FD FF 
+21:35:18.505 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:35:18.634 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:35:18.731 ->  KCAN2:  ID: A3 Buffer: FC FF 
+
+
+Left,holding:
+21:35:41.450 ->  KCAN2:  ID: A3 Buffer: FD FF 
+21:35:41.546 ->  KCAN2:  ID: A3 Buffer: FD FF 
+21:35:41.643 ->  KCAN2:  ID: A3 Buffer: FD FF 
+21:35:42.642 ->  KCAN2:  ID: A3 Buffer: FD FF 
+21:35:43.642 ->  KCAN2:  ID: A3 Buffer: FD FF 
+21:35:44.640 ->  KCAN2:  ID: A3 Buffer: FD FF 
+21:35:45.638 ->  KCAN2:  ID: A3 Buffer: FD FF 
+release:
+21:35:46.441 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:35:46.569 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:35:46.666 ->  KCAN2:  ID: A3 Buffer: FC FF 
+
+
+Right, single press:
+21:37:13.156 ->  KCAN2:  ID: A3 Buffer: FE FF 
+21:37:13.220 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:37:13.348 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:37:13.443 ->  KCAN2:  ID: A3 Buffer: FC FF 
+
+
+Right, holding:
+21:37:36.117 ->  KCAN2:  ID: A3 Buffer: FE FF 
+21:37:36.245 ->  KCAN2:  ID: A3 Buffer: FE FF 
+21:37:36.341 ->  KCAN2:  ID: A3 Buffer: FE FF 
+21:37:37.339 ->  KCAN2:  ID: A3 Buffer: FE FF 
+21:37:38.370 ->  KCAN2:  ID: A3 Buffer: FE FF 
+21:37:39.371 ->  KCAN2:  ID: A3 Buffer: FE FF 
+release:
+21:37:39.979 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:37:40.075 ->  KCAN2:  ID: A3 Buffer: FC FF 
+21:37:40.172 ->  KCAN2:  ID: A3 Buffer: FC FF 

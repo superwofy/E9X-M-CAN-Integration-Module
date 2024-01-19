@@ -1,0 +1,9 @@
+100 ms cycle time
+
+Byte 0 torque. 0 to 0x64 (I.e. 0 - 100 % in decimal)
+
+Byte1 scale.
+	first half power (increments of 80): 0 - 80, 1 - 160, 2 - 240 ...
+	second half torque (increments of 80): 4: 400, 5: 480, 6: 560 ...
+
+Byte 2 power. 0 to 0x64 (I.e. 0 - 100 % in decimal)

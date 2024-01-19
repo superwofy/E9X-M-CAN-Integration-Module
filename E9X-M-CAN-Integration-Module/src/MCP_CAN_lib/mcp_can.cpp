@@ -37,7 +37,7 @@ void MCP_CAN::mcp2515_reset(void)
     spi_readwrite(MCP_RESET);
     MCP2515_UNSELECT();
     mcpSPI->endTransaction();
-    delay(5); // If the MCP2515 was in sleep mode when the reset command was issued then we need to wait a while for it to reset properly
+    delay(2); // If the MCP2515 was in sleep mode when the reset command was issued then we need to wait a while for it to reset properly
 }
 
 /*********************************************************************************************************

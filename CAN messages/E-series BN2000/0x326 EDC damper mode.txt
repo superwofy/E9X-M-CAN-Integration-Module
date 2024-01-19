@@ -1,0 +1,18 @@
+08:48:26.049 -> EDC Damper program:  0x38 0xFF			Comfort
+08:48:26.253 -> EDC Damper program:  0x48 0xFF
+08:48:26.457 -> EDC Damper program:  0x58 0xFF
+08:48:26.661 -> EDC Damper program:  0x68 0xFF
+08:48:26.865 -> EDC Damper program:  0x79 0xFF			Sport
+08:48:27.034 -> EDC Damper program:  0x89 0xFF
+08:48:27.237 -> EDC Damper program:  0x99 0xFF
+08:48:27.441 -> EDC Damper program:  0xA9 0xFF
+08:48:27.645 -> EDC Damper program:  0xB9 0xFF
+08:48:27.849 -> EDC Damper program:  0xC9 0xFF
+08:48:28.052 -> EDC Damper program:  0xDB 0xFF			MSport
+08:48:28.254 -> EDC Damper program:  0xEB 0xFF
+08:48:28.458 -> EDC Damper program:  0x0B 0xFF
+08:48:28.662 -> EDC Damper program:  0x1B 0xFF
+08:48:28.866 -> EDC Damper program:  0x2B 0xFF
+08:48:29.036 -> EDC Damper program:  0x38 0xFF			Comfort
+08:48:29.239 -> EDC Damper program:  0x48 0xFF
+08:48:29.443 -> EDC Damper program:  0x58 0xFF

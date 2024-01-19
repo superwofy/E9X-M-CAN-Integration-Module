@@ -1,0 +1,5 @@
+22:44:00.029 ->  KCAN:  ID: 3D7 Buffer: 56 F6 FF 			// OFF
+22:44:00.029 -> 1010110
+
+22:44:01.892 ->  KCAN:  ID: 3D7 Buffer: 55 F5 FF 			// Visual signal for locking/unlocking ON
+22:44:01.892 -> 1010101

@@ -1,28 +1,31 @@
-Black connector
+Black 12-pin connector (MQS 0.64):
 
-7  - 30G Power - 	black/red
-8  - KCAN-H - 		orange/green
-2  - KCAN-L - 		green
-9  - PTCAN-H - 		blue/red
-4  - PTCAN-L - 		red
-11 - DCAN-H - 		white/yellow
-10 - DCAN-L - 		white/blue
-12 - GND - 			black/brown
+1  - Faceplate eject (D18)               black
+2  - KCAN-L                              green
+3  - Faceplate power/mute (D19)          red
+4  - PTCAN-L                             red/black
+7  - 30G Power                           black/red
+8  - KCAN-H                              orange/green
+9  - PTCAN-H                             blue/red
+10 - DCAN-L                              white/blue
+11 - DCAN-H                              white/yellow
+12 - GND                                 black/brown
 
 
-White connector
 
-12 - Extra GND - 						brown
-	-> To cope with solenoid draw
-13 - Exhaust flap solenoid (D17) - 		gray
-	-> Use flyback diode between +/-
-	-> Disconnect DME X60001 pin 5
-14 - Steering heater switch (D5) - 		black
-15 - Front FOG button LED (D4) -		blue/yellow
-16 - POWER console LED (D3) - 			black/white
-17 - POWER console switch (D2) - 		white/red
-18 - DSC console switch (D16) - 		white/brown
+White 18-pin connector (MQS 0.64):
 
+9  - Faceplate TX (D21)                  yellow
+10 - KCAN2-L                             yellow/brown
+11 - KCAN2-H                             yellow/red
+13 - Exhaust flap solenoid (D17)         gray
+   -> Use flyback diode between +/-
+   -> Disconnect DME X60001 pin 5
+14 - Steering heater switch (D5)         black
+15 - Front FOG button LED (D4)           blue/yellow
+16 - POWER console LED (D3)              black/white
+17 - POWER console switch (D2)           white/red
+18 - DSC console switch (D16)            white/brown
 
 
 

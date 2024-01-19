@@ -1,0 +1,28 @@
+Byte0:
+
+12 - Condition below MIN
+25 - State MIN
+38 - Condition between MIN and OK
+53 - Condition OK
+69 - Condition between OK and MAX
+85 - State MAX
+95 - Condition Overcrowded
+120 - No measurement possible
+121 - Status measurement in progress
+122 - Condition Oil Level Check OK
+123 - Status measurement OK
+124 - Ignition OFF state, no measurement possible
+125 - Engine oil level OK, precise measurement in progress.
+126 - Engine oil level OK
+127 - Measurement in progress
+128 - Accurate measurement in progress. Measuring time: 1min
+0xFF - signal invalid
+
+
+Byte1:
+
+0xF0 - everything OK
+0xF1 - overcrowding
+0xF2 - Refill 1.0 L
+0xF4 - Service
+0xFF - signal invalid

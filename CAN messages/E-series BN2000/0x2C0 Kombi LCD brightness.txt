@@ -1,0 +1,14 @@
+00:00:26.592 ->  KCAN:  ID: 2C0 Buffer: 3F 0 3 				// Darkness
+00:00:36.607 ->  KCAN:  ID: 2C0 Buffer: 3F 81 3 
+00:00:46.614 ->  KCAN:  ID: 2C0 Buffer: 3F 81 2 
+00:00:56.622 ->  KCAN:  ID: 2C0 Buffer: 3F 81 2 
+00:01:03.825 ->  KCAN:  ID: 2C0 Buffer: 3F 7F FE			// Bright light in front of kombi
+00:01:04.371 ->  KCAN:  ID: 2C0 Buffer: 88 0 FE 
+00:01:04.725 ->  KCAN:  ID: 2C0 Buffer: 88 7F FE 
+00:01:05.014 ->  KCAN:  ID: 2C0 Buffer: B1 0 FE 
+00:01:05.656 ->  KCAN:  ID: 2C0 Buffer: B1 7F FE 
+00:01:05.913 ->  KCAN:  ID: 2C0 Buffer: D4 0 FE 
+00:01:07.457 ->  KCAN:  ID: 2C0 Buffer: D4 7F FE 
+00:01:07.681 ->  KCAN:  ID: 2C0 Buffer: F4 0 FE 
+00:01:13.789 ->  KCAN:  ID: 2C0 Buffer: F4 E0 5 
+00:01:19.418 ->  KCAN:  ID: 2C0 Buffer: 3F 0 3				// Screen dims back

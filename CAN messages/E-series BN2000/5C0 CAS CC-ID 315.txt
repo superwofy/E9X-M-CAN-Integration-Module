@@ -1,2 +1,0 @@
-22:12:00.433 ->  KCAN:  TS: 12239 ID: 5C0 Buffer: 40 4F 1 28 FF FF FF FF 			// OFF
-22:12:02.129 ->  KCAN:  TS: 51169 ID: 5C0 Buffer: 40 4F 1 29 FF FF FF FF 			// ON

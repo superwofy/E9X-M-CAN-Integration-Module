@@ -1,0 +1,13 @@
+JOB: STEUERN_ASD_AUDIOQUELLE
+
+
+ARGS: 0x01;0x01 (Mute)
+
+19:42:42.743 ->  DCAN:  ID: 6F1 Buffer: 3F 5 31 B8 C 1 1 0 
+
+
+
+
+ARGS: 0x01;0x00 (Demute)
+
+19:42:56.679 ->  DCAN:  ID: 6F1 Buffer: 3F 5 31 B8 C 1 0 0 

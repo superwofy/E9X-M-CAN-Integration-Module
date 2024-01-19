@@ -1,6 +1,0 @@
-20:34:10.826 ->  KCAN:  TS: 29746 ID: 2F7 Buffer: 2 D9 B9 F9 				// byte 2: miles, l/100km
-20:34:46.565 ->  KCAN:  TS: 218 ID: 2F7 Buffer:   2 D9 79 F9 				// byte 2: km, l/100km
-
-
-Sent 3x during Terminal R change.
-

@@ -1,0 +1,10 @@
+Forward collision warning setting:
+
+Late:
+23:24:23.649 ->  KCAN2:  ID: 420 Buffer: 20 0 FD FF FF FF FF FF 
+
+Medium
+23:24:31.529 ->  KCAN2:  ID: 420 Buffer: 24 0 FD FF FF FF FF FF 
+
+Early
+23:24:39.864 ->  KCAN2:  ID: 420 Buffer: 28 0 FD FF FF FF FF FF 

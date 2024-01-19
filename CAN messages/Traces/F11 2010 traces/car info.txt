@@ -1,0 +1,51 @@
+MX32-EUR-01-2011-F11-BMW-525d
+
+CHAMP radio
+
+
+FA:
+S423	Floor mats velours
+S428	Warning triangle and first aid kit
+S431	Interior mirror with automatic-dip
+S441	Smoker package
+S494	Seat heating driver/passenger
+S4AT	Interior trim finishers black high-gloss
+S4UR	Ambient interior light
+S606	Navigation system Business
+S612	BMW Assist
+S615	Extended BMW Online Information
+S616	BMW Online
+S620	Voice control
+S633	Preparation, mobile phone, Business
+S698	Area-Code 2 for DVD
+S6AA	BMW TeleServices
+S6AB	Control, Teleservices
+S6FL	USB/audio interface
+S6VC	Control, Combox
+S508	Park Distance Control (PDC)
+S534	Automatic air conditioning
+S230	Extra package, EU-speciifc
+S258	Tyres with runflat properties
+S2K1	BMW LA wheel, V spoke 236
+S2PA	Locking wheel bolt
+S302	Alarm system
+S3AT	Roof rails aluminium satinated
+S850	Dummy-SALAPA
+S853	Language version, English
+S863	Dealer List Europe
+S877	Omission of non-combined operation
+S880	On-board literature, English
+S8KA	Oil service interval 24 mths / 30,000 km
+S8S2	Coding, alarm signal
+S8S3	Automatic locking during starting
+S8SC	Telematics access request,country-spec.
+S8SM	Car ident. number visible from outside
+S8TF	Active pedestrian protection
+S8TG	Thiefproofing device
+S8TL	Dummy-SALAPA
+S8TN	Daytime driv.lights adjus.via light menu
+S8V1	Information plate
+S1CA	Selection of COP-relevant vehicles
+S1CB	CO2 equipment
+S1CD	Brake Energy Regeneration
+SA090	90 Ah AGM battery

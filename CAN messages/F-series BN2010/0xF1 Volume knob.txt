@@ -1,0 +1,20 @@
+Released:
+21:53:13.209 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+21:53:14.207 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+21:53:15.237 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+21:53:16.235 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+21:53:17.233 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+21:53:18.234 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+21:53:19.233 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+
+
+Clockwise:
+21:53:51.669 ->  KCAN2:  ID: F1 Buffer: 1 FE 
+21:53:51.896 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+21:53:52.090 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+
+
+Anti-clockwise:
+21:54:09.342 ->  KCAN2:  ID: F1 Buffer: 1 FD 
+21:54:09.536 ->  KCAN2:  ID: F1 Buffer: 0 FC 
+21:54:09.761 ->  KCAN2:  ID: F1 Buffer: 0 FC

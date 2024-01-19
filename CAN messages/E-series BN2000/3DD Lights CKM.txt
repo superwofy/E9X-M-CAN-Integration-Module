@@ -1,6 +1,0 @@
-14:32:57.140 ->  KCAN:  ID: 3DD Buffer: A5 28 FD 		// DRLs OFF
-14:32:57.302 ->  KCAN:  ID: 3DD Buffer: A5 28 FD 
-14:32:57.463 ->  KCAN:  ID: 3DD Buffer: A5 28 FD 
-14:32:44.341 ->  KCAN:  ID: 3DD Buffer: A5 28 FE 		// DRLs ON
-14:32:44.502 ->  KCAN:  ID: 3DD Buffer: A5 28 FE 
-14:32:44.662 ->  KCAN:  ID: 3DD Buffer: A5 28 FE 

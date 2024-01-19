@@ -1,9 +1,0 @@
-19:35:41.384 ->  KCAN:  ID: 34F Buffer: FE FF 				// ON
-19:35:41.546 ->  KCAN:  ID: 34F Buffer: FE FF 
-19:35:41.707 ->  KCAN:  ID: 34F Buffer: FE FF 
-19:35:41.868 ->  KCAN:  ID: 34F Buffer: FE FF
-
-
-19:35:43.894 ->  KCAN:  ID: 34F Buffer: FD FF 				// OFF
-19:35:44.054 ->  KCAN:  ID: 34F Buffer: FD FF 
-19:35:44.214 ->  KCAN:  ID: 34F Buffer: FD FF 

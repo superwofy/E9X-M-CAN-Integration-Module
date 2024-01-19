@@ -1,0 +1,44 @@
+20:25:32.337 ->  KCAN2:  ID: 2C1 Buffer: 6 0 0 F 0 0 FF FF 					// PDC OFF
+20:25:32.530 ->  KCAN2:  ID: 2C1 Buffer: 7 0 0 F 0 0 FF FF 
+20:25:32.820 ->  KCAN2:  ID: 2C1 Buffer: 8 0 0 F 0 0 FF FF 
+20:25:33.045 ->  KCAN2:  ID: 2C1 Buffer: 9 0 0 F 0 0 FF FF 
+20:25:33.239 ->  KCAN2:  ID: 2C1 Buffer: A 0 0 F 0 0 FF FF 
+20:25:33.433 ->  KCAN2:  ID: 2C1 Buffer: B 0 0 F 0 0 FF FF 
+20:25:33.626 ->  KCAN2:  ID: 2C1 Buffer: C 0 0 F 0 0 FF FF 
+20:25:33.915 ->  KCAN2:  ID: 2C1 Buffer: D 0 0 F 0 0 FF FF 
+20:25:34.139 ->  KCAN2:  ID: 2C1 Buffer: E 0 0 F 0 0 FF FF 
+20:25:34.332 ->  KCAN2:  ID: 2C1 Buffer: 40 5 0 F 0 0 FF FF 				// PDC ON
+20:25:34.525 ->  KCAN2:  ID: 2C1 Buffer: 41 5 0 F 0 0 FF FF 
+20:25:34.815 ->  KCAN2:  ID: 2C1 Buffer: 42 5 0 F 0 0 FF FF 
+20:25:35.040 ->  KCAN2:  ID: 2C1 Buffer: 43 5 0 F 0 0 FF FF 
+20:25:35.233 ->  KCAN2:  ID: 2C1 Buffer: 44 5 0 F 0 0 FF FF 
+20:25:35.426 ->  KCAN2:  ID: 2C1 Buffer: 45 5 0 F 0 0 FF FF 
+20:25:35.618 ->  KCAN2:  ID: 2C1 Buffer: 46 5 0 F 0 0 FF FF 
+20:25:35.844 ->  KCAN2:  ID: 2C1 Buffer: 47 5 0 F 0 0 FF FF 
+
+22:56:33.190 ->  KCAN2:  ID: 2C1 Buffer: 8 1 0 F 0 0 FF FF 					// PDC ON but no longer displayed on iDrive
+22:56:33.383 ->  KCAN2:  ID: 2C1 Buffer: 9 1 0 F 0 0 FF FF 
+22:56:33.576 ->  KCAN2:  ID: 2C1 Buffer: A 1 0 F 0 0 FF FF 
+22:56:33.769 ->  KCAN2:  ID: 2C1 Buffer: B 1 0 F 0 0 FF FF 
+22:56:33.961 ->  KCAN2:  ID: 2C1 Buffer: C 1 0 F 0 0 FF FF 
+22:56:34.283 ->  KCAN2:  ID: 2C1 Buffer: D 1 0 F 0 0 FF FF 
+22:56:34.476 ->  KCAN2:  ID: 2C1 Buffer: E 1 0 F 0 0 FF FF 
+22:56:34.671 ->  KCAN2:  ID: 2C1 Buffer: 0 1 0 F 0 0 FF FF 
+22:56:34.863 ->  KCAN2:  ID: 2C1 Buffer: 1 1 0 F 0 0 FF FF 
+22:56:35.090 ->  KCAN2:  ID: 2C1 Buffer: 2 1 0 F 0 0 FF FF 
+22:56:35.379 ->  KCAN2:  ID: 2C1 Buffer: 3 1 0 F 0 0 FF FF 
+22:56:35.571 ->  KCAN2:  ID: 2C1 Buffer: 4 1 0 F 0 0 FF FF 
+22:56:35.765 ->  KCAN2:  ID: 2C1 Buffer: 5 1 0 F 0 0 FF FF 
+22:56:35.990 ->  KCAN2:  ID: 2C1 Buffer: 6 1 0 F 0 0 FF FF 
+22:56:36.280 ->  KCAN2:  ID: 2C1 Buffer: 7 1 0 F 0 0 FF FF 
+22:56:36.473 ->  KCAN2:  ID: 2C1 Buffer: 8 1 0 F 0 0 FF FF 
+22:56:36.665 ->  KCAN2:  ID: 2C1 Buffer: 9 1 0 F 0 0 FF FF 
+22:56:36.891 ->  KCAN2:  ID: 2C1 Buffer: A 1 0 F 0 0 FF FF 
+22:56:37.085 ->  KCAN2:  ID: 2C1 Buffer: B 1 0 F 0 0 FF FF 
+
+20:25:36.936 ->  KCAN2:  ID: 2C1 Buffer: C 0 0 F 0 0 FF FF 					// PDC OFF
+20:25:37.225 ->  KCAN2:  ID: 2C1 Buffer: D 0 0 F 0 0 FF FF 
+20:25:37.419 ->  KCAN2:  ID: 2C1 Buffer: E 0 0 F 0 0 FF FF 
+20:25:37.644 ->  KCAN2:  ID: 2C1 Buffer: 0 0 0 F 0 0 FF FF 
+20:25:37.838 ->  KCAN2:  ID: 2C1 Buffer: 1 0 0 F 0 0 FF FF 
+20:25:38.128 ->  KCAN2:  ID: 2C1 Buffer: 2 0 0 F 0 0 FF FF 

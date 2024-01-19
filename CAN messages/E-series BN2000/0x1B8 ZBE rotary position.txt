@@ -1,0 +1,53 @@
+
+// startup, untouched
+23:37:47.152 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 10 10 
+23:37:49.243 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 11 10 
+23:37:49.339 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 12 10 
+23:37:49.371 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 13 10 
+23:37:49.437 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 14 10 
+23:37:49.694 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 15 10
+
+23:38:06.646 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 16 10
+
+
+sent on terminal R change:
+
+23:38:38.237 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 17 10 
+23:38:46.313 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 18 10 
+
+
+
+clockwise 5 times:
+
+23:39:15.035 ->  KCAN:  ID: 1B8 Buffer: F C0 1 0 18 10 
+23:39:15.711 ->  KCAN:  ID: 1B8 Buffer: F C0 2 0 18 10 
+23:39:16.483 ->  KCAN:  ID: 1B8 Buffer: F C0 3 0 18 10 
+23:39:17.320 ->  KCAN:  ID: 1B8 Buffer: F C0 4 0 18 10 
+23:39:18.092 ->  KCAN:  ID: 1B8 Buffer: F C0 5 0 18 10 
+
+
+
+anti-clockwise 6 times:
+
+23:39:37.743 ->  KCAN:  ID: 1B8 Buffer: F C0 4 0 18 10 
+23:39:38.226 ->  KCAN:  ID: 1B8 Buffer: F C0 3 0 18 10 
+23:39:38.677 ->  KCAN:  ID: 1B8 Buffer: F C0 2 0 18 10 
+23:39:39.158 ->  KCAN:  ID: 1B8 Buffer: F C0 1 0 18 10 
+23:39:39.738 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 18 10 
+23:39:41.345 ->  KCAN:  ID: 1B8 Buffer: F C0 FF FF 18 10 
+
+
+
+
+after many rotations:
+
+23:40:10.097 ->  KCAN:  ID: 1B8 Buffer: F C0 EC 0 18 10 
+23:40:10.129 ->  KCAN:  ID: 1B8 Buffer: F C0 D 1 18 10 
+23:40:10.194 ->  KCAN:  ID: 1B8 Buffer: F C0 17 1 18 10 
+23:40:10.226 ->  KCAN:  ID: 1B8 Buffer: F C0 1C 1 18 10 
+23:40:10.548 ->  KCAN:  ID: 1B8 Buffer: F C0 1D 1 18 10 
+23:40:11.125 ->  KCAN:  ID: 1B8 Buffer: F C0 1E 1 18 10 
+23:40:11.190 ->  KCAN:  ID: 1B8 Buffer: F C0 1F 1 18 10 
+23:40:11.254 ->  KCAN:  ID: 1B8 Buffer: F C0 20 1 18 10 
+23:40:11.286 ->  KCAN:  ID: 1B8 Buffer: F C0 21 1 18 10 
+23:40:11.350 ->  KCAN:  ID: 1B8 Buffer: F C0 22 1 18 10
