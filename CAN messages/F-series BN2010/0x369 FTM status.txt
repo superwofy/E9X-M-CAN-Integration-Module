@@ -1,0 +1,12 @@
+Fuzzer:
+
+
+Pressure low (all): 00 00 A1 30 00 / 00 00 A5 30 00
+
+right front tyre low: 00 00 A1 21 E0
+rear right low: 00 00 A3 24 F0 
+rear left low: 00 00 A2 28 73
+
+
+resetting: 00 71 EA 59 22  /  00 00 E8 00 00
+	-> Only works if 0x1A1 is not being sent?

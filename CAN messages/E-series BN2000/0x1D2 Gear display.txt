@@ -1,0 +1,18 @@
+To display SPORT in KOMBI:
+
+
+// If MOTORSPORT is set to wert_01, SPORT_ANZEIGE doesn't work. If SPORT_ANZEIGE is aktiv and MOTORSPORT is set to wert_02, the M LED does not work
+SPORT_ANZEIGE
+  aktiv
+MOTORSPORT	
+  wert_02
+
+
+// ON
+uint8_t sport_on[] = {0, 0, 0, 4, 0, 0, 0};
+ptcan_write_msg(make_msg_buf(0x1D2, 6, sport_on));
+
+
+// OFF
+uint8_t sport_off[] = {0, 0, 0, 0, 0, 0, 0};
+ptcan_write_msg(make_msg_buf(0x1D2, 6, sport_off));

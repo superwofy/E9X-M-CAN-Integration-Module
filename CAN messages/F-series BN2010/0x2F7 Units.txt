@@ -1,0 +1,10 @@
+Bytes 0 to 3 are identical to BN2000.
+Byte4 contains power and torque units. First half is power, second half is torque.
+	1 - kW
+	2 - hp
+
+	1 - Nm
+	2 - lb-ft
+	3 - kg-m
+	
+Byte5 is fixed 0xF1

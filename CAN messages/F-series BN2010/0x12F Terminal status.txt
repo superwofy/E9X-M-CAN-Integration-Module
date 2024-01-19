@@ -1,0 +1,88 @@
+CRC_KL: 0 - 0xFF
+
+
+ALV_COU_KL: 0 - 0xF
+
+
+ST_VEH_CON: 0 - F
+	0	Initial (VSM_STM_STATE_INIT)
+	1	Standby, driver absent (VSM_STM_STATE_STANDBY)
+	2	Basis operation, driver present (VSM_STM_STATE_BASICOP)
+	3	Basis operation, vehicle coasting (VSM_STM_STATE_BASICOP_ROLL)
+	4	Engine postrun (VSM_STM_STATE_15OFF_DRIVE)
+	5	Ignition On (VSM_STM_STATE_IGNITION)
+	6	Ignition On, vehicle coasting (VSM_STM_STATE_IGNITION_ROLL)
+	7	Ignition On, vehicle not coasting (VSM_STM_STATE_ENG_IDLE)
+	8	Driving (VSM_STM_STATE_DRIVE)
+	9	Impending start of engine (VSM_STM_STATE_ENG_START_PRE)
+	A	Impending start of engine, vehicle coasting (VSM_STM_STATE_ENG_START_PRE_ROLL)
+	B	Start engine (VSM_STM_STATE_ENG_START)
+	C	Start engine, vehicle coasting (VSM_STM_STATE_ENG_START_ROLL)
+	D	Car wash operation (VSM_STM_STATE_WASH)
+	E	Error (VSM_STM_STAT_ERROR)
+	F	Signal invalid
+
+
+ST_KL
+	0 - Init
+	1 - Reserve
+	2 - KL30
+	3 - KL30F - Change
+	4 - KL30F - On
+	5 - KL30B (30G) - Change
+	6 - KL30B (30G) - On
+	7 - KLR - Change
+	8 - KLR - On
+	9 - KL15 - Change
+	A - KL15 - On
+	B - KL50 - delay
+	C - KL50 - Change
+	D - KL50 - On
+	E - Error
+	F - Signal invalid
+
+
+ST_KL_KEY_VLD
+	0 - Initial value
+	1 - Key invalid
+	2 - Key search active
+	3 - Key valid recognized in AR
+	4 - Key valid detected in IR
+	5 -	Key in the 10 s lag
+	6 - Key valid for MFS
+	E - Error
+	F - Signal invalid
+
+
+CTR_ENG_STOP
+	0 - Init
+	1 - Default
+	2 - Engine off
+	3 - Signal invalid
+
+
+ST_STCD_PENG
+	0 - Starting condition traction not met
+	1 - Starting condition traction fulfilled
+	2 - Starting condition traction implausibly fulfilled
+	3 - Signal invalid
+
+
+ST_OP_MSA
+	0 - MSA active - LED in the MSA button does not light up (initial state)
+	1 - MSA deactivated - LED in the MSA button lights up
+	10 MSA status implausible - Error MSA button pressed for longer than 60 seconds, KS on button likely and MSA function is deactivated: LED in the MSA button does not light up (This error condition is no longer activated given KS taken back after 60 seconds)
+	11 Signal invalid
+
+
+ST_SSP
+	0 - no button Hall sensor detected
+	1 - a button Hall sensor detected
+	2 - two button Hall sensor detected
+	3 - Signal invalid
+
+
+RQ_DRVG_RDI
+	0 No requirement
+	1 Prepare to drive
+	11 Signal invalid

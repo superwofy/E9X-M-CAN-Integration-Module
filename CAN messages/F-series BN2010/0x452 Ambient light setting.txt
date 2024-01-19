@@ -1,0 +1,17 @@
+Classic:
+
+23:36:36.234 ->  KCAN2:  ID: 45B Buffer: FF FF FF FF 1F FF FF FF 
+
+
+Sport/modernt/luxury etc.:
+
+23:37:00.770 ->  KCAN2:  ID: 45B Buffer: FF FF FF FF 2F FF FF FF 
+
+
+
+
+Brightness (Byte3):
+
+23:38:22.100 ->  KCAN2:  ID: 45B Buffer: FF FF FF 0 1F FF FF FF 			// Minimum
+23:39:11.174 ->  KCAN2:  ID: 45B Buffer: FF FF FF D3 1F FF FF FF 			// Middle
+23:39:11.174 ->  KCAN2:  ID: 45B Buffer: FF FF FF FE 1F FF FF FF 			// Max

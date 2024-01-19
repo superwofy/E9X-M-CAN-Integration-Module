@@ -1,0 +1,36 @@
+Released:
+21:16:57.398 ->  KCAN2:  ID: A1 Buffer: 0 FF
+
+
+Power:
+21:17:44.964 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:17:44.964 ->  KCAN2:  ID: A1 Buffer: 0 FF 
+
+
+Power, holding:
+21:18:14.066 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.066 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.097 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.097 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.097 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.129 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.129 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.129 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.161 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.161 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.161 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.193 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.193 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.193 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.193 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.226 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.226 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.226 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+21:18:14.258 ->  KCAN2:  ID: A1 Buffer: 4 FF 
+Release: 
+21:18:14.258 ->  KCAN2:  ID: A1 Buffer: 0 FF 
+
+
+Eject:
+21:18:44.964 ->  KCAN2:  ID: A1 Buffer: 1 FF 
+21:18:44.964 ->  KCAN2:  ID: A1 Buffer: 0 FF 

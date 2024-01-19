@@ -1,0 +1,20 @@
+20:43:51.630 ->  KCAN2:  ID: 31A Buffer: 5 1 0 8 FF FF FF FF 							// Byte1: PDC ON
+20:43:51.824 ->  KCAN2:  ID: 31A Buffer: 6 1 0 8 FF FF FF FF 
+20:43:52.047 ->  KCAN2:  ID: 31A Buffer: 7 1 0 8 FF FF FF FF 
+20:43:52.271 ->  KCAN2:  ID: 31A Buffer: 8 1 0 8 FF FF FF FF 
+20:43:52.464 ->  KCAN2:  ID: 31A Buffer: 9 1 0 8 FF FF FF FF 
+20:43:52.689 ->  KCAN2:  ID: 31A Buffer: A 1 0 8 FF FF FF FF 
+20:43:52.883 ->  KCAN2:  ID: 31A Buffer: B 1 0 8 FF FF FF FF 
+20:43:53.075 ->  KCAN2:  ID: 31A Buffer: C 1 0 8 FF FF FF FF 
+20:43:53.267 ->  KCAN2:  ID: 31A Buffer: D 1 0 8 FF FF FF FF 
+20:43:53.491 ->  KCAN2:  ID: 31A Buffer: E 1 0 8 FF FF FF FF 
+20:43:53.651 ->  KCAN2:  ID: 31A Buffer: 0 5 0 8 FF FF FF FF 							// Byte1: Camera ON
+20:43:53.844 ->  KCAN2:  ID: 31A Buffer: 1 5 0 8 FF FF FF FF 
+20:43:54.069 ->  KCAN2:  ID: 31A Buffer: 2 5 0 8 FF FF FF FF 
+20:43:54.263 ->  KCAN2:  ID: 31A Buffer: 3 5 0 8 FF FF FF FF 
+20:43:54.455 ->  KCAN2:  ID: 31A Buffer: 4 5 0 8 FF FF FF FF 
+20:43:54.648 ->  KCAN2:  ID: 31A Buffer: 5 5 0 8 FF FF FF FF 
+20:43:54.872 ->  KCAN2:  ID: 31A Buffer: 6 5 0 8 FF FF FF FF 
+20:43:55.065 ->  KCAN2:  ID: 31A Buffer: 7 5 0 8 FF FF FF FF 
+20:43:55.065 ->  KCAN2:  ID: 31A Buffer: 18 1 0 0 FF FF FF FF 							// Byte0 > 0: User navigated away from reverse UI on HU.
+20:43:55.065 ->  KCAN2:  ID: 31A Buffer: 19 1 0 0 FF FF FF FF 

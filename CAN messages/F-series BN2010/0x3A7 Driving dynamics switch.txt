@@ -1,0 +1,50 @@
+***DME manual
+
+
+// Signal SU_SW_DRDY. Starts at bit 16 with length 16 bits.
+
+1000 ---- ---- ---- 	Initialization
+
+0--- ---- ---- 0000 	Drive base
+0--- ---- ---- 0100 	Drive Traction
+0--- ---- ---- 0010 	Drive Comfort 
+0--- ---- ---- 1001 	Drive Sport
+0--- ---- ---- 1010 	Drive Eco 1
+0--- ---- ---- 1011 	Drive Sport+
+0--- ---- ---- 1101 	Drive Race
+
+0--- ---- 0000 ---- 	Vertical dynamics basis VDC basis ARS basis
+0--- ---- 1000 ---- 	Vertical dynamics comfort VDC sport ARS basis
+0--- ---- 0101 ---- 	Vertical Dynamics Sport VDC Comfort ARS Sport
+
+0--- --00 ---- ---- 	Integrated chassis management controller on
+0--- --11 ---- ---- 	Integrated chassis management controller off
+0--- 00-- ---- ---- 	Integrated chassis management basis
+0--- 01-- ---- ---- 	Integrated chassis management sport
+
+0000 ---- ---- ---- 	Driving dynamics stabilization DSC on
+0001 ---- ---- ---- 	Driving dynamics stabilization DTC
+0100 ---- ---- ---- 	Driving dynamics stabilization DSC off
+1111 1111 1111 1111 	Signal invalid
+
+
+
+Second nibble of byte4 is DSC status.
+Byte3 is ICM state and VDC.
+Second nibble of byte2 is the drive mode.
+
+
+
+
+
+
+***Tested
+
+Byte4:
+
+
+1 - Traction
+2 - Comfort+
+5 - Sport+ (option for sports displays)
+6 - DSC OFF (option for sports displays)
+0x13 - Comfort

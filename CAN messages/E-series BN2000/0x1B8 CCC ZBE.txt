@@ -1,0 +1,79 @@
+MENU CCC:
+
+23:23:42.231 ->  KCAN:  ID: 1B8 Buffer: F C4 0 0 10 10 
+23:23:42.328 ->  KCAN:  ID: 1B8 Buffer: F C4 0 0 10 10 
+23:23:42.360 ->  KCAN:  ID: 1B8 Buffer: F C0 0 0 10 10 
+
+MENU CIC:
+
+23:24:13.921 ->  KCAN:  ID: 267 Buffer: E1 FD 1 1 C0 1 
+23:24:14.018 ->  KCAN:  ID: 267 Buffer: E1 FD 2 0 C0 1 
+23:24:14.179 ->  KCAN:  ID: 267 Buffer: E1 FD 2 0 C0 1 
+23:24:14.339 ->  KCAN:  ID: 267 Buffer: E1 FD 2 0 C0 1
+
+
+
+joystick north CCC:
+
+23:38:05.593 ->  KCAN:  ID: 1B8 Buffer: 0 C0 1C 0 12 10 
+23:38:05.689 ->  KCAN:  ID: 1B8 Buffer: 0 C0 1C 0 12 10 
+23:38:05.689 ->  KCAN:  ID: 1B8 Buffer: F C0 1C 0 12 10 
+
+joystick north CIC:
+
+23:38:38.573 ->  KCAN:  ID: 267 Buffer: E1 FD 1 11 DD 1 
+23:38:38.670 ->  KCAN:  ID: 267 Buffer: E1 FD 1 11 DD 1 
+23:38:38.734 ->  KCAN:  ID: 267 Buffer: E1 FD 2 0 DD 1 
+23:38:38.895 ->  KCAN:  ID: 267 Buffer: E1 FD 2 0 DD 1 
+23:38:39.055 ->  KCAN:  ID: 267 Buffer: E1 FD 2 0 DD 1 
+
+
+
+joystick press CIC:
+
+23:44:44.056 ->  KCAN:  ID: 267 Buffer: E1 FD D 1 DE 1 
+23:44:44.151 ->  KCAN:  ID: 267 Buffer: E1 FD D 1 DE 1 
+23:44:44.184 ->  KCAN:  ID: 267 Buffer: E1 FD E 0 DE 1 
+23:44:44.345 ->  KCAN:  ID: 267 Buffer: E1 FD E 0 DE 1 
+23:44:44.505 ->  KCAN:  ID: 267 Buffer: E1 FD E 0 DE 1 
+
+
+
+
+Rotation CIC:
+
+00:01:00.241 ->  KCAN:  ID: 264 Buffer: E1 FD 1A 0 80 1E 		clockwise
+00:01:01.110 ->  KCAN:  ID: 264 Buffer: E1 FD 1B 1 80 1E 
+00:01:01.851 ->  KCAN:  ID: 264 Buffer: E1 FD 1C 2 80 1E 
+00:01:02.400 ->  KCAN:  ID: 264 Buffer: E1 FD 1D 3 80 1E 
+00:01:03.043 ->  KCAN:  ID: 264 Buffer: E1 FD 1E 4 80 1E 
+00:01:03.559 ->  KCAN:  ID: 264 Buffer: E1 FD 1F 5 80 1E 
+00:01:04.298 ->  KCAN:  ID: 264 Buffer: E1 FD 20 6 80 1E 
+00:01:05.521 ->  KCAN:  ID: 264 Buffer: E1 FD 21 5 80 1E 		anti-clockwise
+00:01:06.324 ->  KCAN:  ID: 264 Buffer: E1 FD 22 4 80 1E 
+00:01:06.935 ->  KCAN:  ID: 264 Buffer: E1 FD 23 3 80 1E 
+00:01:07.545 ->  KCAN:  ID: 264 Buffer: E1 FD 24 2 80 1E 
+00:01:08.220 ->  KCAN:  ID: 264 Buffer: E1 FD 25 1 80 1E 
+
+
+
+Rotation CCC: rotation starts from 1 instead of 0!
+
+00:02:39.735 ->  KCAN:  ID: 1B8 Buffer: F C0 1 0 10 10 			clockwise
+00:02:40.345 ->  KCAN:  ID: 1B8 Buffer: F C0 2 0 10 10 
+00:02:40.924 ->  KCAN:  ID: 1B8 Buffer: F C0 3 0 10 10 
+00:02:41.535 ->  KCAN:  ID: 1B8 Buffer: F C0 4 0 10 10 
+00:02:42.145 ->  KCAN:  ID: 1B8 Buffer: F C0 5 0 10 10 
+00:02:42.756 ->  KCAN:  ID: 1B8 Buffer: F C0 6 0 10 10 
+00:02:43.336 ->  KCAN:  ID: 1B8 Buffer: F C0 7 0 10 10 
+00:02:43.882 ->  KCAN:  ID: 1B8 Buffer: F C0 8 0 10 10 
+00:02:44.428 ->  KCAN:  ID: 1B8 Buffer: F C0 9 0 10 10 
+00:02:44.910 ->  KCAN:  ID: 1B8 Buffer: F C0 A 0 10 10 
+00:02:45.871 ->  KCAN:  ID: 1B8 Buffer: F C0 9 0 10 10 			anti-clockwise
+00:02:46.322 ->  KCAN:  ID: 1B8 Buffer: F C0 8 0 10 10 
+00:02:47.093 ->  KCAN:  ID: 1B8 Buffer: F C0 7 0 10 10 
+00:02:47.511 ->  KCAN:  ID: 1B8 Buffer: F C0 6 0 10 10 
+00:02:47.831 ->  KCAN:  ID: 1B8 Buffer: F C0 5 0 10 10 
+00:02:48.088 ->  KCAN:  ID: 1B8 Buffer: F C0 4 0 10 10 
+00:02:48.314 ->  KCAN:  ID: 1B8 Buffer: F C0 3 0 10 10 
+00:02:48.540 ->  KCAN:  ID: 1B8 Buffer: F C0 2 0 10 10 

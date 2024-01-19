@@ -1,0 +1,38 @@
+{0, 0xF0, 4, 0xC0};              // Measuring...
+
+
+{0xFF, 0xF0, 0xFF, 0xC0};        // Measurement only possible when stationary with engine on.
+
+
+{0, 0x50, 4, 0xC0};              // Oil level OK max.
+
+
+{0, 0xF0, 4, 0xC0};              // Oil level measurement currently inactive.
+
+
+
+
+Byte1: 
+
+
+0: Below Minimum add 1L immediately
+
+0x10: Minimum add 1L
+
+0x20: Halfway between min and middle
+
+0x30: middle
+
+0x40: Halfway between middle and max
+
+0x50 and 0x60: max
+
+0x70: Overfilled
+
+
+
+Byte2:
+
+4: QntMssg measurement
+
+0x40: No measured values from the sensor

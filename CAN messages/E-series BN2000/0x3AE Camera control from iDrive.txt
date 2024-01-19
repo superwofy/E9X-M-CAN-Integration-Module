@@ -1,0 +1,4 @@
+00:09:56.022 ->  KCAN:  ID: 3AE Buffer: A5 FF 							// ON
+00:09:59.144 ->  KCAN:  ID: 3AE Buffer: A1 FF 							// OFF
+
+00:50:29.466 ->  KCAN:  ID: 3AE Buffer: 81 FF 							// Navigated away from camera view in iDrive

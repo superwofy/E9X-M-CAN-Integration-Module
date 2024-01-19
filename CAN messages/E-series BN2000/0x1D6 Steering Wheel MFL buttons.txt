@@ -1,0 +1,26 @@
+13:11:34.293 -> MFL:  0xC0 0x0C
+13:11:35.310 -> MFL:  0xC0 0x0C
+13:11:35.616 -> MFL:  0xC0 0x4C mdrive button pressed
+13:11:35.718 -> MFL:  0xC0 0x0C
+13:11:36.533 -> MFL:  0xC0 0x4C mdrive button pressed
+13:11:36.635 -> MFL:  0xC0 0x4C mdrive button pressed
+13:11:36.703 -> MFL:  0xC0 0x0C
+13:11:37.485 -> MFL:  0xC0 0x4C mdrive button pressed
+13:11:37.585 -> MFL:  0xC0 0x0C
+13:11:38.603 -> MFL:  0xC0 0x0C
+13:11:39.587 -> MFL:  0xC0 0x0C
+13:11:40.606 -> MFL:  0xC0 0x0C
+13:11:40.808 -> MFL:  0xC0 0x4C mdrive button pressed
+13:11:40.909 -> MFL:  0xC0 0x4C mdrive button pressed
+13:11:41.011 -> MFL:  0xC0 0x0C
+13:11:41.793 -> MFL:  0xC0 0x4C mdrive button pressed
+13:11:41.895 -> MFL:  0xC0 0x0C
+13:11:42.881 -> MFL:  0xC0 0x0C
+13:11:43.901 -> MFL:  0xC0 0x0C
+13:11:44.887 -> MFL:  0xC0 0x0C
+13:11:45.905 -> MFL:  0xC0 0x0C
+13:11:46.313 -> MFL:  0xC0 0x4C mdrive button pressed
+13:11:46.415 -> MFL:  0xC0 0x0C
+13:11:47.434 -> MFL:  0xC0 0x0C
+13:11:48.416 -> MFL:  0xC0 0x0C
+13:11:49.435 -> MFL:  0xC0 0x0C

@@ -1,0 +1,193 @@
+Released:
+21:41:56.139 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:41:57.139 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:41:58.106 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:41:59.104 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:42:00.102 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 1 hovering:
+21:42:17.936 ->  KCAN2:  ID: A2 Buffer: 1 0 
+21:42:18.064 ->  KCAN2:  ID: A2 Buffer: 1 0 
+21:42:18.161 ->  KCAN2:  ID: A2 Buffer: 1 0 
+21:42:19.160 ->  KCAN2:  ID: A2 Buffer: 1 0 
+21:42:20.161 ->  KCAN2:  ID: A2 Buffer: 1 0 
+21:42:21.158 ->  KCAN2:  ID: A2 Buffer: 1 0 
+Release:
+21:42:21.190 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:42:21.319 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:42:21.416 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 1 press:
+21:44:03.314 ->  KCAN2:  ID: A2 Buffer: 2 0 
+21:44:03.378 ->  KCAN2:  ID: A2 Buffer: 2 0 
+Short hover:
+21:44:03.410 ->  KCAN2:  ID: A2 Buffer: 1 0 
+21:44:03.507 ->  KCAN2:  ID: A2 Buffer: 1 0 
+Release:
+21:44:03.570 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:44:03.668 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 2 hover:
+21:44:36.889 ->  KCAN2:  ID: A2 Buffer: 4 0 
+21:44:36.984 ->  KCAN2:  ID: A2 Buffer: 4 0 
+21:44:37.113 ->  KCAN2:  ID: A2 Buffer: 4 0 
+21:44:38.113 ->  KCAN2:  ID: A2 Buffer: 4 0 
+21:44:39.111 ->  KCAN2:  ID: A2 Buffer: 4 0 
+21:44:40.110 ->  KCAN2:  ID: A2 Buffer: 4 0 
+Release:
+21:44:40.272 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:44:40.368 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:44:40.464 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 2 press:
+21:45:04.502 ->  KCAN2:  ID: A2 Buffer: 8 0 
+21:45:04.533 ->  KCAN2:  ID: A2 Buffer: 8 0 
+Short hover:
+21:45:04.629 ->  KCAN2:  ID: A2 Buffer: 4 0 
+Release:
+21:45:04.695 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:45:04.790 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:45:04.920 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 3 hover:
+21:45:28.695 ->  KCAN2:  ID: A2 Buffer: 10 0 
+21:45:28.790 ->  KCAN2:  ID: A2 Buffer: 10 0 
+21:45:28.886 ->  KCAN2:  ID: A2 Buffer: 10 0 
+21:45:29.885 ->  KCAN2:  ID: A2 Buffer: 10 0 
+21:45:30.883 ->  KCAN2:  ID: A2 Buffer: 10 0 
+Release:
+21:45:31.044 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:45:31.141 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:45:31.237 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 3 press:
+21:45:49.617 ->  KCAN2:  ID: A2 Buffer: 20 0 
+21:45:49.682 ->  KCAN2:  ID: A2 Buffer: 20 0 
+Short hover:
+21:45:49.779 ->  KCAN2:  ID: A2 Buffer: 10 0 
+Release:
+21:45:49.844 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:45:49.941 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:45:50.038 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 4 hover:
+21:47:23.884 ->  KCAN2:  ID: A2 Buffer: 40 0 
+21:47:23.980 ->  KCAN2:  ID: A2 Buffer: 40 0 
+21:47:24.076 ->  KCAN2:  ID: A2 Buffer: 40 0 
+21:47:25.076 ->  KCAN2:  ID: A2 Buffer: 40 0 
+Release:
+21:47:25.881 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:47:25.977 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:47:26.107 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 4 press:
+21:47:44.834 ->  KCAN2:  ID: A2 Buffer: 40 0 
+21:47:44.865 ->  KCAN2:  ID: A2 Buffer: 80 0 
+Short hover:
+21:47:44.897 ->  KCAN2:  ID: A2 Buffer: 40 0 
+Release:
+21:47:44.962 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:47:45.090 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:47:45.185 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 5 hover:
+21:48:10.293 ->  KCAN2:  ID: A2 Buffer: 0 1 
+21:48:10.422 ->  KCAN2:  ID: A2 Buffer: 0 1 
+21:48:10.519 ->  KCAN2:  ID: A2 Buffer: 0 1 
+21:48:11.518 ->  KCAN2:  ID: A2 Buffer: 0 1 
+21:48:12.517 ->  KCAN2:  ID: A2 Buffer: 0 1 
+21:48:13.515 ->  KCAN2:  ID: A2 Buffer: 0 1 
+Release:
+21:48:13.548 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:48:13.677 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:48:13.775 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 5 press:
+21:48:32.986 ->  KCAN2:  ID: A2 Buffer: 0 2 
+21:48:33.018 ->  KCAN2:  ID: A2 Buffer: 0 2 
+21:48:33.115 ->  KCAN2:  ID: A2 Buffer: 0 2 
+21:48:33.244 ->  KCAN2:  ID: A2 Buffer: 0 2 
+21:48:34.245 ->  KCAN2:  ID: A2 Buffer: 0 2 
+21:48:35.244 ->  KCAN2:  ID: A2 Buffer: 0 2 
+Short hover:
+21:48:35.307 ->  KCAN2:  ID: A2 Buffer: 0 1 
+Release:
+21:48:35.339 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:48:35.468 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:48:35.565 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 6 hover:
+21:48:55.454 ->  KCAN2:  ID: A2 Buffer: 0 4 
+21:48:55.550 ->  KCAN2:  ID: A2 Buffer: 0 4 
+21:48:55.647 ->  KCAN2:  ID: A2 Buffer: 0 4 
+21:48:56.646 ->  KCAN2:  ID: A2 Buffer: 0 4 
+21:48:57.643 ->  KCAN2:  ID: A2 Buffer: 0 4 
+Release:
+21:48:57.707 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:48:57.804 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:48:57.902 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 6 press:
+21:49:34.647 ->  KCAN2:  ID: A2 Buffer: 0 8 
+Short hover:
+21:49:34.713 ->  KCAN2:  ID: A2 Buffer: 0 4 
+Release:
+21:49:34.809 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:49:34.907 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:49:35.003 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 7 hover:
+21:49:56.950 ->  KCAN2:  ID: A2 Buffer: 0 10 
+21:49:57.048 ->  KCAN2:  ID: A2 Buffer: 0 10 
+21:49:57.178 ->  KCAN2:  ID: A2 Buffer: 0 10 
+21:49:58.178 ->  KCAN2:  ID: A2 Buffer: 0 10 
+21:49:59.144 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:49:59.274 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:49:59.371 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 7 press:
+21:50:17.055 ->  KCAN2:  ID: A2 Buffer: 0 20 
+21:50:17.152 ->  KCAN2:  ID: A2 Buffer: 0 20 
+Short hover:
+21:50:17.184 ->  KCAN2:  ID: A2 Buffer: 0 10 
+Release:
+21:50:17.249 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:50:17.379 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:50:17.475 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 8 hover:
+21:50:36.717 ->  KCAN2:  ID: A2 Buffer: 0 40 
+21:50:36.813 ->  KCAN2:  ID: A2 Buffer: 0 40 
+21:50:36.943 ->  KCAN2:  ID: A2 Buffer: 0 40 
+21:50:37.908 ->  KCAN2:  ID: A2 Buffer: 0 40 
+21:50:38.939 ->  KCAN2:  ID: A2 Buffer: 0 40 
+Release:
+21:50:39.519 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:50:39.614 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:50:39.710 ->  KCAN2:  ID: A2 Buffer: 0 0 
+
+
+Button 8 press:
+21:50:58.534 ->  KCAN2:  ID: A2 Buffer: 0 80 
+21:50:58.598 ->  KCAN2:  ID: A2 Buffer: 0 80 
+Short hover:
+21:50:58.630 ->  KCAN2:  ID: A2 Buffer: 0 40 
+Release:
+21:50:58.728 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:50:58.825 ->  KCAN2:  ID: A2 Buffer: 0 0 
+21:50:58.921 ->  KCAN2:  ID: A2 Buffer: 0 0 

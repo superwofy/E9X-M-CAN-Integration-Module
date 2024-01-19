@@ -1,5 +1,0 @@
-JOB: steuern_spiegel_position 
-ARGS: 0;0x05;1
-
-21:59:57.751 ->  DCAN:  TS: 38503 ID: 6F1 Buffer: 72 10 7 30 10 7 1 5 
-21:59:57.751 ->  DCAN:  TS: 39346 ID: 6F1 Buffer: 72 21 0 1 0 0 0 0 

@@ -1,0 +1,19 @@
+17:32:50.077 ->  KCAN:  ID: 205 Buffer: F1 FF 			// Single gong active
+17:32:50.464 ->  KCAN:  ID: 205 Buffer: F1 FF 
+17:32:50.881 ->  KCAN:  ID: 205 Buffer: F1 FF 
+17:32:51.266 ->  KCAN:  ID: 205 Buffer: F1 FF 
+17:32:51.684 ->  KCAN:  ID: 205 Buffer: F1 FF 
+17:32:52.071 ->  KCAN:  ID: 205 Buffer: F1 FF 
+17:32:52.489 ->  KCAN:  ID: 205 Buffer: F1 FF 
+17:32:52.874 ->  KCAN:  ID: 205 Buffer: F1 FF 
+17:32:53.068 ->  KCAN:  ID: 205 Buffer: F0 FF 			// Gong OFF
+
+KCAN:  ID: 205 Buffer: F2 FF							// Double gong active
+
+KCAN:  ID: 205 Buffer: F3 FF							// Long, triple gong active. Same as F8 FF.
+
+KCAN:  ID: 205 Buffer: F5 FF							// Double beep from collision warning
+
+KCAN:  ID: 205 Buffer: FA FF							// Four beeps in quick succession
+
+KCAN:  ID: 205 Buffer: FB FF							// Two double gongs

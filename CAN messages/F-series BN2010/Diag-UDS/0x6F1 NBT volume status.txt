@@ -1,0 +1,8 @@
+JOB: steuern_routine
+ARG: ARG;STATUS_VOLUMEAUDIO;STR;Entertainment
+
+18:49:51.288 ->  DCAN:  ID: 6F1 Buffer: 63 5 31 1 A0 39 0 
+18:49:51.352 ->  KCAN2:  ID: 663 Buffer: F1 5 71 1 A0 39 F 			// 0xF -> 15 (dec) in Tool32
+
+18:52:08.560 ->  DCAN:  ID: 6F1 Buffer: 63 5 31 1 A0 39 0 
+18:52:08.592 ->  KCAN2:  ID: 663 Buffer: F1 5 71 1 A0 39 11 		// 0x11 -> 17 (dec) in Tool32

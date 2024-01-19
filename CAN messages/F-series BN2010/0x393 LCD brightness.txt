@@ -1,0 +1,12 @@
+23:50:59.723 ->  KCAN2:  ID: 393 Buffer: 3F 32 3 FD 					// Darkness
+23:51:09.741 ->  KCAN2:  ID: 393 Buffer: 3F 32 3 FD 
+23:51:14.862 ->  KCAN2:  ID: 393 Buffer: 3F 32 FE FD					// Bright light in front of KOMBI
+23:51:15.409 ->  KCAN2:  ID: 393 Buffer: 88 32 FE FD 
+23:51:15.764 ->  KCAN2:  ID: 393 Buffer: 88 32 FE FD 
+23:51:16.086 ->  KCAN2:  ID: 393 Buffer: B1 32 FE FD 
+23:51:16.665 ->  KCAN2:  ID: 393 Buffer: B1 32 FE FD 
+23:51:16.890 ->  KCAN2:  ID: 393 Buffer: D1 32 FE FD 
+23:51:18.307 ->  KCAN2:  ID: 393 Buffer: D1 32 FE FD 
+23:51:18.532 ->  KCAN2:  ID: 393 Buffer: F1 32 FE FD 
+23:51:22.139 ->  KCAN2:  ID: 393 Buffer: F1 32 5 FD 					// light off
+23:51:27.647 ->  KCAN2:  ID: 393 Buffer: 3F 32 3 FD 					// NBT/CID dims back

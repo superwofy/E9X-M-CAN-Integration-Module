@@ -1,0 +1,8 @@
+02:00:16.067 -> 0x3A9   DLC: 2  Data: 0xF2 0xFF				-> Terminal R, mode sport. 3 are sent with terminal R. No idle ones
+02:00:16.237 -> 0x3A9   DLC: 2  Data: 0xF2 0xFF
+02:00:16.407 -> 0x3A9   DLC: 2  Data: 0xF2 0xFF
+
+No idles sent with ignition
+
+02:03:11.239 -> 0x3A8   DLC: 2  Data: 0xF1 0xFF				-> Change from sport to Normal
+02:03:11.239 -> 0x3A9   DLC: 2  Data: 0xF1 0xFF

@@ -1,0 +1,24 @@
+CIC fs_loeschen
+22:42:08.654 ->  DCAN:  ID: 6F1 Buffer: 63 3 14 FF FF 0 0 0 
+
+
+CIC is_loeschen
+22:42:30.366 ->  DCAN:  ID: 6F1 Buffer: 63 3 31 6 0 0 0 0 
+
+
+MSD80 fs_loeschen
+22:42:50.509 ->  DCAN:  ID: 6F1 Buffer: 12 2 1A 80 0 0 0 0 
+22:42:50.541 ->  DCAN:  ID: 6F1 Buffer: 12 30 0 0 0 0 0 0 
+22:42:52.789 ->  DCAN:  ID: 6F1 Buffer: 12 3 14 FF FF 0 0 0 
+
+
+MSD80 hs_loeschen
+22:43:34.210 ->  DCAN:  ID: 6F1 Buffer: 12 2 31 3 0 0 0 0 
+
+
+KOMBI fs_loeschen
+22:44:57.768 ->  DCAN:  ID: 6F1 Buffer: 60 3 14 FF FF 0 0 0 
+
+
+FZD is_loeschen
+22:47:24.982 ->  DCAN:  ID: 6F1 Buffer: 56 3 31 6 0 0 0 0 

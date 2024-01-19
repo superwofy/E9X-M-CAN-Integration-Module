@@ -1,0 +1,32 @@
+Car is unlocked, driver's door is open, Terminal R is OFF.
+
+
+23:50:49.407 ->  KCAN:  ID: 3BD Buffer: FD FF 			// Preparing to sleep
+23:50:54.421 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:50:59.408 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:04.393 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:09.411 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:14.398 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:19.417 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:24.399 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:29.416 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:34.400 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:39.421 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:44.402 ->  KCAN:  ID: 3BD Buffer: FD FF 
+23:51:49.416 ->  KCAN:  ID: 3BD Buffer: FD FF 			// Car fell asleep, network now silet.
+23:56:03.823 ->  KCAN:  ID: 3BD Buffer: FC FF 			// 30g reset (coded at ~5 minutes).
+23:56:03.823 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:03.888 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:04.048 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:09.030 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:14.046 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:19.059 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:24.046 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:29.060 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:34.041 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:39.053 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:44.039 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:49.054 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:54.068 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:56:59.047 ->  KCAN:  ID: 3BD Buffer: FC FF 
+23:57:04.062 ->  KCAN:  ID: 3BD Buffer: FC FF 

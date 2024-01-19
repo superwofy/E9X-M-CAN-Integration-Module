@@ -1,33 +1,84 @@
+# NBT
+
+SERVICE_HISTORY                                             // Disable service history in Vehicle status
+	nicht_aktiv
+IBA                                                         // Disables owner's manual
+	nicht_aktiv
+REFERENCE_CHANNEL_TEL                                       // Echo fix for non-FXX amplifier
+	nicht_aktiv
+HELLIGKEIT_AMBILIGHT                                        // Disable interior brightness setting
+	nicht_aktiv
+SETTINGS_TIME_AUTOMATIC                                     // Update time with GPS
+	navigation
+MACRO_CAM_LEGALDISCLAIMER                                   // Camera disclaimers
+	kein_ld
+COMMUNICATION_PARKMASTER                                    // PDC display not working without this
+	gen2
+SLEEPDELAY_CLAMP30B_MIN                                     // Sleep after 5 min
+	1E
+KEY_CONF_TAILGATE                                           // Hides tailgate button menu
+	nicht_aktiv
+KEY_CONF_COMFORT
+	nicht_aktiv
+MDRIVE                                                      // Enable MDrive
+	aktiv
+DSC_OFF                                                     // Enable DSC OFF in MDrive settings
+	aktiv
+ECO_MODE                                                    // Deactivates ECO mode and Efficient dynamics
+	nicht_aktiv
+MACRO_FDS                                                   // FDS popup display
+	only_popup
+M_VEHICLE                                                   // Darker graphic for sport displays
+	aktiv
+MICROPHONE_POSITION                                         // Mic in FZD
+	wert_03
+EINBAUWINKEL_HU_PITCH                                       // Gyro parameters from F25 (has somewhat similar dash position)
+	p_140
+EINBAUWINKEL_HU_YAW
+	p_55
+SWITCH_MLS_MI
+	aktiv
+BASIS_KOMBI_MMI_LIST
+	aktiv
+GATEWAYTABLE
+	table_5
+PRODUKTLINIE
+	lg
+
+
+
 # CIC
 
-CIC_MDRIVE													// Enables M3 MDrive
+CIC_MDRIVE                                                  // Enables M3 MDrive
 	aktiv
-M_KEY_SETTINGS												// Enables M3 key profile settings
+M_KEY_SETTINGS                                              // Enables M3 key profile settings
 	aktiv
-EDC_CIC														// EDC, if retrofitted.
+EDC_CIC                                                     // EDC, if retrofitted.
 	aktiv
-DSC_OFF_CIC													// Allows disabling DSC from MDrive menu,
+DSC_OFF_CIC                                                 // Allows disabling DSC from MDrive menu,
 	aktiv
-MACRO_L6_PARKMENU											// Rear view camera settings
+MACRO_L6_PARKMENU                                           // Rear view camera settings
 	aktiv
+
 
 
 # KOMBI
 
-MMI_ENA_SHIFTLIGHTS											// Enable shiftlights
+MMI_ENA_SHIFTLIGHTS                                         // Enable shiftlights
 	aktiv
-DSC_VARIANTE
-	wert_02													// Changes DSC symbol when disabled, disables DTC mode kombi screen warning
+DSC_VARIANTE                                                // Changes DSC symbol when disabled, disables DTC mode kombi screen warning
+	wert_02
+
 
 
 # IHKA
 
-MSA
-	aktiv 													// Activates the Auto-Start-Stop button.
+MSA                                                         // Activates the Auto-Start-Stop button.
+	aktiv
 
 
-# SVT 70
-# E70 X5M params
+
+# SVT 70: E70 X5M params
 
 KENNLINIEN1_3_NORM
 	wert_07
@@ -51,22 +102,23 @@ BETRIEBSWERTE
 	wert_01
 
 
+
 # JBBF3R
 
-PIA_EDC														// Enables EDC M3 key profile setting.
+PIA_EDC                                                     // Enables EDC M3 key profile setting.
 	mit_mmi
-EDC_LED_SWITCH												// Enables EDC button instead of Servotronic PWM from JBE.
+EDC_LED_SWITCH                                              // Enables EDC button instead of Servotronic PWM from JBE.
 	aktiv
-DSC_SWITCH													// Disabled for M3 hazards cluster.
+DSC_SWITCH                                                  // Disabled for M3 hazards cluster.
 	nicht_aktiv
-RPA_SWITCH													// Enables the Flat tyre monitor reset button.
+RPA_SWITCH                                                  // Enables the Flat tyre monitor reset button.
 	aktiv
 
 
 
 # FRM
 
-ASP_KOMFORT_EINKLAPP										// Disable the original comfort fold mirror behavior.
+ASP_KOMFORT_EINKLAPP                                        // Disable the original comfort fold mirror behavior.
 	nicht_aktiv
-MAX_SCHWENK_V_H_BEGR_SP										// Faster swivel speed (horizontal) in sport mode.
+MAX_SCHWENK_V_H_BEGR_SP                                     // Faster swivel speed (horizontal) in sport mode.
 	wert_21
