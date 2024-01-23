@@ -29,7 +29,7 @@ void evaluate_shiftlight_display(void) {
   } else if (MAX_UPSHIFT_WARN_RPM_ <= RPM) {                                                                                        // Flash all segments.
     activate_shiftlight_segments(shiftlights_max_flash_buf);
     if (GONG_UPSHIFT_WARN_RPM_ <= RPM) {
-      play_cc_gong();                                                                                                               // Send an audible warning.
+      play_cc_gong(1);                                                                                                              // Send an audible warning.
     }
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Flash max warning at RPM: %d", RPM / 4);
@@ -163,6 +163,9 @@ void evaluate_lc_display(void) {
     if (clutch_pressed && !vehicle_moving) {
       if (!reverse_gear_status) {
         kcan_write_msg(lc_cc_on_buf);
+        #if F_NBT
+          kcan2_write_msg(lc_cc_on_buf);
+        #endif
         lc_cc_active = true;
         if (dsc_program_status == 0) {
           mdm_with_lc = true;
@@ -194,6 +197,9 @@ void evaluate_lc_display(void) {
 void deactivate_lc_display(void) {
   if (lc_cc_active) {
     kcan_write_msg(lc_cc_off_buf);
+    #if F_NBT
+      kcan2_write_msg(lc_cc_off_buf);
+    #endif
     lc_cc_active = false;
     serial_log("Deactivated Launch Control flag CC.", 2);
     #if CONTROL_SHIFTLIGHTS
@@ -208,6 +214,9 @@ void send_svt_kcan_cc_notification(void) {
     pt_msg.buf[1] = 0x46;
   }
   kcan_write_msg(pt_msg);                                                                                                           // Forward the SVT error status to KCAN.
+  #if F_NBT
+    kcan2_write_msg(pt_msg);
+  #endif
 }
 
 
@@ -236,15 +245,19 @@ void evaluate_fog_status(void) {
 
 
 void evaluate_reverse_beep(void) {
-  if (reverse_gear_status && engine_running) {
+  if (reverse_gear_status) {
     if (reverse_beep_resend_timer >= 2000) {
       if (!reverse_beep_sent) {
         if (!pdc_too_close) {
           serial_log("Sending reverse beep.", 2);
           if (!idrive_died) {
-            kcan_write_msg(cic_beep_sound_buf);
+            #if F_NBT
+              kcan2_write_msg(idrive_beep_sound_buf);
+            #else
+              kcan_write_msg(idrive_beep_sound_buf);
+            #endif
           } else {
-            play_cc_gong();
+            play_cc_gong(1);
           }
           reverse_beep_sent = true;
           reverse_beep_resend_timer = 0;
@@ -272,12 +285,50 @@ void evaluate_indicate_ftm_status(void) {
 }
 
 
+void send_f_ftm_status(void) {
+  uint8_t f_ftm_status[] = {0, 0, 0, 0, 0};
+  f_ftm_status[1] = 0xF << 4 | f_ftm_status_alive_counter;
+  f_ftm_status_alive_counter == 0xE ? f_ftm_status_alive_counter = 0 
+                                    : f_ftm_status_alive_counter++;
+
+  if (ignition) {
+    if (k_msg.buf[0] == 0) {                                                                                                        // Active
+      if (engine_running) {
+        f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
+      } else {
+        f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+      }
+    } else if (k_msg.buf[0] == 3) {                                                                                                 // Re-setting
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+    } else if (k_msg.buf[0] == 1) {
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;                                                                   // Failure
+    } else {                                                                                                                        // Other, e.g pressure low.
+      f_ftm_status[2] = 0xA1;
+      f_ftm_status[3] = 0x30;
+    }
+  } else {
+    f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+  }
+
+  f_ftm_status_crc.restart();
+  for (uint8_t i = 1; i < 5; i++) {
+    f_ftm_status_crc.add(f_ftm_status[i]);
+  }
+  f_ftm_status[0] = f_ftm_status_crc.calc();
+  CAN_message_t f_ftm_status_buf = make_msg_buf(0x369, 5, f_ftm_status);
+  kcan2_write_msg(f_ftm_status_buf);
+}
+
+
 void evaluate_msa_button(void) {
   if (k_msg.buf[0] == 0xF5 || k_msg.buf[0] == 0xF1) {                                                                               // Button pressed.
     if (!msa_button_pressed) {
       #if FAKE_MSA
         if (engine_running) {
           kcan_write_msg(msa_deactivated_cc_on_buf);
+          #if F_NBT
+            kcan2_write_msg(msa_deactivated_cc_on_buf);
+          #endif
           serial_log("Sent MSA OFF CC.", 2);
           m = {msa_deactivated_cc_off_buf, millis() + 3000};
           ihk_extra_buttons_cc_txq.push(&m);
@@ -286,18 +337,33 @@ void evaluate_msa_button(void) {
       #if MSA_RVC
         if (pdc_bus_status == 0xA5) {
           kcan_write_msg(camera_off_buf);
+          #if F_NBT
+            kcan2_write_msg(camera_off_buf);
+          #endif
           serial_log("Deactivated RVC with PDC ON.", 2);
         } else if (pdc_bus_status == 0xA4) {
           kcan_write_msg(pdc_off_camera_off_buf);
+          #if F_NBT
+            kcan2_write_msg(pdc_off_camera_off_buf);
+          #endif
           serial_log("Deactivated RVC.", 2);
         } else if (pdc_bus_status == 0xA1) {
           kcan_write_msg(camera_on_buf);
+          #if F_NBT
+            kcan2_write_msg(camera_on_buf);
+          #endif
           serial_log("Activated RVC with PDC displayed.", 2);
         } else if (pdc_bus_status == 0x81) {
           kcan_write_msg(pdc_on_camera_on_buf);
+          #if F_NBT
+            kcan2_write_msg(pdc_on_camera_on_buf);
+          #endif
           serial_log("Activated RVC from PDC ON, not displayed.", 2);
         } else if (pdc_bus_status == 0x80) {
           kcan_write_msg(pdc_off_camera_on_buf);
+          #if F_NBT
+            kcan2_write_msg(pdc_off_camera_on_buf);
+          #endif
           serial_log("Activated RVC from PDC OFF.", 2);
         }
       #endif
@@ -314,6 +380,9 @@ void check_ihk_buttons_cc_queue(void) {
     ihk_extra_buttons_cc_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
+      #if F_NBT
+        kcan2_write_msg(delayed_tx.tx_msg);
+      #endif
       ihk_extra_buttons_cc_txq.drop();
     }
   }
@@ -339,11 +408,20 @@ void evaluate_pdc_bus_status(void) {
     #if MSA_RVC
       if (pdc_bus_status == 0xA4 && k_msg.buf[2] == 0x81) {
         kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when navingating away from RVC only.
+        #if F_NBT
+          kcan2_write_msg(pdc_off_camera_off_buf);
+        #endif
       } else if (pdc_bus_status == 0xA4 && k_msg.buf[2] == 0xA1) {
         kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when turning off RVC from iDrive UI.
+        #if F_NBT
+          kcan2_write_msg(pdc_off_camera_off_buf);
+        #endif
       }
       if (pdc_with_rvc_requested && k_msg.buf[2] == 0x80) {
         kcan_write_msg(pdc_on_camera_on_buf);
+        #if F_NBT
+          kcan2_write_msg(pdc_on_camera_on_buf);
+        #endif
         serial_log("Activated PDC with RVC ON.", 2);
         pdc_with_rvc_requested = false;
       }
@@ -359,6 +437,22 @@ void evaluate_pdc_bus_status(void) {
         rvc_tow_view_by_module = rvc_tow_view_by_driver = false;
       }
     #endif
+  }
+}
+
+
+void evaluate_f_pdc_function_request(void) {
+  if (k_msg.buf[0] > 0x10) {                                                                                                      // Navigated away from reversing screen.
+    kcan_write_msg(camera_inactive_buf);
+  } else {
+    if (f_pdc_request != k_msg.buf[1]) {                                                                                          // PDC only, camera OFF.
+      f_pdc_request = k_msg.buf[1];
+      if (f_pdc_request == 1) {
+        kcan_write_msg(camera_off_buf);
+      } else if (f_pdc_request == 5) {                                                                                            // Camera ON.
+        kcan_write_msg(camera_on_buf);
+      }
+    }
   }
 }
 
@@ -389,7 +483,9 @@ void evaluate_pdc_warning(void) {
 void evaluate_pdc_distance(void) {
   if (!rvc_tow_view_by_driver) {
     uint8_t distance_threshold = 0x36;                                                                                              // There's a slight delay when changing modes. Preempt by switching earlier.
-    if (real_speed >= 1) {
+    if (real_speed >= 5) {                                                                                                          // At higher speeds the delay is very noticeable.
+      return;
+    } else if (real_speed >= 1) {
       distance_threshold = 0x40;
     }
 
@@ -397,15 +493,23 @@ void evaluate_pdc_distance(void) {
       if (reverse_gear_status && !rvc_tow_view_by_module && pdc_bus_status == 0xA5) {
         bitWrite(rvc_settings[0], 3, 1);                                                                                            // Set tow hitch view to ON.
         serial_log("Rear inner sensors RED, enabling camera tow view.", 3);
-        kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
+        CAN_message_t new_rvc_settings = make_msg_buf(0x38F, 4, rvc_settings);
+        kcan_write_msg(new_rvc_settings);
+        #if F_NBT
+          kcan2_write_msg(new_rvc_settings);
+        #endif
         rvc_tow_view_by_module = true;
         rvc_action_timer = 0;
       }
     } else if (rvc_tow_view_by_module && pdc_bus_status == 0xA5) {
-      if (rvc_action_timer >= 500) {
+      if (rvc_action_timer >= 2000) {
         bitWrite(rvc_settings[0], 3, 0);                                                                                            // Set tow hitch view to OFF.
         serial_log("Disabled camera tow view after inner sensors no longer RED.", 2);
-        kcan_write_msg(make_msg_buf(0x38F, 4, rvc_settings));
+        CAN_message_t new_rvc_settings = make_msg_buf(0x38F, 4, rvc_settings);
+        kcan_write_msg(new_rvc_settings);
+        #if F_NBT
+          kcan2_write_msg(new_rvc_settings);
+        #endif
         rvc_tow_view_by_module = false;
         rvc_action_timer = 0;
       }
@@ -424,6 +528,9 @@ void evaluate_handbrake_status(void) {
           if (!reverse_gear_status && !vehicle_moving && pdc_bus_status > 0x80) {
             unsigned long time_now = millis();
             kcan_write_msg(pdc_button_presssed_buf);
+            #if F_NBT
+              kcan2_write_msg(pdc_button_presssed_buf);
+            #endif
             m = {pdc_button_released_buf, time_now + 100};
             pdc_buttons_txq.push(&m);
             m = {pdc_button_released_buf, time_now + 200};
@@ -448,14 +555,98 @@ void check_pdc_button_queue(void) {
     pdc_buttons_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
+      #if F_NBT
+        kcan2_write_msg(delayed_tx.tx_msg);
+      #endif
       pdc_buttons_txq.drop();
     }
   }
 }
 
 
-void play_cc_gong(void) {
-  if (diag_transmit) {
-    kcan_write_msg(cc_gong_buf);
+void play_cc_gong(uint8_t gong_count) {
+  if (gong_count == 2) {
+    kcan_write_msg(cc_double_gong_buf);
+    #if F_NBT
+      kcan2_write_msg(cc_double_gong_buf);
+    #endif
+  } else if (gong_count == 3) {
+    kcan_write_msg(cc_triple_gong_buf);
+    #if F_NBT
+      kcan2_write_msg(cc_triple_gong_buf);
+    #endif
+  } else {
+    kcan_write_msg(cc_single_gong_buf);
+    #if F_NBT
+      kcan2_write_msg(cc_single_gong_buf);
+    #endif
   }
+}
+
+
+void send_f_pdc_function_status(bool disable) {
+  uint8_t f_parking_function_status[] = {0, 0, 0, 0xF, 0, 0, 0xFF, 0xFF};                                                           // PDC OFF.
+  f_parking_function_status[0] = f_pdc_function_status_alive_counter;
+  if (!disable) {
+    if (pdc_bus_status == 0xA1 || pdc_bus_status == 0xA5) {
+      f_parking_function_status[0] += 0x40;
+    }
+    f_parking_function_status[1] = k_msg.buf[2] & 0xF;                                                                              // Second half of PDC bus status.
+  }
+  f_pdc_function_status_alive_counter == 0xE ? f_pdc_function_status_alive_counter = 0 
+                                            : f_pdc_function_status_alive_counter++;
+  CAN_message_t f_parking_function_status_buf = make_msg_buf(0x2C1, 8, f_parking_function_status);
+  kcan2_write_msg(f_parking_function_status_buf);
+}
+
+
+void send_nbt_sport_displays_data(void) {
+  #if F_NBT
+    if (terminal_r) {
+      uint8_t nbt_sport_data[] = {0, 0, 0, 0xFF};
+      float max_power = 0, max_torque = 0, power_factor = 1, torque_factor = 1;                                                     // kW and Nm
+      if (power_unit[cas_key_number] == 1) {
+        nbt_sport_data[1] = MAX_POWER_SCALE_KW << 4;
+        max_power = (1 + MAX_POWER_SCALE_KW) * 80;
+      } else if (power_unit[cas_key_number] == 2) {
+        nbt_sport_data[1] = MAX_POWER_SCALE_HP << 4;
+        max_power = (1 + MAX_POWER_SCALE_HP) * 80;
+        power_factor = 1.341;
+      }
+      if (torque_unit[cas_key_number] == 1) {
+        nbt_sport_data[1] |= MAX_TORQUE_SCALE_NM;
+        max_torque = (1 + MAX_TORQUE_SCALE_NM) * 80;
+      } else if (torque_unit[cas_key_number] == 2) {
+        nbt_sport_data[1] |= MAX_TORQUE_SCALE_LB;
+        max_torque = (1 + MAX_TORQUE_SCALE_LB) * 80;
+        torque_factor = 0.7376;
+      } else if (torque_unit[cas_key_number] == 3) {
+        nbt_sport_data[1] |= MAX_TORQUE_SCALE_KG;
+        max_torque = (1 + MAX_TORQUE_SCALE_KG) * 80;
+        torque_factor = 0.1;
+      }
+
+      if (engine_running) {
+        uint16_t raw_value = (pt_msg.buf[2] << 4) | (pt_msg.buf[1] >> 4);                                                           // 12-bit EXX torque (TORQ_AVL - torque actual-value at the clutch).
+        int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
+        engine_torque = signed_value * 0.5 * torque_factor;                                                                         // Signed and scaled Nm value.
+
+        if (engine_torque > max_torque) { engine_torque = max_torque; }                                                             // Ensure we don't exceed the scale.
+        if (engine_torque > 0) {                                                                                                    // This value can be negative. When coasting?
+          uint8_t torque_percentage = round((engine_torque / max_torque) * 100);
+          nbt_sport_data[0] = torque_percentage;
+
+          float calculated_power = ((engine_torque * (RPM / 4)) / 9548) * power_factor;
+          if (calculated_power > max_power) { calculated_power = max_power; }
+          if (calculated_power > 0) {
+            uint8_t power_percentage = round((calculated_power / max_power) * 100);
+            nbt_sport_data[2] = power_percentage;
+          }
+        }
+      }
+
+      CAN_message_t nbt_sport_data_buf = make_msg_buf(0x253, 4, nbt_sport_data);
+      kcan2_write_msg(nbt_sport_data_buf);
+    }
+  #endif
 }

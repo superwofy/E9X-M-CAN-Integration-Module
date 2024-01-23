@@ -237,10 +237,8 @@ void evaluate_door_status(void) {
     if (hood_open_status) {
       serial_log("Hood opened.", 2);
       #if HOOD_OPEN_GONG
-        if (diag_transmit) {
-          if (!vehicle_moving && terminal_r) {
-            play_cc_gong();
-          }
+        if (!vehicle_moving && terminal_r) {
+          play_cc_gong(2);
         }
       #endif
     } else {
@@ -330,16 +328,21 @@ void evaluate_key_number_remote(void) {
     } else {
       cas_key_number = cas_key_number_can;                                                                                          // Key 1 = 0, Key 2 = 0x11, Key 3 = 0x22..., Guest = 0xAA.
       #if DEBUG_MODE
-        sprintf(serial_debug_string, "Received remote key number: %d.", cas_key_number + 1);
+        sprintf(serial_debug_string, "Received remote key profile number: %d.", cas_key_number + 1);
         serial_log(serial_debug_string, 2);
       #endif
     }
     
     key_guest_profile = false;
-    console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
-    if (vehicle_awake_timer >= 10000) {                                                                                             // Make sure the car was awake first...
-      send_dme_power_ckm();                                                                                                         // Update iDrive in case key remote changed
-    }
+
+    #if !F_NBT
+      console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
+      if (vehicle_awakened_timer >= 10000) {                                                                                        // Make sure the car was awake first...
+        send_dme_power_ckm();                                                                                                       // Update iDrive in case key remote changed
+      }
+    #endif
+    update_mdrive_can_message();
+    send_mdrive_message();
   }
 }
 
@@ -579,7 +582,7 @@ void evaluate_dipped_beam_status(void) {
 }
 
 
-void evaluate_steering_angle_fog(void) {
+void evaluate_steering_angle(void) {
   steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
   // Max left angle is 1005 / 23
   if (steering_angle >= 435) { 
@@ -840,6 +843,9 @@ void send_f_brightness_status(void) {
     f_outside_brightness[0] = f_outside_brightness[1] = rls_brightness;
     CAN_message_t f_outside_brightness_buf = make_msg_buf(0x2A5, 2, f_outside_brightness);
     ptcan_write_msg(f_outside_brightness_buf);
+    #if F_NBT
+      kcan2_write_msg(f_outside_brightness_buf);
+    #endif
     f_outside_brightness_timer = 0;
   }
 }
@@ -871,7 +877,7 @@ void evaluate_drivers_door_status(void) {                                       
         #if DEBUG_MODE
           if (serial_commands_unlocked) {
             serial_commands_unlocked = false;
-            EEPROM.update(26, serial_commands_unlocked);
+            EEPROM.update(43, serial_commands_unlocked);
             update_eeprom_checksum();
             serial_log("Locked serial interface.", 0);
           }
@@ -931,7 +937,11 @@ void activate_intermittent_wipers(void) {
   intermittent_wipe_active = true;
   serial_log("Intermittent wiping ON.", 2);
   intermittent_wipe_timer = 0;
-  kcan_write_msg(cic_button_sound_buf);                                                                                             // Acoustic indicator.
+  #if F_NBT
+    kcan2_write_msg(idrive_button_sound_buf);
+  #else
+    kcan_write_msg(idrive_button_sound_buf);                                                                                        // Acoustic indicator.
+  #endif
 }
 
 
@@ -939,7 +949,11 @@ void disable_intermittent_wipers(void) {
   intermittent_wipe_active = false;
   serial_log("Intermittent wiping OFF.", 2);
   intermittent_wipe_timer = 0;
-  kcan_write_msg(cic_button_sound_buf);                                                                                             // Acoustic indicator.
+  #if F_NBT
+    kcan2_write_msg(idrive_button_sound_buf);
+  #else
+    kcan_write_msg(idrive_button_sound_buf);                                                                                        // Acoustic indicator.
+  #endif
 }
 
 
@@ -948,6 +962,12 @@ void check_intermittent_wipers(void) {
     uint16_t calculated_interval = intermittent_intervals[intermittent_setting];
     if (!vehicle_moving) {
       calculated_interval += intermittent_intervals_offset_stopped[intermittent_setting];
+    } else {                                                                                                                        // Reduce intervals with speed.
+      if (indicated_speed >= 50) {
+        calculated_interval *= 0.8;
+      } else if (indicated_speed >= 100) {
+        calculated_interval *= 0.7;
+      }
     }
     if (intermittent_wipe_timer >= calculated_interval) {
       uint8_t single_wipe[] = {8, intermittent_setting_can};

@@ -1,8 +1,14 @@
 // Engine/driveline functions go here.
 
 
-void evaluate_engine_rpm(void) {
+void evaluate_engine_status(void) {
   RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
+  uint8_t idle_status = (k_msg.buf[6] & 0xF) >> 2;                                                                                  // Get the first two bits of the second half of this byte.
+  if (idle_status == 0) {
+    engine_idling = true;
+  } else {
+    engine_idling = false;
+  }
   if (RPM > 2000) {
     if (!engine_running) {
       engine_runtime = 0;
@@ -36,12 +42,9 @@ void evaluate_engine_rpm(void) {
 void toggle_mdrive_message_active(void) {
   if (mdrive_status) {                                                                                                              // Turn OFF MDrive.
     serial_log("Status MDrive OFF.", 2);
-    mdrive_message[1] -= 1;                                                                                                         // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
-    mdrive_message[4] -= 0x10;
+    mdrive_message_bn2000[1] -= 1;                                                                                                  // Decrement bytes 1 (6MT, DSC mode) and 4 (SVT) to deactivate.
+    mdrive_message_bn2000[4] -= 0x10;
     mdrive_status = mdrive_power_active = false;
-    #if GWS_SPORT_MODE
-      kcan_write_msg(gws_sport_off_buf);
-    #endif
     #if FRM_AHL_MODE
       kcan_write_msg(frm_ckm_ahl_komfort_buf);
       serial_log("Set AHL back to comfort mode.", 2);
@@ -52,21 +55,18 @@ void toggle_mdrive_message_active(void) {
         serial_log("Muted ASD.", 2);
       }
     #endif
-    if (mdrive_power == 0x30) {
+    if (mdrive_power[cas_key_number] == 0x30) {
       #if EXHAUST_FLAP_CONTROL
         exhaust_flap_sport = false;
       #endif
-    } else if (mdrive_power == 0x10) {
+    } else if (mdrive_power[cas_key_number] == 0x10) {
       console_power_mode = restore_console_power_mode;
     }                                                                                                                               // Else, POWER unchanged
   } else {                                                                                                                          // Turn ON MDrive.
     serial_log("Status MDrive ON.", 2);
-    if (mdrive_power == 0x20) {                                                                                                     // POWER in Sport.
+    if (mdrive_power[cas_key_number] == 0x20) {                                                                                     // POWER in Sport.
       mdrive_power_active = true;
-    } else if (mdrive_power == 0x30) {                                                                                              // POWER Sport+.
-      #if GWS_SPORT_MODE
-        kcan_write_msg(gws_sport_on_buf);
-      #endif
+    } else if (mdrive_power[cas_key_number] == 0x30) {                                                                              // POWER Sport+.
       #if ASD
         if (diag_transmit) {
           kcan_write_msg(demute_asd_buf);
@@ -77,36 +77,40 @@ void toggle_mdrive_message_active(void) {
         exhaust_flap_sport = true;                                                                                                  // Exhaust flap always open in Sport+
       #endif
       mdrive_power_active = true;
-    } else if (mdrive_power == 0x10) {
+    } else if (mdrive_power[cas_key_number] == 0x10) {
       restore_console_power_mode = console_power_mode;                                                                              // We'll need to return to its original state when MDrive is turned OFF.
       console_power_mode = false;                                                                                                   // Turn OFF POWER from console too.
     }                                                                                                                               // Else, POWER unchanged.
 
     #if FRM_AHL_MODE
-    if (mdrive_svt == 0xF1) {                                                                                                       // Headlights will move faster if Servotronic is set to Sport.
+    if (mdrive_svt[cas_key_number] == 0xF1) {                                                                                       // Headlights will move faster if Servotronic is set to Sport.
       kcan_write_msg(frm_ckm_ahl_sport_buf);
       serial_log("Set AHL to sport mode.", 2);
     }
     #endif
 
-    mdrive_message[1] += 1;
-    mdrive_message[4] += 0x10;
+    mdrive_message_bn2000[1] += 1;
+    mdrive_message_bn2000[4] += 0x10;
     mdrive_status = true;
   }
+
+  #if F_NBT
+    f_driving_dynamics_timer = 1002;
+  #endif
 }
 
 
 void toggle_mdrive_dsc_mode(void) {
   if (mdrive_status) {
-    if (mdrive_dsc == 7) {                                                                                                          // DSC OFF requested.
+    if (mdrive_dsc[cas_key_number] == 7) {                                                                                          // DSC OFF requested.
       send_dsc_mode(2);
-    } else if (mdrive_dsc == 0x13) {                                                                                                // DSC MDM (DTC in non-M) requested.
+    } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M) requested.
       send_dsc_mode(1);
-    } else if (mdrive_dsc == 0xB) {                                                                                                 // DSC ON requested.
+    } else if (mdrive_dsc[cas_key_number] == 0xB) {                                                                                 // DSC ON requested.
       send_dsc_mode(0);
     }
   } else {
-    if (mdrive_dsc == 0x13 || mdrive_dsc == 7) {                                                                                    // If MDrive was set to change DSC, restore back to DSC ON.
+    if (mdrive_dsc[cas_key_number] == 0x13 || mdrive_dsc[cas_key_number] == 7) {                                                    // If MDrive was set to change DSC, restore back to DSC ON.
       if (dsc_program_status != 0) {
         send_dsc_mode(0);
       }
@@ -129,19 +133,21 @@ void evaluate_m_mfl_button_press(void) {
       }
       #endif
     }
-    if (m_mfl_held_count > 10 && !ignore_m_hold) {                                                                                  // Each count is about 100ms
-      #if IMMOBILIZER_SEQ
-      if (immobilizer_released) {
-      #endif
-      if (ignition) {
-        show_mdrive_settings_screen();
+    #if !F_NBT
+      if (m_mfl_held_count > 10 && !ignore_m_hold) {                                                                                // Each count is about 100ms
+        #if IMMOBILIZER_SEQ
+        if (immobilizer_released) {
+        #endif
+        if (ignition) {
+          show_mdrive_settings_screen();
+        }
+        #if IMMOBILIZER_SEQ
+        }
+        #endif
+      } else {
+        m_mfl_held_count++;
       }
-      #if IMMOBILIZER_SEQ
-      }
-      #endif
-    } else {
-      m_mfl_held_count++;
-    }
+    #endif
   } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
     ignore_m_press = ignore_m_hold = false;
     m_mfl_held_count = 0;
@@ -163,7 +169,7 @@ void evaluate_m_mfl_button_press(void) {
             immobilizer_pressed_activate_count++;
           } else {
             activate_immobilizer();
-            play_cc_gong();
+            play_cc_gong(1);
           }
         }
       }
@@ -173,15 +179,52 @@ void evaluate_m_mfl_button_press(void) {
 }
 
 
-void initialize_mdrive(void) {
-  mdrive_message[1] = mdrive_dsc - 2;                                                                                               // Difference between iDrive settting and MDrive CAN message (OFF) is always 2.
+void update_mdrive_can_message(void) {
+  mdrive_message_bn2000[1] = mdrive_dsc[cas_key_number] - 2;                                                                        // Difference between iDrive settting and BN2000 CAN message is always 2
                                                                                                                                     // DSC: 1 unchanged, 5 OFF, 0x11 MDM, 9 On
-  mdrive_message[2] = mdrive_power;                                                                                                 // Copy POWER as is.
-  mdrive_message[3] = mdrive_edc;                                                                                                   // Copy EDC as is.
-  if (mdrive_svt == 0xE9) {
-    mdrive_message[4] = 0x41;                                                                                                       // SVT normal, MDrive OFF.
-  } else if (mdrive_svt == 0xF1) {
-    mdrive_message[4] = 0x81;                                                                                                       // SVT sport, MDrive OFF.
+  mdrive_message_bn2000[2] = mdrive_power[cas_key_number];                                                                          // Copy POWER as is.
+  mdrive_message_bn2000[3] = mdrive_edc[cas_key_number];                                                                            // Copy EDC as is.
+  if (mdrive_svt[cas_key_number] == 0xE9) {
+    mdrive_message_bn2000[4] = 0x41;                                                                                                // SVT normal, MDrive OFF.
+  } else if (mdrive_svt[cas_key_number] == 0xF1) {
+    mdrive_message_bn2000[4] = 0x81;                                                                                                // SVT sport, MDrive OFF.
+  }
+
+  #if F_NBT
+    if (mdrive_dsc[cas_key_number] == 7) {                                                                                          // DSC OFF.
+      mdrive_message_bn2010[1] = 1;
+    } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M).
+      mdrive_message_bn2010[1] = 3;
+    } else if (mdrive_dsc[cas_key_number] == 0xB) {                                                                                 // DSC ON.
+      mdrive_message_bn2010[1] = 2;
+    }
+
+    if (mdrive_power[cas_key_number] == 0 || mdrive_power[cas_key_number] == 0x10) {
+      mdrive_message_bn2010[2] = 1 << 4;                                                                                            // Efficient
+    } else if (mdrive_power[cas_key_number] == 0x20) {
+      mdrive_message_bn2010[2] = 2 << 4;                                                                                            // Sport                                                                                           
+    } else if (mdrive_power[cas_key_number] == 0x30) {
+      mdrive_message_bn2010[2] = 3 << 4;                                                                                            // Sport+
+    }
+
+    if (mdrive_svt[cas_key_number] == 0xE9) {
+      mdrive_message_bn2010[3] = 1 << 4;                                                                                            // Comfort
+    } else if (mdrive_svt[cas_key_number] == 0xF1) {
+      mdrive_message_bn2010[3] = 2 << 4;                                                                                            // Sport
+    }
+
+    if (mdrive_edc[cas_key_number] == 0x20 || mdrive_edc[cas_key_number] == 0x21) {
+      mdrive_message_bn2010[3] |= 1;                                                                                                // Comfort                         
+    } else if (mdrive_edc[cas_key_number] == 0x22) {
+      mdrive_message_bn2010[3] |= 2;                                                                                                // Sport
+    } else if (mdrive_edc[cas_key_number] == 0x2A) {
+      mdrive_message_bn2010[3] |= 3;                                                                                                // Sport+
+    }
+  #endif
+
+  if (mdrive_status) {
+    mdrive_message_bn2000[1] += 1;
+    mdrive_message_bn2000[4] += 0x10;
   }
 }
 
@@ -196,7 +239,7 @@ void show_mdrive_settings_screen(void) {
       kcan_write_msg(idrive_mdrive_settings_menu_b_buf);
       if (!idrive_died) {
         unsigned long time_now = millis();
-        m = {cic_button_sound_buf, time_now + 500};
+        m = {idrive_button_sound_buf, time_now + 500};
         idrive_txq.push(&m);
       }
     #if IMMOBILIZER_SEQ
@@ -208,13 +251,19 @@ void show_mdrive_settings_screen(void) {
 
 
 void send_mdrive_message(void) {
-  mdrive_message[0] += 10;
-  if (mdrive_message[0] > 0xEF) {                                                                                                   // Alive(first half of byte) must be between 0..E.
-    mdrive_message[0] = 0;
+  mdrive_message_bn2000[0] += 10;
+  if (mdrive_message_bn2000[0] > 0xEF) {                                                                                            // Alive(first half of byte) must be between 0..E.
+    mdrive_message_bn2000[0] = 0;
   }
-  can_checksum_update(0x399, 6, mdrive_message);                                                                                    // Recalculate checksum. No module seems to check this - MDSC?
-  ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message));                                                                          // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
-  mdrive_message_timer = 0;                                                                   
+  can_checksum_update(0x399, 6, mdrive_message_bn2000);                                                                             // Recalculate checksum. No module seems to check this - MDSC?
+  ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message_bn2000));                                                                   // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
+  mdrive_message_timer = 0;
+  #if F_NBT
+    mdrive_message_bn2010[0] = f_mdrive_alive_counter;
+    kcan2_write_msg(make_msg_buf(0x42E, 8, mdrive_message_bn2010));
+    f_mdrive_alive_counter == 0xE ? f_mdrive_alive_counter = 0 
+                                  : f_mdrive_alive_counter++;
+  #endif
 }
 
 
@@ -232,98 +281,122 @@ void send_mdrive_alive_message(uint16_t interval) {
 }
 
 
-void update_mdrive_message_settings(void) {
-  if (k_msg.buf[4] == 0xEC || k_msg.buf[4] == 0xF4 || k_msg.buf[4] == 0xE4) {                                                       // Reset requested.
-    reset_mdrive_settings();
-    eeprom_unsaved = true;
-  } else if ((k_msg.buf[4] == 0xE0 || k_msg.buf[4] == 0xE1)) {                                                                      // Ignore E0/E1 (Invalid).
-  } else {
-    //Decode settings
-    mdrive_dsc = k_msg.buf[0];                                                                                                      // 3 unchanged, 7 OFF, 0x13 MDM, 0xB ON.
-    mdrive_power = k_msg.buf[1];                                                                                                    // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
-    mdrive_edc = k_msg.buf[2];                                                                                                      // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
-    mdrive_svt = k_msg.buf[4];                                                                                                      // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
-    
-    mdrive_message[1] = mdrive_dsc - 2 + mdrive_status;                                                                             // DSC message is 2 less than iDrive setting. 1 is added if MDrive is ON.
-    mdrive_message[2] = mdrive_power;                                                                                               // Copy POWER as is.
-    mdrive_message[3] = mdrive_edc;                                                                                                 // Copy EDC as is.
+void execute_mdrive_settings_changed_actions() {
+  if (mdrive_status) {                                                                                                              // Perform actions that are impacted by changing settings while MDrive is active.
+    if (mdrive_power[cas_key_number] == 0x20) {                                                                                     // POWER in Sport.
+      mdrive_power_active = true;
+    } else if (mdrive_power[cas_key_number] == 0x30) {                                                                              // POWER Sport+.
+      #if ASD
+        if (diag_transmit) {
+          kcan_write_msg(demute_asd_buf);
+          serial_log("De-muted ASD.", 2);
+        }
+      #endif
+      #if EXHAUST_FLAP_CONTROL
+        exhaust_flap_sport = true;                                                                                                  // Exhaust flap always open in Sport+
+      #endif
+      mdrive_power_active = true;
+    } else if (mdrive_power[cas_key_number] == 0x10) {
+      restore_console_power_mode = console_power_mode;                                                                              // We'll need to return to its original state when MDrive is turned OFF.
+      console_power_mode = false;                                                                                                   // Turn OFF POWER from console too.
+      mdrive_power_active = false;
+      #if ASD
+        if (diag_transmit) {
+          kcan_write_msg(mute_asd_buf);
+          serial_log("Muted ASD.", 3);
+        }
+      #endif
+      #if EXHAUST_FLAP_CONTROL
+        exhaust_flap_sport = false;
+      #endif
+    }
+    toggle_mdrive_dsc_mode();                                                                                                       // Change DSC to the new state.
 
-    if (mdrive_status) {
-      if (mdrive_power != 0x30) {
-        #if EXHAUST_FLAP_CONTROL
-          exhaust_flap_sport = false;
-        #endif
-        #if ASD
-          if (diag_transmit) {
-            kcan_write_msg(mute_asd_buf);
-            serial_log("Muted ASD.", 3);
-          }
-        #endif
-        #if GWS_SPORT_MODE
-          kcan_write_msg(gws_sport_off_buf);
-        #endif
-      } else {
-        #if EXHAUST_FLAP_CONTROL
-          exhaust_flap_sport = true;                                                                                                // Exhaust flap should open in Sport+.
-        #endif
-        #if ASD
-          if (diag_transmit) {
-            kcan_write_msg(demute_asd_buf);
-            serial_log("De-muted ASD with POWER setting of Sport+.", 3);
-          }
-        #endif
-        #if GWS_SPORT_MODE
-          kcan_write_msg(gws_sport_on_buf);
-        #endif
+    if (mdrive_svt[cas_key_number] == 0xE9) {
+      #if FRM_AHL_MODE
+        kcan_write_msg(frm_ckm_ahl_komfort_buf);
+        serial_log("Set AHL to comfort mode with SVT setting of Normal.", 3);
+      #endif
+    } else if (mdrive_svt[cas_key_number] == 0xF1) {
+      #if FRM_AHL_MODE
+        kcan_write_msg(frm_ckm_ahl_sport_buf);
+        serial_log("Set AHL to sport mode with SVT setting of Sport.", 3);
+      #endif
+    }
+  }
+}
+
+
+void update_mdrive_message_settings_nbt(void) {
+  if (k_msg.buf[0] == 0 && k_msg.buf[4] == 0xE0) {                                                                                  // Reset requested.
+    reset_mdrive_settings();
+  } else if (k_msg.buf[0] == 0xF0) {                                                                                                // Ignore this ping and send the status message.
+  } else {
+    if (k_msg.buf[0] != 0) {                                                                                                        // DSC settings were updated.
+      if (k_msg.buf[0] == 1) {                                                                                                      // DSC OFF.
+        mdrive_dsc[cas_key_number] = 7;
+      } else if (k_msg.buf[0] == 2) {                                                                                               // DSC ON.
+        mdrive_dsc[cas_key_number] = 0xB;
+      } else if (k_msg.buf[0] == 3) {                                                                                               // DSC MDM.
+        mdrive_dsc[cas_key_number] = 0x13;
       }
     }
-   
-    if (mdrive_svt == 0xE9) {
-      if (!mdrive_status) {
-        mdrive_message[4] = 0x41;                                                                                                   // SVT normal, MDrive OFF.
-      } else {
-        mdrive_message[4] = 0x51;                                                                                                   // SVT normal, MDrive ON.
-        #if FRM_AHL_MODE
-          kcan_write_msg(frm_ckm_ahl_komfort_buf);
-          serial_log("Set AHL to comfort mode with SVT setting of Normal.", 3);
-        #endif
-      }
-    } else if (mdrive_svt == 0xF1) {
-      if (!mdrive_status) {
-        mdrive_message[4] = 0x81;                                                                                                   // SVT sport, MDrive OFF.
-      } else {
-        mdrive_message[4] = 0x91;                                                                                                   // SVT sport, MDrive ON.
-        #if FRM_AHL_MODE
-          kcan_write_msg(frm_ckm_ahl_sport_buf);
-          serial_log("Set AHL to sport mode with SVT setting of Sport.", 3);
-        #endif
+
+    else if(k_msg.buf[1] != 0) {                                                                                                    // Engine settings were updated.
+      mdrive_power[cas_key_number] = (k_msg.buf[1] >> 4) * 0x10;
+    }
+
+    else if ((k_msg.buf[2] & 0xF) != 0) {                                                                                           // Chassis settings were updated.
+      if ((k_msg.buf[2] & 0xF) == 1) {                                                                                              // Comfort.
+        mdrive_edc[cas_key_number] = 0x21;
+      } else if ((k_msg.buf[2] & 0xF) == 2) {                                                                                       // Sport.
+        mdrive_edc[cas_key_number] = 0x22;
+      } else if ((k_msg.buf[2] & 0xF) == 3) {                                                                                       // Sport+.
+        mdrive_edc[cas_key_number] = 0x2A;
       }
     }
+
+    else if (((k_msg.buf[2] >> 4) & 0x0F) != 0) {                                                                                   // Steering settings were updated.
+      if (((k_msg.buf[2] >> 4) & 0x0F) == 1) {                                                                                      // Comfort.
+        mdrive_svt[cas_key_number] = 0xE9;
+      } else if ((k_msg.buf[2] >> 4) == 2) {                                                                                        // Sport.
+        mdrive_svt[cas_key_number] = 0xF1;
+      } else if ((k_msg.buf[2] >> 4) == 3) {                                                                                        // Sport+ hardcoded to Sport for now.
+        mdrive_svt[cas_key_number] = 0xF1;
+      }
+    }
+
+    eeprom_unsaved = true;
+
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
-          mdrive_dsc, mdrive_power, mdrive_edc, mdrive_svt);
+          mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
       serial_log(serial_debug_string, 3);
     #endif
-    eeprom_unsaved = true;
+
+    update_mdrive_can_message();
+    execute_mdrive_settings_changed_actions();
   }
   send_mdrive_message();
 }
 
 
 void reset_mdrive_settings(void) {
-  mdrive_dsc = 3;                                                                                                                   // Unchanged
-  mdrive_message[1] = 1;
-  mdrive_power = 0;                                                                                                                 // Unchanged
-  mdrive_message[2] = mdrive_power;
-  mdrive_edc = 0x20;                                                                                                                // Unchanged
-  mdrive_message[3] = mdrive_edc;
-  mdrive_svt = 0xE9;                                                                                                                // Normal
-  mdrive_message[4] = 0x41;
-  dme_ckm[cas_key_number][0] = 0xF1;                                                                                                // Normal
-  #if EDC_CKM_FIX
-    edc_ckm[cas_key_number] = 0xF1;                                                                                                 // Comfort
+  #if F_NBT                                                                                                                         // NBT does not have "Unchanged" settings.
+    mdrive_dsc[cas_key_number] = 0xB;                                                                                               // DSC ON
+    mdrive_power[cas_key_number] = 0x10;                                                                                            // Normal
+    mdrive_edc[cas_key_number] = 0x21;                                                                                              // Comfort
+    mdrive_svt[cas_key_number] = 0xE9;                                                                                              // Normal
+  #else
+    mdrive_dsc[cas_key_number] = 3;                                                                                                 // Unchanged
+    mdrive_power[cas_key_number] = 0;                                                                                               // Unchanged
+    mdrive_edc[cas_key_number] = 0x20;                                                                                              // Unchanged
+    mdrive_svt[cas_key_number] = 0xE9;                                                                                              // Normal
+    dme_ckm[cas_key_number][0] = 0xF1;                                                                                              // Normal
   #endif
   serial_log("Reset MDrive settings to defaults.", 3);
+  update_mdrive_can_message();
+  execute_mdrive_settings_changed_actions();
 }
 
 
@@ -368,7 +441,7 @@ void send_power_mode(void) {
 
 void send_dme_power_ckm(void) {
   if (!frm_consumer_shutdown) {
-    kcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                                // This is sent by the DME to populate the M Key iDrive section
+    ptcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                               // This is sent by the DME to populate the M Key iDrive section
     serial_log("Sent DME POWER CKM.", 3);
   }
 }
@@ -383,48 +456,6 @@ void update_dme_power_ckm(void) {
   #endif
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
   eeprom_unsaved = true;
-}
-
-
-void update_edc_ckm(void) {
-  edc_ckm[cas_key_number] = k_msg.buf[0];
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "Received new EDC CKM setting: %s for key %d.", k_msg.buf[0] == 0xF1 ? "Comfort" : 
-                                  k_msg.buf[0] == 0xF2 ? "Normal" : "Sport", cas_key_number);
-    serial_log(serial_debug_string, 3);
-  #endif
-  eeprom_unsaved = true;
-}
-
-
-void evaluate_edc_ckm_mismatch(void) {
-  if (edc_mismatch_check_counter < 2) {
-    if (pt_msg.buf[1] != edc_ckm[cas_key_number]) {
-      serial_log("EDC EEPROM CKM setting match the current value. Correcting.", 1);
-      uint8_t edc_state = pt_msg.buf[1] == 0xFA ? 3 : pt_msg.buf[1] - 0xF0;                                                           // Normalize these values for easier comparison.
-      uint8_t edc_memory = edc_ckm[cas_key_number] == 0xFA ? 3 : edc_ckm[cas_key_number] - 0xF0;
-      if ((edc_memory == 1 && edc_state == 2) || (edc_memory == 2 && edc_state == 3) || (edc_memory == 3 && edc_state == 1)) {
-        unsigned long time_now = millis();
-        kcan_write_msg(edc_button_press_buf);
-        m = {edc_button_press_buf, time_now + 1200};
-        edc_ckm_txq.push(&m);
-      } else {
-        kcan_write_msg(edc_button_press_buf);
-      }
-    }
-    edc_mismatch_check_counter++;
-  }
-}
-
-
-void check_edc_ckm_queue(void) {
-  if (!edc_ckm_txq.isEmpty()) {
-    edc_ckm_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      kcan_write_msg(delayed_tx.tx_msg);
-      edc_ckm_txq.drop();
-    }
-  }
 }
 
 
@@ -454,6 +485,9 @@ void check_immobilizer_status(void) {
 
             // Visual indicators with Terminal R, 15.
             kcan_write_msg(key_cc_on_buf);                                                                                          // Keep sending this message so that CC is ON until disabled.
+            #if F_NBT
+              kcan2_write_msg(key_cc_on_buf);
+            #endif
             if (led_message_counter > 56) {                                                                                         // Send LED message every 112s to keep it ON.
               kcan_write_msg(alarm_led_on_buf);
               alarm_led_active = true;
@@ -486,6 +520,9 @@ void check_immobilizer_status(void) {
     alarm_warnings_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
+      #if F_NBT
+        kcan2_write_msg(delayed_tx.tx_msg);
+      #endif
       alarm_warnings_txq.drop();
     }
   }
@@ -501,6 +538,9 @@ void check_immobilizer_status(void) {
 
 void reset_key_cc(void) {
   kcan_write_msg(key_cc_off_buf);
+  #if F_NBT
+    kcan2_write_msg(key_cc_off_buf);
+  #endif
 }
 
 
@@ -509,7 +549,7 @@ void activate_immobilizer(void) {
   immobilizer_pressed_release_count = 0;
   alarm_led_txq.flush();
   ekp_txq.flush();
-  EEPROM.update(13, immobilizer_released);
+  EEPROM.update(30, immobilizer_released);
   update_eeprom_checksum();                                                                                                         // Update now in case we lose power before sleep.
   alarm_led_active = false;
   immobilizer_activate_release_timer = 0;
@@ -520,7 +560,7 @@ void activate_immobilizer(void) {
 void release_immobilizer(void) {
   immobilizer_released = true;
   immobilizer_pressed_activate_count = 0;
-  EEPROM.update(13, immobilizer_released);                                                                                          // Save to EEPROM directly in case program crashes.
+  EEPROM.update(30, immobilizer_released);                                                                                          // Save to EEPROM directly in case program crashes.
   update_eeprom_checksum();
   ptcan_write_msg(ekp_return_to_normal_buf);
   unsigned long time_now = millis();
@@ -548,6 +588,9 @@ void release_immobilizer(void) {
   alarm_led_txq.push(&m);
   alarm_led_active = false;
   kcan_write_msg(key_cc_off_buf);
+  #if F_NBT
+    kcan2_write_msg(key_cc_off_buf);
+  #endif
   if (terminal_r) {
     m = {start_cc_on_buf, time_now + 500};
     alarm_warnings_txq.push(&m);
@@ -555,7 +598,7 @@ void release_immobilizer(void) {
     alarm_warnings_txq.push(&m);
     serial_log("Sent start ready CC.", 2);
   } else {
-    play_cc_gong();                                                                                                                 // 6F1 to KOMBI.
+    play_cc_gong(1);
   }
   immobilizer_activate_release_timer = 0;
 }
@@ -566,10 +609,13 @@ void enable_alarm_after_stall(void) {
     alarm_after_engine_stall = true;
     serial_log("Immobilizer still active. Alarm will sound after engine stalls.", 2);    
     kcan_write_msg(key_cc_on_buf);
+    #if F_NBT
+      kcan2_write_msg(key_cc_on_buf);
+    #endif
     if (diag_transmit) {
       kcan_write_msg(alarm_led_on_buf);
       unsigned long time_now = millis();
-      m = {cc_gong_buf, time_now + 1500};                                                                                           // Audible alert of impending stall.
+      m = {cc_single_gong_buf, time_now + 1500};                                                                                    // Audible alert of impending stall.
       alarm_warnings_txq.push(&m);
     }
   }
@@ -578,7 +624,7 @@ void enable_alarm_after_stall(void) {
 
 void execute_alarm_after_stall(void) {
   if (alarm_after_engine_stall) {
-    alarm_led_txq.flush();                                                                                                        // Clear pending gongs.
+    alarm_led_txq.flush();                                                                                                          // Clear pending gongs.
     unsigned long time_now = millis();
     m = {alarm_siren_on_buf, time_now};
     alarm_siren_txq.push(&m);
@@ -596,20 +642,21 @@ void execute_alarm_after_stall(void) {
 
 void send_f_powertrain_2_status(void) {
   if (f_data_powertrain_2_timer >= 1000) {
-    uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                    // Byte7 max rpm: 50 * 8C = 7000.
+    uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                    // Byte7 max rpm: 50 * 140(0x8C) = 7000.
 
     f_data_powertrain_2[1] = 1 << 4 | f_data_powertrain_2_alive_counter;                                                            // Combine ST_ECU_DT_PT_2 (0001 - State of normal operation) and ALIV_DT_PT_2.
     f_data_powertrain_2_alive_counter == 0xE ? f_data_powertrain_2_alive_counter = 0 
                                              : f_data_powertrain_2_alive_counter++;
+                                             
     if (engine_running) {
-      f_data_powertrain_2[2] = 2;
-      if (RPM > 4800) {
-        f_data_powertrain_2[3] = 0;                                                                                                 // Engine is idling.
+      f_data_powertrain_2[2] = 0x82;                                                                                                // Engine running.
+      if (engine_idling) {
+        f_data_powertrain_2[3] = 0;
       } else {
         f_data_powertrain_2[3] = 1 << 6;                                                                                            // Not idling.
       }
     } else {
-      f_data_powertrain_2[2] = 0x83;
+      f_data_powertrain_2[2] = 0x80;                                                                                                // Engine OFF.
       f_data_powertrain_2[3] = 1 << 6;                                                                                              // Not idling.
     }
 
@@ -634,7 +681,8 @@ void send_f_powertrain_2_status(void) {
       f_data_powertrain_2[5] = 0x80;
     #endif
 
-    f_data_powertrain_2[6] = 0 | 2 << 4;                                                                                            // Engine start allowed.
+    f_data_powertrain_2[6] = 2 << 4;                                                                                                // Engine start allowed.
+
     if (reverse_gear_status) {
       f_data_powertrain_2[6] |= 2;                                                                                                  // Gearbox in R.
     } else {
@@ -646,8 +694,179 @@ void send_f_powertrain_2_status(void) {
       f_data_powertrain_2_crc.add(f_data_powertrain_2[i]);
     }
     f_data_powertrain_2[0] = f_data_powertrain_2_crc.calc();
+    
     CAN_message_t f_data_powertrain_2_buf = make_msg_buf(0x3F9, 8, f_data_powertrain_2);
     ptcan_write_msg(f_data_powertrain_2_buf);
+    #if F_NBT
+      kcan2_write_msg(f_data_powertrain_2_buf);
+    #endif
     f_data_powertrain_2_timer = 0;
+  }
+}
+
+
+void send_f_torque_1(void) {
+  if (f_torque_1_timer >= 100) {
+    uint8_t f_torque_1[] = {0, 0, 0, 0, 0, 0, 0, 0xF2};                                                                             // Byte7 QU_AVL_RPM_ENG_CRSH hardcoded to 2 - Signal valid.
+
+    f_torque_1[1] = 0xF << 4 | f_torque_1_alive_counter;                                                                            // Combine FREI (0xF - unused) and ALIV_TORQ_CRSH_1.
+    f_torque_1_alive_counter == 0xE ? f_torque_1_alive_counter = 0 
+                                  : f_torque_1_alive_counter++;
+    
+    uint16_t raw_torque = (k_msg.buf[2] << 4 | ((k_msg.buf[1] >> 4) & 0x0F));                                                       // Extract E torque value to big endian.
+    
+    // Engine torque
+    f_torque_1[2] = raw_torque & 0xFF;                                                                                              // LE encoded.
+    f_torque_1[3] = (raw_torque >> 8) << 4;
+
+    // Gearbox torque
+    f_torque_1[3] = f_torque_1[3] | (raw_torque & 0xF);
+    f_torque_1[4] = raw_torque >> 4;
+
+    // Engine RPM (raw, not scaled by 0.25)
+    f_torque_1[5] = RPM & 0xFF;                                                                                                     // Transmit in LE.
+    f_torque_1[6] = RPM >> 8;
+
+    f_torque_1_crc.restart();
+    for (uint8_t i = 1; i < 8; i++) {
+      f_torque_1_crc.add(f_torque_1[i]);
+    }
+    f_torque_1[0] = f_torque_1_crc.calc();
+
+    CAN_message_t f_torque_1_buf = make_msg_buf(0xA5, 8, f_torque_1);
+    kcan2_write_msg(f_torque_1_buf);
+    f_torque_1_timer = 0;
+  }
+}
+
+
+void send_f_driving_dynamics_switch(void) {
+  if (f_driving_dynamics_timer >= 1002) {
+    uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};                                                                  // Inspired very loosely by 272.4.8...
+    uint8_t new_driving_mode;
+
+    // Not needed for KCAN
+    // f_driving_dynamics[1] = 0xF << 4 | f_driving_dynamics_alive_counter;
+    // f_driving_dynamics_alive_counter == 0xE ? f_driving_dynamics_alive_counter = 0 
+    //                                         : f_driving_dynamics_alive_counter++;
+
+    if (pdc_bus_status != 0xA4 && pdc_bus_status != 0xA5) {                                                                         // The popup interferes with the reverse camera.
+      if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 7 
+          && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] == 0xF1) {                                            // Sportiest settings.
+        f_driving_dynamics[4] = 6;
+        new_driving_mode = 2;
+      } else if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 0x13 
+                  && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] == 0xF1) {                                    // Sportiest settings but with MDM.
+        f_driving_dynamics[4] = 5;
+        new_driving_mode = 1;
+      } else {
+        f_driving_dynamics[4] = 0x13;                                                                                               // Blank box with COMFORT title. Used to indicate DSC back ON.
+        new_driving_mode = 0;
+      }
+    }
+
+    // Not needed for KCAN
+    // f_driving_dynamics_crc.restart();
+    // for (uint8_t i = 1; i < 7; i++) {
+    //   f_driving_dynamics_crc.add(f_driving_dynamics[i]);
+    // }
+    // f_driving_dynamics[0] = f_driving_dynamics_crc.calc();
+
+    CAN_message_t f_driving_dynamics_buf = make_msg_buf(0x3A7, 7, f_driving_dynamics);
+    kcan2_write_msg(f_driving_dynamics_buf);
+    f_driving_dynamics_timer = 0;
+
+    if (new_driving_mode != driving_mode) {                                                                                         // Simulate a quick left movement of the ZBE to disimiss COMFORT popup.
+      if (new_driving_mode == 0) {
+        uint8_t zbe_east[] = {0xE1, 0xFD, 0, 0x81, 0xDD, 1};
+        kcan2_write_msg(make_msg_buf(0x267, 6, zbe_east));
+        zbe_east[3] = 0;
+        kcan2_write_msg(make_msg_buf(0x267, 6, zbe_east));
+      }
+      driving_mode = new_driving_mode;
+    }
+  }
+}
+
+
+void send_f_oil_level(void) {                                                                                                       // Used with OELSTAND_OENS.
+  if (f_oil_level_timer >= 500) {
+    uint8_t f_oil_level[4] = {0, 0xF0, 4, 0xC0};
+    switch(e_oil_level) {
+      case 0xC: {                                                                                                                   // Below MIN
+        f_oil_level[1] = 0;
+        break;
+      }
+      case 0x19: {                                                                                                                  // MIN
+        f_oil_level[1] = 0x10;
+        break;
+      }
+      case 0x26: {                                                                                                                  // Between MIN and OK
+        f_oil_level[1] = 0x20;
+        break;
+      }
+      case 0x35: {                                                                                                                  // OK
+        f_oil_level[1] = 0x30;
+        break;
+      }
+      case 0x45: {                                                                                                                  // Between OK and MAX
+        f_oil_level[1] = 0x40;
+        break;
+      }
+      case 0x55: {                                                                                                                  // State MAX
+        f_oil_level[1] = 0x50;
+        break;
+      }
+      case 0x5F: {                                                                                                                  // Overfilled
+        f_oil_level[1] = 0x70;
+        break;
+      }
+      case 0x78: {                                                                                                                  // No measurement possible
+        f_oil_level[2] = 0x40;
+        break;
+      }
+      case 0x79: {                                                                                                                  // Measurement in progress
+        break;
+      }
+      case 0x7A: {                                                                                                                  // Oil Level Check OK (Oil level sufficient to start engine).
+        f_oil_level[1] = 0x50;
+        break;
+      }
+      case 0x7B: {                                                                                                                  // Measurement OK
+        f_oil_level[1] = 0x50;
+        break;
+      }
+      case 0x7C: {                                                                                                                  // Ignition OFF, no measurement possible
+        f_oil_level[0] = 0xFF;
+        f_oil_level[2] = 0xFF;
+        break;
+      }
+      case 0x7D: {                                                                                                                  // Engine oil level OK, precise measurement in progress.
+        break;
+      }
+      case 0x7E: {                                                                                                                  // Engine oil level OK
+        f_oil_level[1] = 0x50;
+        break;
+      }
+      case 0x7F: {                                                                                                                  // Measurement in progress
+        break;
+      }
+      case 0x80: {                                                                                                                  // Accurate measurement in progress. Measuring time: 1min
+        break;
+      }
+      case 0xFF: {                                                                                                                  // signal invalid
+        f_oil_level[2] = 0x40;
+        break;
+      }
+    }
+    kcan2_write_msg(make_msg_buf(0x435, 4, f_oil_level));
+    f_oil_level_timer = 0;
+  }
+  if (ignition) {
+    if (f_oil_level_measuring_timer >= 8000) {                                                                                     // Periodically and when cycling ignition, re-set the level.
+      kcan2_write_msg(f_oil_level_measuring_buf);
+      f_oil_level_measuring_timer = 0;
+      f_oil_level_timer = 500;
+    }
   }
 }

@@ -26,16 +26,105 @@ void cache_can_message_buffers(void) {                                          
   gws_sport_on_buf = make_msg_buf(0x1D2, 6, gws_sport_on);
   gws_sport_off_buf = make_msg_buf(0x1D2, 6, gws_sport_off);
 
-  uint8_t cc_gong[] = {0x60, 3, 0x31, 0x22, 2, 0, 0, 0};
-  cc_gong_buf = make_msg_buf(0x6F1, 8, cc_gong);
+  uint8_t cc_single_gong[] = {0xF1, 0xFF};
+  uint8_t cc_double_gong[] = {0xF2, 0xFF};
+  uint8_t cc_triple_gong[] = {0xF3, 0xFF};
+  cc_single_gong_buf = make_msg_buf(0x205, 2, cc_single_gong);
+  cc_double_gong_buf = make_msg_buf(0x205, 2, cc_double_gong);
+  cc_triple_gong_buf = make_msg_buf(0x205, 2, cc_triple_gong);
 
-  uint8_t cic_button_sound[] = {0x63, 3, 0x31, 0x21, 7},
-          cic_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x12},
-          cic_double_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x10};
-  cic_button_sound_buf = make_msg_buf(0x6F1, 5, cic_button_sound);
-  cic_beep_sound_buf = make_msg_buf(0x6F1, 5, cic_beep_sound);
-  cic_double_beep_sound_buf = make_msg_buf(0x6F1, 5, cic_double_beep_sound);
+  #if F_NBT
+    uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 7, 0},
+            idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x12, 0},
+            idrive_double_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0};
+    idrive_button_sound_buf = make_msg_buf(0x6F1, 8, idrive_button_sound);
+    idrive_beep_sound_buf = make_msg_buf(0x6F1, 8, idrive_beep_sound);
+    idrive_double_beep_sound_buf = make_msg_buf(0x6F1, 8, idrive_double_beep_sound);
+  #else
+    uint8_t idrive_button_sound[] = {0x63, 3, 0x31, 0x21, 7},
+            idrive_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x12},
+            idrive_double_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x10};
+    idrive_button_sound_buf = make_msg_buf(0x6F1, 5, idrive_button_sound);
+    idrive_beep_sound_buf = make_msg_buf(0x6F1, 5, idrive_beep_sound);
+    idrive_double_beep_sound_buf = make_msg_buf(0x6F1, 5, idrive_double_beep_sound);
+  #endif
 
+  uint8_t clear_fs_job_uds_nbt[] = {0x63, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_job_uds_nbt[] = {0x63, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_fs_job_uds_zbe[] = {0x67, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_job_uds_zbe[] = {0x67, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_fs_job_uds_tbx[] = {0x35, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_job_uds_tbx[] = {0x35, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_fs_job_vsw[] = {0x48, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_job_vsw[] = {0x48, 4, 0x31, 1, 0xF, 6, 0, 0};
+  clear_fs_job_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_fs_job_uds_nbt);
+  clear_is_job_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_is_job_uds_nbt);
+  clear_fs_job_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_fs_job_uds_zbe);
+  clear_is_job_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_is_job_uds_zbe);
+  clear_fs_job_uds_tbx_buf = make_msg_buf(0x6F1, 8, clear_fs_job_uds_tbx);
+  clear_is_job_uds_tbx_buf = make_msg_buf(0x6F1, 8, clear_is_job_uds_tbx);
+  clear_fs_job_vsw_buf = make_msg_buf(0x6F1, 8, clear_fs_job_vsw);
+  clear_is_job_vsw_buf = make_msg_buf(0x6F1, 8, clear_is_job_vsw);
+
+  uint8_t ccc_zbe_wake[] = {0xFE, 3, 0, 0, 0, 0, 0, 0};
+  ccc_zbe_wake_buf = make_msg_buf(0x1AA, 8, ccc_zbe_wake);
+
+  uint8_t nbt_vin_request[] = {0x63, 3, 0x22, 0xF1, 0x90, 0, 0, 0x40};
+  nbt_vin_request_buf = make_msg_buf(0x6F1, 8, nbt_vin_request);
+
+  uint8_t faceplate_a1_released[] = {0, 0xFF},
+          faceplate_power_mute[] = {4, 0xFF},
+          faceplate_eject[] = {1, 0xFF},
+          faceplate_a2_released[] = {0, 0},
+          faceplate_button1_hover[] = {1, 0},
+          faceplate_button1_press[] = {2, 0},
+          faceplate_button2_hover[] = {4, 0},
+          faceplate_button2_press[] = {8, 0},
+          faceplate_button3_hover[] = {0x10, 0},
+          faceplate_button3_press[] = {0x20, 0},
+          faceplate_button4_hover[] = {0x40, 0},
+          faceplate_button4_press[] = {0x80, 0},
+          faceplate_button5_hover[] = {0, 1},
+          faceplate_button5_press[] = {0, 2},
+          faceplate_button6_hover[] = {0, 4},
+          faceplate_button6_press[] = {0, 8},
+          faceplate_button7_hover[] = {0, 0x10},
+          faceplate_button7_press[] = {0, 0x20},
+          faceplate_button8_hover[] = {0, 0x40},
+          faceplate_button8_press[] = {0, 0x80},
+          faceplate_a3_released[] = {0xFC, 0xFF},
+          faceplate_seek_left[] = {0xFD, 0xFF},
+          faceplate_seek_right[] = {0xFE, 0xFF},
+          faceplate_f1_released[] = {0, 0xFC},
+          faceplate_volume_decrease[] = {1, 0xFE},
+          faceplate_volume_increase[] = {1, 0xFD};
+  faceplate_a1_released_buf = make_msg_buf(0xA1, 2, faceplate_a1_released);
+  faceplate_power_mute_buf = make_msg_buf(0xA1, 2, faceplate_power_mute);
+  faceplate_eject_buf = make_msg_buf(0xA1, 2, faceplate_eject);
+  faceplate_a2_released_buf = make_msg_buf(0xA2, 2, faceplate_a2_released);
+  faceplate_button1_hover_buf = make_msg_buf(0xA2, 2, faceplate_button1_hover);
+  faceplate_button1_press_buf = make_msg_buf(0xA2, 2, faceplate_button1_press);
+  faceplate_button2_hover_buf = make_msg_buf(0xA2, 2, faceplate_button2_hover);
+  faceplate_button2_press_buf = make_msg_buf(0xA2, 2, faceplate_button2_press);
+  faceplate_button3_hover_buf = make_msg_buf(0xA2, 2, faceplate_button3_hover);
+  faceplate_button3_press_buf = make_msg_buf(0xA2, 2, faceplate_button3_press);
+  faceplate_button4_hover_buf = make_msg_buf(0xA2, 2, faceplate_button4_hover);
+  faceplate_button4_press_buf = make_msg_buf(0xA2, 2, faceplate_button4_press);
+  faceplate_button5_hover_buf = make_msg_buf(0xA2, 2, faceplate_button5_hover);
+  faceplate_button5_press_buf = make_msg_buf(0xA2, 2, faceplate_button5_press);
+  faceplate_button6_hover_buf = make_msg_buf(0xA2, 2, faceplate_button6_hover);
+  faceplate_button6_press_buf = make_msg_buf(0xA2, 2, faceplate_button6_press);
+  faceplate_button7_hover_buf = make_msg_buf(0xA2, 2, faceplate_button7_hover);
+  faceplate_button7_press_buf = make_msg_buf(0xA2, 2, faceplate_button7_press);
+  faceplate_button8_hover_buf = make_msg_buf(0xA2, 2, faceplate_button8_hover);
+  faceplate_button8_press_buf = make_msg_buf(0xA2, 2, faceplate_button8_press);
+  faceplate_a3_released_buf = make_msg_buf(0xA3, 2, faceplate_a3_released);
+  faceplate_seek_left_buf = make_msg_buf(0xA3, 2, faceplate_seek_left);
+  faceplate_seek_right_buf = make_msg_buf(0xA3, 2, faceplate_seek_right);
+  faceplate_f1_released_buf = make_msg_buf(0xF1, 2, faceplate_f1_released);
+  faceplate_volume_decrease_buf = make_msg_buf(0xF1, 2, faceplate_volume_decrease);
+  faceplate_volume_increase_buf = make_msg_buf(0xF1, 2, faceplate_volume_increase);
+  
   uint8_t edc_button_press[] = {0, 5, 0x30, 1, 7, 0x1A, 0, 0};
   edc_button_press_buf = make_msg_buf(0x6F1, 8, edc_button_press);
 
@@ -164,10 +253,8 @@ void cache_can_message_buffers(void) {                                          
   uint8_t f_kombi_network_mgmt[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                               // Network management KOMBI - F-series.
   f_kombi_network_mgmt_buf = make_msg_buf(0x560, 8, f_kombi_network_mgmt);
 
-  // uint8_t idrive_menu_request_a[] = {0x63, 2, 0x33, 0x52, 0, 0, 0, 0};
-  // uint8_t idrive_menu_request_b[] = {0x63, 0x30, 0, 0, 0, 0, 0, 0};
-  // idrive_menu_request_a_buf = make_msg_buf(0x6F1, 8, idrive_menu_request_a);
-  // idrive_menu_request_b_buf = make_msg_buf(0x6F1, 8, idrive_menu_request_b);
+  uint8_t f_zgw_network_mgmt[] = {0x40, 0x10, 0x10, 0, 0, 2, 1, 0};                                                                 // Network management ZGW - F-series.
+  f_zgw_network_mgmt_buf = make_msg_buf(0x510, 8, f_zgw_network_mgmt);
 
   uint8_t sine_angle_request_a[] = {0x50, 2, 0x21, 5},
           sine_angle_request_b[] = {0x50, 0x30, 0, 2, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -184,11 +271,6 @@ void cache_can_message_buffers(void) {                                          
   seat_heating_button_released_dr_buf = make_msg_buf(0x1E7, 2, generic_button_released);
   seat_heating_button_pressed_pas_buf = make_msg_buf(0x1E8, 2, generic_button_pressed);
   seat_heating_button_released_pas_buf = make_msg_buf(0x1E8, 2, generic_button_released);
-
-  uint8_t set_time_cc[] = {0x40, 0xA7, 0, 0x39, 0xFF, 0xFF, 0xFF, 0xFF},
-          set_time_cc_off[] = {0x40, 0xA7, 0, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
-  set_time_cc_buf = make_msg_buf(0x5E0, 8, set_time_cc);
-  set_time_cc_off_buf = make_msg_buf(0x5E0, 8, set_time_cc_off);
 
   uint8_t shiftlights_start[] = {0x86, 0x3E}, 
           shiftlights_mid_buildup[] = {0xF6, 0},
@@ -230,9 +312,15 @@ void cache_can_message_buffers(void) {                                          
   oil_needle_min_buf = make_msg_buf(0x6F1, 8, oil_needle_min);
   oil_needle_release_buf = make_msg_buf(0x6F1, 8, oil_needle_release);
 
-  uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0}, 
-          door_open_cc_off[] = {0x40, 0x4F, 1, 0x28, 0xFF, 0xFF, 0xFF, 0xFF};
-  vol_request_buf = make_msg_buf(0x6F1, 8, vol_request);
+  #if F_NBT
+    uint8_t vol_request[] = {0x63, 5, 0x31, 1, 0xA0, 0x39, 0};
+    vol_request_buf = make_msg_buf(0x6F1, 7, vol_request);
+  #else
+    uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0};
+    vol_request_buf = make_msg_buf(0x6F1, 8, vol_request);
+  #endif
+  
+  uint8_t door_open_cc_off[] = {0x40, 0x4F, 1, 0x28, 0xFF, 0xFF, 0xFF, 0xFF};
   door_open_cc_off_buf = make_msg_buf(0x5C0, 8, door_open_cc_off);
 
   uint8_t hdc_cc_activated_on[] = {0x40, 0x4B, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF},
@@ -253,12 +341,14 @@ void cache_can_message_buffers(void) {                                          
   msa_deactivated_cc_on_buf = make_msg_buf(0x592, 8, msa_deactivated_cc_on);
   msa_deactivated_cc_off_buf = make_msg_buf(0x592, 8, msa_deactivated_cc_off);
 
-  uint8_t camera_off[] = {0xA1, 0xFF}, camera_on[] = {0xA5, 0xFF},
+  uint8_t camera_off[] = {0xA1, 0xFF}, camera_on[] = {0xA5, 0xFF}, 
+          camera_inactive[] = {0x81, 0xFF},
           pdc_off_camera_on[] = {0x64, 4, 0x30, 9, 7, 4, 0, 0},
           pdc_on_camera_on[] = {0x64, 4, 0x30, 9, 7, 5, 0, 0},
           pdc_off_camera_off[] = {0x64, 4, 0x30, 9, 7, 0, 0, 0};
   camera_off_buf = make_msg_buf(0x3AE, 2, camera_off);
   camera_on_buf = make_msg_buf(0x3AE, 2, camera_on);
+  camera_inactive_buf = make_msg_buf(0x3AE, 2, camera_inactive);
   pdc_off_camera_on_buf = make_msg_buf(0x6F1, 8, pdc_off_camera_on);
   pdc_on_camera_on_buf = make_msg_buf(0x6F1, 8, pdc_on_camera_on);
   pdc_off_camera_off_buf = make_msg_buf(0x6F1, 8, pdc_off_camera_off);
@@ -282,6 +372,12 @@ void cache_can_message_buffers(void) {                                          
   power_down_cmd_a_buf = make_msg_buf(0x6F1, 8, power_down_cmd_a);
   power_down_cmd_b_buf = make_msg_buf(0x6F1, 8, power_down_cmd_b);
   power_down_cmd_c_buf = make_msg_buf(0x6F1, 8, power_down_cmd_c);
+
+  uint8_t f_oil_level_measuring[] = {0, 0xF0, 4, 0xC0};
+  f_oil_level_measuring_buf = make_msg_buf(0x435, 4, f_oil_level_measuring);
+
+  uint8_t f_hu_nbt_reboot[] = {0x63, 2, 0x11, 1, 0, 0, 0, 0};
+  f_hu_nbt_reboot_buf = make_msg_buf(0x6F1, 8, f_hu_nbt_reboot);
 }
 
 
@@ -310,7 +406,7 @@ void kcan_write_msg(const CAN_message_t &msg) {
   }
   uint8_t result = KCAN.write(msg);
   if (result != 1) {
-    if (kcan_retry_counter < 100) {                                                                                                 // Safeguard to avoid polluting the network in case of unrecoverable issue.
+    if (kcan_retry_counter < 10) {                                                                                                  // Safeguard to avoid polluting the network in case of unrecoverable issue.
       m = {msg, millis() + 100};
       kcan_resend_txq.push(&m);
       kcan_retry_counter++;
@@ -323,8 +419,60 @@ void kcan_write_msg(const CAN_message_t &msg) {
       serial_log("KCAN resend max counter exceeded.", 1);
     }
     kcan_error_counter++;
+  } else {
+    kcan_error_counter = 0;
+    kcan_resend_txq.flush();
   }
 }
+
+
+
+void kcan2_write_msg(const CAN_message_t &msg) {
+  #if F_NBT
+    if (kcan2_mode == MCP_NORMAL && vehicle_awakened_timer >= 5000) {                                                               // Prevent writing to the bus when sleeping or waking up.
+      byte send_buf[msg.len];
+
+      // Sinkhole for unused messages.
+      if (msg.id == 0xAA || msg.id == 0xA8) { return; }                                                                             // BN2000 engine status and torques.
+      else if (msg.id == 0xC4 || msg.id == 0xC8) { return; }                                                                        // BN2000 steering angle.
+      else if (msg.id == 0x2C0) { return; }                                                                                         // BN2000 LCD brightness.
+      else if (msg.id == 0x317) { return; }                                                                                         // BN2000 PDC button.
+      else if (msg.id == 0x31D) { return; }                                                                                         // BN2000 FTM status.
+      else if (msg.id == 0x399) { return; }                                                                                         // BN2000 MDrive / BN2010 Status energy voltage.
+      else if (msg.id >= 0x5FF && msg.id <= 0x662) { return; }                                                                      // Diagnosis response messages from various modules.
+      else if (msg.id == 0x6F1 && !(msg.buf[0] == 0x63 || msg.buf[0] == 0x67 || msg.buf[0] == 0x35)) { return; }                    // 6F1s not meant for the NBT/ZBE/TBX.
+      else if (msg.id >= 0x6F5) { return; }
+      
+      #if F_NBT_VIN_PATCH
+        else if (msg.id == 0x380) {                                                                                                 // Patch NBT VIN to donor.
+          if (donor_vin_initialized) {
+            for (uint8_t i = 0; i < msg.len; i++) {
+              send_buf[i] = DONOR_VIN[i];
+            }
+          } else {
+            return;
+          }
+        }
+      #endif 
+      
+      else {
+        for (uint8_t i = 0; i < msg.len; i++) {
+          send_buf[i] = msg.buf[i];
+        }
+      }
+
+      if (CAN_OK != KCAN2.sendMsgBuf(msg.id, 0, msg.len, send_buf)) {
+        #if DEBUG_MODE
+          sprintf(serial_debug_string, "KCAN2 write failed for ID: %lX.", msg.id);
+          serial_log(serial_debug_string, 1);
+          can_debug_print_buffer(msg);
+        #endif
+        kcan2_error_counter++;
+      }
+    }
+  #endif
+}
+
 
 
 void ptcan_write_msg(const CAN_message_t &msg) {
@@ -342,8 +490,8 @@ void ptcan_write_msg(const CAN_message_t &msg) {
 
   uint8_t result = PTCAN.write(msg);
   if (result != 1) {
-    if (ptcan_retry_counter < 100) {                                                                                                // Safeguard to avoid polluting the network in case of unrecoverable issue.
-      m = {msg, millis() + 100};
+    if (ptcan_retry_counter < 10) {                                                                                                 // Safeguard to avoid polluting the network in case of unrecoverable issue.
+      m = {msg, millis() + 50};
       ptcan_resend_txq.push(&m);
       ptcan_retry_counter++;
       #if DEBUG_MODE
@@ -355,6 +503,9 @@ void ptcan_write_msg(const CAN_message_t &msg) {
       serial_log("PTCAN resend max counter exceeded.", 1);
     }
     ptcan_error_counter++;
+  } else {
+    ptcan_retry_counter = 0;
+    ptcan_resend_txq.flush();
   }
 }
 
@@ -363,8 +514,8 @@ void dcan_write_msg(const CAN_message_t &msg) {
   if (vehicle_awake) {
     uint8_t result = DCAN.write(msg);
     if (result != 1) {
-      if (dcan_retry_counter < 100) {                                                                                               // Safeguard to avoid polluting the network in case of unrecoverable issue.
-        m = {msg, millis() + 100};
+      if (dcan_retry_counter < 10) {                                                                                                // Safeguard to avoid polluting the network in case of unrecoverable issue.
+        m = {msg, millis() + 50};
         dcan_resend_txq.push(&m);
         dcan_retry_counter++;
         #if DEBUG_MODE
@@ -376,6 +527,9 @@ void dcan_write_msg(const CAN_message_t &msg) {
         serial_log("DCAN resend max counter exceeded.", 1);
       }
       dcan_error_counter++;
+    } else {
+      dcan_retry_counter = 0;
+      dcan_resend_txq.flush();
     }
   }
   #if DEBUG_MODE

@@ -6,90 +6,120 @@ void read_initialize_eeprom(void) {
   uint16_t calculated_eeprom_checksum = eeprom_crc();
 
   if (stored_eeprom_checksum != calculated_eeprom_checksum){
-    sprintf(serial_debug_string, "EEPROM data corrupted. Loaded checksum: 0x%X, calculated: 0x%X. Restoring defaults.",
+    sprintf(serial_debug_string, "EEPROM data corrupted. Stored checksum: 0x%X, calculated checksum: 0x%X. Restoring defaults.",
             stored_eeprom_checksum, calculated_eeprom_checksum);
     serial_log(serial_debug_string, 1);
 
-    EEPROM.update(2, mdrive_dsc);                                                                           
-    EEPROM.update(3, mdrive_power);
-    EEPROM.update(4, mdrive_edc);
-    EEPROM.update(5, mdrive_svt);
-    EEPROM.update(6, 0xF1);
-    EEPROM.update(7, 0xF1);
-    EEPROM.update(8, 0xF1);
-    EEPROM.update(9, 0xF1);
-    EEPROM.update(10, 0xF1);
-    EEPROM.update(11, 0xF1);
-    EEPROM.update(12, 0);
-    EEPROM.update(13, 1);
-    EEPROM.update(14, 1);
-    EEPROM.update(15, 0xFF);
-    EEPROM.update(16, 0x10);
-    EEPROM.update(17, 0);
-    EEPROM.update(18, 0);
-    EEPROM.update(19, 0);
-    EEPROM.update(20, 0);
-    EEPROM.update(21, 0);
-    EEPROM.update(22, 0);
-    EEPROM.update(23, 1);
+    EEPROM.update(2, mdrive_dsc[0]);                                                                                                // MDrive
+    EEPROM.update(3, mdrive_power[0]);
+    EEPROM.update(4, mdrive_edc[0]);
+    EEPROM.update(5, mdrive_svt[0]);
+    EEPROM.update(6, 0xFF);                                                                                                         // Blank for future use
+    EEPROM.update(7, 0xFF);
+    EEPROM.update(8, mdrive_dsc[1]);
+    EEPROM.update(9, mdrive_power[1]);
+    EEPROM.update(10, mdrive_edc[1]);
+    EEPROM.update(11, mdrive_svt[1]);   
+    EEPROM.update(12, 0xFF);
+    EEPROM.update(13, 0xFF);
+    EEPROM.update(14, mdrive_dsc[2]);
+    EEPROM.update(15, mdrive_power[2]);
+    EEPROM.update(16, mdrive_edc[2]);
+    EEPROM.update(17, mdrive_svt[2]);
+    EEPROM.update(18, 0xFF);
+    EEPROM.update(19, 0xFF);
+    EEPROM.update(20, 0xF1);                                                                                                        // DME CKM
+    EEPROM.update(21, 0xF1);
+    EEPROM.update(22, 0xF1);
+    EEPROM.update(23, 1);                                                                                                           // Torque / Power units
     EEPROM.update(24, 1);
     EEPROM.update(25, 1);
-    EEPROM.update(26, 0);
-    EEPROM.update(27, 0);
-    EEPROM.update(28, 0);
+    EEPROM.update(26, 1);
+    EEPROM.update(27, 1);
+    EEPROM.update(28, 1);
+    EEPROM.update(29, 0);                                                                                                           // Un-fold mirrors when unlocking
+    EEPROM.update(30, 1);                                                                                                           // Immobilizer
+    EEPROM.update(31, 1);
+    EEPROM.update(32, 0xFF);                                                                                                        // CPU temp
+    EEPROM.update(33, 0x10);                                                                                                        // CIC persistent volume
+    EEPROM.update(34, 0);                                                                                                           // Visual acknowledge CKM
+    EEPROM.update(35, 0);
+    EEPROM.update(36, 0);
+    EEPROM.update(37, 0);                                                                                                           // Automatic seat position CKM
+    EEPROM.update(38, 0);
+    EEPROM.update(39, 0);
+    EEPROM.update(40, 1);                                                                                                           // DRL CKM
+    EEPROM.update(41, 1);
+    EEPROM.update(42, 1);
+    EEPROM.update(43, 0);
+    EEPROM.update(44, 0);                                                                                                           // Door locks
+    EEPROM.update(45, 0);
 
     update_eeprom_checksum();
   } else {
-    mdrive_dsc = EEPROM.read(2);
-    mdrive_power = EEPROM.read(3);
-    mdrive_edc = EEPROM.read(4);
-    mdrive_svt = EEPROM.read(5);
-    dme_ckm[0][0] = EEPROM.read(6);
-    dme_ckm[1][0] = EEPROM.read(7);
-    dme_ckm[2][0] = EEPROM.read(8);
-    #if EDC_CKM_FIX
-      edc_ckm[0] = EEPROM.read(9);
-      edc_ckm[1] = EEPROM.read(10);
-      edc_ckm[2] = EEPROM.read(11);
+    mdrive_dsc[0] = EEPROM.read(2);
+    mdrive_power[0] = EEPROM.read(3);
+    mdrive_edc[0] = EEPROM.read(4);
+    mdrive_svt[0] = EEPROM.read(5);
+    mdrive_dsc[1] = EEPROM.read(8);
+    mdrive_power[1] = EEPROM.read(9);
+    mdrive_edc[1] = EEPROM.read(10);
+    mdrive_svt[1] = EEPROM.read(11);
+    mdrive_dsc[2] = EEPROM.read(14);
+    mdrive_power[2] = EEPROM.read(15);
+    mdrive_edc[2] = EEPROM.read(16);
+    mdrive_svt[2] = EEPROM.read(17);
+    #if !F_NBT                                                                                                                      // NBT does not have M-Key settings.
+      dme_ckm[0][0] = EEPROM.read(20);
+      dme_ckm[1][0] = EEPROM.read(21);
+      dme_ckm[2][0] = EEPROM.read(22);
+    #endif
+    #if F_NBT
+      torque_unit[0] = EEPROM.read(23);
+      power_unit[0] = EEPROM.read(24);
+      torque_unit[0] = EEPROM.read(25);
+      power_unit[0] = EEPROM.read(26);
+      torque_unit[0] = EEPROM.read(27);
+      power_unit[0] = EEPROM.read(28);
     #endif
     #if AUTO_MIRROR_FOLD
-      unfold_with_door_open = EEPROM.read(12) == 1 ? true : false;
+      unfold_with_door_open = EEPROM.read(29) == 1 ? true : false;
     #endif
     #if IMMOBILIZER_SEQ
-      immobilizer_released = EEPROM.read(13) == 1 ? true : false;
-      immobilizer_persist = EEPROM.read(14) == 1 ? true : false;
+      immobilizer_released = EEPROM.read(30) == 1 ? true : false;
+      immobilizer_persist = EEPROM.read(31) == 1 ? true : false;
       if (!immobilizer_persist) {
         immobilizer_released = true;                                                                                                // Deactivate immobilizer at boot if this value is set.
       }
     #endif
-    max_cpu_temp = EEPROM.read(15);
+    max_cpu_temp = EEPROM.read(32);
     if (max_cpu_temp == 0xFF) {
       max_cpu_temp = -40.0;
     }
-    #if DOOR_VOLUME
-      peristent_volume = EEPROM.read(16);
+    #if DOOR_VOLUME && !F_NBT
+      peristent_volume = EEPROM.read(33);
       if (peristent_volume > 0x33) {
         peristent_volume = 0x15;
       } else if (peristent_volume == 0) {
         peristent_volume = 0x10;
       }
     #endif
-    visual_signal_ckm[0] = EEPROM.read(17) == 1 ? true : false;
-    visual_signal_ckm[1] = EEPROM.read(18) == 1 ? true : false;
-    visual_signal_ckm[2] = EEPROM.read(19) == 1 ? true : false;
+    visual_signal_ckm[0] = EEPROM.read(34) == 1 ? true : false;
+    visual_signal_ckm[1] = EEPROM.read(35) == 1 ? true : false;
+    visual_signal_ckm[2] = EEPROM.read(36) == 1 ? true : false;
     #if COMFORT_EXIT
-      auto_seat_ckm[0] = EEPROM.read(20) == 1 ? true : false;
-      auto_seat_ckm[1] = EEPROM.read(21) == 1 ? true : false;
-      auto_seat_ckm[2] = EEPROM.read(22) == 1 ? true : false;
+      auto_seat_ckm[0] = EEPROM.read(37) == 1 ? true : false;
+      auto_seat_ckm[1] = EEPROM.read(38) == 1 ? true : false;
+      auto_seat_ckm[2] = EEPROM.read(39) == 1 ? true : false;
     #endif
     #if DIM_DRL
-      drl_ckm[0] = EEPROM.read(23) == 1 ? true : false;
-      drl_ckm[1] = EEPROM.read(24) == 1 ? true : false;
-      drl_ckm[2] = EEPROM.read(25) == 1 ? true : false;
+      drl_ckm[0] = EEPROM.read(40) == 1 ? true : false;
+      drl_ckm[1] = EEPROM.read(41) == 1 ? true : false;
+      drl_ckm[2] = EEPROM.read(42) == 1 ? true : false;
     #endif
-    serial_commands_unlocked = EEPROM.read(26) == 1 ? true : false;
-    doors_locked = EEPROM.read(27) == 1 ? true : false;
-    doors_alarmed = EEPROM.read(28) == 1 ? true : false;
+    serial_commands_unlocked = EEPROM.read(43) == 1 ? true : false;
+    doors_locked = EEPROM.read(44) == 1 ? true : false;
+    doors_alarmed = EEPROM.read(45) == 1 ? true : false;
     serial_log("Loaded data from EEPROM.", 2);
   }
 }
@@ -97,7 +127,7 @@ void read_initialize_eeprom(void) {
 
 uint16_t eeprom_crc(void) {
   teensy_eeprom_crc.restart();
-  for (uint8_t i = 2; i < 29; i++) {
+  for (uint8_t i = 2; i < 46; i++) {
     teensy_eeprom_crc.add(EEPROM.read(i));
   }
   return teensy_eeprom_crc.calc();
@@ -106,41 +136,54 @@ uint16_t eeprom_crc(void) {
 
 void update_data_in_eeprom(void) {                                                                                                  // EEPROM lifetime approx. 100k writes. Always update, never write()!
   if (!key_guest_profile) {
-    EEPROM.update(2, mdrive_dsc);
-    EEPROM.update(3, mdrive_power);
-    EEPROM.update(4, mdrive_edc);
-    EEPROM.update(5, mdrive_svt);
+    EEPROM.update(2, mdrive_dsc[0]);
+    EEPROM.update(3, mdrive_power[0]);
+    EEPROM.update(4, mdrive_edc[0]);
+    EEPROM.update(5, mdrive_svt[0]);
+    EEPROM.update(8, mdrive_dsc[1]);
+    EEPROM.update(9, mdrive_power[1]);
+    EEPROM.update(10, mdrive_edc[1]);
+    EEPROM.update(11, mdrive_svt[1]);
+    EEPROM.update(14, mdrive_dsc[2]);
+    EEPROM.update(15, mdrive_power[2]);
+    EEPROM.update(16, mdrive_edc[2]);
+    EEPROM.update(17, mdrive_svt[2]);
   }
-  EEPROM.update(6, dme_ckm[0][0]);
-  EEPROM.update(7, dme_ckm[1][0]);
-  EEPROM.update(8, dme_ckm[2][0]);
-  #if EDC_CKM_FIX
-    EEPROM.update(9, edc_ckm[0]);
-    EEPROM.update(10, edc_ckm[1]);
-    EEPROM.update(11, edc_ckm[2]);
+  #if !F_NBT
+    EEPROM.update(20, dme_ckm[0][0]);
+    EEPROM.update(21, dme_ckm[1][0]);
+    EEPROM.update(22, dme_ckm[2][0]);
+  #endif
+  #if F_NBT
+    EEPROM.update(23, torque_unit[0]);
+    EEPROM.update(24, power_unit[0]);
+    EEPROM.update(25, torque_unit[1]);
+    EEPROM.update(26, power_unit[1]);
+    EEPROM.update(27, torque_unit[2]);
+    EEPROM.update(28, power_unit[2]);
   #endif
   #if AUTO_MIRROR_FOLD
-    EEPROM.update(12, unfold_with_door_open);
+    EEPROM.update(29, unfold_with_door_open);
   #endif
-  EEPROM.update(15, round(max_cpu_temp));
-  #if DOOR_VOLUME
-    EEPROM.update(16, peristent_volume);
+  EEPROM.update(32, round(max_cpu_temp));
+  #if DOOR_VOLUME && !F_NBT
+    EEPROM.update(33, peristent_volume);
   #endif
-  EEPROM.update(17, visual_signal_ckm[0]);
-  EEPROM.update(18, visual_signal_ckm[1]);
-  EEPROM.update(19, visual_signal_ckm[2]);
+  EEPROM.update(34, visual_signal_ckm[0]);
+  EEPROM.update(35, visual_signal_ckm[1]);
+  EEPROM.update(36, visual_signal_ckm[2]);
   #if COMFORT_EXIT
-    EEPROM.update(20, auto_seat_ckm[0]);
-    EEPROM.update(21, auto_seat_ckm[1]);
-    EEPROM.update(22, auto_seat_ckm[2]);
+    EEPROM.update(37, auto_seat_ckm[0]);
+    EEPROM.update(38, auto_seat_ckm[1]);
+    EEPROM.update(39, auto_seat_ckm[2]);
   #endif
   #if DIM_DRL
-    EEPROM.update(23, drl_ckm[0]);
-    EEPROM.update(24, drl_ckm[1]);
-    EEPROM.update(25, drl_ckm[2]);
+    EEPROM.update(40, drl_ckm[0]);
+    EEPROM.update(41, drl_ckm[1]);
+    EEPROM.update(42, drl_ckm[2]);
   #endif
-  EEPROM.update(27, doors_locked);
-  EEPROM.update(28, doors_alarmed);
+  EEPROM.update(44, doors_locked);
+  EEPROM.update(45, doors_alarmed);
   update_eeprom_checksum();
   serial_log("Saved data to EEPROM.", 2);
 }
@@ -155,9 +198,9 @@ void update_eeprom_checksum(void) {
 
 void initialize_watchdog(void) {
   WDT_timings_t config;
-  config.trigger = 15;
+  config.trigger = 20;
   config.callback = wdt_callback;
-  config.timeout = 18;                                                                                                              // If the watchdog timer is not reset within 15s, re-start the program.
+  config.timeout = 23;                                                                                                              // If the watchdog timer is not reset, re-start the program.
   wdt.begin(config);
   serial_log("WDT initialized.", 2);
 }
@@ -173,10 +216,10 @@ void print_current_state(Stream &status_serial) {
   sprintf(serial_debug_string, "\r\n ================================ Operation ===============================\r\n"
           " Vehicle PTCAN: %s\r\n"
           " Terminal R: %s, Ignition: %s\r\n"
-          " Engine: %s, RPM: %d\r\n"
+          " Engine: %s, RPM: %d, Torque: %.1f Nm, idling: %s\r\n"
           " Indicated speed: %d, Real speed: %d %s",
-          vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF",
-          ignition ? "ON" : "OFF", engine_running ? "ON" : "OFF", RPM / 4,
+          vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF",
+          engine_running ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
           indicated_speed, real_speed, speed_mph ? "MPH" : "KPH");
   status_serial.println(serial_debug_string);
   #if HDC
@@ -205,24 +248,26 @@ void print_current_state(Stream &status_serial) {
           vehicle_moving ? "Moving" : "Stationary");
   status_serial.println(serial_debug_string);
   #if F_NIVI
-    if (vehicle_direction == 8) {
+    if (e_vehicle_direction == 0) {
       status_serial.println(" Direction: None");
-    } else if (vehicle_direction == 9) {
+    } else if (e_vehicle_direction == 1) {
       status_serial.println(" Direction: Forward");
-    } else if (vehicle_direction == 0xA) {
+    } else if (e_vehicle_direction == 2) {
       status_serial.println(" Direction: Backward");
     } else {
       status_serial.println(" Direction: Unknown");
     }
     sprintf(serial_debug_string, " Sine Tilt: %.1f, FXX-Converted: %.1f deg\r\n"
             " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
+            " Lateral acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
             " Yaw rate FXX-Converted: %.2f deg/s",
             sine_tilt_angle, f_vehicle_angle * 0.05 - 64.0, 
-            e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0, 
-            yaw_rate * 0.005 - 163.83);
+            e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0,
+            e_lateral_acceleration * 0.10197162129779283, lateral_acceleration * 0.002 - 65.0,
+            yaw_rate * 0.005 - 163.84);
     status_serial.println(serial_debug_string);
   #endif
-  #if F_NIVI || MIRROR_UNDIM
+  #if F_NBT || F_NIVI || MIRROR_UNDIM
     sprintf(serial_debug_string, " Outside brightness: 0x%X, %s.", rls_brightness, 
             rls_time_of_day == 0 ? "Daytime" : rls_time_of_day == 1 ? "Twilight" : "Darkness");
     status_serial.println(serial_debug_string);
@@ -230,7 +275,7 @@ void print_current_state(Stream &status_serial) {
   #if IMMOBILIZER_SEQ
     sprintf(serial_debug_string, " ================================ Immobilizer ===============================\r\n"
             " Immobilizer: %s, Persistent setting: %s, Key detected: %s",
-            immobilizer_released ? "OFF" : "Active", EEPROM.read(14) == 1 ? "Active" : "OFF",
+            immobilizer_released ? "OFF" : "Active", EEPROM.read(31) == 1 ? "Active" : "OFF",
             key_valid ? "YES" : "NO");
     status_serial.println(serial_debug_string);
   #endif
@@ -238,65 +283,54 @@ void print_current_state(Stream &status_serial) {
           " Active: %s", mdrive_status ? "YES" : "NO");
   status_serial.println(serial_debug_string);
   status_serial.print(" Settings: DSC-");
-  if (mdrive_dsc == 3) {
+  if (mdrive_dsc[cas_key_number] == 3) {
     status_serial.print("Unchanged");
-  } else if (mdrive_dsc == 7) {
+  } else if (mdrive_dsc[cas_key_number] == 7) {
     status_serial.print("OFF");
-  } else if (mdrive_dsc == 0x13) {
+  } else if (mdrive_dsc[cas_key_number] == 0x13) {
     status_serial.print("DTC/MDM");
-  } else if (mdrive_dsc == 0xB) {
+  } else if (mdrive_dsc[cas_key_number] == 0xB) {
     status_serial.print("ON");
   }
   status_serial.print("  POWER-");
-  if (mdrive_power == 0) {
+  if (mdrive_power[cas_key_number] == 0) {
     status_serial.print("Unchanged");
-  } else if (mdrive_power == 0x10) {
+  } else if (mdrive_power[cas_key_number] == 0x10) {
     status_serial.print("Normal");
-  } else if (mdrive_power == 0x20) {
+  } else if (mdrive_power[cas_key_number] == 0x20) {
     status_serial.print("Sport");
-  } else if (mdrive_power == 0x30) {
+  } else if (mdrive_power[cas_key_number] == 0x30) {
     status_serial.print("Sport+");
   }
   status_serial.print("  EDC-");
-  if (mdrive_edc == 0x20) {
+  if (mdrive_edc[cas_key_number] == 0x20) {
     status_serial.print("Unchanged");
-  } else if (mdrive_edc == 0x21) {
+  } else if (mdrive_edc[cas_key_number] == 0x21) {
     status_serial.print("Comfort");
-  } else if (mdrive_edc == 0x22) {
+  } else if (mdrive_edc[cas_key_number] == 0x22) {
     status_serial.print("Normal");
-  } else if (mdrive_edc == 0x2A) {
+  } else if (mdrive_edc[cas_key_number] == 0x2A) {
     status_serial.print("Sport");
   }
   status_serial.print("  SVT-");
-  if (mdrive_svt == 0xE9) {
+  if (mdrive_svt[cas_key_number] == 0xE9) {
     status_serial.print("Normal");
-  } else if (mdrive_svt == 0xF1) {
+  } else if (mdrive_svt[cas_key_number] == 0xF1) {
     status_serial.print("Sport");
   }
   status_serial.println();
   sprintf(serial_debug_string, " Console POWER: %s\r\n"
-          " POWER CKM: %s\r\n"
+          #if !F_NBT
+            " POWER CKM: %s\r\n"
+          #endif
           " Key profile number: %d\r\n"
           " ============================== Body ===============================",
           console_power_mode ? "ON" : "OFF",
-          dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport",
+          #if !F_NBT
+            dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport",
+          #endif
           cas_key_number + 1);
   status_serial.println(serial_debug_string);
-  #if RTC
-    time_t t = now();
-    uint8_t rtc_hours = hour(t);
-    uint8_t rtc_minutes = minute(t);
-    uint8_t rtc_seconds = second(t);
-    uint8_t rtc_day = day(t);
-    uint8_t rtc_month = month(t);
-    uint16_t rtc_year = year(t);
-    sprintf(serial_debug_string, " RTC: %s%d:%s%d:%s%d %s%d/%s%d/%d %s", 
-            rtc_hours > 9 ? "" : "0", rtc_hours, rtc_minutes > 9 ? "" : "0", rtc_minutes, 
-            rtc_seconds > 9 ? "" : "0", rtc_seconds, 
-            rtc_day > 9 ? "" : "0", rtc_day, rtc_month > 9 ? "" : "0", rtc_month, rtc_year,
-            rtc_valid ? "Valid" : "Invalid");
-    status_serial.println(serial_debug_string);
-  #endif
   sprintf(serial_debug_string, " Reverse gear: %s", reverse_gear_status ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
   #if PDC_AUTO_OFF
@@ -342,7 +376,7 @@ void print_current_state(Stream &status_serial) {
     status_serial.println(serial_debug_string);
   #endif
   #if F_VSW01
-    sprintf(serial_debug_string, " VSW switch input: %d", vsw_current_input);
+    sprintf(serial_debug_string, " VSW switch current input: %d", vsw_current_input);
     status_serial.println(serial_debug_string);
   #endif
   #if EXHAUST_FLAP_CONTROL
@@ -376,9 +410,9 @@ void print_current_state(Stream &status_serial) {
     }
   #endif
 
-  int8_t max_stored_temp = EEPROM.read(15);
+  int8_t max_stored_temp = EEPROM.read(32);
   sprintf(serial_debug_string, " ================================= Debug ==================================\r\n"
-          " CPU speed: %ld, MHz CPU temperature: %.2f, °C Max recorded: %.2f °C", 
+          " CPU speed: %ld, MHz CPU temperature: %.2f °C, Max recorded: %.2f °C", 
           F_CPU_ACTUAL / 1000000, cpu_temp, max_cpu_temp > max_stored_temp ? max_cpu_temp : max_stored_temp);
   status_serial.println(serial_debug_string);
   if (clock_mode == 0) {
@@ -404,9 +438,15 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Max loop execution time: %ld μs", max_loop_timer);
   }
   status_serial.println(serial_debug_string);
-  sprintf(serial_debug_string, " KCAN errors: %ld, PTCAN errors: %ld, DCAN errors: %ld\r\n"
-          " ==========================================================================",
-          kcan_error_counter, ptcan_error_counter, dcan_error_counter);
+  #if F_NBT
+    sprintf(serial_debug_string, " KCAN errors: %ld, KCAN2 errors: %ld, PTCAN errors: %ld, DCAN errors: %ld\r\n"
+            " ==========================================================================",
+            kcan_error_counter, kcan2_error_counter, ptcan_error_counter, dcan_error_counter);
+  #else
+    sprintf(serial_debug_string, " KCAN errors: %ld, PTCAN errors: %ld, DCAN errors: %ld\r\n"
+            " ==========================================================================",
+            kcan_error_counter, ptcan_error_counter, dcan_error_counter);
+  #endif
   status_serial.println(serial_debug_string);
   status_serial.println();
   debug_print_timer = 0;
@@ -432,29 +472,6 @@ void serial_log(const char message[], int8_t level) {
       strcat(boot_debug_string, buffer);
     }
   #endif
-}
-
-
-void log_setup_complete(void) {
-  if (rtc_valid) {
-    time_t t = now();
-    uint8_t rtc_hours = hour(t);
-    uint8_t rtc_minutes = minute(t);
-    uint8_t rtc_seconds = second(t);
-    uint8_t rtc_day = day(t);
-    uint8_t rtc_month = month(t);
-    uint16_t rtc_year = year(t);
-    sprintf(serial_debug_string, "Setup complete at RTC: %s%d:%s%d:%s%d %s%d/%s%d/%d.",
-            rtc_hours > 9 ? "" : "0", rtc_hours,
-            rtc_minutes > 9 ? "" : "0", rtc_minutes,
-            rtc_seconds > 9 ? "" : "0", rtc_seconds,
-            rtc_day > 9 ? "" : "0", rtc_day,
-            rtc_month > 9 ? "" : "0", rtc_month,
-            rtc_year);
-    serial_log(serial_debug_string, 2);
-  } else {
-    serial_log("Setup complete.", 2);
-  }
 }
 
 
@@ -541,7 +558,13 @@ void reset_ignition_variables(void) {                                           
   #endif
   reverse_gear_status = false;
   sine_angle_requested = false;
+  #if F_NBT
+    kcan2_write_msg(f_oil_level_measuring_buf);                                                                                     // Needed to reset the oil level display when switching ingition OFF
+    f_oil_level_timer = 0;
+    f_oil_level_measuring_timer = 8000;
+  #endif
 }
+
 
 
 void reset_sleep_variables(void) {
@@ -569,12 +592,12 @@ void reset_sleep_variables(void) {
   mirror_status_retry = 0;
   mirror_fold_txq.flush();
   last_lock_status_can = 0;
-  vsw_initialized = false;
   vsw_current_input = 0;
   vsw_switch_counter = 0xF1;
   asd_initialized = false;
   comfort_exit_done = false;
   full_indicator = false;
+  f_pdc_request = 1;
   #if IMMOBILIZER_SEQ
     if (immobilizer_persist) {
       if (immobilizer_released) {
@@ -582,7 +605,15 @@ void reset_sleep_variables(void) {
       }
     }
   #endif
+  zbe_action_counter = zbe_rotation[2] = zbe_rotation[3] = 0;
+  faceplate_volume = 0;
+  gong_active = false;
+  faceplate_buttons_txq.flush();
   hazards_flash_txq.flush();
+  #if F_NBT
+    FACEPLATE_UART.end();                                                                                                           // Close serial connection.
+  #endif
+  driving_mode = 0;
   update_data_in_eeprom();
   kcan_retry_counter = ptcan_retry_counter = dcan_retry_counter = 0;
   kcan_resend_txq.flush();
