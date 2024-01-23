@@ -1,12 +1,12 @@
 // Functions that allow the user to send commands to the program go here.
 
 
-void serial_interpreter(void) {
+void serial_debug_interpreter(void) {
   String cmd = Serial.readStringUntil('\n', 64);                                                                                    // Limit command the size to prevent overflow.
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
     if (cmd == "lock_serial") {
       serial_commands_unlocked = false;
-      EEPROM.update(26, serial_commands_unlocked);
+      EEPROM.update(43, serial_commands_unlocked);
       update_eeprom_checksum();
       serial_log("  Serial: Commands locked.", 0);
     }
@@ -37,7 +37,6 @@ void serial_interpreter(void) {
       } else {
         serial_log("  Serial: Saved data to EEPROM.", 0);
       }
-      delay(200);
       update_data_in_eeprom();
       delay(1000);
       wdt.reset();
@@ -92,23 +91,67 @@ void serial_interpreter(void) {
         if (diag_transmit) {
           serial_log("  Serial: Clearing error and shadow memories.", 0);
           unsigned long time_now = millis();
-          uint8_t clear_fs_job[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0}, i;
-          for (i = 0; i < 0x8C; i++) {
+          uint8_t clear_fs_job[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0};
+          for (uint8_t i = 0; i < 0x8C; i++) {
+            #if F_NBT
+              if (i == 0x63 || i == 0x67 || i == 0x35) {                                                                            // NBT, ZBE, TBX.
+                continue;
+              }
+            #endif
             clear_fs_job[0] = i;
-            m = {make_msg_buf(0x6F1, 8, clear_fs_job), time_now + i * 20};
-            serial_diag_txq.push(&m);
+            m = {make_msg_buf(0x6F1, 8, clear_fs_job), time_now};
+            serial_diag_kcan1_txq.push(&m);
+            time_now += 50;
           }
-          time_now += 20;
-          uint8_t clear_is_job[] = {0, 3, 0x31, 6, 0, 0, 0, 0}, j;
-          for (j = 0; j < 0x8C; j++) {
-            clear_fs_job[0] = j;
-            m = {make_msg_buf(0x6F1, 8, clear_is_job), time_now + (i + j) * 20};
-            serial_diag_txq.push(&m);
+          uint8_t clear_is_job[] = {0, 3, 0x31, 6, 0, 0, 0, 0};
+          for (uint8_t i = 0; i < 0x8C; i++) {
+            clear_fs_job[0] = i;
+            m = {make_msg_buf(0x6F1, 8, clear_is_job), time_now};
+            serial_diag_kcan1_txq.push(&m);
+            time_now += 50;
           }
-          time_now += 20;
           uint8_t clear_dme_hs_job[] = {0x12, 2, 0x31, 3, 0, 0, 0, 0};
-          m = {make_msg_buf(0x6F1, 8, clear_dme_hs_job), time_now + (i + j) * 20};
-          serial_diag_txq.push(&m);
+          m = {make_msg_buf(0x6F1, 8, clear_dme_hs_job), time_now};
+          serial_diag_kcan1_txq.push(&m);
+          time_now += 50;
+          #if F_NBT
+            m = {clear_fs_job_uds_nbt_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_is_job_uds_nbt_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_fs_job_uds_zbe_buf, time_now};                                                                               // Send the clear command to KCAN2 in case there's a ZBE retrofitted there.
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            #if !F_NBT_CCC_ZBE
+              m = {clear_is_job_uds_zbe_buf, time_now};
+              serial_diag_kcan2_txq.push(&m);
+              time_now += 50;
+              m = {clear_fs_job_uds_tbx_buf, time_now};
+              serial_diag_kcan2_txq.push(&m);
+              time_now += 50;
+              m = {clear_is_job_uds_tbx_buf, time_now};
+              serial_diag_kcan2_txq.push(&m);
+              time_now += 50;
+            #endif
+          #endif
+          #if F_ZBE_KCAN1 && !F_NBT
+            m = {clear_fs_job_uds_zbe_buf, time_now};
+            serial_diag_kcan1_txq.push(&m);
+            time_now += 50;
+            m = {clear_is_job_uds_zbe_buf, time_now};
+            serial_diag_kcan1_txq.push(&m);
+            time_now += 50;
+          #endif
+          #if F_VSW01
+            m = {clear_fs_job_vsw_buf, time_now};
+            serial_diag_kcan1_txq.push(&m);
+            time_now += 50;
+            m = {clear_is_job_vsw_buf, time_now};
+            serial_diag_kcan1_txq.push(&m);
+            time_now += 50;
+          #endif
           clearing_dtcs = true;
         } else {
           serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
@@ -120,7 +163,7 @@ void serial_interpreter(void) {
     else if (cmd == "cc_gong") {
       if (diag_transmit) {
         serial_log("  Serial: Sending CC gong.", 0);
-        play_cc_gong();
+        play_cc_gong(1);
       } else {
         serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
       }
@@ -332,6 +375,9 @@ void serial_interpreter(void) {
               alarm_warnings_txq.peek(&delayed_tx);
               if (millis() >= delayed_tx.transmit_time) {
                 kcan_write_msg(delayed_tx.tx_msg);
+                #if F_NBT
+                  kcan2_write_msg(delayed_tx.tx_msg);
+                #endif
                 alarm_warnings_txq.drop();
               }
             }
@@ -349,19 +395,13 @@ void serial_interpreter(void) {
       }
     }
     #endif
-    #if RTC
-    else if (cmd == "reset_rtc") {
-      setTime(0, 0, 0, 1, 1, 2019); 
-      time_t t = now();
-      Teensy3Clock.set(t); 
-      rtc_valid = false;
-      serial_log("  Serial: RTC reset to initial value (1/1/19 0:0:0).", 0);
-    }
-    #endif
     #if MSA_RVC
     else if (cmd == "activate_rvc") {
       if (ignition) {
         kcan_write_msg(pdc_off_camera_on_buf);
+        #if F_NBT
+          kcan2_write_msg(pdc_off_camera_on_buf);
+        #endif
         serial_log("  Serial: Activated RVC on display.", 0);
       } else {
         serial_log("  Serial: Activate ignition first.", 0);
@@ -424,6 +464,70 @@ void serial_interpreter(void) {
       vsw_switch_input(5);
     }
     #endif
+    #if F_NBT
+    else if (cmd == "hu_reboot") {
+      if (diag_transmit) {
+        kcan2_write_msg(f_hu_nbt_reboot_buf);
+        serial_log("  Serial: Sent HU reboot job.", 0);
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+      }
+    }
+    else if (cmd == "faceplate_eject") {
+      unsigned long time_now = millis();
+      m = {faceplate_eject_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      time_now += 200;
+      m = {faceplate_a1_released_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      serial_log("  Serial: Sent eject button.", 0);
+    }
+    else if (cmd == "faceplate_mute") {
+      unsigned long time_now = millis();
+      m = {faceplate_power_mute_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      time_now += 200;
+      m = {faceplate_a1_released_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      serial_log("  Serial: Sent power/mute button.", 0);
+    }
+    else if (cmd == "faceplate_seek_left") {
+      unsigned long time_now = millis();
+      m = {faceplate_seek_left_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      time_now += 200;
+      m = {faceplate_a3_released_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      serial_log("  Serial: Sent seek left button.", 0);
+    }
+    else if (cmd == "faceplate_seek_right") {
+      unsigned long time_now = millis();
+      m = {faceplate_seek_right_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      time_now += 200;
+      m = {faceplate_a3_released_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      serial_log("  Serial: Sent seek right button.", 0);
+    }
+    else if (cmd == "faceplate_decrease_volume") {
+      unsigned long time_now = millis();
+      m = {faceplate_volume_decrease_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      time_now += 200;
+      m = {faceplate_f1_released_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      serial_log("  Serial: Sent volume down.", 0);
+    }
+    else if (cmd == "faceplate_increase_volume") {
+      unsigned long time_now = millis();
+      m = {faceplate_volume_increase_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      time_now += 200;
+      m = {faceplate_f1_released_buf, time_now};
+      serial_diag_kcan2_txq.push(&m);
+      serial_log("  Serial: Sent volume up.", 0);
+    }
+    #endif
     else if (cmd == "help") {
       print_help();
     }
@@ -437,11 +541,11 @@ void serial_interpreter(void) {
     if (cmd == serial_password) {
       serial_unlocked_timer = 0;
       serial_commands_unlocked = true;
-      EEPROM.update(26, serial_commands_unlocked);
+      EEPROM.update(43, serial_commands_unlocked);
       update_eeprom_checksum();
       serial_log("  Serial: Commands unlocked.", 0);
     } else {
-      serial_log("  Serial: Locked.", 0);
+      serial_log("  Serial: Locked. Please input the password as the next command.", 0);
     }
   }
 }
@@ -504,9 +608,6 @@ void print_help(void) {
     "  alarm_led_off - Deactivates the Alarm interior mirror LED.\r\n"
     "  test_trip_stall_alarm - Simulates tripping the EKP immobilizer without disabling it first.", 0);
   #endif
-  #if RTC
-    serial_log("  reset_rtc - Sets teensy's RTC to 01/01/2019 00:00:00 UTC.", 0);
-  #endif
   #if MSA_RVC
     serial_log("  activate_rvc - Activates the reversing camera and displays the feed on the CID.", 0);
   #endif
@@ -518,17 +619,37 @@ void print_help(void) {
     "  vsw_4 - Sets the VideoSwitch to input 4 (A40*1B Pins: 4 FBAS+, 22 FBAS-, 40 Shield).\r\n"
     "  vsw_5 - Sets the VideoSwitch to input 5 (A40*1B Pins: 5 FBAS+, 23 FBAS-, 41 Shield).", 0);
   #endif
+  #if F_NBT
+    serial_log("  hu_reboot - Restart the NBT_HU immediately."
+    "  faceplate_eject - Simulate pressing the eject button on the faceplate.\r\n"
+    "  faceplate_mute - Simulate pressing the power/mute button on the faceplate.\r\n"
+    "  faceplate_seek_left - Simulate pressing the previous track button on the faceplate.\r\n"
+    "  faceplate_seek_right - Simulate pressing the next track button on the faceplate.\r\n"
+    "  faceplate_decrease_volume - Simulate turning the volume knob anti-clockwise on the faceplate.\r\n"
+    "  faceplate_increase_volume - Simulate turning the volume knob clockwise on the faceplate.", 0);
+  #endif
   serial_log("  ==========================================================", 0);
 }
 
 
 void check_serial_diag_actions(void) {
-  if (!serial_diag_txq.isEmpty()) {
-    serial_diag_txq.peek(&delayed_tx);
-    if (millis() >= delayed_tx.transmit_time) {
-      dcan_write_msg(delayed_tx.tx_msg);
-      serial_diag_txq.drop();
+  if (!serial_diag_kcan1_txq.isEmpty() || !serial_diag_kcan2_txq.isEmpty()) {
+    if (!serial_diag_kcan1_txq.isEmpty()) {
+      serial_diag_kcan1_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        dcan_write_msg(delayed_tx.tx_msg);
+        serial_diag_kcan1_txq.drop();
+      }
     }
+    #if F_NBT 
+      if (!serial_diag_kcan2_txq.isEmpty()) {
+        serial_diag_kcan2_txq.peek(&delayed_tx);
+        if (millis() >= delayed_tx.transmit_time) {
+          kcan2_write_msg(delayed_tx.tx_msg);
+          serial_diag_kcan2_txq.drop();
+        }
+      }
+    #endif
   } else {
     if (clearing_dtcs) {
       clearing_dtcs = false;
@@ -537,9 +658,9 @@ void check_serial_diag_actions(void) {
     }
   }
 
-  if (serial_commands_unlocked && serial_unlocked_timer >= 480000) {
+  if (serial_commands_unlocked && serial_unlocked_timer >= 900000) {
     serial_commands_unlocked = false;
-    EEPROM.update(26, serial_commands_unlocked);
+    EEPROM.update(43, serial_commands_unlocked);
     update_eeprom_checksum();
     serial_log("  Serial: Locked after timeout.", 0);
   }
