@@ -10,9 +10,7 @@ void setup() {
   configure_flexcan();                                                                                                              // systick: 1.25 +/- 0.05 ms is when the CAN subsystem is fully ready.
   configure_mcp2515();                                                                                                              // Starting the MCP2515 takes around 2.2 ms!
   configure_IO();
-  #if !USB_DISABLE
-    activate_usb(0);                                                                                                                // This code ensures compatibility with unmodified Teensy cores since USB init will work anyway.
-  #endif
+  activate_usb(0);                                                                                                                  // This code ensures compatibility with unmodified Teensy cores since USB init will work anyway.
   read_initialize_eeprom();                                                                                                         // systick: 1.80 +/- 0.01 ms is when the EEPROM is read. If EEPROM is corrupt, this takes longer.
   update_mdrive_can_message();
   cache_can_message_buffers();
@@ -64,6 +62,7 @@ void loop() {
     #if F_NBT
       send_f_oil_level();
       check_faceplate_buttons_queue();
+      check_nbt_cc_queue();
       #if F_NBT_VIN_PATCH
         send_nbt_vin_request();
       #endif
@@ -203,6 +202,10 @@ void loop() {
       }
       #endif
 
+      else if (k_msg.id == 0x1D0) {
+        evaluate_engine_temperature();
+      }
+
       #if MIRROR_UNDIM
       else if (k_msg.id == 0x1EE) {
         evaluate_indicator_stalk();
@@ -236,6 +239,16 @@ void loop() {
       #if AUTO_SEAT_HEATING
       else if (k_msg.id == 0x232) {                                                                                                 // Monitor driver's seat heating.
         evaluate_seat_heating_status();
+      }
+      #endif
+
+      #if F_NBT
+      else if (k_msg.id == 0x23D) {
+        send_climate_popup_acknowledge();
+      }
+
+      else if (k_msg.id == 0x2E6) {                                                                                                 // Air distribution status message.
+        evaluate_ihka_auto_state();
       }
       #endif
 
@@ -295,7 +308,7 @@ void loop() {
         #endif
       }
      
-      #if NBT
+      #if !F_NBT
       else if (k_msg.id == 0x3CA) {                                                                                                 // Receive settings from iDrive (BN2000).
         update_mdrive_message_settings_cic();
       }
@@ -356,7 +369,7 @@ void loop() {
         send_zbe_acknowledge();
       #endif
       #if DOOR_VOLUME 
-        send_initial_volume();
+        send_initial_volume_cic();
       #endif
       #if ASD
         initialize_asd();
@@ -421,6 +434,12 @@ void loop() {
     #if DIM_DRL
     else if (k_msg.id == 0x3DD) {                                                                                                   // Received CKM setting status for lights.
       evaluate_drl_ckm();
+    }
+    #endif
+
+    #if F_NBT
+    else if (k_msg.id == 0x3DF) {                                                                                                   // Received CKM setting for AUTO blower speed.
+      evaluate_ihka_auto_ckm();
     }
     #endif
 

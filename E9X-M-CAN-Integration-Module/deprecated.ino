@@ -24,6 +24,8 @@ void set_kcan_filters(uint8_t *filter_set_ok_counter, uint8_t *filter_position_c
     *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1C6, STD);                                             // PDC acoustic message
     *filter_position_counter = *filter_position_counter + 1;
   #endif
+  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1D0, STD);                                               // Engine temperature
+  *filter_position_counter = *filter_position_counter + 1;
   #if MIRROR_UNDIM
     *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1EE, STD);                                             // Indicator stalk status from FRM (KCAN only).
     *filter_position_counter = *filter_position_counter + 1;
@@ -254,7 +256,7 @@ void evaluate_audio_volume_cic(void) {
 }
 
 
-void send_initial_volume(void) {
+void send_initial_volume_cic(void) {
   if (k_msg.buf[7] >= 3) {                                                                                                          // 0x273 has been transmitted X times according to the counter.
     if (!initial_volume_set && diag_transmit) {
       uint8_t restore_last_volume[] = {0x63, 4, 0x31, 0x23, peristent_volume, 0, 0, 0};

@@ -1,0 +1,10 @@
+0x2E6
+byte6 = 0x7F        auto fan control
+byte6 = 0x3F        manual fan control
+
+
+
+0x3DF
+9F FF FF            Auto fan intensity high
+6F FF FF            Auto fan intensity low
+5F FF FF            Auto fan intensity medium

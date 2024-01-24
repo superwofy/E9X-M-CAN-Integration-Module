@@ -530,7 +530,7 @@ void send_servotronic_message(void) {
   }
   
   servotronic_message[0] &= 0xF0;                                                                                                   // Discard current mode
-  if (mdrive_status && mdrive_svt[cas_key_number] == 0xF1) {                                                                        // Servotronic in sport mode.
+  if (mdrive_status && mdrive_svt[cas_key_number] >= 0xF1) {                                                                        // Servotronic in sport mode.
     servotronic_message[0] += 9;
   } else {
     servotronic_message[0] += 8;

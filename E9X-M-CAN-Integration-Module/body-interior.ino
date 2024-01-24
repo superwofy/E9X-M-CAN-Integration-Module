@@ -114,9 +114,6 @@ void evaluate_terminal_clutch_keyno_status(void) {
 
   if (ignition && !ignition_) {                                                                                                     // Ignition changed from OFF to ON.
     scale_cpu_speed();
-    #if USB_DISABLE
-      activate_usb(100);                                                                                                            // If this fails to run, the program button will need to be pressed to recover.
-    #endif
     serial_log("Ignition ON.", 2);
 
     #if DIM_DRL                                                                                                                     // These resets are required if quickly (less than 15s) switching igniton 
@@ -762,4 +759,48 @@ void send_f_kombi_lcd_brightness(void) {
     f_kombi_lcd_brightness[3] = 0xFE;                                                                                               // This makes the NBT switch to night mode.
   }
   kcan2_write_msg(make_msg_buf(0x393, 4, f_kombi_lcd_brightness));
+}
+
+
+void send_climate_popup_acknowledge(void) {
+  uint8_t climate_popup_acknowledge[] = {k_msg.buf[0], (uint8_t)((k_msg.buf[1] + 1) % 256)};
+  kcan_write_msg(make_msg_buf(0x339, 2, climate_popup_acknowledge));                                                                // This reply is required to allow cycling through AUTO blower modes.
+}
+
+
+void evaluate_ihka_auto_ckm(void) {
+  uint8_t new_speed = k_msg.buf[0] >> 4;
+  if (ihka_auto_blower_speed != new_speed) {
+    if (ignition) {
+      if (new_speed == 6) {
+        send_cc_message_text("Air distribution: AUTO Low. ", 4000);
+      } else if (new_speed == 5) {
+        send_cc_message_text("Air distribution: AUTO Medium.", 4000);
+      } else if (new_speed == 9) {
+        send_cc_message_text("Air distribution: AUTO High.", 4000);
+      }
+    }
+    ihka_auto_blower_speed = new_speed;
+  }
+}
+
+
+void evaluate_ihka_auto_state(void) {
+  uint8_t new_state = k_msg.buf[6] >> 4;
+  if (ihka_auto_blower_state != new_state) {
+    if (new_state == 7) {
+      serial_log("IHKA set to AUTO.", 3);
+      if (ihka_auto_blower_speed == 6) {
+        send_cc_message_text("Air distribution: AUTO Low. ", 4000);
+      } else if (ihka_auto_blower_speed == 5) {
+        send_cc_message_text("Air distribution: AUTO Medium.", 4000);
+      } else if (ihka_auto_blower_speed == 9) {
+        send_cc_message_text("Air distribution: AUTO High.", 4000);
+      }
+    } else {
+      send_cc_message_text("Air distribution: AUTO OFF. ", 2000);
+      serial_log("IHKA AUTO OFF.", 3);
+    }
+    ihka_auto_blower_state = new_state;
+  }
 }

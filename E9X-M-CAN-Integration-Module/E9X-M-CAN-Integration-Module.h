@@ -81,8 +81,10 @@ const unsigned long STANDARD_CLOCK = 528 * 1000000;
 
 #ifndef F_NBT
   #define F_NBT 0                                                                                                                   // Emulate KCAN2 network allowing NBT to integrate into Exx cars. Tested with p/n 9318750 HW07.
-  #define F_NBT_VIN_PATCH 1                                                                                                         // Requests CPS VIN from NBT before sending 0x380. Disable if using patched NBT binary.
-  #define F_NBT_CCC_ZBE 0                                                                                                           // Converts CCC ZBE1 messages for use with NBT.
+  #if F_NBT
+    #define F_NBT_VIN_PATCH 1                                                                                                       // Requests CPS VIN from NBT before sending 0x380. Disable if using patched NBT binary.
+    #define F_NBT_CCC_ZBE 0                                                                                                         // Converts CCC ZBE1 messages for use with NBT.
+  #endif
 #endif
 #if F_NBT
   // Stock IKM0S tops out at around 350hp / 500Nm. 
@@ -106,17 +108,13 @@ const unsigned long STANDARD_CLOCK = 528 * 1000000;
 #ifndef F_NIVI
   #define F_NIVI 0                                                                                                                  // Enable/disable FXX NVE diagnosis, wakeup and BN2000->BN2010 message translation.
 #endif
-const char *vsw_positions[] = {"Disabled", "Rear view camera: TRSVC", "N/A", "DVD changer: MMC", "Digital TV: VM", ""};
+const char *vsw_positions[] = {"Disabled", "Rear view camera: TRSVC", "Night Vision: NiVi", "DVD changer: MMC",
+                               "Digital TV: VM", "N/A", "N/A", "N/A", "N/A", "N/A"};
 
 /***********************************************************************************************************************************************************************************************************************************************
   These features are *very* implementation specific. They are disabled by default since they're unlikely to be used by anyone except me.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#if !DEBUG_MODE
-  #ifndef USB_DISABLE
-    #define USB_DISABLE 0                                                                                                           // USB can be disabled if not using Serial, for security reasons. Do not enable without modifying startup.c!
-  #endif
-#endif
 #ifndef HDC
   #define HDC 0                                                                                                                     // Gives a function to the HDC console button in non 4WD cars.
 #endif
@@ -449,6 +447,10 @@ unsigned long max_loop_timer = 0, loop_timer = 0;
 uint32_t kcan_error_counter = 0, kcan2_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;
 uint8_t torque_unit[4] = {1, 1, 1, 1}, power_unit[4] = {1, 1, 1, 1}, driving_mode = 0, f_units[] = {0, 0, 0, 0, 0, 0xF1};
+uint8_t engine_coolant_temperature = 48, engine_oil_temperature = 48;                                                               // Celsius temperature is: value - 48.
+CAN_message_t custom_cc_dismiss_buf, custom_cc_clear_buf;
+uint8_t ihka_auto_blower_speed = 5, ihka_auto_blower_state = 3;
+cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 #if SECRETS
   String serial_password = secret_serial_password;
 #else
