@@ -473,6 +473,9 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
       }
     }
+    else if (cmd == "custom_cc_test") {
+      send_cc_message_text("Hello world!                  ", 5000);
+    }
     else if (cmd == "faceplate_eject") {
       unsigned long time_now = millis();
       m = {faceplate_eject_buf, time_now};
@@ -532,9 +535,13 @@ void serial_debug_interpreter(void) {
       print_help();
     }
     else {
-      sprintf(serial_debug_string, "  Serial: command '%s' not recognized. "
-              "Use 'help' to see a list of available commands.", cmd.c_str());
-      serial_log(serial_debug_string, 0);
+      if (cmd == serial_password) {
+        serial_log("  Serial: Already unlocked.", 0);
+      } else {
+        sprintf(serial_debug_string, "  Serial: command '%s' not recognized. "
+                "Use 'help' to see a list of available commands.", cmd.c_str());
+        serial_log(serial_debug_string, 0);
+      }
     }
     serial_unlocked_timer = 0;
   } else {
@@ -621,6 +628,7 @@ void print_help(void) {
   #endif
   #if F_NBT
     serial_log("  hu_reboot - Restart the NBT_HU immediately."
+    "  custom_cc_test - Print hello world as a Check Control notification.\r\n"
     "  faceplate_eject - Simulate pressing the eject button on the faceplate.\r\n"
     "  faceplate_mute - Simulate pressing the power/mute button on the faceplate.\r\n"
     "  faceplate_seek_left - Simulate pressing the previous track button on the faceplate.\r\n"

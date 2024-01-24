@@ -581,6 +581,7 @@ void play_cc_gong(uint8_t gong_count) {
       kcan2_write_msg(cc_single_gong_buf);
     #endif
   }
+  gong_active = true;
 }
 
 

@@ -315,6 +315,10 @@ void cache_can_message_buffers(void) {                                          
   #if F_NBT
     uint8_t vol_request[] = {0x63, 5, 0x31, 1, 0xA0, 0x39, 0};
     vol_request_buf = make_msg_buf(0x6F1, 7, vol_request);
+    uint8_t custom_cc_dismiss[] = {0x46, 3, 0x50, 0xF0, 0, 0, 0, 0};
+    custom_cc_dismiss_buf = make_msg_buf(0x338, 8, custom_cc_dismiss);
+    uint8_t custom_cc_clear[] = {0x46, 3, 0x70, 0xF0, 0, 0, 0, 0};
+    custom_cc_clear_buf = make_msg_buf(0x338, 8, custom_cc_clear);
   #else
     uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0};
     vol_request_buf = make_msg_buf(0x6F1, 8, vol_request);
@@ -429,7 +433,7 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 void kcan2_write_msg(const CAN_message_t &msg) {
   #if F_NBT
-    if (kcan2_mode == MCP_NORMAL && vehicle_awakened_timer >= 5000) {                                                               // Prevent writing to the bus when sleeping or waking up.
+    if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 5000 || msg.id == 0x12F || msg.id == 0x130)) {                       // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
       byte send_buf[msg.len];
 
       // Sinkhole for unused messages.
@@ -442,7 +446,7 @@ void kcan2_write_msg(const CAN_message_t &msg) {
       else if (msg.id >= 0x5FF && msg.id <= 0x662) { return; }                                                                      // Diagnosis response messages from various modules.
       else if (msg.id == 0x6F1 && !(msg.buf[0] == 0x63 || msg.buf[0] == 0x67 || msg.buf[0] == 0x35)) { return; }                    // 6F1s not meant for the NBT/ZBE/TBX.
       else if (msg.id >= 0x6F5) { return; }
-      
+
       #if F_NBT_VIN_PATCH
         else if (msg.id == 0x380) {                                                                                                 // Patch NBT VIN to donor.
           if (donor_vin_initialized) {

@@ -217,9 +217,11 @@ void print_current_state(Stream &status_serial) {
           " Vehicle PTCAN: %s\r\n"
           " Terminal R: %s, Ignition: %s\r\n"
           " Engine: %s, RPM: %d, Torque: %.1f Nm, idling: %s\r\n"
+          " Coolant temperature: %d °C, Oil temperature %d °C\r\n"
           " Indicated speed: %d, Real speed: %d %s",
           vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF",
           engine_running ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
+          engine_coolant_temperature - 48, engine_oil_temperature - 48,
           indicated_speed, real_speed, speed_mph ? "MPH" : "KPH");
   status_serial.println(serial_debug_string);
   #if HDC
@@ -317,6 +319,8 @@ void print_current_state(Stream &status_serial) {
     status_serial.print("Normal");
   } else if (mdrive_svt[cas_key_number] == 0xF1) {
     status_serial.print("Sport");
+  } else if (mdrive_svt[cas_key_number] == 0xF2) {
+    status_serial.print("Sport+");
   }
   status_serial.println();
   sprintf(serial_debug_string, " Console POWER: %s\r\n"
@@ -609,6 +613,7 @@ void reset_sleep_variables(void) {
   faceplate_volume = 0;
   gong_active = false;
   faceplate_buttons_txq.flush();
+  nbt_cc_txq.flush();
   hazards_flash_txq.flush();
   #if F_NBT
     FACEPLATE_UART.end();                                                                                                           // Close serial connection.

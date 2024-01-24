@@ -295,6 +295,9 @@ void check_teensy_cpu_clock(void) {                                             
         #if DEBUG_MODE
           max_loop_timer = 0;
         #endif
+        #if F_NBT
+          send_cc_message_text("Teensy CPU at max temperature!", 0);
+        #endif
       }
     } else {
       if (clock_mode != 0) {

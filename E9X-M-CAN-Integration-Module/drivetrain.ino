@@ -83,7 +83,7 @@ void toggle_mdrive_message_active(void) {
     }                                                                                                                               // Else, POWER unchanged.
 
     #if FRM_AHL_MODE
-    if (mdrive_svt[cas_key_number] == 0xF1) {                                                                                       // Headlights will move faster if Servotronic is set to Sport.
+    if (mdrive_svt[cas_key_number] >= 0xF1) {                                                                                       // Headlights will move faster if Servotronic is set to Sport.
       kcan_write_msg(frm_ckm_ahl_sport_buf);
       serial_log("Set AHL to sport mode.", 2);
     }
@@ -186,8 +186,8 @@ void update_mdrive_can_message(void) {
   mdrive_message_bn2000[3] = mdrive_edc[cas_key_number];                                                                            // Copy EDC as is.
   if (mdrive_svt[cas_key_number] == 0xE9) {
     mdrive_message_bn2000[4] = 0x41;                                                                                                // SVT normal, MDrive OFF.
-  } else if (mdrive_svt[cas_key_number] == 0xF1) {
-    mdrive_message_bn2000[4] = 0x81;                                                                                                // SVT sport, MDrive OFF.
+  } else if (mdrive_svt[cas_key_number] == 0xF1 || mdrive_svt[cas_key_number] == 0xF2) {
+    mdrive_message_bn2000[4] = 0x81;                                                                                                // SVT sport (or Sport+ from NBT), MDrive OFF.
   }
 
   #if F_NBT
@@ -211,6 +211,8 @@ void update_mdrive_can_message(void) {
       mdrive_message_bn2010[3] = 1 << 4;                                                                                            // Comfort
     } else if (mdrive_svt[cas_key_number] == 0xF1) {
       mdrive_message_bn2010[3] = 2 << 4;                                                                                            // Sport
+    } else if (mdrive_svt[cas_key_number] == 0xF2) {
+      mdrive_message_bn2010[3] = 3 << 4;                                                                                            // Sport+
     }
 
     if (mdrive_edc[cas_key_number] == 0x20 || mdrive_edc[cas_key_number] == 0x21) {
@@ -317,7 +319,7 @@ void execute_mdrive_settings_changed_actions() {
         kcan_write_msg(frm_ckm_ahl_komfort_buf);
         serial_log("Set AHL to comfort mode with SVT setting of Normal.", 3);
       #endif
-    } else if (mdrive_svt[cas_key_number] == 0xF1) {
+    } else if (mdrive_svt[cas_key_number] >= 0xF1) {
       #if FRM_AHL_MODE
         kcan_write_msg(frm_ckm_ahl_sport_buf);
         serial_log("Set AHL to sport mode with SVT setting of Sport.", 3);
@@ -361,8 +363,8 @@ void update_mdrive_message_settings_nbt(void) {
         mdrive_svt[cas_key_number] = 0xE9;
       } else if ((k_msg.buf[2] >> 4) == 2) {                                                                                        // Sport.
         mdrive_svt[cas_key_number] = 0xF1;
-      } else if ((k_msg.buf[2] >> 4) == 3) {                                                                                        // Sport+ hardcoded to Sport for now.
-        mdrive_svt[cas_key_number] = 0xF1;
+      } else if ((k_msg.buf[2] >> 4) == 3) {                                                                                        // Sport+.
+        mdrive_svt[cas_key_number] = 0xF2;
       }
     }
 
@@ -635,6 +637,9 @@ void execute_alarm_after_stall(void) {
       alarm_siren_txq.push(&m);
     }
     serial_log("Alarm siren and hazards ON.", 0);
+    #if F_NBT
+      send_cc_message_text("Immobilizer activated!        ", 0);
+    #endif
     alarm_active = true;
   }
 }
@@ -668,19 +673,8 @@ void send_f_powertrain_2_status(void) {
       f_data_powertrain_2[3] |= 1;
     }
 
-    #if CONTROL_SHIFTLIGHTS
-      if (engine_coolant_warmed_up) {
-        f_data_powertrain_2[4] = 0x80;                                                                                              // Engine coolant temperature (C): temperature in hex - 48.
-        f_data_powertrain_2[5] = 0x80;                                                                                              // Engine oil temperature (C): temperature in hex - 48.
-      } else {
-        f_data_powertrain_2[4] = 0x3A;                                                                                              // 10 degrees.
-        f_data_powertrain_2[5] = 0x3A;
-      }
-    #else
-      f_data_powertrain_2[4] = 0x80;                                                                                                // Hardcode if this status is not available.
-      f_data_powertrain_2[5] = 0x80;
-    #endif
-
+    f_data_powertrain_2[4] = engine_coolant_temperature;                                                                            // Engine coolant temperature (C): value - 48.
+    f_data_powertrain_2[5] = engine_oil_temperature;                                                                                // Engine oil temperature (C): value - 48.
     f_data_powertrain_2[6] = 2 << 4;                                                                                                // Engine start allowed.
 
     if (reverse_gear_status) {
@@ -696,7 +690,9 @@ void send_f_powertrain_2_status(void) {
     f_data_powertrain_2[0] = f_data_powertrain_2_crc.calc();
     
     CAN_message_t f_data_powertrain_2_buf = make_msg_buf(0x3F9, 8, f_data_powertrain_2);
-    ptcan_write_msg(f_data_powertrain_2_buf);
+    #if F_NIVI
+      ptcan_write_msg(f_data_powertrain_2_buf);
+    #endif
     #if F_NBT
       kcan2_write_msg(f_data_powertrain_2_buf);
     #endif
@@ -752,11 +748,11 @@ void send_f_driving_dynamics_switch(void) {
 
     if (pdc_bus_status != 0xA4 && pdc_bus_status != 0xA5) {                                                                         // The popup interferes with the reverse camera.
       if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 7 
-          && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] == 0xF1) {                                            // Sportiest settings.
+          && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] >= 0xF1) {                                            // Sportiest settings.
         f_driving_dynamics[4] = 6;
         new_driving_mode = 2;
       } else if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 0x13 
-                  && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] == 0xF1) {                                    // Sportiest settings but with MDM.
+                  && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] >= 0xF1) {                                    // Sportiest settings but with MDM.
         f_driving_dynamics[4] = 5;
         new_driving_mode = 1;
       } else {
@@ -869,4 +865,10 @@ void send_f_oil_level(void) {                                                   
       f_oil_level_timer = 500;
     }
   }
+}
+
+
+void evaluate_engine_temperature(void) {
+  engine_coolant_temperature = k_msg.buf[0];
+  engine_oil_temperature = k_msg.buf[1];
 }

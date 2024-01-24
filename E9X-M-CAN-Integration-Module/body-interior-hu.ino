@@ -476,3 +476,43 @@ void convert_f_units(bool sport_units_only) {
     kcan2_write_msg(make_msg_buf(0x2F7, 6, f_units));
   #endif
 }
+
+
+void send_cc_message_text(const char input[], uint16_t dismiss_time) {
+  nbt_cc_txq.flush();                                                                                                               // Clear any pending dimiss messages.
+  uint8_t input_length = strlen(input);
+  uint8_t padded_length = input_length + (3 - (input_length % 3)) % 3;
+  char padded_input[padded_length];
+  memset(padded_input, ' ', padded_length);
+  strncpy(padded_input, input, input_length);
+  
+  uint8_t cc_message_chunk_counter = 0xDF;
+  for (uint8_t i = 0; i < (padded_length / 3); i++) {
+    cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 256;
+    uint8_t cc_message_text[] = {0x46, 3, 0x72, 0xF0, cc_message_chunk_counter,
+                                padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
+    kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text));
+  }
+  
+  cc_message_chunk_counter = (cc_message_chunk_counter + 3) % 256;
+  uint8_t cc_message_text_end[] = {0x46, 3, 0x72, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
+  kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));
+  cc_message_text_end[4] = (cc_message_chunk_counter + 2) % 256;
+  kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));
+  if (dismiss_time > 0) {
+    unsigned long time_now = millis();
+    m = {custom_cc_dismiss_buf, time_now + dismiss_time};
+    nbt_cc_txq.push(&m);
+  }
+}
+
+
+void check_nbt_cc_queue(void) {
+  if (!nbt_cc_txq.isEmpty()) {
+    nbt_cc_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan2_write_msg(delayed_tx.tx_msg);
+      nbt_cc_txq.drop();
+    }
+  }
+}
