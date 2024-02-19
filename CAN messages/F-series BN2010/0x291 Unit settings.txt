@@ -1,3 +1,4 @@
+Byte3 second half - Pressure
 Byte4 first half - Torque
 Byte4 second half - Power
 
@@ -24,3 +25,15 @@ KW:
 hp:
 00 03 00 00 02 F0
 
+
+
+Pressure:
+
+bar:
+00 03 00 01 00 F0 
+
+psi:
+00 03 00 03 00 F0 
+
+kPa:
+00 03 00 02 00 F0 

@@ -6,13 +6,16 @@ To NBT:
 0xA3:  Faceplate seek buttons.													UART CIC faceplate.
 0xF1:  Faceplate volume knob.													UART CIC faceplate.
 0x12F: Terminal status. 														Translated from BN2000 0x130.
+0x163: Road incline.															Obtained from SINE through 0x6F1.
+0x180: X_VIEW pitch angle.														Obtained from SINE through 0x6F1.
 0x19F: Yaw rate (gyro). Needed on NBT HW >= 10.									Translated from BN2000 0x1A0.
 0x1A1: Vehicle speed. 															Translated from BN2000 0x1A0.
+0x1B6: Unknown.																	Blocked.
 0x1C4, 0x1C5: Distance.															Translated from BN2000 0x1A6.
 0x253: Sport displays data.
 0x2A5: Brightness.																Translated from BN2000 0x314.
 0x2C1: PDC status.																Translated from BN2000 0x3AF.
-0x2ED: Standstill status.														Translated from BN2000 0x1B4.
+0x2ED: Standstill status.														Translated from BN2000 0x1A0.
 0x2F7: Units.																	Expanded from BN2000 0x2F7.
 0x301, 0x302: Steering angle, steering angle effective.							Translated from BN2000 0xC8.
 0x369: Flat Tyre Monitor status													Translated from BN2000 0x31D.
@@ -20,6 +23,7 @@ To NBT:
 0x393: Kombi LCD brightness. Used by NBT for CID brightness.					Translated from BN2000 0x2C0.
 0x3A0: Vehicle energy condition. 												Translated from BN2000 0x3B4.
 0x3A7: Driving dynamics switch. Used for FDS mode popup.						Adapted from mdrive_status and dsc_program_status.
+0x3DD: Light CKM status.														Modified value sent to NBT to match 0x3DC.
 0x3F9: Powertrain data 2.														Translated from BN2000 0xAA, 0x130, 0x332 and 0x3B0.
 0x42E: MDrive status.															Translated from BN2000 0x399.
 0x435: Oil level measurement.													Translated from BN2000 0x381.
@@ -29,7 +33,8 @@ To NBT:
 
 
 From NBT:
-0x291: Sports display units.
+0x291: iDrive units.
 0x42F: MDrive settings.
 0x317: ZBE related. Discarded.
 0x31A: PDC bus status request. Converted to 0x3AE. Not forwarded to KCAN.
+0x3DC: Light CKM setting. Stored last byte used to correct 0x3DD.

@@ -24,7 +24,7 @@ Included are also tools to allow full manipulation of the program section in the
 
 **Required hardware:**
 * MSD81 DME.
-* NBT/CIC iDrive.
+* NBT EVO/NBT/CIC iDrive.
 	* ID3 NBT has now replaced the head unit used in this project. Previous CIC functionality is still available but no longer tested.
 * MK60E5 or DSC8 (E89 Z4) non-M modules.
 * E9X M3 centre console trim and buttons or similar.
@@ -57,6 +57,7 @@ Included are also tools to allow full manipulation of the program section in the
 	* Display M Drive settings menu when holding M button (CIC only)
 * Display Shiftlights - including startup animation and sync with the M3 KOMBI variable redline.
 * Display a needle sweep animation on startup.
+	* On NBT sports displays do a sweep also.
 * Display the Launch Control flag (6MT-MHD).
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
 * Fold/Un-fold mirrors when locking/unlocking.
@@ -84,6 +85,9 @@ Included are also tools to allow full manipulation of the program section in the
 * Enable use of FXX K-CAN1 controller with CIC.
 * Enable use of FXX VSW01 (VideoSWitch) module with NBT.
 * Enable use of FXX NIVI2/3 module.
+* Enable diagnosis encoding and flashing through Tool32 and E-Sys for F series modules via J2534 passthru over D-CAN.
+	* For E-sys a custom SVT is used. See my example [SVT](SVT.xml).
+	* Tested with pttbmw_2.1.0.0 (32-bit Java only!) and GM MDI.
 * Enable full diagnosis and coding of SVT70 module.
 * Turn on heated seats below a set temperature.
 * Turn on heated steering below a set temperature.
@@ -131,7 +135,7 @@ A serial interface with a set of commands is implemented to allow manipulation d
 **Arduino IDE settings:**
 
 Board: Teensy 4.0  
-Optimize: Fastest with LTO  
+Optimize: Faster with LTO  
 CPU Speed: 396 MHz  
 USB Type: Dual Serial for debugging, Single for normal operation.  
 

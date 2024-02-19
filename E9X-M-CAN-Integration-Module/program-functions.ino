@@ -37,7 +37,7 @@ void read_initialize_eeprom(void) {
     EEPROM.update(26, 1);
     EEPROM.update(27, 1);
     EEPROM.update(28, 1);
-    EEPROM.update(29, 0);                                                                                                           // Un-fold mirrors when unlocking
+    EEPROM.update(29, 0);                                                                                                           // Un-fold exterior mirrors when unlocking
     EEPROM.update(30, 1);                                                                                                           // Immobilizer
     EEPROM.update(31, 1);
     EEPROM.update(32, 0xFF);                                                                                                        // CPU temp
@@ -54,6 +54,9 @@ void read_initialize_eeprom(void) {
     EEPROM.update(43, 0);
     EEPROM.update(44, 0);                                                                                                           // Door locks
     EEPROM.update(45, 0);
+    EEPROM.update(46, 1);                                                                                                           // Pressure units
+    EEPROM.update(47, 1);
+    EEPROM.update(48, 1);
 
     update_eeprom_checksum();
   } else {
@@ -77,10 +80,13 @@ void read_initialize_eeprom(void) {
     #if F_NBT
       torque_unit[0] = EEPROM.read(23);
       power_unit[0] = EEPROM.read(24);
-      torque_unit[0] = EEPROM.read(25);
-      power_unit[0] = EEPROM.read(26);
-      torque_unit[0] = EEPROM.read(27);
-      power_unit[0] = EEPROM.read(28);
+      torque_unit[1] = EEPROM.read(25);
+      power_unit[1] = EEPROM.read(26);
+      torque_unit[2] = EEPROM.read(27);
+      power_unit[2] = EEPROM.read(28);
+      pressure_unit[0] = EEPROM.read(46);
+      pressure_unit[1] = EEPROM.read(47);
+      pressure_unit[2] = EEPROM.read(48);
     #endif
     #if AUTO_MIRROR_FOLD
       unfold_with_door_open = EEPROM.read(29) == 1 ? true : false;
@@ -127,7 +133,7 @@ void read_initialize_eeprom(void) {
 
 uint16_t eeprom_crc(void) {
   teensy_eeprom_crc.restart();
-  for (uint8_t i = 2; i < 46; i++) {
+  for (uint8_t i = 2; i < 49; i++) {
     teensy_eeprom_crc.add(EEPROM.read(i));
   }
   return teensy_eeprom_crc.calc();
@@ -161,6 +167,9 @@ void update_data_in_eeprom(void) {                                              
     EEPROM.update(26, power_unit[1]);
     EEPROM.update(27, torque_unit[2]);
     EEPROM.update(28, power_unit[2]);
+    EEPROM.update(46, pressure_unit[0]);
+    EEPROM.update(47, pressure_unit[1]);
+    EEPROM.update(48, pressure_unit[2]);
   #endif
   #if AUTO_MIRROR_FOLD
     EEPROM.update(29, unfold_with_door_open);
@@ -249,24 +258,32 @@ void print_current_state(Stream &status_serial) {
           clutch_pressed ? "Depressed" : "Released",
           vehicle_moving ? "Moving" : "Stationary");
   status_serial.println(serial_debug_string);
-  #if F_NIVI
-    if (e_vehicle_direction == 0) {
-      status_serial.println(" Direction: None");
-    } else if (e_vehicle_direction == 1) {
-      status_serial.println(" Direction: Forward");
-    } else if (e_vehicle_direction == 2) {
-      status_serial.println(" Direction: Backward");
-    } else {
-      status_serial.println(" Direction: Unknown");
+  
+  if (e_vehicle_direction == 0) {
+    status_serial.println(" Direction: None");
+  } else if (e_vehicle_direction == 1) {
+    status_serial.println(" Direction: Forward");
+  } else if (e_vehicle_direction == 2) {
+    status_serial.println(" Direction: Backward");
+  } else {
+    status_serial.println(" Direction: Unknown");
+  }
+  #if F_NBT || F_NIVI
+    if (ignition) {
+      sprintf(serial_debug_string, " Sine pitch angle: %.1f, FXX-Converted: %.1f degrees\r\n"
+              " Sine roll angle: %.1f, FXX-Converted: %.1f degrees\r\n"
+              " Yaw rate FXX-Converted: %.2f degrees/s",
+              sine_pitch_angle, (f_vehicle_pitch_angle - 0x2000) * 0.05 - 64.0,
+              sine_roll_angle, (f_vehicle_roll_angle - 0x2000) * 0.05 - 64.0,
+              yaw_rate * 0.005 - 163.84);
+      status_serial.println(serial_debug_string);
     }
-    sprintf(serial_debug_string, " Sine Tilt: %.1f, FXX-Converted: %.1f deg\r\n"
-            " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
-            " Lateral acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
-            " Yaw rate FXX-Converted: %.2f deg/s",
-            sine_tilt_angle, f_vehicle_angle * 0.05 - 64.0, 
+  #endif
+  #if F_NIVI
+    sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
+            " Lateral acceleration: %.2f g, FXX-Converted: %.2f m/s^2",          
             e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0,
-            e_lateral_acceleration * 0.10197162129779283, lateral_acceleration * 0.002 - 65.0,
-            yaw_rate * 0.005 - 163.84);
+            e_lateral_acceleration * 0.10197162129779283, lateral_acceleration * 0.002 - 65.0);
     status_serial.println(serial_debug_string);
   #endif
   #if F_NBT || F_NIVI || MIRROR_UNDIM
@@ -368,13 +385,8 @@ void print_current_state(Stream &status_serial) {
   sprintf(serial_debug_string, " Door locks: %s, alarm: %s", doors_locked ? "ON" : "OFF", doors_alarmed ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
   #if DOOR_VOLUME
-    #if RHD
-      sprintf(serial_debug_string, " Passenger's door: %s, Driver's door: %s", 
-              left_door_open ? "Open" : "Closed", right_door_open ? "Open" : "Closed");
-    #else
-      sprintf(serial_debug_string, " Driver's's door: %s, Passenger's door: %s", 
-              left_door_open ? "Open" : "Closed", right_door_open ? "Open" : "Closed");
-    #endif
+    sprintf(serial_debug_string, " Left door: %s, Right door: %s", 
+            left_door_open ? "Open" : "Closed", right_door_open ? "Open" : "Closed");
     status_serial.println(serial_debug_string);
     sprintf(serial_debug_string, " iDrive volume: 0x%X", peristent_volume);
     status_serial.println(serial_debug_string);
@@ -561,11 +573,14 @@ void reset_ignition_variables(void) {                                           
     reset_key_cc();
   #endif
   reverse_gear_status = false;
-  sine_angle_requested = false;
-  #if F_NBT
-    kcan2_write_msg(f_oil_level_measuring_buf);                                                                                     // Needed to reset the oil level display when switching ingition OFF
+  sine_pitch_angle_requested = sine_roll_angle_requested = false;
+  #if F_NBT && !F_NBT_EVO6
+    send_f_pdc_function_status(true);                                                                                               // If PDC was active, update NBT with the OFF status.
+    send_f_ftm_status();                                                                                                            // FTM is now inactive. ID3/4 require this to reset the stats displayed.
+    f_oil_level_measuring_timer = 59500;                                                                                            // Measure oil level when ignition is turned ON.
+    kcan2_write_msg(f_oil_level_measuring_buf);                                                                                     // Needed to reset the oil level display when switching ingition OFF.
     f_oil_level_timer = 0;
-    f_oil_level_measuring_timer = 8000;
+    f_oil_level_measuring_timer = 60000;
   #endif
 }
 
@@ -624,4 +639,5 @@ void reset_sleep_variables(void) {
   kcan_resend_txq.flush();
   ptcan_resend_txq.flush();
   dcan_resend_txq.flush();
+  f_drl_ckm_request = 0;
 }

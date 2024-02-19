@@ -154,6 +154,10 @@ void needle_sweep_animation(void) {
     m = {fuel_needle_release_buf, time_now + 3000};
     kombi_needle_txq.push(&m);
     serial_log("Sending needle sweep animation.", 3);
+
+    #if F_NBT
+      send_nbt_sport_displays_data(true);
+    #endif
   }
 }
 
@@ -291,24 +295,37 @@ void send_f_ftm_status(void) {
   f_ftm_status_alive_counter == 0xE ? f_ftm_status_alive_counter = 0 
                                     : f_ftm_status_alive_counter++;
 
-  if (ignition) {
-    if (k_msg.buf[0] == 0) {                                                                                                        // Active
-      if (engine_running) {
-        f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
-      } else {
-        f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
-      }
-    } else if (k_msg.buf[0] == 3) {                                                                                                 // Re-setting
-      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+  #if F_NBT_EVO6
+    if (k_msg.buf[0] == 0) {
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
     } else if (k_msg.buf[0] == 1) {
-      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;                                                                   // Failure
-    } else {                                                                                                                        // Other, e.g pressure low.
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;
+    } else if (k_msg.buf[0] == 3) {
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+    } else {
       f_ftm_status[2] = 0xA1;
       f_ftm_status[3] = 0x30;
     }
-  } else {
-    f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
-  }
+  #else
+    if (ignition) {
+      if (k_msg.buf[0] == 0) {                                                                                                      // Active
+        if (engine_running) {
+          f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
+        } else {
+          f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+        }
+      } else if (k_msg.buf[0] == 3) {                                                                                               // Re-setting
+        f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+      } else if (k_msg.buf[0] == 1) {
+        f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;                                                                 // Failure
+      } else {                                                                                                                      // Other, e.g pressure low.
+        f_ftm_status[2] = 0xA1;
+        f_ftm_status[3] = 0x30;
+      }
+    } else {
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+    }
+  #endif
 
   f_ftm_status_crc.restart();
   for (uint8_t i = 1; i < 5; i++) {
@@ -442,15 +459,20 @@ void evaluate_pdc_bus_status(void) {
 
 
 void evaluate_f_pdc_function_request(void) {
-  if (k_msg.buf[0] > 0x10) {                                                                                                      // Navigated away from reversing screen.
-    kcan_write_msg(camera_inactive_buf);
-  } else {
-    if (f_pdc_request != k_msg.buf[1]) {                                                                                          // PDC only, camera OFF.
-      f_pdc_request = k_msg.buf[1];
-      if (f_pdc_request == 1) {
-        kcan_write_msg(camera_off_buf);
-      } else if (f_pdc_request == 5) {                                                                                            // Camera ON.
-        kcan_write_msg(camera_on_buf);
+  if (k_msg.buf[3] != 4) {                                                                                                          // The first 0x31A should be ignored. Its Byte3 is 4. Next message will be 8.
+    if (k_msg.buf[0] > 0x10) {                                                                                                      // Navigated away from reversing screen.
+      kcan_write_msg(camera_inactive_buf);
+      kcan2_write_msg(camera_inactive_buf);
+    } else {
+      if (f_pdc_request != k_msg.buf[1]) {                                                                                          // PDC only, camera OFF.
+        f_pdc_request = k_msg.buf[1];
+        if (f_pdc_request == 1) {
+          kcan_write_msg(camera_off_buf);
+          kcan2_write_msg(camera_off_buf);
+        } else if (f_pdc_request == 5) {                                                                                            // Camera ON.
+          kcan_write_msg(camera_on_buf);
+          kcan2_write_msg(camera_on_buf);
+        }
       }
     }
   }
@@ -601,7 +623,7 @@ void send_f_pdc_function_status(bool disable) {
 }
 
 
-void send_nbt_sport_displays_data(void) {
+void send_nbt_sport_displays_data(bool startup_animation) {
   #if F_NBT
     if (terminal_r) {
       uint8_t nbt_sport_data[] = {0, 0, 0, 0xFF};
@@ -627,22 +649,32 @@ void send_nbt_sport_displays_data(void) {
         torque_factor = 0.1;
       }
 
-      if (engine_running) {
-        uint16_t raw_value = (pt_msg.buf[2] << 4) | (pt_msg.buf[1] >> 4);                                                           // 12-bit EXX torque (TORQ_AVL - torque actual-value at the clutch).
-        int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
-        engine_torque = signed_value * 0.5 * torque_factor;                                                                         // Signed and scaled Nm value.
+      if (startup_animation) {
+        nbt_sport_data[0] = nbt_sport_data[2] = 0x64;                                                                               // Set to 100% on startup to match needle sweep.
+        ignore_sports_data_counter = 10;
+      } else {
+        if (ignore_sports_data_counter == 0) {
+          if (engine_running) {
+            uint16_t raw_value = (k_msg.buf[2] << 4) | (k_msg.buf[1] >> 4);                                                         // 12-bit EXX torque (TORQ_AVL - torque actual-value at the clutch).
+            int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
+            engine_torque = signed_value * 0.5 * torque_factor;                                                                     // Signed and scaled Nm value.
 
-        if (engine_torque > max_torque) { engine_torque = max_torque; }                                                             // Ensure we don't exceed the scale.
-        if (engine_torque > 0) {                                                                                                    // This value can be negative. When coasting?
-          uint8_t torque_percentage = round((engine_torque / max_torque) * 100);
-          nbt_sport_data[0] = torque_percentage;
+            if (engine_torque > max_torque) { engine_torque = max_torque; }                                                         // Ensure we don't exceed the scale.
+            if (engine_torque > 10) {                                                                                               // This value can be negative. When coasting? Add a minimum to prevent idle twitching.
+              uint8_t torque_percentage = round((engine_torque / max_torque) * 100);
+              nbt_sport_data[0] = torque_percentage;
 
-          float calculated_power = ((engine_torque * (RPM / 4)) / 9548) * power_factor;
-          if (calculated_power > max_power) { calculated_power = max_power; }
-          if (calculated_power > 0) {
-            uint8_t power_percentage = round((calculated_power / max_power) * 100);
-            nbt_sport_data[2] = power_percentage;
+              float calculated_power = ((engine_torque * (RPM / 4)) / 9548) * power_factor;
+              if (calculated_power > max_power) { calculated_power = max_power; }
+              if (calculated_power > 0) {
+                uint8_t power_percentage = round((calculated_power / max_power) * 100);
+                nbt_sport_data[2] = power_percentage;
+              }
+            }
           }
+        } else {
+          nbt_sport_data[0] = nbt_sport_data[2] = 0x64;
+          ignore_sports_data_counter--;
         }
       }
 

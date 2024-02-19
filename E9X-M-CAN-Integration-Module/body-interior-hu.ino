@@ -285,13 +285,11 @@ void evaluate_faceplate_uart(void) {
   #if F_NBT
     uint8_t faceplate_status_message[7] = {0};
 
-    if (vehicle_awakened_timer >= 200) {
+    if (vehicle_awakened_timer >= 500) {
       if (FACEPLATE_UART.available() == 7) {                                                                                        // Wait for the full message to come in. Cycle time 1s.
         for (uint8_t i = 0; i < 7; i++) {
           faceplate_status_message[i] = FACEPLATE_UART.read();
-          // Serial.print(faceplate_status_message[i], HEX); Serial.print(" ");
         }
-        // Serial.println();
 
         if (faceplate_status_message[0] != 0x55) {                                                                                  // Faceplate is in some error state which should be ignored.
           FACEPLATE_UART.clear();
@@ -445,33 +443,37 @@ void evaluate_cc_gong_status(void) {
 }
 
 
-void evaluate_sport_units(void) {
-  uint8_t new_torque_unit = k_msg.buf[4] >> 4, new_power_unit = k_msg.buf[4] & 0xF;
+void evaluate_idrive_units(void) {
+  uint8_t new_torque_unit = k_msg.buf[4] >> 4, new_power_unit = k_msg.buf[4] & 0xF, new_pressure_unit = k_msg.buf[3] & 0xF;
   if (new_torque_unit > 0) {
     torque_unit[cas_key_number] = new_torque_unit;
   }
   if (new_power_unit > 0) {
     power_unit[cas_key_number] = new_power_unit;
   }
+  if (new_pressure_unit > 0) {
+    pressure_unit[cas_key_number] = new_pressure_unit;
+  }
   #if DEBUG_MODE
-      sprintf(serial_debug_string, "Received sport units: %s/%s.", 
+      sprintf(serial_debug_string, "Received iDrive units: %s/%s/%s.", 
               torque_unit[cas_key_number] == 1 ? "Nm" : (torque_unit[cas_key_number] == 2 ? "lb-ft" : (torque_unit[cas_key_number] == 3 ? "Kg-m" : "-")), 
-              power_unit[cas_key_number] == 1 ? "kW" :  (power_unit[cas_key_number] == 2 ? "hp" : "-"));
+              power_unit[cas_key_number] == 1 ? "kW" :  (power_unit[cas_key_number] == 2 ? "hp" : "-"),
+              pressure_unit[cas_key_number] == 1 ? "bar" : (pressure_unit[cas_key_number] == 2 ? "kPa" : (pressure_unit[cas_key_number] == 3 ? "psi" : "-")));
       serial_log(serial_debug_string, 3);
   #endif
   convert_f_units(true);
-  send_nbt_sport_displays_data();                                                                                                  // Update the scale for the new units.
+  send_nbt_sport_displays_data(false);                                                                                              // Update the scale for the new units.
 }
 
 
-void convert_f_units(bool sport_units_only) {
+void convert_f_units(bool idrive_units_only) {
   #if F_NBT
-    if (!sport_units_only) {
+    if (!idrive_units_only) {
       f_units[0] = k_msg.buf[0];
       f_units[1] = k_msg.buf[1];
       f_units[2] = k_msg.buf[2];
-      f_units[3] = k_msg.buf[3];
     }
+    f_units[3] = (k_msg.buf[3] & 0xF0) | pressure_unit[cas_key_number];
     f_units[4] = (torque_unit[cas_key_number] << 4) | power_unit[cas_key_number];                                                   // The units message is mostly the same with the addition of units in Byte4.
     kcan2_write_msg(make_msg_buf(0x2F7, 6, f_units));
   #endif
@@ -479,6 +481,11 @@ void convert_f_units(bool sport_units_only) {
 
 
 void send_cc_message_text(const char input[], uint16_t dismiss_time) {
+
+  #if F_NBT_EVO6
+    return;       // Disable for now.
+  #endif
+
   nbt_cc_txq.flush();                                                                                                               // Clear any pending dimiss messages.
   uint8_t input_length = strlen(input);
   uint8_t padded_length = input_length + (3 - (input_length % 3)) % 3;
@@ -489,13 +496,22 @@ void send_cc_message_text(const char input[], uint16_t dismiss_time) {
   uint8_t cc_message_chunk_counter = 0xDF;
   for (uint8_t i = 0; i < (padded_length / 3); i++) {
     cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 256;
-    uint8_t cc_message_text[] = {0x46, 3, 0x72, 0xF0, cc_message_chunk_counter,
-                                padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
+    #if F_NBT_EVO6
+      uint8_t cc_message_text[] = {0x46, 3, 0x32, 0xF0, cc_message_chunk_counter,
+                                  padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
+    #else
+      uint8_t cc_message_text[] = {0x46, 3, 0x72, 0xF0, cc_message_chunk_counter,
+                                  padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
+    #endif
     kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text));
   }
   
   cc_message_chunk_counter = (cc_message_chunk_counter + 3) % 256;
-  uint8_t cc_message_text_end[] = {0x46, 3, 0x72, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
+  #if F_NBT_EVO6
+    uint8_t cc_message_text_end[] = {0x46, 3, 0x32, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
+  #else
+    uint8_t cc_message_text_end[] = {0x46, 3, 0x72, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
+  #endif
   kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));
   cc_message_text_end[4] = (cc_message_chunk_counter + 2) % 256;
   kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));

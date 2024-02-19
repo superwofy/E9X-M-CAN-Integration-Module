@@ -1,124 +1,197 @@
-# NBT
+# NBT EVO ID5/6 18-03, Coded as F082 3R92.
 
-SERVICE_HISTORY                                             // Disable service history in Vehicle status
-	nicht_aktiv
-IBA                                                         // Disables owner's manual
-	nicht_aktiv
-REFERENCE_CHANNEL_TEL                                       // Echo fix for non-FXX amplifier
-	nicht_aktiv
-HELLIGKEIT_AMBILIGHT                                        // Disable interior brightness setting
-	nicht_aktiv
-SETTINGS_TIME_AUTOMATIC                                     // Update time with GPS
-	navigation
-MACRO_CAM_LEGALDISCLAIMER                                   // Camera disclaimers
-	kein_ld
-COMMUNICATION_PARKMASTER                                    // PDC display not working without this
-	gen2
-SLEEPDELAY_CLAMP30B_MIN                                     // Sleep after 5 min
-	1E
-KEY_CONF_TAILGATE                                           // Hides tailgate button menu
-	nicht_aktiv
-KEY_CONF_COMFORT
-	nicht_aktiv
-MDRIVE                                                      // Enable MDrive
-	aktiv
-DSC_OFF                                                     // Enable DSC OFF in MDrive settings
-	aktiv
-ECO_MODE                                                    // Deactivates ECO mode and Efficient dynamics
-	nicht_aktiv
-MACRO_FDS                                                   // FDS popup display
-	only_popup
-M_VEHICLE                                                   // Darker graphic for sport displays
-	aktiv
-MICROPHONE_POSITION                                         // Mic in FZD
-	wert_03
-EINBAUWINKEL_HU_PITCH                                       // Gyro parameters from F25 (has somewhat similar dash position)
-	p_140
-EINBAUWINKEL_HU_YAW
-	p_55
-SWITCH_MLS_MI
-	aktiv
+SERVICE_HISTORY                                                         // Disable service history in Vehicle status
+    nicht_aktiv
+IBA                                                                     // Disables owner's manual
+    nicht_aktiv
+SETTINGS_TIME_AUTOMATIC                                                 // Update time with GPS
+    navigation
+MMI_STATISTIK                                                           // Disable some logging
+    nicht_aktiv
+HELLIGKEIT_AMBILIGHT                                                    // Disable interior brightness setting
+    nicht_aktiv
+DEAKTIVIERUNGSMOEGLICHKEIT_AMBILIGHT
+    deaktivierung_bmw
+COLOUR_SWITCH
+    nicht_aktiv
+MACRO_CAM_LEGALDISCLAIMER                                               // Camera disclaimer
+    kein_ld
+COMMUNICATION_PARKMASTER                                                // PDC not working without this.
+    gen2
+SLEEPDELAY_CLAMP30B_MIN                                                 // Sleep after 5 min
+    1E
+ECO_CSC_KOMBI
+    nicht_aktiv
+ID5_COLOR_SET
+    nicht_aktiv
+CC_CBS_ETH_SERVICE_VERSION
+    version_1
+ZBE_HARDKEY_LAYOUT_NEW
+    nicht_aktiv
+M_DIGITAL_TACHO
+    nicht_aktiv
+SETTINGS_INFO_DISPLAY
+    nicht_aktiv
+SETTINGS_INFO_DISPLAY_DATE
+    nicht_aktiv
+KEY_CONF_TAILGATE                                                       // Hides tailgate button menu
+    nicht_aktiv
+M_MENUE                                                                 // M Setup instead of MDrive
+    aktiv
+MDRIVE_CONFIG                                                           // Single MDrive
+    1_menu
+ECO_MODE                                                                // Deactivates ECO mode and Efficient dynamics
+    nicht_aktiv
+HIST_ZOOM
+    nicht_aktiv
+HIST_GAS_CONSUMP
+    nicht_aktiv
+DRIVE_EXP_BRW
+    nicht_aktiv
+MACRO_FDS                                                               // FDS popup display
+    only_popup
+CAM_ECU                                                                 // VSW output connected to +21, -24 and shield 23 of A42*1B.
+    wert_5
+TV
+    wert_10
+MICROPHONE_POSITION                                                     // Mic in FZD
+    wert_03
 BASIS_KOMBI_MMI_LIST
-	aktiv
+    aktiv
 GATEWAYTABLE
-	table_5
+    table_5
 PRODUKTLINIE
-	lg
+    lg
+KOMBI_CIC
+    kombi_low
+CAMERA_SYSTEM
+    trsvc
+X_VIEW
+    aktiv
+
+
+
+# NBT HW07
+
+SERVICE_HISTORY                                                         // Disable service history in Vehicle status
+    nicht_aktiv
+IBA                                                                     // Disables owner's manual
+    nicht_aktiv
+REFERENCE_CHANNEL_TEL                                                   // Echo fix for non-FXX amplifier
+    nicht_aktiv
+HELLIGKEIT_AMBILIGHT                                                    // Disable interior brightness setting
+    nicht_aktiv
+SETTINGS_TIME_AUTOMATIC                                                 // Update time with GPS
+    navigation
+MACRO_CAM_LEGALDISCLAIMER                                               // Camera disclaimers
+    kein_ld
+COMMUNICATION_PARKMASTER                                                // PDC display not working without this
+    gen2
+SLEEPDELAY_CLAMP30B_MIN                                                 // Sleep after 5 min
+    1E
+KEY_CONF_TAILGATE                                                       // Hides tailgate button menu
+    nicht_aktiv
+KEY_CONF_COMFORT
+    nicht_aktiv
+MDRIVE                                                                  // Enable MDrive
+    aktiv
+DSC_OFF                                                                 // Enable DSC OFF in MDrive settings
+    aktiv
+ECO_MODE                                                                // Deactivates ECO mode and Efficient dynamics
+    nicht_aktiv
+MACRO_FDS                                                               // FDS popup display
+    only_popup
+M_VEHICLE                                                               // Darker graphic for sport displays
+    aktiv
+MICROPHONE_POSITION                                                     // Mic in FZD
+    wert_03
+EINBAUWINKEL_HU_PITCH                                                   // Gyro parameters from F25 (has somewhat similar dash position)
+    p_140
+EINBAUWINKEL_HU_YAW
+    p_55
+SWITCH_MLS_MI
+    aktiv
+BASIS_KOMBI_MMI_LIST
+    aktiv
+GATEWAYTABLE
+    table_5
+PRODUKTLINIE
+    lg
 
 
 
 # CIC
 
-CIC_MDRIVE                                                  // Enables M3 MDrive
-	aktiv
-M_KEY_SETTINGS                                              // Enables M3 key profile settings
-	aktiv
-EDC_CIC                                                     // EDC, if retrofitted.
-	aktiv
-DSC_OFF_CIC                                                 // Allows disabling DSC from MDrive menu,
-	aktiv
-MACRO_L6_PARKMENU                                           // Rear view camera settings
-	aktiv
+CIC_MDRIVE                                                              // Enables M3 MDrive
+    aktiv
+M_KEY_SETTINGS                                                          // Enables M3 key profile settings
+    aktiv
+EDC_CIC                                                                 // EDC, if retrofitted.
+    aktiv
+DSC_OFF_CIC                                                             // Allows disabling DSC from MDrive menu,
+    aktiv
+MACRO_L6_PARKMENU                                                       // Rear view camera settings
+    aktiv
 
 
 
 # KOMBI
 
-MMI_ENA_SHIFTLIGHTS                                         // Enable shiftlights
-	aktiv
-DSC_VARIANTE                                                // Changes DSC symbol when disabled, disables DTC mode kombi screen warning
-	wert_02
+MMI_ENA_SHIFTLIGHTS                                                     // Enable shiftlights
+    aktiv
+DSC_VARIANTE                                                            // Changes DSC symbol when disabled, disables DTC mode kombi screen warning
+    wert_02
 
 
 
 # IHKA
 
-MSA                                                         // Activates the Auto-Start-Stop button.
-	aktiv
+MSA                                                                     // Activates the Auto-Start-Stop button.
+    aktiv
 
 
 
 # SVT 70: E70 X5M params
 
 KENNLINIEN1_3_NORM
-	wert_07
+    wert_07
 KENNLINIEN1_3_SPORT
-	wert_02
-	wert_03
-	wert_04
+    wert_02
+    wert_03
+    wert_04
 KENNLINIEN4_6_NORM
-	wert_07
+    wert_07
 KENNLINIEN4_6_SPORT
-	wert_02
-	wert_03
-	wert_04
+    wert_02
+    wert_03
+    wert_04
 REGLERPARAMETER
-	wert_01
+    wert_01
 STUETZSTELLEN_V_LW
-	wert_01
+    wert_01
 WANDLERKENNLINIE
-	wert_01
+    wert_01
 BETRIEBSWERTE
-	wert_01
+    wert_01
 
 
 
 # JBBF3R
 
-PIA_EDC                                                     // Enables EDC M3 key profile setting.
-	mit_mmi
-EDC_LED_SWITCH                                              // Enables EDC button instead of Servotronic PWM from JBE.
-	aktiv
-DSC_SWITCH                                                  // Disabled for M3 hazards cluster.
-	nicht_aktiv
-RPA_SWITCH                                                  // Enables the Flat tyre monitor reset button.
-	aktiv
+PIA_EDC                                                                 // Enables EDC M3 key profile setting.
+    mit_mmi
+EDC_LED_SWITCH                                                          // Enables EDC button instead of Servotronic PWM from JBE.
+    aktiv
+DSC_SWITCH                                                              // Disabled for M3 hazards cluster.
+    nicht_aktiv
+RPA_SWITCH                                                              // Enables the Flat tyre monitor reset button.
+    aktiv
 
 
 
 # FRM
 
-ASP_KOMFORT_EINKLAPP                                        // Disable the original comfort fold mirror behavior.
-	nicht_aktiv
-MAX_SCHWENK_V_H_BEGR_SP                                     // Faster swivel speed (horizontal) in sport mode.
-	wert_21
+ASP_KOMFORT_EINKLAPP                                                    // Disable the original comfort fold mirror behavior.
+    nicht_aktiv
+MAX_SCHWENK_V_H_BEGR_SP                                                 // Faster swivel speed (horizontal) in sport mode.
+    wert_21

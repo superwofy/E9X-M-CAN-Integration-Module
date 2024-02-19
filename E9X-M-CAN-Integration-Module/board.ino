@@ -122,10 +122,6 @@ void configure_flexcan(void) {
   PTCAN.setRFFN(RFFN_16);
 
   PTCAN.FLEXCAN_EnterFreezeMode();
-  #if F_NBT
-    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0xA8, STD);                                               // Torque:                                                      Cycle time 30ms (PT-CAN), 100ms (K-CAN).
-    filter_position_counter++;
-  #endif
   #if FRONT_FOG_CORNER || F_NIVI || F_NBT
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0xC8, STD);                                               // Steering angle:                                              Cycle time 200ms.
     filter_position_counter++;
@@ -157,7 +153,11 @@ void configure_flexcan(void) {
   #if SERVOTRONIC_SVT70
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x58E, STD);                                              // Forward SVT CC to KCAN for KOMBI to display:                 Cycle time 10s.
     filter_position_counter++;
-    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x60E, STD);                                              // Diagnostic messages from SVT module to forward.
+    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x60E, STD);                                              // Diagnostic responses from SVT module to forward.
+    filter_position_counter++;
+  #endif
+  #if F_NIVI
+    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x657, STD);                                              // Diagnostic responses from NVE module to forward.
     filter_position_counter++;
   #endif
   PTCAN.setFIFOFilter(REJECT_ALL, filter_position_counter);
@@ -316,7 +316,7 @@ void check_teensy_cpu_clock(void) {                                             
 
 void disable_diag_transmit_jobs(void) {                                                                                             // Without this, other KWP jobs sent by Ediabas will receive strange reponse codes.
   if (diag_transmit) {
-    serial_log("Detected OBD port diagnosis request. Pausing all diagnostic jobs.", 0);
+    serial_log("Detected OBD port diagnosis request. Pausing module initiated diagnostic jobs.", 0);
     diag_transmit = false;
     #if DOOR_VOLUME
       volume_changed_to = 0;

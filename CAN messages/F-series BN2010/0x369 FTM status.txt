@@ -10,3 +10,17 @@ rear left low: 00 00 A2 28 73
 
 resetting: 00 71 EA 59 22  /  00 00 E8 00 00
 	-> Only works if 0x1A1 is not being sent?
+
+
+
+
+EVO:
+
+Byte2 = Byte3 = Byte4.
+
+0xA0: Active
+0xE8: Resetting
+0x60, 0: Failure
+
+
+Byte2 = 0xA1 and Byte3 = 0x30: Tyre pressure low.

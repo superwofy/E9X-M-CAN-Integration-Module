@@ -38,7 +38,7 @@ Second nibble of byte2 is the drive mode.
 
 
 
-***Tested
+***Tested (6MT, Coded as F82)
 
 Byte4:
 
@@ -48,3 +48,13 @@ Byte4:
 5 - Sport+ (option for sports displays)
 6 - DSC OFF (option for sports displays)
 0x13 - Comfort
+
+
+
+
+EVO:
+
+Byte4:
+1 - Traction
+6 - DSC OFF (option for sports displays)
+

@@ -109,12 +109,17 @@ void loop() {
       #if F_NIVI || F_NBT
         send_f_powertrain_2_status();
         send_f_standstill_status();
+        request_vehicle_pitch_angle();
+        request_vehicle_roll_angle();
+        send_f_road_incline();
         #if F_NBT
-          send_f_driving_dynamics_switch();
+          send_f_xdrive_pitch_angle();
+          #if F_NBT_EVO6
+            send_f_driving_dynamics_switch_evo();
+          #else
+            send_f_driving_dynamics_switch_nbt();
+          #endif
         #endif
-      #endif
-      #if F_NIVI
-        request_vehicle_tilt_angle();
       #endif
     } else {
       if (vehicle_awake_timer >= 2000) {
@@ -155,7 +160,7 @@ void loop() {
   if (KCAN.read(k_msg)) {
 
     #if F_NBT
-      if (k_msg.id != 0x2F7) {                                                                                                      // Skip the units message as this requires further processing.
+      if (k_msg.id != 0x2F7 && k_msg.id != 0x3DD) {                                                                                 // Skip the units and lights CKM messages as they require further processing.
         kcan2_write_msg(k_msg);                                                                                                     // Write messages from the car to the NBT.
       }
     #endif
@@ -176,6 +181,12 @@ void loop() {
         #endif
       }
 
+      #if F_NBT
+      else if (k_msg.id == 0xA8) {                                                                                                  // Crankshaft torque.
+        send_nbt_sport_displays_data(false);
+      }
+      #endif
+
       #if HDC
       else if (k_msg.id == 0x193) {                                                                                                 // Monitor state of cruise control
         evaluate_cruise_control_status();
@@ -191,8 +202,7 @@ void loop() {
       }
       #endif
 
-      else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor if the car is stationary/moving
-        evaluate_vehicle_moving();
+      else if (k_msg.id == 0x1B4) {                                                                                                 // Monitor KOMBI status.
         evaluate_indicated_speed();
       }
 
@@ -203,7 +213,8 @@ void loop() {
       #endif
 
       else if (k_msg.id == 0x1D0) {
-        evaluate_engine_temperature();
+        engine_coolant_temperature = k_msg.buf[0];
+        engine_oil_temperature = k_msg.buf[1];
       }
 
       #if MIRROR_UNDIM
@@ -314,15 +325,16 @@ void loop() {
       }
       #endif
 
-      #if F_NIVI
+      #if F_NIVI || F_NBT
       else if (k_msg.id == 0x650) {                                                                                                 // SINE is at address 0x50.
-        evaluate_vehicle_tilt_angle();
+        evaluate_vehicle_pitch_angle();
+        evaluate_vehicle_roll_angle();
       }
       #endif
     }
 
     if (k_msg.id == 0xEA) {                                                                                                         // Driver's door status.
-      evaluate_drivers_door_status();
+      evaluate_drivers_door_lock_status();
     }
 
     #if F_NBT
@@ -413,7 +425,7 @@ void loop() {
 
     else if (k_msg.id == 0x381) {                                                                                                   // Store the Oil level for use with NBT. 10s cycle time.
       e_oil_level = k_msg.buf[0];
-      f_oil_level_timer = 500;
+      f_oil_level_timer = 501;
     }
     #endif
 
@@ -434,6 +446,7 @@ void loop() {
     #if DIM_DRL
     else if (k_msg.id == 0x3DD) {                                                                                                   // Received CKM setting status for lights.
       evaluate_drl_ckm();
+      fix_f_lights_ckm();
     }
     #endif
 
@@ -509,81 +522,80 @@ void loop() {
         evaluate_wiper_stalk_status();
       }
       #endif
-     
-      if (ignition) {              
-        if (pt_msg.id == 0x315) {                                                                                                   // Monitor EDC status message from the JBE.
-          send_power_mode();                                                                                                        // state_spt request from DME.   
+
+      if (pt_msg.id == 0x1A0) {
+        evaluate_real_speed();
+        evaluate_vehicle_moving();
+        #if F_NIVI
+          send_f_longitudinal_acceleration();
+          send_f_lateral_acceleration();
+        #endif
+        #if F_NIVI || F_NBT
+          send_f_yaw_rate();                                                                                                        // Equivalent to Gyro.
+          send_f_speed_status();
+        #endif
+      } else {
+        if (ignition) {              
+          if (pt_msg.id == 0x315) {                                                                                                 // Monitor EDC status message from the JBE.
+            send_power_mode();                                                                                                      // state_spt request from DME.   
+            #if SERVOTRONIC_SVT70
+              send_servotronic_message();
+            #endif
+          }
+
+          #if FRONT_FOG_CORNER || F_NIVI || F_NBT
+          else if (pt_msg.id == 0xC8) {
+            evaluate_steering_angle();
+            #if FRONT_FOG_CORNER
+              evaluate_corner_fog_activation();
+            #endif
+            #if F_NIVI || F_NBT
+              send_f_steering_angle();
+            #endif
+          }
+          #endif
+
+          #if HDC
+          else if (pt_msg.id == 0x194) {
+            evaluate_cruise_stalk_message();
+          }
+          #endif
+
+          #if !IMMOBILIZER_SEQ
+          else if (pt_msg.id == 0x1D6) {
+            evaluate_m_mfl_button_press();
+          }
+          #endif
+        
+          #if FTM_INDICATOR
+          else if (pt_msg.id == 0x31D) {                                                                                            // FTM initialization is ongoing.
+            evaluate_indicate_ftm_status();
+          }
+          #endif  
+
+          #if CONTROL_SHIFTLIGHTS
+          else if (pt_msg.id == 0x332) {                                                                                            // Monitor variable redline broadcast from DME.
+            evaluate_update_shiftlight_sync();
+          }
+          #endif
+
           #if SERVOTRONIC_SVT70
-            send_servotronic_message();
+          else if (pt_msg.id == 0x58E) {                                                                                            // Since the JBE doesn't forward Servotronic errors from SVT70, we have to do it.
+            send_svt_kcan_cc_notification();
+          }
+          else if (pt_msg.id == 0x60E) {                                                                                            // Forward Diagnostic responses from SVT module to DCAN
+            if (!uif_read) {
+              dcan_write_msg(pt_msg);
+            }
+          }
           #endif
-        }
 
-        #if F_NBT
-        else if (pt_msg.id == 0xA8) {                                                                                               // Crankshaft torque.
-          send_nbt_sport_displays_data();                                                                                           // Normally this is on KCAN at 100ms.
-        }
-        #endif
-
-        #if FRONT_FOG_CORNER || F_NIVI || F_NBT
-        else if (pt_msg.id == 0xC8) {
-          evaluate_steering_angle();
-          #if FRONT_FOG_CORNER
-            evaluate_corner_fog_activation();
-          #endif
-          #if F_NIVI || F_NBT
-            send_f_steering_angle();
-          #endif
-        }
-        #endif
-
-        #if HDC
-        else if (pt_msg.id == 0x194) {
-          evaluate_cruise_stalk_message();
-        }
-        #endif
-
-        else if (pt_msg.id == 0x1A0) {
-          evaluate_real_speed();
           #if F_NIVI
-            send_f_longitudinal_acceleration();
-            send_f_lateral_acceleration();
-            send_f_road_inclination();
-          #endif
-          #if F_NIVI || F_NBT
-            evaluate_vehicle_direction();
-            send_f_yaw_rate();                                                                                                      // Equivalent to Gyro.
-            send_f_speed_status();
-          #endif
-        }
-
-        #if !IMMOBILIZER_SEQ
-        else if (pt_msg.id == 0x1D6) {
-          evaluate_m_mfl_button_press();
-        }
-        #endif
-      
-        #if FTM_INDICATOR
-        else if (pt_msg.id == 0x31D) {                                                                                              // FTM initialization is ongoing.
-          evaluate_indicate_ftm_status();
-        }
-        #endif  
-
-        #if CONTROL_SHIFTLIGHTS
-        else if (pt_msg.id == 0x332) {                                                                                              // Monitor variable redline broadcast from DME.
-          evaluate_update_shiftlight_sync();
-        }
-        #endif
-
-        #if SERVOTRONIC_SVT70
-        else if (pt_msg.id == 0x58E) {                                                                                              // Since the JBE doesn't forward Servotronic errors from SVT70, we have to do it.
-          send_svt_kcan_cc_notification();
-        }
-        else if (pt_msg.id == 0x60E) {                                                                                              // Forward Diagnostic responses from SVT module to DCAN
-          if (!uif_read) {
+          else if (pt_msg.id == 0x657) {                                                                                            // Forward Diagnostic responses from NVE module to DCAN
             dcan_write_msg(pt_msg);
           }
+          #endif
         }
-        #endif
       }
     }
 
@@ -637,6 +649,12 @@ void loop() {
         #if F_NBT
         else if (d_msg.buf[0] == 0x35) {                                                                                            // TBX address is 0x35.
           kcan2_write_msg(d_msg);
+        }
+        #endif
+
+        #if F_NIVI
+        else if (d_msg.buf[0] == 0x57) {                                                                                            // NIVI address is 0x57.
+          ptcan_write_msg(d_msg);
         }
         #endif
 
@@ -708,7 +726,7 @@ void process_kcan2_message(void) {
   #endif
 
   else if (k_msg.id == 0x291) {
-    evaluate_sport_units();
+    evaluate_idrive_units();
   }
 
   #if F_VSW01
@@ -733,6 +751,10 @@ void process_kcan2_message(void) {
     store_rvc_settings_idrive();
   }
   #endif
+
+  else if (k_msg.id == 0x3DC) {
+    f_drl_ckm_request = k_msg.buf[2];
+  }
 
   else if (k_msg.id == 0x635) {                                                                                                     // TBX diagnostic response.
     dcan_write_msg(k_msg);

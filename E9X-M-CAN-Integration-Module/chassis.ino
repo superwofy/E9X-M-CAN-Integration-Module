@@ -24,7 +24,7 @@ void send_dsc_mode(uint8_t mode) {
   }
   dsc_program_status = mode;
   #if F_NBT
-    f_driving_dynamics_timer = 1002;
+    f_driving_dynamics_timer = 1001;
   #endif
 }
 
@@ -110,7 +110,9 @@ void evaluate_reverse_gear_status(void) {
 
 
 void evaluate_vehicle_moving(void) {
-  if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0xD0) {
+  e_vehicle_direction = (pt_msg.buf[1] >> 4) & 0b0111;                                                                              // ST_VEH_DVCO is the last three bits of the first halfof byte1.
+
+  if (e_vehicle_direction == 0 || e_vehicle_direction == 7) {                                                                       // 7 - Signal invalid.
     if (vehicle_moving) {
       vehicle_moving = false;
       serial_log("Vehicle stationary.", 2);
@@ -155,20 +157,61 @@ void evaluate_indicated_speed(void) {
 }
 
 
-void send_f_road_inclination(void) {
-  if (f_chassis_inclination_timer >= 100) {
-    uint8_t f_road_inclination[] = {0xFF, 0xFF, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF};                                                      // Angle formula simlar to 56.1.2.
-    f_road_inclination[2] = f_vehicle_angle & 0xFF;                                                                                 // Send in LE.
-    f_road_inclination[3] = 0x20 | f_vehicle_angle >> 8;                                                                            // Byte3 lower 4 bits fixed to 2 - QU_AVL_LOGR_RW Signal value is valid, permanent.
-    CAN_message_t f_road_inclination_buf = make_msg_buf(0x163, 8, f_road_inclination);
-    ptcan_write_msg(f_road_inclination_buf);
-    f_chassis_inclination_timer = 0;
+void send_f_xdrive_pitch_angle(void) {
+  if (f_xdrive_pitch_timer >= 300) {
+    uint8_t f_xdrive_pitch_angle[] = {0xFF, 0, 0xFF, 0xFF, 0, 0, 0, 0xFF};
+
+    f_xdrive_pitch_angle[1] = 0xF << 4 | f_xdrive_pitch_alive_counter;
+    f_xdrive_pitch_alive_counter == 0xE ? f_xdrive_pitch_alive_counter = 0 
+                                        : f_xdrive_pitch_alive_counter++;
+
+    f_xdrive_pitch_angle[4] = xview_pitch_angle & 0xFF;                                                                   // Send in LE.
+    f_xdrive_pitch_angle[5] = xview_pitch_angle >> 8;
+    f_xdrive_pitch_angle[6] = xview_grade_percentage;
+    
+    CAN_message_t f_xdrive_pitch_angle_buf = make_msg_buf(0x180, 8, f_xdrive_pitch_angle);
+    #if F_NBT
+      kcan2_write_msg(f_xdrive_pitch_angle_buf);
+    #endif
+    f_xdrive_pitch_timer = 0;
+  }
+}
+
+
+void send_f_road_incline(void) {
+  if (f_road_incline_timer >= 100) {
+    uint8_t f_road_incline[] = {0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF};                                                                // Angle formula simlar to 56.1.2 - TLT_RW_STEA_FTAX_EFFV_FX.
+
+    f_road_incline[1] = 0xF << 4 | f_road_incline_alive_counter;
+    f_road_incline_alive_counter == 0xE ? f_road_incline_alive_counter = 0 
+                                      : f_road_incline_alive_counter++;
+
+    f_road_incline[2] = f_vehicle_pitch_angle & 0xFF;
+    f_road_incline[3] = f_vehicle_pitch_angle >> 8;
+
+    f_road_incline[4] = f_vehicle_roll_angle & 0xFF;                                                                                // Send in LE.
+    f_road_incline[5] = f_vehicle_roll_angle >> 8;
+    
+    f_road_incline_crc.restart();
+    for (uint8_t i = 1; i < 8; i++) {
+      f_road_incline_crc.add(f_road_incline[i]);
+    }
+    f_road_incline[0] = f_road_incline_crc.calc();
+
+    CAN_message_t f_road_incline_buf = make_msg_buf(0x163, 8, f_road_incline);
+    #if F_NIVI
+      ptcan_write_msg(f_road_incline_buf);
+    #endif
+    #if F_NBT
+      kcan2_write_msg(f_road_incline_buf);
+    #endif
+    f_road_incline_timer = 0;
   }
 }
 
 
 void send_f_longitudinal_acceleration(void) {
-  if (f_chassis_longitudinal_timer >= 100) {
+  if (f_chassis_longitudinal_timer >= 19) {
     uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                         // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
     uint16_t raw_value = 0;
     // Combine the second half of byte3 with byte2 to form 12-bit signed integer.
@@ -183,7 +226,7 @@ void send_f_longitudinal_acceleration(void) {
     longitudinal_acceleration = round((e_longitudinal_acceleration + 65) / 0.002);
     f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
     f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
-                                                    : f_longitudinal_acceleration_alive_counter++;
+                                                     : f_longitudinal_acceleration_alive_counter++;
     f_longitudinal_acceleration[2] = longitudinal_acceleration & 0xFF;                                                              // Convert and transmit in LE.
     f_longitudinal_acceleration[3] = longitudinal_acceleration >> 8;
     
@@ -201,7 +244,7 @@ void send_f_longitudinal_acceleration(void) {
 
 
 void send_f_lateral_acceleration(void) {
-  if (f_chassis_lateral_timer >= 100) {
+  if (f_chassis_lateral_timer >= 20) {
     uint8_t f_lateral_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                              // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNY_COG.
     uint16_t raw_value = 0;
     // Combine byte 4 with the first half of byte 3 to form 12-bit signed integer.
@@ -212,9 +255,9 @@ void send_f_lateral_acceleration(void) {
     lateral_acceleration = round((e_lateral_acceleration + 65) / 0.002);
     f_lateral_acceleration[1] = 0xF << 4 | f_lateral_acceleration_alive_counter;
     f_lateral_acceleration_alive_counter == 0xE ? f_lateral_acceleration_alive_counter = 0 
-                                                    : f_lateral_acceleration_alive_counter++;
-    f_lateral_acceleration[2] = longitudinal_acceleration & 0xFF;                                                                   // Convert and transmit in LE.
-    f_lateral_acceleration[3] = longitudinal_acceleration >> 8;
+                                                : f_lateral_acceleration_alive_counter++;
+    f_lateral_acceleration[2] = lateral_acceleration & 0xFF;                                                                        // Convert and transmit in LE.
+    f_lateral_acceleration[3] = lateral_acceleration >> 8;
 
     f_lateral_acceleration_crc.restart();
     for (uint8_t i = 1; i < 6; i++) {
@@ -230,8 +273,8 @@ void send_f_lateral_acceleration(void) {
 
 
 void send_f_yaw_rate(void) {
-  if (f_chassis_yaw_timer >= 100) {
-    uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0x80, 0xFF, 0x2F};                                                                       // M4 (VYAW_VEH) 56.0.2. Byte5 fixed 0x2F - Signal value is valid QU_VYAW_VEH.
+  if (f_chassis_yaw_timer >= 21) {
+    uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0x80, 0xFF, 0x20};                                                                       // M4 (VYAW_VEH) 56.0.2. Byte5 - Signal value is valid QU_VYAW_VEH.
     
     if (vehicle_moving) {
       uint16_t raw_value = 0;
@@ -247,6 +290,9 @@ void send_f_yaw_rate(void) {
       yaw_rate = round((e_yaw_rate + 163.84) / 0.005);
       f_yaw_rate[2] = yaw_rate & 0xFF;                                                                                              // Convert and transmit in LE.
       f_yaw_rate[3] = yaw_rate >> 8;
+    } else {
+      e_yaw_rate = 0;
+      yaw_rate = 0x8000;
     }
 
     CAN_message_t f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
@@ -282,13 +328,8 @@ void evaluate_real_speed(void) {
 }
 
 
-void evaluate_vehicle_direction(void) {
-  e_vehicle_direction = (pt_msg.buf[1] >> 4) & 0b0111;                                                                              // ST_VEH_DVCO is the last three bits of the first halfof byte1.
-}
-
-
 void send_f_speed_status(void) {
-  if (f_chassis_speed_timer >= 100) {
+  if (f_chassis_speed_timer >= 22) {
     uint8_t f_speed[] = {0, 0, 0, 0, 0};                                                                                            // Message is the same format as Flexray 55.3.4.
 
     // Second half of byte4 is QU_V_VEH_COG. 1 = Signal valid, 0xF = invalid.
