@@ -4,7 +4,7 @@
 void set_kcan_filters(uint8_t *filter_set_ok_counter, uint8_t *filter_position_counter) {
   *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0xAA, STD);                                                // RPM, throttle pos:                                           Cycle time 100ms (KCAN).
   *filter_position_counter = *filter_position_counter + 1; 
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0xEA, STD);                                                // Driver's door status.
+  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0xEA, STD);                                                // Driver's door lock status.
   *filter_position_counter = *filter_position_counter + 1;
   *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x130, STD);                                               // Key/ignition status:                                         Cycle time 100ms.
   *filter_position_counter = *filter_position_counter + 1;

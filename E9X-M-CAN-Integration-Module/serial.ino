@@ -55,7 +55,9 @@ void serial_debug_interpreter(void) {
             power_down_requested = true;
             kcan_write_msg(power_down_cmd_a_buf);
           } else {
-            serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+            sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                    (int) (60000 - diag_deactivate_timer) / 1000);
+            serial_log(serial_debug_string, 0);
           }
         } else {
           serial_log("  Serial: Terminal R must be OFF.", 0);
@@ -154,7 +156,9 @@ void serial_debug_interpreter(void) {
           #endif
           clearing_dtcs = true;
         } else {
-          serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+          sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                  (int) (60000 - diag_deactivate_timer) / 1000);
+          serial_log(serial_debug_string, 0);
         }
       } else {
         serial_log("  Serial: Activate ignition first.", 0);
@@ -162,12 +166,24 @@ void serial_debug_interpreter(void) {
     }
     else if (cmd == "cc_gong") {
       if (diag_transmit) {
-        serial_log("  Serial: Sending CC gong.", 0);
         play_cc_gong(1);
+        serial_log("  Serial: Sent CC gong.", 0);
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+            sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                    (int) (60000 - diag_deactivate_timer) / 1000);
+            serial_log(serial_debug_string, 0);
       }
-    } 
+    }
+    else if (cmd == "jbe_reboot") {
+      if (diag_transmit) {
+        dcan_write_msg(jbe_reboot_buf);
+        serial_log("  Serial: Sent JBE reboot.", 0);
+      } else {
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
+      }
+    }
     #if EXHAUST_FLAP_CONTROL
     else if (cmd == "open_exhaust_flap") {
       actuate_exhaust_solenoid(LOW);
@@ -235,7 +251,9 @@ void serial_debug_interpreter(void) {
         left_fog_soft(true);
         serial_log("  Serial: Activated front left fog light.", 0);
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
       }
     }
     else if (cmd == "front_right_fog_off") {
@@ -243,7 +261,9 @@ void serial_debug_interpreter(void) {
         kcan_write_msg(front_right_fog_off_buf);
         serial_log("  Serial: Deactivated front right fog light.", 0);
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
       }
     }
     else if (cmd == "front_left_fog_off") {
@@ -251,7 +271,9 @@ void serial_debug_interpreter(void) {
         kcan_write_msg(front_left_fog_off_buf);
         serial_log("  Serial: Deactivated front left fog light.", 0);
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
       }
     }
     else if (cmd == "front_fogs_off") {
@@ -260,7 +282,9 @@ void serial_debug_interpreter(void) {
           kcan_write_msg(front_fogs_all_off_buf);
           serial_log("  Serial: Deactivated front fog lights.", 0);
         } else {
-          serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+          sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                  (int) (60000 - diag_deactivate_timer) / 1000);
+          serial_log(serial_debug_string, 0);
         }
       } else {
         serial_log("  Serial: Activate ignition first.", 0);
@@ -287,7 +311,9 @@ void serial_debug_interpreter(void) {
             }
             needle_sweep_animation();
           } else {
-            serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+            sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                    (int) (60000 - diag_deactivate_timer) / 1000);
+            serial_log(serial_debug_string, 0);
           }
         #endif
       } else {
@@ -304,7 +330,9 @@ void serial_debug_interpreter(void) {
         eeprom_unsaved = eeprom_unsaved_;
         serial_log("  Serial: Sent mirror fold/unfold request.", 0);
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
       }
     }
     else if (cmd == "mirror_fold_status") {
@@ -318,7 +346,9 @@ void serial_debug_interpreter(void) {
           serial_log("  Serial: Checking mirror status.", 0);
         }
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
       }
     }
     #endif
@@ -328,7 +358,9 @@ void serial_debug_interpreter(void) {
         kcan_write_msg(frm_mirror_undim_buf);
         serial_log("  Serial: Sent undim request.", 0);
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
       }
     }
     #endif
@@ -391,7 +423,9 @@ void serial_debug_interpreter(void) {
           serial_log("  Serial: Activate ignition first.", 0);
         }
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
       }
     }
     #endif
@@ -470,7 +504,9 @@ void serial_debug_interpreter(void) {
         kcan2_write_msg(f_hu_nbt_reboot_buf);
         serial_log("  Serial: Sent HU reboot job.", 0);
       } else {
-        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                (int) (60000 - diag_deactivate_timer) / 1000);
+        serial_log(serial_debug_string, 0);
       }
     }
     else if (cmd == "custom_cc_test") {
@@ -574,7 +610,8 @@ void print_help(void) {
   "  print_boot_log - Prints the first 10s of serial messages and timing information.\r\n"
   "  print_can_config - Prints the configuration of the FlexCAN module.\r\n"
   "  clear_all_dtcs - Clear the error memories of every module on the bus.\r\n"
-  "  cc_gong - Create an audible check-control gong.", 0);
+  "  cc_gong - Create an audible check-control gong.\r\n"
+  "  jbe_reboot - Reboot the gateway. Use when troubleshooting DCAN errors.", 0);
   #if EXHAUST_FLAP_CONTROL
     serial_log("  open_exhaust_flap - Energize the exhaust solenoid to open the flap.\r\n"
     "  close_exhaust_flap - Release the exhaust solenoid to close the flap.", 0);

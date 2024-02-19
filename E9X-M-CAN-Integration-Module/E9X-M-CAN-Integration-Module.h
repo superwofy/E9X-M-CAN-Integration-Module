@@ -17,7 +17,7 @@ int8_t LOGLEVEL = 4;                                                            
 #define FRM_AHL_MODE 1                                                                                                              // Switches FRM AHL mode from Komfort and Sport.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
 #define INTERMITTENT_WIPERS 1                                                                                                       // Inermittent wiping alongside auto wipers when holding the stalk down for 1.3s.
-#define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold mirrors when locking. Un-fold with door open event instead of remote unlock button.
+#define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold exterior mirrors when locking. Un-fold with door open event instead of remote unlock button.
 #define MIRROR_UNDIM 1                                                                                                              // Undim electrochromic exterior mirrors when indicating at night.
 #define COMFORT_EXIT 1                                                                                                              // Move driver's seat back when exiting car.
 #define IMMOBILIZER_SEQ 1                                                                                                           // Disable EKP until the M button is pressed X times. Sound the alarm if engine ON without disabling immobilizer.
@@ -80,9 +80,10 @@ const unsigned long STANDARD_CLOCK = 528 * 1000000;
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #ifndef F_NBT
-  #define F_NBT 0                                                                                                                   // Emulate KCAN2 network allowing NBT to integrate into Exx cars. Tested with p/n 9318750 HW07.
+  #define F_NBT 0                                                                                                                   // Emulate KCAN2 to integrate HU_NBT/HU_NBT2 into Exx cars. Tested with p/n 9318750 HW07 and B140 HW2.3.
   #if F_NBT
     #define F_NBT_VIN_PATCH 1                                                                                                       // Requests CPS VIN from NBT before sending 0x380. Disable if using patched NBT binary.
+    #define F_NBT_EVO6 1                                                                                                            // Additional changes for ID5 and ID6.
     #define F_NBT_CCC_ZBE 0                                                                                                         // Converts CCC ZBE1 messages for use with NBT.
   #endif
 #endif
@@ -249,7 +250,7 @@ uint8_t servotronic_message[] = {0, 0xFF};
 CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf,
               shiftlights_max_flash_buf, shiftlights_off_buf;
 bool shiftlights_segments_active = false, startup_animation_active = false;
-uint8_t ignore_shiftlights_off_counter = 0;
+uint8_t ignore_shiftlights_off_counter = 0, ignore_sports_data_counter = 0;
 uint16_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM,
          MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM,
          MAX_UPSHIFT_WARN_RPM_ = MAX_UPSHIFT_WARN_RPM,
@@ -349,9 +350,12 @@ CAN_message_t f_kombi_network_mgmt_buf, f_zgw_network_mgmt_buf;
 uint8_t vsw_current_input = 0, vsw_switch_counter = 0xF1;
 uint16_t idrive_current_menu;
 CAN_message_t idrive_menu_request_a_buf, idrive_menu_request_b_buf;
-float sine_tilt_angle = 0;
-bool sine_angle_requested = false;
-int f_vehicle_angle = 0x500;                                                                                                        // 0 deg.
+float sine_pitch_angle = 0, sine_roll_angle = 0;
+bool sine_pitch_angle_requested = false, sine_roll_angle_requested = false;
+uint16_t xview_pitch_angle = 0x5000;                                                                                                // 0 degrees
+uint8_t xview_grade_percentage = 0x64;                                                                                              // 0%
+uint16_t f_vehicle_pitch_angle = 0x2500;                                                                                            // 1280 * 0.05 - 64 = 0 degrees, 2 - Valid.
+uint16_t f_vehicle_roll_angle = 0x2500;
 float e_longitudinal_acceleration = 0;
 uint16_t longitudinal_acceleration = 0x7EF4;                                                                                        // 32500 * 0.002 - 65 = 0 m/s^2.
 uint8_t f_longitudinal_acceleration_alive_counter = 0;
@@ -365,20 +369,25 @@ uint16_t real_speed = 0;
 uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xFE, rls_time_of_day = 0,
         f_data_powertrain_2_alive_counter = 0, f_torque_1_alive_counter = 0, f_vehicle_status_alive_counter = 0,
         f_driving_dynamics_alive_counter = 0, f_steering_angle_alive_counter = 0, f_pdc_function_status_alive_counter = 0,
-        f_ftm_status_alive_counter = 0, f_standstill_status_alive_counter = 0, f_mdrive_alive_counter = 0;
+        f_ftm_status_alive_counter = 0, f_standstill_status_alive_counter = 0, f_mdrive_alive_counter = 0,
+        f_xdrive_pitch_alive_counter = 0, f_road_incline_alive_counter = 0;
 uint8_t f_mdrive_settings[5] = {0};
 uint32_t f_distance_alive_counter = 0x2000;
-elapsedMillis sine_angle_request_timer = 500, f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000,
-              f_chassis_inclination_timer = 98, f_chassis_longitudinal_timer = 100, f_chassis_lateral_timer = 102,
-              f_chassis_yaw_timer = 104, f_chassis_speed_timer = 106, f_torque_1_timer = 100,
-              f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1002, f_oil_level_timer = 500, 
-              f_oil_level_measuring_timer = 8000;
-CAN_message_t f_oil_level_measuring_buf, sine_angle_request_a_buf, sine_angle_request_b_buf,
-              nivi_button_pressed_buf, nivi_button_released_buf, f_hu_nbt_reboot_buf;
+uint8_t f_drl_ckm_request = 0;
+elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_timer = 500, 
+              f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000,
+              f_xdrive_pitch_timer = 300, f_road_incline_timer = 100, f_chassis_longitudinal_timer = 20,
+              f_chassis_lateral_timer = 20, f_chassis_yaw_timer = 20, f_chassis_speed_timer = 20, f_torque_1_timer = 100,
+              f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1000, f_oil_level_timer = 500, 
+              f_oil_level_measuring_timer = 50000;
+CAN_message_t f_oil_level_measuring_buf, sine_pitch_angle_request_a_buf, sine_pitch_angle_request_b_buf,
+              sine_roll_angle_request_a_buf, sine_roll_angle_request_b_buf, nivi_button_pressed_buf,
+              nivi_button_released_buf, f_hu_nbt_reboot_buf;
 uint8_t e_oil_level = 0xFF;                                                                                                         // Initialize to 0xFF in case we never receive status from the oil sensor/DME.
 CRC8 f_vehicle_status_crc(0x1D, 0, 0x64, false, false),                                                                             // SAE J1850 POLY, 0 init and XOR-OUT 0x64 for ARB-ID 0x3C.
      f_torque_1_crc(0x1D, 0, 0x6A, false, false),                                                                                   // SAE J1850 POLY, 0 init and XOR-OUT 0x6A for ARB-ID 0xA5.
      f_terminal_status_crc(0x1D, 0, 0xB1, false, false),                                                                            // SAE J1850 POLY, 0 init and XOR-OUT 0xB1 for ARB-ID 0x12F.
+     f_road_incline_crc(0x1D, 0, 0xCE, false, false),                                                                               // SAE J1850 POLY, 0 init and XOR-OUT 0xCE for ARB-ID 0x163.
      f_longitudinal_acceleration_crc(0x1D, 0, 0x5F, false, false),                                                                  // SAE J1850 POLY, 0 init and XOR-OUT 0x5F for ARB-ID 0x199.
      f_lateral_acceleration_crc(0x1D, 0, 0xE5, false, false),                                                                       // SAE J1850 POLY, 0 init and XOR-OUT 0xE5 for ARB-ID 0x19A.
      f_yaw_rate_crc(0x1D, 0, 1, false, false),                                                                                      // SAE J1850 POLY, 0 init and XOR-OUT 1 for ARB-ID 0x19F.
@@ -439,14 +448,15 @@ bool asd_initialized = false;
 CAN_message_t mute_asd_buf, demute_asd_buf,
               clear_fs_job_uds_nbt_buf, clear_is_job_uds_nbt_buf, clear_fs_job_uds_zbe_buf, 
               clear_is_job_uds_zbe_buf, clear_fs_job_uds_tbx_buf, clear_is_job_uds_tbx_buf, 
-              clear_fs_job_vsw_buf, clear_is_job_vsw_buf, ccc_zbe_wake_buf;
+              clear_fs_job_vsw_buf, clear_is_job_vsw_buf, ccc_zbe_wake_buf, jbe_reboot_buf;
 extern float tempmonGetTemp(void);
 char serial_debug_string[512];
 char boot_debug_string[8192];
 unsigned long max_loop_timer = 0, loop_timer = 0;
 uint32_t kcan_error_counter = 0, kcan2_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;
-uint8_t torque_unit[4] = {1, 1, 1, 1}, power_unit[4] = {1, 1, 1, 1}, driving_mode = 0, f_units[] = {0, 0, 0, 0, 0, 0xF1};
+uint8_t torque_unit[4] = {1, 1, 1, 1}, power_unit[4] = {1, 1, 1, 1}, pressure_unit[4] = {1, 1, 1, 1},
+        driving_mode = 0, f_units[] = {0, 0, 0, 0, 0, 0xF1};
 uint8_t engine_coolant_temperature = 48, engine_oil_temperature = 48;                                                               // Celsius temperature is: value - 48.
 CAN_message_t custom_cc_dismiss_buf, custom_cc_clear_buf;
 uint8_t ihka_auto_blower_speed = 5, ihka_auto_blower_state = 3;

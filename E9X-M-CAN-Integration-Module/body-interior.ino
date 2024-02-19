@@ -49,7 +49,11 @@ void evaluate_terminal_clutch_keyno_status(void) {
       f_terminal_status[1] = 2 << 4;
       f_terminal_status[2] |= 8;
     } else if (!frm_consumer_shutdown) {                                                                                            // 30B/30G?
-      f_terminal_status[1] = 1 << 4;
+      if (doors_alarmed) {
+        f_terminal_status[1] = 1 << 4;                                                                                              // Driver not present.
+      } else {
+        f_terminal_status[1] = 2 << 4;
+      }
       f_terminal_status[2] |= 6;
     } else {                                                                                                                        // 30G will be killed shortly...
       f_terminal_status[1] = 1 << 4;
@@ -129,10 +133,6 @@ void evaluate_terminal_clutch_keyno_status(void) {
       }
     #endif
   } else if (!ignition && ignition_) {
-    #if F_NBT
-      send_f_pdc_function_status(true);                                                                                             // If PDC was active, update NBT with the OFF status.
-      send_f_ftm_status();                                                                                                          // FTM is now inactive.
-    #endif
     reset_ignition_variables();
     scale_cpu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
     serial_log("Ignition OFF. Reset values.", 2);
@@ -150,7 +150,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
       kcan_write_msg(ccc_zbe_wake_buf);                                                                                             // ZBE1 will now transmit data on 0x1B8.
     #endif
     #if F_NBT
-      send_nbt_sport_displays_data();                                                                                               // Initialize the sport display scale.
+      send_nbt_sport_displays_data(false);                                                                                          // Initialize the sport display scale.
     #endif
   } else if (!terminal_r && terminal_r_) {
     serial_log("Terminal R OFF.", 2);
@@ -368,12 +368,12 @@ void send_f_zgw_network_management() {
 
 void send_f_energy_condition(void) {
   if (f_energy_condition_timer >= 5000) {
-    uint8_t f_energy_condition[] = {0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0};                                                // Energy good.
-    if (battery_voltage < 12.40 && battery_voltage > 12.20) {
-      f_energy_condition[2] = 0xF1;                                                                                                 // Energy OK (80% to 60% SoC).
-    } else if (battery_voltage < 12 && battery_voltage > 11.8) {
-      f_energy_condition[2] = 0xF2;                                                                                                 // Energy shortage (30% to 50% SoC).
-    } else if (battery_voltage < 11.6) {
+    uint8_t f_energy_condition[] = {0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};                                                // Energy good.
+    if (battery_voltage <= 12.4 && battery_voltage > 12.2) {
+      f_energy_condition[2] = 0xF1;                                                                                                 // Energy OK (80% to 50% SoC).
+    } else if (battery_voltage <= 12.2 && battery_voltage > 11.6) {
+      f_energy_condition[2] = 0xF2;                                                                                                 // Energy shortage (50% to 20% SoC).
+    } else if (battery_voltage <= 11.6) {
       f_energy_condition[2] = 0xF3;                                                                                                 // Energy severe shortage (less than 20% SoC).
     }
     CAN_message_t f_energy_condition_buf = make_msg_buf(0x3A0, 8, f_energy_condition);
@@ -774,10 +774,13 @@ void evaluate_ihka_auto_ckm(void) {
     if (ignition) {
       if (new_speed == 6) {
         send_cc_message_text("Air distribution: AUTO Low. ", 4000);
+        serial_log("IHKA AUTO Low.", 3);
       } else if (new_speed == 5) {
         send_cc_message_text("Air distribution: AUTO Medium.", 4000);
+        serial_log("IHKA AUTO Medium.", 3);
       } else if (new_speed == 9) {
         send_cc_message_text("Air distribution: AUTO High.", 4000);
+        serial_log("IHKA AUTO High.", 3);
       }
     }
     ihka_auto_blower_speed = new_speed;
@@ -792,10 +795,13 @@ void evaluate_ihka_auto_state(void) {
       serial_log("IHKA set to AUTO.", 3);
       if (ihka_auto_blower_speed == 6) {
         send_cc_message_text("Air distribution: AUTO Low. ", 4000);
+        serial_log("IHKA AUTO Low.", 3);
       } else if (ihka_auto_blower_speed == 5) {
         send_cc_message_text("Air distribution: AUTO Medium.", 4000);
+        serial_log("IHKA AUTO Medium.", 3);
       } else if (ihka_auto_blower_speed == 9) {
         send_cc_message_text("Air distribution: AUTO High.", 4000);
+        serial_log("IHKA AUTO High.", 3);
       }
     } else {
       send_cc_message_text("Air distribution: AUTO OFF. ", 2000);

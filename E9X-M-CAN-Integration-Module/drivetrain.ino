@@ -95,7 +95,7 @@ void toggle_mdrive_message_active(void) {
   }
 
   #if F_NBT
-    f_driving_dynamics_timer = 1002;
+    f_driving_dynamics_timer = 1001;
   #endif
 }
 
@@ -675,13 +675,8 @@ void send_f_powertrain_2_status(void) {
 
     f_data_powertrain_2[4] = engine_coolant_temperature;                                                                            // Engine coolant temperature (C): value - 48.
     f_data_powertrain_2[5] = engine_oil_temperature;                                                                                // Engine oil temperature (C): value - 48.
-    f_data_powertrain_2[6] = 2 << 4;                                                                                                // Engine start allowed.
 
-    if (reverse_gear_status) {
-      f_data_powertrain_2[6] |= 2;                                                                                                  // Gearbox in R.
-    } else {
-      f_data_powertrain_2[6] |= 1;                                                                                                  // Gearbox in N.
-    }
+    f_data_powertrain_2[6] = 0x2F;                                                                                                  // Engine start allowed, unused (6MT).
 
     f_data_powertrain_2_crc.restart();
     for (uint8_t i = 1; i < 8; i++) {
@@ -736,10 +731,10 @@ void send_f_torque_1(void) {
 }
 
 
-void send_f_driving_dynamics_switch(void) {
-  if (f_driving_dynamics_timer >= 1002) {
+void send_f_driving_dynamics_switch_nbt(void) {
+  if (f_driving_dynamics_timer >= 1001) {
     uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};                                                                  // Inspired very loosely by 272.4.8...
-    uint8_t new_driving_mode;
+    uint8_t new_driving_mode = driving_mode;
 
     // Not needed for KCAN
     // f_driving_dynamics[1] = 0xF << 4 | f_driving_dynamics_alive_counter;
@@ -785,8 +780,25 @@ void send_f_driving_dynamics_switch(void) {
 }
 
 
+void send_f_driving_dynamics_switch_evo(void) {
+  if (f_driving_dynamics_timer >= 1001) {
+    uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};
+
+    if (dsc_program_status == 1) {
+      f_driving_dynamics[4] = 1;
+    } else if (dsc_program_status == 2) {
+      f_driving_dynamics[4] = 6;
+    }
+
+    CAN_message_t f_driving_dynamics_buf = make_msg_buf(0x3A7, 7, f_driving_dynamics);
+    kcan2_write_msg(f_driving_dynamics_buf);
+    f_driving_dynamics_timer = 0;
+  }
+}
+
+
 void send_f_oil_level(void) {                                                                                                       // Used with OELSTAND_OENS.
-  if (f_oil_level_timer >= 500) {
+  if (f_oil_level_timer >= 501) {
     uint8_t f_oil_level[4] = {0, 0xF0, 4, 0xC0};
     switch(e_oil_level) {
       case 0xC: {                                                                                                                   // Below MIN
@@ -859,16 +871,10 @@ void send_f_oil_level(void) {                                                   
     f_oil_level_timer = 0;
   }
   if (ignition) {
-    if (f_oil_level_measuring_timer >= 8000) {                                                                                     // Periodically and when cycling ignition, re-set the level.
+    if (f_oil_level_measuring_timer >= 60000) {                                                                                     // Periodically and when cycling ignition, re-set the level.
       kcan2_write_msg(f_oil_level_measuring_buf);
       f_oil_level_measuring_timer = 0;
-      f_oil_level_timer = 500;
+      f_oil_level_timer = 501;
     }
   }
-}
-
-
-void evaluate_engine_temperature(void) {
-  engine_coolant_temperature = k_msg.buf[0];
-  engine_oil_temperature = k_msg.buf[1];
 }

@@ -34,9 +34,14 @@ void cache_can_message_buffers(void) {                                          
   cc_triple_gong_buf = make_msg_buf(0x205, 2, cc_triple_gong);
 
   #if F_NBT
-    uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 7, 0},
-            idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x12, 0},
-            idrive_double_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0};
+    #if F_NBT_EVO6
+      uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x13, 0},
+              idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0},
+    #else
+      uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 7, 0},
+              idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x12, 0},
+    #endif
+              idrive_double_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0};
     idrive_button_sound_buf = make_msg_buf(0x6F1, 8, idrive_button_sound);
     idrive_beep_sound_buf = make_msg_buf(0x6F1, 8, idrive_beep_sound);
     idrive_double_beep_sound_buf = make_msg_buf(0x6F1, 8, idrive_double_beep_sound);
@@ -256,10 +261,14 @@ void cache_can_message_buffers(void) {                                          
   uint8_t f_zgw_network_mgmt[] = {0x40, 0x10, 0x10, 0, 0, 2, 1, 0};                                                                 // Network management ZGW - F-series.
   f_zgw_network_mgmt_buf = make_msg_buf(0x510, 8, f_zgw_network_mgmt);
 
-  uint8_t sine_angle_request_a[] = {0x50, 2, 0x21, 5},
-          sine_angle_request_b[] = {0x50, 0x30, 0, 2, 0xFF, 0xFF, 0xFF, 0xFF};
-  sine_angle_request_a_buf = make_msg_buf(0x6F1, 4, sine_angle_request_a);
-  sine_angle_request_b_buf = make_msg_buf(0x6F1, 8, sine_angle_request_b);
+  uint8_t sine_pitch_angle_request_a[] = {0x50, 2, 0x21, 5},
+          sine_pitch_angle_request_b[] = {0x50, 0x30, 0, 2, 0xFF, 0xFF, 0xFF, 0xFF},
+          sine_roll_angle_request_a[] = {0x50, 2, 0x21, 4},
+          sine_roll_angle_request_b[] = {0x50, 0x30, 0, 2, 0xFF, 0xFF, 0xFF, 0xFF};
+  sine_pitch_angle_request_a_buf = make_msg_buf(0x6F1, 4, sine_pitch_angle_request_a);
+  sine_pitch_angle_request_b_buf = make_msg_buf(0x6F1, 8, sine_pitch_angle_request_b);
+  sine_roll_angle_request_a_buf = make_msg_buf(0x6F1, 4, sine_roll_angle_request_a);
+  sine_roll_angle_request_b_buf = make_msg_buf(0x6F1, 8, sine_roll_angle_request_b);
 
   uint8_t lc_cc_on[] = {0x40, 0xBE, 1, 0x39, 0xFF, 0xFF, 0xFF, 0xFF},
           lc_cc_off[] = {0x40, 0xBE, 1, 0x30, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -382,6 +391,9 @@ void cache_can_message_buffers(void) {                                          
 
   uint8_t f_hu_nbt_reboot[] = {0x63, 2, 0x11, 1, 0, 0, 0, 0};
   f_hu_nbt_reboot_buf = make_msg_buf(0x6F1, 8, f_hu_nbt_reboot);
+
+  uint8_t jbe_reboot[] = {0, 2, 0x11, 1, 0, 0, 0, 0};
+  jbe_reboot_buf = make_msg_buf(0x6F1, 8, jbe_reboot);
 }
 
 
@@ -430,22 +442,20 @@ void kcan_write_msg(const CAN_message_t &msg) {
 }
 
 
-
 void kcan2_write_msg(const CAN_message_t &msg) {
   #if F_NBT
     if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 5000 || msg.id == 0x12F || msg.id == 0x130)) {                       // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
       byte send_buf[msg.len];
 
-      // Sinkhole for unused messages.
+      // Sinkhole for unused messages. Skip to reduce KCAN2 traffic.
       if (msg.id == 0xAA || msg.id == 0xA8) { return; }                                                                             // BN2000 engine status and torques.
       else if (msg.id == 0xC4 || msg.id == 0xC8) { return; }                                                                        // BN2000 steering angle.
+      else if (msg.id == 0x1B6) { return; }                                                                                         // BN2000 Engine heat flow. Unknown in BN2010. It causes NBT EVO to block phone calls.
       else if (msg.id == 0x2C0) { return; }                                                                                         // BN2000 LCD brightness.
       else if (msg.id == 0x317) { return; }                                                                                         // BN2000 PDC button.
       else if (msg.id == 0x31D) { return; }                                                                                         // BN2000 FTM status.
       else if (msg.id == 0x399) { return; }                                                                                         // BN2000 MDrive / BN2010 Status energy voltage.
-      else if (msg.id >= 0x5FF && msg.id <= 0x662) { return; }                                                                      // Diagnosis response messages from various modules.
-      else if (msg.id == 0x6F1 && !(msg.buf[0] == 0x63 || msg.buf[0] == 0x67 || msg.buf[0] == 0x35)) { return; }                    // 6F1s not meant for the NBT/ZBE/TBX.
-      else if (msg.id >= 0x6F5) { return; }
+      else if (msg.id >= 0x5FF) { return; }                                                                                         // Diagnosis response and misc. messages from various modules.
 
       #if F_NBT_VIN_PATCH
         else if (msg.id == 0x380) {                                                                                                 // Patch NBT VIN to donor.
@@ -478,11 +488,10 @@ void kcan2_write_msg(const CAN_message_t &msg) {
 }
 
 
-
 void ptcan_write_msg(const CAN_message_t &msg) {
   if (msg.id == 0x6F1 && !diag_transmit) {
     if (msg.buf[0] == 0x17 && msg.buf[2] == 0x30 && (msg.buf[1] == 4 || msg.buf[1] == 2)) {                                         // Exception for EKP disable.
-    } else if (msg.buf[0] == 0xE) {                                                                                                 // Exception for SVT70 diag.
+    } else if (msg.buf[0] == 0xE || msg.buf[0] == 0x57) {                                                                           // Exception for SVT70 and NiVi diag.
     } else {
       #if DEBUG_MODE
         serial_log("6F1 message not sent to PTCAN due to OBD tool presence.", 2);

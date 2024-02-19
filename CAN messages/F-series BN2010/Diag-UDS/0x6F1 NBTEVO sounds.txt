@@ -1,0 +1,9 @@
+JOB: steuern_routine.
+
+
+ARG;STEUERN_KLANGZEICHEN;STR;HMI_FBM										(faceplate save button noise)
+12:58:07.404 ->  DCAN:  ID: 6F1 Buffer: 63 5 31 1 A0 0 13 0 
+
+
+ARG;STEUERN_KLANGZEICHEN;STR;ETC1											(single beep from Japan ETC)
+13:03:01.744 ->  DCAN:  ID: 6F1 Buffer: 63 5 31 1 A0 0 10 0  

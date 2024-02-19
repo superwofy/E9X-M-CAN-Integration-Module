@@ -1,0 +1,35 @@
+ID: 0x180
+
+Bytes 0, 1, 2, 3 and 7 appear unused.
+Bytes 0 and 1 may contain CRC and alive but it appears optional for KCAN.
+
+
+Bytes 4 and 5 contain the pitch angle. Maximum appears to be 140 degrees:
+
+	byte 4 lower half - angle, LSB.
+	byte 4 upper half not used
+	byte 5 - angle
+
+	0x500..0x509 = 0 degrees
+	0x50A..0x51D = 1 degrees
+	0x51E..0x531 = 2 degrees
+	0x532 = 3 degrees
+
+
+Byte 6 contains the road grade percentage. Maximum appears to be 154%:
+
+	0 = 100%
+	1 = 99 %
+	0x63 = 1%
+	0x64 = 0%
+
+	0x65 = 1%. Negative?
+	0xCA = 102%
+	0xCF = 107%
+	0xDF = 123%
+	0xEF = 139%
+	0xF0 = 140%
+	0xF1 = 141%
+	0xF8 = 148%
+	0xFA = 150%
+	0xFE = 154%

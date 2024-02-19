@@ -1,4 +1,10 @@
-Bytes 0 to 3 are identical to BN2000.
+Bytes 0 to 2 are identical to BN2000.
+
+Byte3 second half contains pressure units.
+	1 - bar
+	2 - kPa
+	3 - psi
+	
 Byte4 contains power and torque units. First half is power, second half is torque.
 	1 - kW
 	2 - hp

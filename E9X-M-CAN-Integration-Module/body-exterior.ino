@@ -150,8 +150,8 @@ void evaluate_door_status(void) {
     if (k_msg.buf[1] == 1) {
       if (!right_door_open) {
         right_door_open = true;
+        serial_log("Front right door open.", 2);
         #if RHD
-          serial_log("Driver's front door open.", 2);
           #if AUTO_MIRROR_FOLD
             if (unfold_with_door_open) {
               toggle_mirror_fold(false);
@@ -160,25 +160,17 @@ void evaluate_door_status(void) {
           #if COMFORT_EXIT
             evaluate_comfort_exit();
           #endif
-        #else
-          serial_log("Passenger's front door open.", 2);
         #endif
       }
       if (left_door_open) {
         left_door_open = false;
-        #if RHD
-          serial_log("Passenger's front door closed.", 2);
-        #else
-          serial_log("Driver's front door closed.", 2);
-        #endif
+        serial_log("Front left door closed.", 2);
       }
     } else if (k_msg.buf[1] == 4) {
       if (!left_door_open) {
         left_door_open = true;
-        #if RHD
-          serial_log("Passenger's front door open.", 2);
-        #else
-          serial_log("Driver's front door open.", 2);
+        serial_log("Front left door open.", 2);
+        #if !RHD
           #if AUTO_MIRROR_FOLD
             if (unfold_with_door_open) {
               toggle_mirror_fold(false);
@@ -191,11 +183,7 @@ void evaluate_door_status(void) {
       }
       if (right_door_open) {
         right_door_open = false;
-        #if RHD
-          serial_log("Driver's front door closed.", 2);
-        #else
-          serial_log("Passenger's front door closed.", 2);
-        #endif
+        serial_log("Front right door closed.", 2);
       }
     } else if (k_msg.buf[1] == 5) {
       left_door_open = right_door_open = true;
@@ -211,19 +199,11 @@ void evaluate_door_status(void) {
     } else if (k_msg.buf[1] == 0) {
       if (left_door_open) {
         left_door_open = false;
-        #if RHD
-          serial_log("Passenger's front door closed.", 2);
-        #else
-          serial_log("Driver's front door closed.", 2);
-        #endif
+        serial_log("Front left door closed.", 2);
       }
       if (right_door_open) {
         right_door_open = false;
-        #if RHD
-          serial_log("Driver's front door closed.", 2);
-        #else
-          serial_log("Passenger's front door closed.", 2);
-        #endif
+        serial_log("Front right door closed.", 2);
       }
     }
     last_door_status = k_msg.buf[1];
@@ -356,7 +336,7 @@ void evaluate_remote_button(void) {
           fold_lock_button_pressed = true;
           #if AUTO_MIRROR_FOLD
             if (diag_transmit) {
-              serial_log("Checking mirror status.", 2);
+              serial_log("Checking exterior mirror status.", 2);
               kcan_write_msg(frm_mirror_status_request_a_buf);
               frm_mirror_status_requested = true;
             }
@@ -460,30 +440,30 @@ void evaluate_mirror_fold_status(void) {
     } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x22) {
       if (k_msg.buf[4] == 0) {
         mirrors_folded = false;
-        serial_log("Mirrors are un-folded.", 2);
+        serial_log("Exterior mirrors are un-folded.", 2);
       } else {
         mirrors_folded = true;
-        serial_log("Mirrors are folded.", 2);
+        serial_log("Exterior mirrors are folded.", 2);
       }
       frm_mirror_status_requested = false;
       mirror_status_retry = 0;
 
       if (fold_lock_button_pressed) {
         if (!mirrors_folded) {
-          serial_log("Folding mirrors after lock button pressed.", 2);
+          serial_log("Folding exterior mirrors after lock button pressed.", 2);
           toggle_mirror_fold(true);
         }
         fold_lock_button_pressed = false;
       } else if (fold_unlock_button_pressed) {
         if (mirrors_folded) {
-          serial_log("Will un-fold mirrors when door is opened after unlock button pressed.", 2);
+          serial_log("Will un-fold exterior mirrors when door is opened after unlock button pressed.", 2);
           unfold_with_door_open = true;
           fold_unlock_button_pressed = false;
         }
       }
     } else {                                                                                                                        // Try again. This will only work if the FRM first sent an error code.
       if (mirror_status_retry < 3 && diag_transmit) {
-        serial_log("Did not receive mirror status. Re-trying.", 1);
+        serial_log("Did not receive exterior mirror status. Re-trying.", 1);
         m = {frm_mirror_status_request_a_buf, millis() + 500};
         mirror_fold_txq.push(&m);
         mirror_status_retry++;
@@ -807,32 +787,66 @@ void evaluate_rls_light_status(void) {
 }
 
 
-void request_vehicle_tilt_angle(void) {
+void request_vehicle_pitch_angle(void) {
   #if IMMOBILIZER_SEQ
-  if (sine_angle_request_timer >= 500 && immobilizer_released) {
+  if (sine_pitch_angle_request_timer >= 500 && immobilizer_released) {
   #else
-  if (sine_angle_request_timer >= 500) {
+  if (sine_pitch_angle_request_timer >= 500) {
   #endif
     if (diag_transmit) {
-      kcan_write_msg(sine_angle_request_a_buf);
-      sine_angle_request_timer = 0;
-      sine_angle_requested = true;
+      kcan_write_msg(sine_pitch_angle_request_a_buf);
+      sine_pitch_angle_request_timer = 0;
+      sine_pitch_angle_requested = true;
     }
   }
 }
 
 
-void evaluate_vehicle_tilt_angle(void) {                                                                                            // Check with sine_65.prg JOB status_inclination_y_axis.
-  if (sine_angle_requested) {
-    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10) {
-      sine_tilt_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
-      sine_tilt_angle = constrain(sine_tilt_angle, -64.0, 64.0);                                                                    // Boundary check since F message has resolution -64..64.
-      f_vehicle_angle = round((sine_tilt_angle + 64) / 0.05);
-      sine_angle_requested = false;
+void evaluate_vehicle_pitch_angle(void) {                                                                                           // Check with sine_65.prg JOB status_inclination_y_axis.
+  if (sine_pitch_angle_requested) {
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10 && k_msg.buf[4] == 5) {
+      sine_pitch_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
+      sine_pitch_angle = constrain(sine_pitch_angle, -64.0, 64.0);                                                                  // Boundary check since F message has resolution -64..64.
+
+      xview_grade_percentage = 0x64 + round(100 * tan(0.0174532925 * abs(sine_pitch_angle)));                                       // Max is 0xFE - 154%.
+      xview_pitch_angle = (0x500 + (int)round(sine_pitch_angle * -1) * 0x14) << 4;
+      
+      f_vehicle_pitch_angle = 0x2000 + round((sine_pitch_angle + 64) / 0.05);                                                       // Make leading 4 bits signal valid (QU_AVL_LOGR_RW).
       if (diag_transmit) {
-        kcan_write_msg(sine_angle_request_b_buf);                                                                                   // Send this to complete the transaction.
+        kcan_write_msg(sine_pitch_angle_request_b_buf);                                                                             // Send this to complete the transaction.
       }
     }
+    sine_pitch_angle_requested = false;
+  }
+}
+
+
+void request_vehicle_roll_angle(void) {
+  #if IMMOBILIZER_SEQ
+  if (sine_roll_angle_request_timer >= 800 && immobilizer_released) {
+  #else
+  if (sine_roll_angle_request_timer >= 800) {
+  #endif
+    if (diag_transmit) {
+      kcan_write_msg(sine_roll_angle_request_a_buf);
+      sine_roll_angle_request_timer = 0;
+      sine_roll_angle_requested = true;
+    }
+  }
+}
+
+
+void evaluate_vehicle_roll_angle(void) {                                                                                            // Check with sine_65.prg JOB status_inclination_x_axis.
+  if (sine_roll_angle_requested) {
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10 && k_msg.buf[4] == 4) {
+      sine_roll_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
+      sine_roll_angle = constrain(sine_roll_angle, -64.0, 64.0);                                                                    // Boundary check since F message has resolution -64..64.
+      f_vehicle_roll_angle = 0x2000 + round((sine_roll_angle + 64) / 0.05);
+      if (diag_transmit) {
+        kcan_write_msg(sine_roll_angle_request_b_buf);                                                                              // Send this to complete the transaction.
+      }
+    }
+    sine_roll_angle_requested = true;
   }
 }
 
@@ -868,7 +882,7 @@ void evaluate_door_lock_ckm(void) {
 }
 
 
-void evaluate_drivers_door_status(void) {                                                                                           // The car won't lock fully with driver's door open, this should be enough.
+void evaluate_drivers_door_lock_status(void) {                                                                                      // The car won't lock fully with driver's door open, this should be enough.
   if (k_msg.buf[3] == 0xFC) {                                                                                                       // Door closed.
     if (k_msg.buf[0] == 0x83) {                                                                                                     // Deadlock ON.
       if (!doors_locked || !doors_alarmed) {
@@ -999,4 +1013,20 @@ void check_wiper_queue(void) {
       }
     }
   }
+}
+
+
+void fix_f_lights_ckm(void) {
+  #if F_NBT
+    if (f_drl_ckm_request == 0) {
+      if (drl_ckm[cas_key_number]) {
+        f_drl_ckm_request = 0xF6;
+      } else {
+        f_drl_ckm_request = 0xF1;
+      }
+    }
+
+    uint8_t f_ckm_message[] = {k_msg.buf[0], k_msg.buf[1], f_drl_ckm_request};
+    kcan2_write_msg(make_msg_buf(0x3DD, 3, f_ckm_message));
+  #endif
 }
