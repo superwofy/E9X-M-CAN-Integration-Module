@@ -167,7 +167,26 @@ void serial_debug_interpreter(void) {
       } else {
         serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
       }
-    } 
+    }
+
+    else if (cmd == "lc_on"){
+      if (diag_transmit) {
+        serial_log("  Serial: Launch Control Display activated.", 0);
+        kcan_write_msg(lc_cc_on_buf);
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+      }
+    }
+
+    else if (cmd == "lc_off"){
+      if (diag_transmit) {
+        serial_log("  Serial: Launch Control Display deactivated.", 0);
+        kcan_write_msg(lc_cc_off_buf);
+      } else {
+        serial_log("  Serial: Function unavailable due to OBD tool presence.", 0);
+      }
+    }
+
     #if EXHAUST_FLAP_CONTROL
     else if (cmd == "open_exhaust_flap") {
       actuate_exhaust_solenoid(LOW);
@@ -579,6 +598,12 @@ void print_help(void) {
     serial_log("  open_exhaust_flap - Energize the exhaust solenoid to open the flap.\r\n"
     "  close_exhaust_flap - Release the exhaust solenoid to close the flap.", 0);
   #endif
+
+  #if LAUNCH_CONTROL_INDICATOR
+  serial_log("  lc_on - Activates the Launch Control Display\r\n", 0);
+  serial_log("  lc_off - Disables the Launch Control", 0);
+  #endif
+
   serial_log("  toggle_mdrive - Change MDrive state ON-OFF.\r\n"
     "  reset_eeprom - Sets EEPROM bytes to 0xFF and reboots. EEPROM will be rebuilt on reboot.\r\n"
     "  reset_mdrive - Reset MDrive settings to defaults.\r\n"
