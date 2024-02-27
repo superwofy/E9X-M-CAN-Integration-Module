@@ -441,6 +441,9 @@ void evaluate_pdc_bus_status(void) {
         #endif
         serial_log("Activated PDC with RVC ON.", 2);
         pdc_with_rvc_requested = false;
+        #if F_VSW01 && F_NBT_EVO6_GW7
+          vsw_switch_input(1);
+        #endif
       }
     #endif
     pdc_bus_status = k_msg.buf[2];
@@ -463,15 +466,24 @@ void evaluate_f_pdc_function_request(void) {
     if (k_msg.buf[0] > 0x10) {                                                                                                      // Navigated away from reversing screen.
       kcan_write_msg(camera_inactive_buf);
       kcan2_write_msg(camera_inactive_buf);
+      #if F_VSW01 && F_NBT_EVO6_GW7
+        vsw_switch_input(4);
+      #endif
     } else {
       if (f_pdc_request != k_msg.buf[1]) {                                                                                          // PDC only, camera OFF.
         f_pdc_request = k_msg.buf[1];
         if (f_pdc_request == 1) {
           kcan_write_msg(camera_off_buf);
           kcan2_write_msg(camera_off_buf);
+          #if F_VSW01 && F_NBT_EVO6_GW7
+            vsw_switch_input(4);
+          #endif
         } else if (f_pdc_request == 5) {                                                                                            // Camera ON.
           kcan_write_msg(camera_on_buf);
           kcan2_write_msg(camera_on_buf);
+          #if F_VSW01 && F_NBT_EVO6_GW7
+            vsw_switch_input(1);
+          #endif
         }
       }
     }

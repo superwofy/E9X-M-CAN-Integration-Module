@@ -51,23 +51,28 @@ DRIVE_EXP_BRW
 MACRO_FDS                                                               // FDS popup display
     only_popup
 CAM_ECU                                                                 // VSW output connected to +21, -24 and shield 23 of A42*1B.
-    wert_5
+    wert_1
 TV
-    wert_10
+    wert_1
 MICROPHONE_POSITION                                                     // Mic in FZD
     wert_03
 BASIS_KOMBI_MMI_LIST
     aktiv
 GATEWAYTABLE
-    table_5
+    table_7
 PRODUKTLINIE
     lg
 KOMBI_CIC
     kombi_low
 CAMERA_SYSTEM
     trsvc
-X_VIEW
+X_VIEW                                                                  // xDrive status
     aktiv
+COMPASS
+    aktiv
+OELSTAND_OENS                                                           // Old CIC-like Oil menu
+    nicht_aktiv
+
 
 
 

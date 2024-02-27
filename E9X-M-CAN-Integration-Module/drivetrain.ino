@@ -272,11 +272,6 @@ void send_mdrive_message(void) {
 void send_mdrive_alive_message(uint16_t interval) {
   if (terminal_r) {
     if (mdrive_message_timer >= interval) {                                                                                         // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
-      if (ignition) {
-        serial_log("Sending Ignition ON MDrive alive message.", 2);
-      } else {
-        serial_log("Sending Vehicle Awake MDrive alive message.", 2);
-      }
       send_mdrive_message();
     }
   }

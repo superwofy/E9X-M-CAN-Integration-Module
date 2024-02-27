@@ -84,6 +84,7 @@ const unsigned long STANDARD_CLOCK = 528 * 1000000;
   #if F_NBT
     #define F_NBT_VIN_PATCH 1                                                                                                       // Requests CPS VIN from NBT before sending 0x380. Disable if using patched NBT binary.
     #define F_NBT_EVO6 1                                                                                                            // Additional changes for ID5 and ID6.
+    #define F_NBT_EVO6_GW7 1                                                                                                        // In NBT EVO ID5/6 GW table 7 allows old oil measurement to work but does not send VSW requests.
     #define F_NBT_CCC_ZBE 0                                                                                                         // Converts CCC ZBE1 messages for use with NBT.
   #endif
 #endif
@@ -370,13 +371,13 @@ uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xF
         f_data_powertrain_2_alive_counter = 0, f_torque_1_alive_counter = 0, f_vehicle_status_alive_counter = 0,
         f_driving_dynamics_alive_counter = 0, f_steering_angle_alive_counter = 0, f_pdc_function_status_alive_counter = 0,
         f_ftm_status_alive_counter = 0, f_standstill_status_alive_counter = 0, f_mdrive_alive_counter = 0,
-        f_xdrive_pitch_alive_counter = 0, f_road_incline_alive_counter = 0;
+        f_xview_pitch_alive_counter = 0, f_road_incline_alive_counter = 0;
 uint8_t f_mdrive_settings[5] = {0};
 uint32_t f_distance_alive_counter = 0x2000;
 uint8_t f_drl_ckm_request = 0;
 elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_timer = 500, 
               f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000,
-              f_xdrive_pitch_timer = 300, f_road_incline_timer = 100, f_chassis_longitudinal_timer = 20,
+              f_xview_pitch_timer = 1000, f_road_incline_timer = 100, f_chassis_longitudinal_timer = 20,
               f_chassis_lateral_timer = 20, f_chassis_yaw_timer = 20, f_chassis_speed_timer = 20, f_torque_1_timer = 100,
               f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1000, f_oil_level_timer = 500, 
               f_oil_level_measuring_timer = 50000;

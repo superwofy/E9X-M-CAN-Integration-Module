@@ -368,8 +368,8 @@ void cache_can_message_buffers(void) {                                          
   pdc_button_presssed_buf = make_msg_buf(0x317, 2, generic_button_pressed);
   pdc_button_released_buf = make_msg_buf(0x317, 2, generic_button_released);
 
-  uint8_t msa_fake_status[] = {0xFF, 0xFF};
-  msa_fake_status_buf = make_msg_buf(0x308, 2, msa_fake_status);
+  uint8_t msa_fake_status[] = {0xFF, 0xD2, 0xF1};
+  msa_fake_status_buf = make_msg_buf(0x308, 3, msa_fake_status);
 
   uint8_t mute_asd[] = {0x3F, 5, 0x31, 0xB8, 0xC, 1, 1, 0},
           demute_asd[] = {0x3F, 5, 0x31, 0xB8, 0xC, 1, 0, 0};
@@ -455,7 +455,7 @@ void kcan2_write_msg(const CAN_message_t &msg) {
       else if (msg.id == 0x317) { return; }                                                                                         // BN2000 PDC button.
       else if (msg.id == 0x31D) { return; }                                                                                         // BN2000 FTM status.
       else if (msg.id == 0x399) { return; }                                                                                         // BN2000 MDrive / BN2010 Status energy voltage.
-      else if (msg.id >= 0x5FF) { return; }                                                                                         // Diagnosis response and misc. messages from various modules.
+      else if (msg.id >= 0x5FF && msg.id <= 0x6F0) { return; }                                                                      // Diagnosis response and misc. messages from various modules.
 
       #if F_NBT_VIN_PATCH
         else if (msg.id == 0x380) {                                                                                                 // Patch NBT VIN to donor.

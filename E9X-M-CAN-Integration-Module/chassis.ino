@@ -157,23 +157,23 @@ void evaluate_indicated_speed(void) {
 }
 
 
-void send_f_xdrive_pitch_angle(void) {
-  if (f_xdrive_pitch_timer >= 300) {
-    uint8_t f_xdrive_pitch_angle[] = {0xFF, 0, 0xFF, 0xFF, 0, 0, 0, 0xFF};
+void send_f_xview_pitch_angle(void) {
+  if (f_xview_pitch_timer >= 1000) {
+    uint8_t f_xview_pitch_angle[] = {0xFF, 0, 0xFF, 0xFF, 0, 0, 0, 0xFF};
 
-    f_xdrive_pitch_angle[1] = 0xF << 4 | f_xdrive_pitch_alive_counter;
-    f_xdrive_pitch_alive_counter == 0xE ? f_xdrive_pitch_alive_counter = 0 
-                                        : f_xdrive_pitch_alive_counter++;
+    f_xview_pitch_angle[1] = 0xF << 4 | f_xview_pitch_alive_counter;
+    f_xview_pitch_alive_counter == 0xE ? f_xview_pitch_alive_counter = 0 
+                                        : f_xview_pitch_alive_counter++;
 
-    f_xdrive_pitch_angle[4] = xview_pitch_angle & 0xFF;                                                                   // Send in LE.
-    f_xdrive_pitch_angle[5] = xview_pitch_angle >> 8;
-    f_xdrive_pitch_angle[6] = xview_grade_percentage;
+    f_xview_pitch_angle[4] = xview_pitch_angle & 0xFF;                                                                              // Send in LE.
+    f_xview_pitch_angle[5] = xview_pitch_angle >> 8;
+    f_xview_pitch_angle[6] = xview_grade_percentage;
     
-    CAN_message_t f_xdrive_pitch_angle_buf = make_msg_buf(0x180, 8, f_xdrive_pitch_angle);
+    CAN_message_t f_xview_pitch_angle_buf = make_msg_buf(0x180, 8, f_xview_pitch_angle);
     #if F_NBT
-      kcan2_write_msg(f_xdrive_pitch_angle_buf);
+      kcan2_write_msg(f_xview_pitch_angle_buf);
     #endif
-    f_xdrive_pitch_timer = 0;
+    f_xview_pitch_timer = 0;
   }
 }
 
@@ -440,6 +440,10 @@ void send_f_steering_angle(void) {
   #endif
   #if F_NBT
     kcan2_write_msg(f_steering_angle_effective_buf);
+    #if F_NBT_EVO6_GW7
+      uint8_t f_xview_steering[] = {f_steering_angle[2], f_steering_angle[3]};
+      kcan2_write_msg(make_msg_buf(0x2F3, 2, f_xview_steering));
+    #endif
   #endif
 }
 
