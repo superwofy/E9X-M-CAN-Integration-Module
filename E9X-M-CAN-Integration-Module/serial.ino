@@ -184,6 +184,26 @@ void serial_debug_interpreter(void) {
         serial_log(serial_debug_string, 0);
       }
     }
+    #if LAUNCH_CONTROL_INDICATOR
+    else if (cmd == "lc_display_on"){
+      if (engine_running) {
+        serial_log("  Serial: Launch Control Display activated.", 0);
+        kcan_write_msg(lc_cc_on_buf);
+        #if F_NBT
+          kcan2_write_msg(lc_cc_on_buf);
+        #endif
+      } else {
+        serial_log("  Serial: Engine must be running for Launch Control Display.", 0);
+      }
+    }
+    else if (cmd == "lc_display_off"){
+      serial_log("  Serial: Launch Control Display deactivated.", 0);
+      kcan_write_msg(lc_cc_off_buf);
+      #if F_NBT
+        kcan2_write_msg(lc_cc_off_buf);
+      #endif
+    }
+    #endif
     #if EXHAUST_FLAP_CONTROL
     else if (cmd == "open_exhaust_flap") {
       actuate_exhaust_solenoid(LOW);
@@ -612,6 +632,10 @@ void print_help(void) {
   "  clear_all_dtcs - Clear the error memories of every module on the bus.\r\n"
   "  cc_gong - Create an audible check-control gong.\r\n"
   "  jbe_reboot - Reboot the gateway. Use when troubleshooting DCAN errors.", 0);
+  #if LAUNCH_CONTROL_INDICATOR
+    serial_log("  lc_display_on - Activates the Launch Control flag CC.\r\n"
+    "  lc_display_off - Deactivates the Launch Control flag CC.", 0);
+  #endif
   #if EXHAUST_FLAP_CONTROL
     serial_log("  open_exhaust_flap - Energize the exhaust solenoid to open the flap.\r\n"
     "  close_exhaust_flap - Release the exhaust solenoid to close the flap.", 0);

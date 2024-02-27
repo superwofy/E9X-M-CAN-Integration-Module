@@ -45,6 +45,7 @@ Included are also tools to allow full manipulation of the program section in the
 * Emulate K-CAN2 for NBT support.
 	* Donor VIN is obtained after every boot when Terminal R is ON. Disable if using own FSCs.
 	* Sport displays are populated with PT-CAN torque data from the DME.
+	* xDrive status data populated with pitch and roll obtained from the alarm siren (SINE).
 	* A BN2000 -> BN2010 message translation overview can be found here: [nbt-messages](CAN%20messages/Message%20translation%20for%20NBT.txt)
 * Control MDrive settings from iDrive.
 	* Control DME throttle map with the M button.

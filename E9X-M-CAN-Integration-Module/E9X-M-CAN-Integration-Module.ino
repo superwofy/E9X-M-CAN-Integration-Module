@@ -60,7 +60,9 @@ void loop() {
       send_f_energy_condition();
     #endif
     #if F_NBT
-      send_f_oil_level();
+      #if !F_NBT_EVO6_GW7
+        send_f_oil_level();
+      #endif
       check_faceplate_buttons_queue();
       check_nbt_cc_queue();
       #if F_NBT_VIN_PATCH
@@ -90,7 +92,7 @@ void loop() {
       check_power_led_state();                                                                                                      // This delay function syncs the power button LED with EDC button LEDS.
       check_dsc_queue();
       check_console_buttons();
-      send_mdrive_alive_message(10000);
+      send_mdrive_alive_message(5000);
       #if AUTO_SEAT_HEATING
         check_seatheating_queue();
       #endif
@@ -113,7 +115,7 @@ void loop() {
         request_vehicle_roll_angle();
         send_f_road_incline();
         #if F_NBT
-          send_f_xdrive_pitch_angle();
+          send_f_xview_pitch_angle();
           #if F_NBT_EVO6
             send_f_driving_dynamics_switch_evo();
           #else
@@ -129,7 +131,7 @@ void loop() {
         scale_cpu_speed();
         reset_sleep_variables();
       } else {                                                                                                                      // Ignition OFF, Terminal R ON/OFF, vehicle_awake.
-        send_mdrive_alive_message(15000);                                                                                           // Send this message with Terminal R to populate the fields in iDrive.
+        send_mdrive_alive_message(10000);                                                                                           // Send this message with Terminal R to populate the fields in iDrive.
       }
     }
   }
@@ -160,7 +162,7 @@ void loop() {
   if (KCAN.read(k_msg)) {
 
     #if F_NBT
-      if (k_msg.id != 0x2F7 && k_msg.id != 0x3DD) {                                                                                 // Skip the units and lights CKM messages as they require further processing.
+      if (k_msg.id != 0x2F3 && k_msg.id != 0x2F7 && k_msg.id != 0x3DD) {                                                            // Skip the units and lights CKM messages as they require further processing.
         kcan2_write_msg(k_msg);                                                                                                     // Write messages from the car to the NBT.
       }
     #endif
@@ -423,10 +425,12 @@ void loop() {
       send_f_ftm_status();
     }
 
+    #if !F_NBT_EVO6_GW7
     else if (k_msg.id == 0x381) {                                                                                                   // Store the Oil level for use with NBT. 10s cycle time.
       e_oil_level = k_msg.buf[0];
       f_oil_level_timer = 501;
     }
+    #endif
     #endif
 
     else if (k_msg.id == 0x3BD) {                                                                                                   // Received consumer shutdown message from FRM.
@@ -730,8 +734,12 @@ void process_kcan2_message(void) {
   }
 
   #if F_VSW01
-  else if (k_msg.id == 0x2FB) {                                                                                                     // VSW switch request sent by NBT.
+  else if (k_msg.id == 0x2FB) {                                                                                                     // VSW switch request sent by HU.
     evaluate_vsw_position_request();
+  }
+
+  else if (k_msg.id == 0x2FD) {                                                                                                     // VSW actual status.
+    vsw_current_input = k_msg.buf[0];
   }
   #endif
 
@@ -751,6 +759,11 @@ void process_kcan2_message(void) {
     store_rvc_settings_idrive();
   }
   #endif
+
+  else if (k_msg.id == 0x39E) {                                                                                                     // Received new date/time from NBT.
+    evaluate_idrive_zero_time();
+    return;
+  }
 
   else if (k_msg.id == 0x3DC) {
     f_drl_ckm_request = k_msg.buf[2];

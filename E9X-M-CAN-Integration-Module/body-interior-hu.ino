@@ -150,6 +150,9 @@ void check_idrive_alive_monitor(void) {
         serial_log("iDrive booting/rebooting.", 2);
         initial_volume_set = false;
         asd_initialized = false;
+        #if F_VSW01 && F_NBT_EVO6_GW7
+          vsw_switch_input(4);
+        #endif
       }
     } else {
       if (idrive_died) {                                                                                                            // It's back.
@@ -172,11 +175,10 @@ void vsw_switch_input(uint8_t input) {
 }
 
 
-
 void evaluate_vsw_position_request() {
   vsw_current_input = k_msg.buf[0];
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "NBT sent VSW/%d (%s) request.", vsw_current_input, vsw_positions[vsw_current_input]);
+    sprintf(serial_debug_string, "HU sent VSW/%d (%s) request.", vsw_current_input, vsw_positions[vsw_current_input]);
     serial_log(serial_debug_string, 3);
   #endif
 }
@@ -530,5 +532,15 @@ void check_nbt_cc_queue(void) {
       kcan2_write_msg(delayed_tx.tx_msg);
       nbt_cc_txq.drop();
     }
+  }
+}
+
+
+void evaluate_idrive_zero_time(void) {
+  if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0 && k_msg.buf[3] == 1 
+      && k_msg.buf[4] == 0x1F && k_msg.buf[5] == 0xD0 && k_msg.buf[6] == 7) {
+    return;
+  } else {
+    kcan_write_msg(k_msg);
   }
 }

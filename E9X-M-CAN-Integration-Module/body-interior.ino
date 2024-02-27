@@ -11,6 +11,9 @@ void evaluate_terminal_clutch_keyno_status(void) {
     #if F_NBT
       FACEPLATE_UART.begin(38400, SERIAL_8E1);
     #endif
+    #if F_VSW01 && F_NBT_EVO6_GW7
+      vsw_switch_input(4);
+    #endif
   }
 
   bool ignition_ = ignition, terminal_r_ = terminal_r;
@@ -757,6 +760,10 @@ void send_f_kombi_lcd_brightness(void) {
   uint8_t f_kombi_lcd_brightness[] = {k_msg.buf[0], 0x32, k_msg.buf[2], 0xFD};                                                      // Byte1 is fixed.
   if (rls_time_of_day == 2) {
     f_kombi_lcd_brightness[3] = 0xFE;                                                                                               // This makes the NBT switch to night mode.
+  } else {
+    #if F_NBT_EVO6
+      f_kombi_lcd_brightness[0] = constrain(f_kombi_lcd_brightness[0] + 0xF, 0, 0xFE);                                              // Increase screen brightness during the day slightly. F3X ID3 APIX1 screen.
+    #endif
   }
   kcan2_write_msg(make_msg_buf(0x393, 4, f_kombi_lcd_brightness));
 }
