@@ -1,4 +1,4 @@
-# NBT EVO ID5/6 18-03, Coded as F082 3R92.
+# NBT EVO ID5/6 23-07, Coded as F082 3R91 or 3R92.
 
 SERVICE_HISTORY                                                         // Disable service history in Vehicle status
     nicht_aktiv
@@ -26,8 +26,6 @@ ID5_COLOR_SET
     nicht_aktiv
 CC_CBS_ETH_SERVICE_VERSION
     version_1
-ZBE_HARDKEY_LAYOUT_NEW
-    nicht_aktiv
 M_DIGITAL_TACHO
     nicht_aktiv
 SETTINGS_INFO_DISPLAY
@@ -54,8 +52,6 @@ CAM_ECU                                                                 // VSW o
     wert_1
 TV
     wert_1
-MICROPHONE_POSITION                                                     // Mic in FZD
-    wert_03
 BASIS_KOMBI_MMI_LIST
     aktiv
 GATEWAYTABLE
@@ -72,57 +68,18 @@ COMPASS
     aktiv
 OELSTAND_OENS                                                           // Old CIC-like Oil menu
     nicht_aktiv
-
-
-
-
-# NBT HW07
-
-SERVICE_HISTORY                                                         // Disable service history in Vehicle status
+LANGUAGE_CZECH                                                          // Unsupported languages
     nicht_aktiv
-IBA                                                                     // Disables owner's manual
+LANGUAGE_DANISH
     nicht_aktiv
-REFERENCE_CHANNEL_TEL                                                   // Echo fix for non-FXX amplifier
+LANGUAGE_NORWEGIAN
     nicht_aktiv
-HELLIGKEIT_AMBILIGHT                                                    // Disable interior brightness setting
+LANGUAGE_SLOVENIAN
     nicht_aktiv
-SETTINGS_TIME_AUTOMATIC                                                 // Update time with GPS
-    navigation
-MACRO_CAM_LEGALDISCLAIMER                                               // Camera disclaimers
-    kein_ld
-COMMUNICATION_PARKMASTER                                                // PDC display not working without this
-    gen2
-SLEEPDELAY_CLAMP30B_MIN                                                 // Sleep after 5 min
-    1E
-KEY_CONF_TAILGATE                                                       // Hides tailgate button menu
+LANGUAGE_SLOVAKIAN
     nicht_aktiv
-KEY_CONF_COMFORT
+LANGUAGE_FINNISH
     nicht_aktiv
-MDRIVE                                                                  // Enable MDrive
-    aktiv
-DSC_OFF                                                                 // Enable DSC OFF in MDrive settings
-    aktiv
-ECO_MODE                                                                // Deactivates ECO mode and Efficient dynamics
-    nicht_aktiv
-MACRO_FDS                                                               // FDS popup display
-    only_popup
-M_VEHICLE                                                               // Darker graphic for sport displays
-    aktiv
-MICROPHONE_POSITION                                                     // Mic in FZD
-    wert_03
-EINBAUWINKEL_HU_PITCH                                                   // Gyro parameters from F25 (has somewhat similar dash position)
-    p_140
-EINBAUWINKEL_HU_YAW
-    p_55
-SWITCH_MLS_MI
-    aktiv
-BASIS_KOMBI_MMI_LIST
-    aktiv
-GATEWAYTABLE
-    table_5
-PRODUKTLINIE
-    lg
-
 
 
 # CIC

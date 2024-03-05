@@ -10,7 +10,7 @@ void setup() {
   configure_flexcan();                                                                                                              // systick: 1.25 +/- 0.05 ms is when the CAN subsystem is fully ready.
   configure_mcp2515();                                                                                                              // Starting the MCP2515 takes around 2.2 ms!
   configure_IO();
-  activate_usb(0);                                                                                                                  // This code ensures compatibility with unmodified Teensy cores since USB init will work anyway.
+  activate_usb();                                                                                                                   // This code ensures compatibility with unmodified Teensy cores since USB init will work anyway.
   read_initialize_eeprom();                                                                                                         // systick: 1.80 +/- 0.01 ms is when the EEPROM is read. If EEPROM is corrupt, this takes longer.
   update_mdrive_can_message();
   cache_can_message_buffers();
@@ -60,14 +60,14 @@ void loop() {
       send_f_energy_condition();
     #endif
     #if F_NBT
-      #if !F_NBT_EVO6_GW7
-        send_f_oil_level();
-      #endif
       check_faceplate_buttons_queue();
       check_nbt_cc_queue();
       #if F_NBT_VIN_PATCH
         send_nbt_vin_request();
       #endif
+    #endif
+    #if ASD89_RAD_ON
+      check_radon_queue();
     #endif
     check_hazards_queue();
     check_can_resend_queues();
@@ -108,19 +108,23 @@ void loop() {
       #if PDC_AUTO_OFF
         check_pdc_button_queue();
       #endif
-      #if F_NIVI || F_NBT
-        send_f_powertrain_2_status();
-        send_f_standstill_status();
+      #if F_NIVI || X_VIEW
         request_vehicle_pitch_angle();
         request_vehicle_roll_angle();
-        send_f_road_incline();
-        #if F_NBT
+        #if X_VIEW
           send_f_xview_pitch_angle();
-          #if F_NBT_EVO6
-            send_f_driving_dynamics_switch_evo();
-          #else
-            send_f_driving_dynamics_switch_nbt();
-          #endif
+        #endif
+        send_f_road_incline();
+      #endif
+      #if F_NIVI || F_NBT
+        send_f_powertrain_2_status();
+      #endif
+      #if F_NBT
+        send_f_standstill_status();
+        #if F_NBT_EVO6
+          send_f_driving_dynamics_switch_evo();
+        #else
+          send_f_driving_dynamics_switch_nbt();
         #endif
       #endif
     } else {
@@ -162,7 +166,7 @@ void loop() {
   if (KCAN.read(k_msg)) {
 
     #if F_NBT
-      if (k_msg.id != 0x2F3 && k_msg.id != 0x2F7 && k_msg.id != 0x3DD) {                                                            // Skip the units and lights CKM messages as they require further processing.
+      if (k_msg.id != 0x2F3 && k_msg.id != 0x2F7 && k_msg.id != 0x3DD && k_msg.id != 0x336 && k_msg.id != 0x338) {                  // Skip messages that require further processing.
         kcan2_write_msg(k_msg);                                                                                                     // Write messages from the car to the NBT.
       }
     #endif
@@ -262,12 +266,6 @@ void loop() {
 
       else if (k_msg.id == 0x2E6) {                                                                                                 // Air distribution status message.
         evaluate_ihka_auto_state();
-      }
-      #endif
-
-      #if F_NBT || F_NIVI || MIRROR_UNDIM || FRONT_FOG_CORNER
-      else if (k_msg.id == 0x314) {                                                                                                 // RLS light status.
-        evaluate_rls_light_status();
       }
       #endif
 
@@ -385,7 +383,7 @@ void loop() {
       #if DOOR_VOLUME 
         send_initial_volume_cic();
       #endif
-      #if ASD
+      #if ASD89
         initialize_asd();
       #endif
     }
@@ -400,6 +398,12 @@ void loop() {
     else if (k_msg.id == 0x2CA) {                                                                                                   // Monitor and update ambient temperature.
       evaluate_ambient_temperature();
     }
+
+    #if F_VSW01
+    else if (k_msg.id == 0x2FD) {                                                                                                   // VSW actual status.
+      vsw_current_input = k_msg.buf[0];
+    }
+    #endif
 
     #if AUTO_SEAT_HEATING_PASS
     else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
@@ -420,17 +424,24 @@ void loop() {
     }
     #endif
 
+    #if F_NBT || F_NIVI || MIRROR_UNDIM || FRONT_FOG_CORNER
+    else if (k_msg.id == 0x314) {                                                                                                   // RLS light status.
+      evaluate_rls_light_status();
+    }
+    #endif
+
     #if F_NBT
     else if (k_msg.id == 0x31D) {
       send_f_ftm_status();
     }
 
-    #if !F_NBT_EVO6_GW7
-    else if (k_msg.id == 0x381) {                                                                                                   // Store the Oil level for use with NBT. 10s cycle time.
-      e_oil_level = k_msg.buf[0];
-      f_oil_level_timer = 501;
+    else if (k_msg.id == 0x336) {
+      process_bn2000_cc_display();
     }
-    #endif
+
+    else if (k_msg.id == 0x338) {
+      process_bn2000_cc_dialog();
+    }
     #endif
 
     else if (k_msg.id == 0x3BD) {                                                                                                   // Received consumer shutdown message from FRM.
@@ -532,13 +543,27 @@ void loop() {
         evaluate_vehicle_moving();
         #if F_NIVI
           send_f_longitudinal_acceleration();
-          send_f_lateral_acceleration();
+          //send_f_lateral_acceleration();
         #endif
         #if F_NIVI || F_NBT
-          send_f_yaw_rate();                                                                                                        // Equivalent to Gyro.
+          send_f_yaw_rate_chassis();                                                                                                // Equivalent to Gyro.
           send_f_speed_status();
         #endif
-      } else {
+      }
+      
+      #if FRONT_FOG_CORNER || F_NIVI || F_NBT
+      else if (pt_msg.id == 0xC4) {
+        evaluate_steering_angle();
+        #if FRONT_FOG_CORNER
+          evaluate_corner_fog_activation();
+        #endif
+        #if F_NIVI || F_NBT
+          send_f_steering_angle();
+        #endif
+      }
+      #endif
+      
+      else {
         if (ignition) {              
           if (pt_msg.id == 0x315) {                                                                                                 // Monitor EDC status message from the JBE.
             send_power_mode();                                                                                                      // state_spt request from DME.   
@@ -546,18 +571,6 @@ void loop() {
               send_servotronic_message();
             #endif
           }
-
-          #if FRONT_FOG_CORNER || F_NIVI || F_NBT
-          else if (pt_msg.id == 0xC8) {
-            evaluate_steering_angle();
-            #if FRONT_FOG_CORNER
-              evaluate_corner_fog_activation();
-            #endif
-            #if F_NIVI || F_NBT
-              send_f_steering_angle();
-            #endif
-          }
-          #endif
 
           #if HDC
           else if (pt_msg.id == 0x194) {
@@ -703,6 +716,7 @@ void loop() {
   K-CAN2 section. Relevant messages sent by NBT to be used by this module follow and are copied from the K-CAN section...
 ***********************************************************************************************************************************************************************************************************************************************/
 void process_kcan2_message(void) {
+  
   if (ignition) {
     if (k_msg.id == 0x42F) {                                                                                                        // Receive M drive settings from iDrive (BN2010).
       update_mdrive_message_settings_nbt();
@@ -733,13 +747,9 @@ void process_kcan2_message(void) {
     evaluate_idrive_units();
   }
 
-  #if F_VSW01
+  #if F_VSW01 && !F_NBT_EVO6
   else if (k_msg.id == 0x2FB) {                                                                                                     // VSW switch request sent by HU.
     evaluate_vsw_position_request();
-  }
-
-  else if (k_msg.id == 0x2FD) {                                                                                                     // VSW actual status.
-    vsw_current_input = k_msg.buf[0];
   }
   #endif
 
@@ -749,8 +759,11 @@ void process_kcan2_message(void) {
 
   else if (k_msg.id == 0x34A) {                                                                                                     // 0x273 does not work the same way on NBT. Use 34A instead. Cycle time 1s.
     idrive_alive_timer = 0;
-    #if ASD
+    #if ASD89
       initialize_asd();
+    #endif
+    #if ASD89_RAD_ON
+      initialize_asd_rad_on();
     #endif
   }
 
@@ -781,13 +794,16 @@ void process_kcan2_message(void) {
     #if DOOR_VOLUME
       evaluate_audio_volume_nbt();
     #endif
+    show_mdrive_settings_screen_evo();    
   }
 
-  else if (k_msg.id == 0x6F1) {                                                                                                     // Block some exploits through browser injecting into the network.
-    serial_log("KCAN2 network sent a 6F1 message!", 0);
-    return;
+
+  else if (k_msg.id == 0x398) {
+    ptcan_write_msg(k_msg);
   }
 
+  else if (k_msg.id == 0x6F1) { return; }                                                                                           // Firewall HU from injecting diagnostic messages to other networks.
+    
   if (terminal_r) {                                                                                                                 // No needed data is sent from KCAN2 modules to the car when KL_R is off. This can stop the car from sleeping.
     kcan_write_msg(k_msg);                                                                                                          // Write the message received from KCAN2 to the rest of the car.
   }

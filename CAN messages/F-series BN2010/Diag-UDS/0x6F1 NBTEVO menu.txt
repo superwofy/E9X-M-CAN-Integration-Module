@@ -1,0 +1,17 @@
+JOB: STEUERN_ROUTINE 
+ARGS: ARG;MENU;STR;1784;0;0;0
+
+1784 = 0x6 F8
+
+21:07:57.543 ->  DCAN:  ID: 6F1 Buffer: 63 10 C 31 1 A0 24 6 
+21:07:57.543 ->  DCAN:  ID: 663 Buffer: F1 30 0 0 FF FF FF FF 
+21:07:57.543 ->  DCAN:  ID: 6F1 Buffer: 63 21 F8 0 0 0 0 0 
+21:07:57.543 ->  DCAN:  ID: 6F1 Buffer: 63 22 0 0 0 0 0 0 
+21:07:57.575 ->  DCAN:  ID: 663 Buffer: F1 4 71 1 A0 24 FF FF
+
+
+Example ARGs:
+
+1784;0;0;0 - M Setup
+
+Get from AAIdrive Android app -> Car Information -> hmi.graphicalContext -> visibleContext

@@ -56,7 +56,7 @@ void serial_debug_interpreter(void) {
             kcan_write_msg(power_down_cmd_a_buf);
           } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (60000 - diag_deactivate_timer) / 1000);
+                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
           }
         } else {
@@ -91,73 +91,103 @@ void serial_debug_interpreter(void) {
     else if (cmd == "clear_all_dtcs") {                                                                                             // Should take around 6s to complete.
       if (ignition) {
         if (diag_transmit) {
-          serial_log("  Serial: Clearing error and shadow memories.", 0);
+          serial_log("  Serial: Clearing error and shadow memories - please wait.", 0);
           unsigned long time_now = millis();
-          uint8_t clear_fs_job[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0};
+          uint8_t clear_fs[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0};
           for (uint8_t i = 0; i < 0x8C; i++) {
             #if F_NBT
-              if (i == 0x63 || i == 0x67 || i == 0x35) {                                                                            // NBT, ZBE, TBX.
+              if (i == 0x63 || i == 0x67 || i == 0x35 || i == 0x48) {                                                               // NBT, ZBE, TBX, VSW.
                 continue;
               }
             #endif
-            clear_fs_job[0] = i;
-            m = {make_msg_buf(0x6F1, 8, clear_fs_job), time_now};
-            serial_diag_kcan1_txq.push(&m);
-            time_now += 50;
-          }
-          uint8_t clear_is_job[] = {0, 3, 0x31, 6, 0, 0, 0, 0};
-          for (uint8_t i = 0; i < 0x8C; i++) {
-            clear_fs_job[0] = i;
-            m = {make_msg_buf(0x6F1, 8, clear_is_job), time_now};
-            serial_diag_kcan1_txq.push(&m);
-            time_now += 50;
-          }
-          uint8_t clear_dme_hs_job[] = {0x12, 2, 0x31, 3, 0, 0, 0, 0};
-          m = {make_msg_buf(0x6F1, 8, clear_dme_hs_job), time_now};
-          serial_diag_kcan1_txq.push(&m);
-          time_now += 50;
-          #if F_NBT
-            m = {clear_fs_job_uds_nbt_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_is_job_uds_nbt_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_fs_job_uds_zbe_buf, time_now};                                                                               // Send the clear command to KCAN2 in case there's a ZBE retrofitted there.
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            #if !F_NBT_CCC_ZBE
-              m = {clear_is_job_uds_zbe_buf, time_now};
-              serial_diag_kcan2_txq.push(&m);
-              time_now += 50;
-              m = {clear_fs_job_uds_tbx_buf, time_now};
-              serial_diag_kcan2_txq.push(&m);
-              time_now += 50;
-              m = {clear_is_job_uds_tbx_buf, time_now};
-              serial_diag_kcan2_txq.push(&m);
-              time_now += 50;
+            #if SERVOTRONIC_SVT70
+              if (i == 0xE) {                                                                                                       // SVT error clear not forwarded over DCAN.
+                continue;
+              }
             #endif
-          #endif
+            clear_fs[0] = i;
+            m = {make_msg_buf(0x6F1, 8, clear_fs), time_now};
+            serial_diag_dcan_txq.push(&m);
+            time_now += 50;
+          }
+          time_now += 50;
+          uint8_t clear_is[] = {0, 3, 0x31, 6, 0, 0, 0, 0};
+          for (uint8_t i = 0; i < 0x8C; i++) {
+            #if F_NBT
+              if (i == 0x63 || i == 0x67 || i == 0x35 || i == 0x48) {
+                continue;
+              }
+            #endif
+            #if SERVOTRONIC_SVT70
+              if (i == 0xE) {
+                continue;
+              }
+            #endif
+            clear_is[0] = i;
+            m = {make_msg_buf(0x6F1, 8, clear_is), time_now};
+            serial_diag_dcan_txq.push(&m);
+            time_now += 50;
+          }
+          time_now += 50;
+          m = {clear_dme_hs_buf, time_now};
+          serial_diag_dcan_txq.push(&m);
           #if F_ZBE_KCAN1 && !F_NBT
-            m = {clear_fs_job_uds_zbe_buf, time_now};
-            serial_diag_kcan1_txq.push(&m);
             time_now += 50;
-            m = {clear_is_job_uds_zbe_buf, time_now};
-            serial_diag_kcan1_txq.push(&m);
+            m = {clear_fs_uds_zbe_buf, time_now};
+            serial_diag_dcan_txq.push(&m);
             time_now += 50;
+            m = {clear_is_uds_zbe_buf, time_now};
+            serial_diag_dcan_txq.push(&m);
           #endif
           #if F_VSW01
-            m = {clear_fs_job_vsw_buf, time_now};
-            serial_diag_kcan1_txq.push(&m);
             time_now += 50;
-            m = {clear_is_job_vsw_buf, time_now};
-            serial_diag_kcan1_txq.push(&m);
+            m = {clear_fs_uds_vsw_buf, time_now};
+            serial_diag_dcan_txq.push(&m);
             time_now += 50;
+            m = {clear_is_uds_vsw_buf, time_now};
+            serial_diag_dcan_txq.push(&m);
+          #endif
+          #if SERVOTRONIC_SVT70
+            time_now += 50;
+            m = {clear_svt_fs_buf, time_now};
+            serial_diag_ptcan_txq .push(&m);
+            time_now += 50;
+            m = {clear_svt_is_buf, time_now};
+            serial_diag_ptcan_txq.push(&m);
+          #endif
+          #if F_NBT
+            time_now = millis();
+            m = {clear_fs_uds_nbt_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_is_uds_nbt_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_fs_uds_zbe_buf, time_now};                                                                                   // Send the clear command to KCAN2 in case there's a ZBE retrofitted there.
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_fs_uds_tbx_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_is_uds_tbx_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_fs_uds_ampt_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_is_uds_ampt_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_fs_uds_vm_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 50;
+            m = {clear_is_uds_vm_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
           #endif
           clearing_dtcs = true;
         } else {
           sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (int) (60000 - diag_deactivate_timer) / 1000);
+                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
           serial_log(serial_debug_string, 0);
         }
       } else {
@@ -170,7 +200,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent CC gong.", 0);
       } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (60000 - diag_deactivate_timer) / 1000);
+                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
       }
     }
@@ -180,7 +210,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent JBE reboot.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -272,7 +302,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Activated front left fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -282,7 +312,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Deactivated front right fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -292,7 +322,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Deactivated front left fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -303,7 +333,7 @@ void serial_debug_interpreter(void) {
           serial_log("  Serial: Deactivated front fog lights.", 0);
         } else {
           sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (int) (60000 - diag_deactivate_timer) / 1000);
+                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
           serial_log(serial_debug_string, 0);
         }
       } else {
@@ -332,7 +362,7 @@ void serial_debug_interpreter(void) {
             needle_sweep_animation();
           } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (60000 - diag_deactivate_timer) / 1000);
+                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
           }
         #endif
@@ -351,13 +381,13 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent mirror fold/unfold request.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
     else if (cmd == "mirror_fold_status") {
       if (diag_transmit) {
-        fold_lock_button_pressed = fold_unlock_button_pressed = false;
+        fold_lock_button_pressed = false;
         frm_mirror_status_requested = true;
         kcan_write_msg(frm_mirror_status_request_a_buf);
         if (LOGLEVEL >= 2) {
@@ -367,7 +397,7 @@ void serial_debug_interpreter(void) {
         }
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -379,7 +409,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent undim request.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -444,7 +474,7 @@ void serial_debug_interpreter(void) {
         }
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -521,11 +551,16 @@ void serial_debug_interpreter(void) {
     #if F_NBT
     else if (cmd == "hu_reboot") {
       if (diag_transmit) {
-        kcan2_write_msg(f_hu_nbt_reboot_buf);
-        serial_log("  Serial: Sent HU reboot job.", 0);
+        unsigned long time_now = millis();
+        m = {f_hu_nbt_reboot_buf, time_now};
+        serial_diag_kcan2_txq.push(&m);
+        time_now += 200;
+        m = {f_hu_nbt_reboot_buf, time_now};
+        serial_diag_kcan2_txq.push(&m);
+        serial_log("  Serial: Sending HU reboot job.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (60000 - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -585,6 +620,13 @@ void serial_debug_interpreter(void) {
       m = {faceplate_f1_released_buf, time_now};
       serial_diag_kcan2_txq.push(&m);
       serial_log("  Serial: Sent volume up.", 0);
+    }
+    #endif
+    #if ASD89_RAD_ON
+    else if (cmd == "asd_rad_on") {
+      kcan_write_msg(radon_asd_buf);
+      asd_rad_on_initialized = true;
+      serial_log("  Serial: Sent RAD_ON request to ASD module.", 0);
     }
     #endif
     else if (cmd == "help") {
@@ -697,16 +739,26 @@ void print_help(void) {
     "  faceplate_decrease_volume - Simulate turning the volume knob anti-clockwise on the faceplate.\r\n"
     "  faceplate_increase_volume - Simulate turning the volume knob clockwise on the faceplate.", 0);
   #endif
+  #if ASD89_RAD_ON
+    serial_log("  asd_rad_on - Activates the RAD_ON signal output from the ASD module.", 0);
+  #endif
   serial_log("  ==========================================================", 0);
 }
 
 
 void check_serial_diag_actions(void) {
-  if (!serial_diag_kcan1_txq.isEmpty() || !serial_diag_kcan2_txq.isEmpty()) {
+  if (!serial_diag_dcan_txq.isEmpty() || !serial_diag_kcan1_txq.isEmpty() || !serial_diag_kcan2_txq.isEmpty() || !serial_diag_ptcan_txq.isEmpty()) {
+    if (!serial_diag_dcan_txq.isEmpty()) {
+      serial_diag_dcan_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        dcan_write_msg(delayed_tx.tx_msg);
+        serial_diag_dcan_txq.drop();
+      }
+    }
     if (!serial_diag_kcan1_txq.isEmpty()) {
       serial_diag_kcan1_txq.peek(&delayed_tx);
       if (millis() >= delayed_tx.transmit_time) {
-        dcan_write_msg(delayed_tx.tx_msg);
+        kcan_write_msg(delayed_tx.tx_msg);
         serial_diag_kcan1_txq.drop();
       }
     }
@@ -719,6 +771,13 @@ void check_serial_diag_actions(void) {
         }
       }
     #endif
+    if (!serial_diag_ptcan_txq.isEmpty()) {
+      serial_diag_ptcan_txq.peek(&delayed_tx);
+      if (millis() >= delayed_tx.transmit_time) {
+        ptcan_write_msg(delayed_tx.tx_msg);
+        serial_diag_ptcan_txq.drop();
+      }
+    }
   } else {
     if (clearing_dtcs) {
       clearing_dtcs = false;

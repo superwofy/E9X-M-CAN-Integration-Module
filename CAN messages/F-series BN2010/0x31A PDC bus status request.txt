@@ -16,5 +16,5 @@
 20:43:54.648 ->  KCAN2:  ID: 31A Buffer: 5 5 0 8 FF FF FF FF 
 20:43:54.872 ->  KCAN2:  ID: 31A Buffer: 6 5 0 8 FF FF FF FF 
 20:43:55.065 ->  KCAN2:  ID: 31A Buffer: 7 5 0 8 FF FF FF FF 
-20:43:55.065 ->  KCAN2:  ID: 31A Buffer: 18 1 0 0 FF FF FF FF 							// Byte0 > 0: User navigated away from reverse UI on HU.
+20:43:55.065 ->  KCAN2:  ID: 31A Buffer: 18 1 0 0 FF FF FF FF 							// Byte0 >> 4 == 1: User navigated away from reverse UI on HU.
 20:43:55.065 ->  KCAN2:  ID: 31A Buffer: 19 1 0 0 FF FF FF FF 

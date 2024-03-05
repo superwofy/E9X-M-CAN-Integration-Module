@@ -1,9 +1,13 @@
 Bytes 0 to 2 are identical to BN2000.
 
-Byte3 second half contains pressure units.
+Byte3 contains pressure units and date format.
 	1 - bar
 	2 - kPa
 	3 - psi
+	8 - dd.mm.yyyy
+	0x10 - mm/dd/yyyy
+	0x30 - yyyy/mm/dd
+	0x28 - yyyy.mm.dd
 	
 Byte4 contains power and torque units. First half is power, second half is torque.
 	1 - kW

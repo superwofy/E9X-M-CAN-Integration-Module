@@ -122,8 +122,9 @@ void configure_flexcan(void) {
   PTCAN.setRFFN(RFFN_16);
 
   PTCAN.FLEXCAN_EnterFreezeMode();
+
   #if FRONT_FOG_CORNER || F_NIVI || F_NBT
-    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0xC8, STD);                                               // Steering angle:                                              Cycle time 200ms.
+    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0xC4, STD);                                               // Steering angle:                                              Cycle time 10ms.
     filter_position_counter++;
   #endif
   #if HDC
@@ -225,7 +226,7 @@ void toggle_transceiver_standby(bool sleep) {
       if (kcan2_mode == MCP_NORMAL) {
         uint8_t kcan2_sleep[8] = {0};
         kcan2_write_msg(make_msg_buf(0x12F, 8, kcan2_sleep));                                                                       // Send one final message before bus shutdown.
-        delay(2);
+        delay(1);
         kcan2_mode = MCP_SLEEP;
         KCAN2.setMode(kcan2_mode);
         serial_log("Deactivated K-CAN2 transceiver.", 0);
@@ -328,10 +329,19 @@ void disable_diag_transmit_jobs(void) {                                         
 
 void check_diag_transmit_status(void) {
   if (!diag_transmit) {
-    if (diag_deactivate_timer >= 60000) {                                                                                           // Re-activate after period of no DCAN requests.
+    if (diag_deactivate_timer >= OBD_DETECT_TIMEOUT) {                                                                              // Re-activate after period of no DCAN requests.
       diag_transmit = true;
       serial_log("Resuming diagnostic jobs after timeout.", 0);
     }
+  }
+}
+
+
+void activate_usb() {
+  if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){
+    usb_pll_start();
+    usb_init();
+    serial_log("USB initialized.", 2);
   }
 }
 
@@ -371,14 +381,3 @@ void usb_pll_start() {                                                          
 	}
 }
 
-
-void activate_usb(uint16_t pll_delay_time) {
-  if (!(CCM_CCGR6 & CCM_CCGR6_USBOH3(CCM_CCGR_ON))){
-    usb_pll_start();
-    if (pll_delay_time > 0) {
-      delay(pll_delay_time);
-    }
-    usb_init();
-    serial_log("USB initialized.", 2);
-  }
-}

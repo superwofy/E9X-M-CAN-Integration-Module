@@ -1,0 +1,109 @@
+Byte0 - Language
+Byte1 - Temperature / Time format
+Byte2 - Distance, Consumption
+Byte3 - Pressure / Date format
+Byte4 - Torque, Power
+
+
+
+Language
+Eng uk:
+2 3 0 0 0 F0
+
+German
+1 3 0 0 0 F0
+
+Turkish:
+14 3 0 0 0 F0
+
+etc.
+
+
+
+Temperature
+C:
+0 13 0 0 0 F0
+
+F:
+0 23 0 0 0 F0
+
+
+
+Time format
+12 h:
+0 7 0 0 0 F0
+
+24 h:
+0 B 0 0 0 F0
+
+
+
+Distance
+km:
+0 3 40 0 0 F0
+
+mi:
+0 3 80 0 0 F0
+
+
+
+Consumption
+l/100km:
+0 3 1 0 0 F0
+
+km/l:
+0 3 4 0 0 F0
+
+mpg:
+0 3 2 0 0 F0
+
+
+
+Pressure
+bar:
+0 3 0 1 0 F0
+
+psi:
+0 3 0 3 0 F0
+
+kPa:
+0 3 0 2 0 F0
+
+
+Date format
+dd.mm.yyyy:
+0 3 0 8 0 F0
+
+
+mm/dd/yyyy:
+0 3 0 10 0 F0
+
+
+yyyy/mm/dd:
+0 3 0 30 0 F0
+
+
+yyyy.mm.dd:
+0 3 0 28 0 F0
+
+
+
+Torque
+Nm:
+0 3 0 0 10 F0
+
+Ft lb:
+0 3 0 0 20 F0
+
+kgm:
+0 3 0 0 30 F0
+
+
+
+
+Power
+KW:
+0 3 0 0 1 F0
+
+hp:
+0 3 0 0 2 F0

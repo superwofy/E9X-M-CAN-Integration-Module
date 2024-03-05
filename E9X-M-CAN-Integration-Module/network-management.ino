@@ -16,10 +16,45 @@ void cache_can_message_buffers(void) {                                          
   dsc_on_buf = make_msg_buf(0x398, 2, dsc_on);
   dsc_mdm_dtc_buf = make_msg_buf(0x398, 2, dsc_mdm_dtc);
   dsc_off_buf = make_msg_buf(0x398, 2, dsc_off);
-  uint8_t idrive_mdrive_settings_menu_a[] = {0x63, 0x10, 0xA, 0x31, 0x52, 0, 0, 6},
-          idrive_mdrive_settings_menu_b[] = {0x63, 0x21, 0x5C, 0, 0, 0, 0, 0};
-  idrive_mdrive_settings_menu_a_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_a);
-  idrive_mdrive_settings_menu_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_b);
+  uint8_t idrive_mdrive_settings_menu_cic_a[] = {0x63, 0x10, 0xA, 0x31, 0x52, 0, 0, 6},
+          idrive_mdrive_settings_menu_cic_b[] = {0x63, 0x21, 0x5C, 0, 0, 0, 0, 0},
+          idrive_mdrive_settings_menu_nbt_a[] = {0x63, 0x10, 0xC, 0x31, 1, 0xA0, 0x24, 6},
+          idrive_mdrive_settings_menu_nbt_b[] = {0x63, 0x21, 0xF8, 0, 0, 0, 0, 0},
+          idrive_mdrive_settings_menu_nbt_c[] = {0x63, 0x22, 0, 0, 0, 0, 0, 0};
+  idrive_mdrive_settings_menu_cic_a_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_cic_a);
+  idrive_mdrive_settings_menu_cic_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_cic_b);
+  idrive_mdrive_settings_menu_nbt_a_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_nbt_a);
+  idrive_mdrive_settings_menu_nbt_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_nbt_b);
+  idrive_mdrive_settings_menu_nbt_c_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_nbt_c);
+
+  uint8_t idrive_bn2000_time_12h[] = {0x1E, 0x66, 0, 1, 0, 4, 0, 0},
+          idrive_bn2000_time_24h[] = {0x1E, 0x66, 0, 1, 0, 8, 0, 0},
+          idrive_bn2000_date_ddmmyyyy[] = {0x1E, 0x66, 0, 1, 0, 1, 0, 0},
+          idrive_bn2000_date_mmddyyyy[] = {0x1E, 0x66, 0, 1, 0, 2, 0, 0},
+          idrive_bn2000_consumption_l100km[] = {0x1E, 0x66, 0, 1, 0, 0, 1, 0},
+          idrive_bn2000_consumption_kml[] = {0x1E, 0x66, 0, 1, 0, 0, 4, 0},
+          idrive_bn2000_consumption_mpg[] = {0x1E, 0x66, 0, 1, 0, 0, 2, 0},
+          idrive_bn2000_distance_km[] = {0x1E, 0x66, 0, 1, 0, 0, 0x40, 0},
+          idrive_bn2000_distance_mi[] = {0x1E, 0x66, 0, 1, 0, 0, 0x80, 0},
+          idrive_bn2000_pressure_bar[] = {0x1E, 0x66, 0, 1, 0, 0, 0, 1},
+          idrive_bn2000_pressure_kpa[] = {0x1E, 0x66, 0, 1, 0, 0, 0, 2},
+          idrive_bn2000_pressure_psi[] = {0x1E, 0x66, 0, 1, 0, 0, 0, 3},
+          idrive_bn2000_temperature_c[] = {0x1E, 0x66, 0, 1, 0, 0x10, 0, 0},
+          idrive_bn2000_temperature_f[] = {0x1E, 0x66, 0, 1, 0, 0x20, 0, 0};
+  idrive_bn2000_time_12h_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_time_12h);
+  idrive_bn2000_time_24h_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_time_24h);
+  idrive_bn2000_date_ddmmyyyy_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_date_ddmmyyyy);
+  idrive_bn2000_date_mmddyyyy_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_date_mmddyyyy);
+  idrive_bn2000_consumption_l100km_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_consumption_l100km);
+  idrive_bn2000_consumption_kml_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_consumption_kml);
+  idrive_bn2000_consumption_mpg_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_consumption_mpg);
+  idrive_bn2000_distance_km_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_distance_km);
+  idrive_bn2000_distance_mi_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_distance_mi);
+  idrive_bn2000_pressure_bar_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_pressure_bar);
+  idrive_bn2000_pressure_kpa_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_pressure_kpa);
+  idrive_bn2000_pressure_psi_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_pressure_psi);
+  idrive_bn2000_temperature_c_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_temperature_c);
+  idrive_bn2000_temperature_f_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_temperature_f);
 
   uint8_t gws_sport_on[] = {0, 0, 0, 4, 0, 0, 0},
           gws_sport_off[] = {0, 0, 0, 0, 0, 0, 0};
@@ -54,22 +89,37 @@ void cache_can_message_buffers(void) {                                          
     idrive_double_beep_sound_buf = make_msg_buf(0x6F1, 5, idrive_double_beep_sound);
   #endif
 
-  uint8_t clear_fs_job_uds_nbt[] = {0x63, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_job_uds_nbt[] = {0x63, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_fs_job_uds_zbe[] = {0x67, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_job_uds_zbe[] = {0x67, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_fs_job_uds_tbx[] = {0x35, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_job_uds_tbx[] = {0x35, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_fs_job_vsw[] = {0x48, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_job_vsw[] = {0x48, 4, 0x31, 1, 0xF, 6, 0, 0};
-  clear_fs_job_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_fs_job_uds_nbt);
-  clear_is_job_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_is_job_uds_nbt);
-  clear_fs_job_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_fs_job_uds_zbe);
-  clear_is_job_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_is_job_uds_zbe);
-  clear_fs_job_uds_tbx_buf = make_msg_buf(0x6F1, 8, clear_fs_job_uds_tbx);
-  clear_is_job_uds_tbx_buf = make_msg_buf(0x6F1, 8, clear_is_job_uds_tbx);
-  clear_fs_job_vsw_buf = make_msg_buf(0x6F1, 8, clear_fs_job_vsw);
-  clear_is_job_vsw_buf = make_msg_buf(0x6F1, 8, clear_is_job_vsw);
+  uint8_t clear_fs_uds_nbt[] = {0x63, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_uds_nbt[] = {0x63, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_fs_uds_zbe[] = {0x67, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_uds_zbe[] = {0x67, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_fs_uds_tbx[] = {0x35, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_uds_tbx[] = {0x35, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_fs_uds_vsw[] = {0x48, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_uds_vsw[] = {0x48, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_fs_uds_ampt[] = {0x37, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_uds_ampt[] = {0x37, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_fs_uds_vm[] = {0x4B, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
+          clear_is_uds_vm[] = {0x4B, 4, 0x31, 1, 0xF, 6, 0, 0};
+  clear_fs_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_nbt);
+  clear_is_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_is_uds_nbt);
+  clear_fs_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_zbe);
+  clear_is_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_is_uds_zbe);
+  clear_fs_uds_tbx_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_tbx);
+  clear_is_uds_tbx_buf = make_msg_buf(0x6F1, 8, clear_is_uds_tbx);
+  clear_fs_uds_vsw_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_vsw);
+  clear_is_uds_vsw_buf = make_msg_buf(0x6F1, 8, clear_is_uds_vsw);
+  clear_fs_uds_ampt_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_ampt);
+  clear_is_uds_ampt_buf = make_msg_buf(0x6F1, 8, clear_is_uds_ampt);
+  clear_fs_uds_vm_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_vm);
+  clear_is_uds_vm_buf = make_msg_buf(0x6F1, 8, clear_is_uds_vm);
+
+  uint8_t clear_dme_hs[] = {0x12, 2, 0x31, 3, 0, 0, 0, 0},
+          clear_svt_fs[] = {0xE, 3, 0x14, 0xFF, 0xFF, 0, 0, 0},
+          clear_svt_is[] = {0xE, 3, 0x31, 6, 0, 0, 0, 0};
+  clear_dme_hs_buf = make_msg_buf(0x6F1, 8, clear_dme_hs);
+  clear_svt_fs_buf = make_msg_buf(0x6F1, 8, clear_svt_fs);
+  clear_svt_is_buf = make_msg_buf(0x6F1, 8, clear_svt_is);
 
   uint8_t ccc_zbe_wake[] = {0xFE, 3, 0, 0, 0, 0, 0, 0};
   ccc_zbe_wake_buf = make_msg_buf(0x1AA, 8, ccc_zbe_wake);
@@ -371,8 +421,10 @@ void cache_can_message_buffers(void) {                                          
   uint8_t msa_fake_status[] = {0xFF, 0xD2, 0xF1};
   msa_fake_status_buf = make_msg_buf(0x308, 3, msa_fake_status);
 
-  uint8_t mute_asd[] = {0x3F, 5, 0x31, 0xB8, 0xC, 1, 1, 0},
+  uint8_t radon_asd[] = {0x3F, 4, 0x31, 0xB8, 0xB, 1, 0, 0},
+          mute_asd[] = {0x3F, 5, 0x31, 0xB8, 0xC, 1, 1, 0},
           demute_asd[] = {0x3F, 5, 0x31, 0xB8, 0xC, 1, 0, 0};
+  radon_asd_buf = make_msg_buf(0x6F1, 8, radon_asd);
   mute_asd_buf = make_msg_buf(0x6F1, 8, mute_asd);
   demute_asd_buf = make_msg_buf(0x6F1, 8, demute_asd);
 
@@ -385,9 +437,6 @@ void cache_can_message_buffers(void) {                                          
   power_down_cmd_a_buf = make_msg_buf(0x6F1, 8, power_down_cmd_a);
   power_down_cmd_b_buf = make_msg_buf(0x6F1, 8, power_down_cmd_b);
   power_down_cmd_c_buf = make_msg_buf(0x6F1, 8, power_down_cmd_c);
-
-  uint8_t f_oil_level_measuring[] = {0, 0xF0, 4, 0xC0};
-  f_oil_level_measuring_buf = make_msg_buf(0x435, 4, f_oil_level_measuring);
 
   uint8_t f_hu_nbt_reboot[] = {0x63, 2, 0x11, 1, 0, 0, 0, 0};
   f_hu_nbt_reboot_buf = make_msg_buf(0x6F1, 8, f_hu_nbt_reboot);
@@ -450,6 +499,7 @@ void kcan2_write_msg(const CAN_message_t &msg) {
       // Sinkhole for unused messages. Skip to reduce KCAN2 traffic.
       if (msg.id == 0xAA || msg.id == 0xA8) { return; }                                                                             // BN2000 engine status and torques.
       else if (msg.id == 0xC4 || msg.id == 0xC8) { return; }                                                                        // BN2000 steering angle.
+      else if (msg.id == 0x1A0) { return; }                                                                                         // BN2000 Speed / BN2010 Gearbox check-control.
       else if (msg.id == 0x1B6) { return; }                                                                                         // BN2000 Engine heat flow. Unknown in BN2010. It causes NBT EVO to block phone calls.
       else if (msg.id == 0x2C0) { return; }                                                                                         // BN2000 LCD brightness.
       else if (msg.id == 0x317) { return; }                                                                                         // BN2000 PDC button.
