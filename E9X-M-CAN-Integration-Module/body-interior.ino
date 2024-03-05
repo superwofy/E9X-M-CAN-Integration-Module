@@ -11,7 +11,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     #if F_NBT
       FACEPLATE_UART.begin(38400, SERIAL_8E1);
     #endif
-    #if F_VSW01 && F_NBT_EVO6_GW7
+    #if F_VSW01 && F_VSW01_MANUAL
       vsw_switch_input(4);
     #endif
   }
@@ -462,8 +462,9 @@ void check_console_buttons(void) {
       }
       send_power_mode();
     }
-  } 
-  
+  }
+
+  #if !MDSC_ZB
   if (!digitalRead(DSC_BUTTON_PIN)) {
     if (!holding_dsc_off_console) {
       holding_dsc_off_console = true;
@@ -491,15 +492,16 @@ void check_console_buttons(void) {
       holding_dsc_off_console = false;
     }
   }
+  #endif
 }
 
 
 void send_volume_request_periodic(void) {
   if (terminal_r) {
     #if F_NBT
-    if (idrive_txq.isEmpty() && !volume_reduced && volume_request_periodic_timer >= 3000) {
+    if (idrive_txq.isEmpty() && !volume_reduced && volume_request_periodic_timer >= 5000 && !ignore_m_hold) {                       // Do not interfere while MDrive settings screen is being shown.
     #else
-    if (idrive_txq.isEmpty() && initial_volume_set && !volume_reduced && volume_request_periodic_timer >= 3000) {
+    if (idrive_txq.isEmpty() && initial_volume_set && !volume_reduced && volume_request_periodic_timer >= 5000) {
     #endif
       if (diag_transmit) {
         #if F_NBT
@@ -517,9 +519,6 @@ void send_volume_request_periodic(void) {
 void disable_door_open_ignition_on_cc(void) {
   if (k_msg.buf[1] == 0x4F && k_msg.buf[2] == 1 && k_msg.buf[3] == 0x29) {
     kcan_write_msg(door_open_cc_off_buf);
-    #if F_NBT
-      kcan2_write_msg(door_open_cc_off_buf);
-    #endif
   }
 }
 
@@ -530,17 +529,6 @@ void send_nivi_button_press(void) {
   ptcan_write_msg(nivi_button_released_buf);
   ptcan_write_msg(nivi_button_released_buf);
   serial_log("Sent NiVi button press.", 2);
-}
-
-
-void initialize_asd(void) {
-  if (!asd_initialized) {
-    if (diag_transmit) {
-      kcan_write_msg(mute_asd_buf);
-      serial_log("Muted ASD on init.", 2);
-      asd_initialized = true;
-    }
-  }
 }
 
 
@@ -579,7 +567,7 @@ void evaluate_comfort_exit(void) {
 
 void store_rvc_settings_idrive(void) {
   if (k_msg.buf[0] == 0xE6) {                                                                                                       // Camera OFF.
-    rvc_settings[0] = 0xE5;                                                                                                         // Store Camera ON, Two view OFF instead.
+    rvc_settings[0] = 0xE5;                                                                                                         // Store Camera ON, Tow view OFF instead.
   } else {
     rvc_settings[0] = k_msg.buf[0];
   }
@@ -760,10 +748,6 @@ void send_f_kombi_lcd_brightness(void) {
   uint8_t f_kombi_lcd_brightness[] = {k_msg.buf[0], 0x32, k_msg.buf[2], 0xFD};                                                      // Byte1 is fixed.
   if (rls_time_of_day == 2) {
     f_kombi_lcd_brightness[3] = 0xFE;                                                                                               // This makes the NBT switch to night mode.
-  } else {
-    #if F_NBT_EVO6
-      f_kombi_lcd_brightness[0] = constrain(f_kombi_lcd_brightness[0] + 0xF, 0, 0xFE);                                              // Increase screen brightness during the day slightly. F3X ID3 APIX1 screen.
-    #endif
   }
   kcan2_write_msg(make_msg_buf(0x393, 4, f_kombi_lcd_brightness));
 }

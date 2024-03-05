@@ -2,29 +2,31 @@
 
 
 void send_dsc_mode(uint8_t mode) {
-  unsigned long time_now = millis();
-  if (mode == 0) {
-    m = {dsc_on_buf, time_now};
-    dsc_txq.push(&m);
-    m = {dsc_on_buf, time_now + 20};
-    dsc_txq.push(&m);
-    serial_log("Sending DSC ON.", 2);
-  } else if (mode == 1) {
-    m = {dsc_mdm_dtc_buf, time_now};
-    dsc_txq.push(&m);
-    m = {dsc_mdm_dtc_buf, time_now + 20};
-    dsc_txq.push(&m);
-    serial_log("Sending DTC/MDM.", 2);
-  } else {
-    m = {dsc_off_buf, time_now};
-    dsc_txq.push(&m);
-    m = {dsc_off_buf, time_now + 20};
-    dsc_txq.push(&m);
-    serial_log("Sending DSC OFF.", 2);
-  }
-  dsc_program_status = mode;
-  #if F_NBT
-    f_driving_dynamics_timer = 1001;
+  #if !MDSC_ZB
+    unsigned long time_now = millis();
+    if (mode == 0) {
+      m = {dsc_on_buf, time_now};
+      dsc_txq.push(&m);
+      m = {dsc_on_buf, time_now + 20};
+      dsc_txq.push(&m);
+      serial_log("Sending DSC ON.", 2);
+    } else if (mode == 1) {
+      m = {dsc_mdm_dtc_buf, time_now};
+      dsc_txq.push(&m);
+      m = {dsc_mdm_dtc_buf, time_now + 20};
+      dsc_txq.push(&m);
+      serial_log("Sending DTC/MDM.", 2);
+    } else {
+      m = {dsc_off_buf, time_now};
+      dsc_txq.push(&m);
+      m = {dsc_off_buf, time_now + 20};
+      dsc_txq.push(&m);
+      serial_log("Sending DSC OFF.", 2);
+    }
+    dsc_program_status = mode;
+    #if F_NBT
+      f_driving_dynamics_timer = 1001;
+    #endif
   #endif
 }
 
@@ -168,58 +170,55 @@ void send_f_xview_pitch_angle(void) {
     f_xview_pitch_angle[4] = xview_pitch_angle & 0xFF;                                                                              // Send in LE.
     f_xview_pitch_angle[5] = xview_pitch_angle >> 8;
     f_xview_pitch_angle[6] = xview_grade_percentage;
-    
+
     CAN_message_t f_xview_pitch_angle_buf = make_msg_buf(0x180, 8, f_xview_pitch_angle);
-    #if F_NBT
-      kcan2_write_msg(f_xview_pitch_angle_buf);
-    #endif
+    kcan2_write_msg(f_xview_pitch_angle_buf);
+
     f_xview_pitch_timer = 0;
   }
 }
 
 
 void send_f_road_incline(void) {
-  if (f_road_incline_timer >= 100) {
-    uint8_t f_road_incline[] = {0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF};                                                                // Angle formula simlar to 56.1.2 - TLT_RW_STEA_FTAX_EFFV_FX.
+  #if F_NIVI || X_VIEW
+    if (f_road_incline_timer >= 100200) {
+      uint8_t f_road_incline[] = {0, 0, 0xFF, 0xFF, 0, 0, 0xFF, 0xFF};                                                              // Angle formula simlar to 56.1.2 - TLT_RW_STEA_FTAX_EFFV_FX.
 
-    f_road_incline[1] = 0xF << 4 | f_road_incline_alive_counter;
-    f_road_incline_alive_counter == 0xE ? f_road_incline_alive_counter = 0 
-                                      : f_road_incline_alive_counter++;
+      f_road_incline[1] = 0xF << 4 | f_road_incline_alive_counter;
+      f_road_incline_alive_counter == 0xE ? f_road_incline_alive_counter = 0 
+                                        : f_road_incline_alive_counter++;
 
-    f_road_incline[2] = f_vehicle_pitch_angle & 0xFF;
-    f_road_incline[3] = f_vehicle_pitch_angle >> 8;
+      f_road_incline[2] = f_vehicle_pitch_angle & 0xFF;
+      f_road_incline[3] = f_vehicle_pitch_angle >> 8;
 
-    f_road_incline[4] = f_vehicle_roll_angle & 0xFF;                                                                                // Send in LE.
-    f_road_incline[5] = f_vehicle_roll_angle >> 8;
-    
-    f_road_incline_crc.restart();
-    for (uint8_t i = 1; i < 8; i++) {
-      f_road_incline_crc.add(f_road_incline[i]);
+      f_road_incline[4] = f_vehicle_roll_angle & 0xFF;                                                                              // Send in LE.
+      f_road_incline[5] = f_vehicle_roll_angle >> 8;
+      
+      f_road_incline_crc.restart();
+      for (uint8_t i = 1; i < 8; i++) {
+        f_road_incline_crc.add(f_road_incline[i]);
+      }
+      f_road_incline[0] = f_road_incline_crc.calc();
+      
+      CAN_message_t f_road_incline_buf = make_msg_buf(0x163, 8, f_road_incline);
+      #if F_NIVI
+        ptcan_write_msg(f_road_incline_buf);
+      #endif
+      #if X_VIEW
+        kcan2_write_msg(f_road_incline_buf);
+      #endif
+      f_road_incline_timer = 0;
     }
-    f_road_incline[0] = f_road_incline_crc.calc();
-
-    CAN_message_t f_road_incline_buf = make_msg_buf(0x163, 8, f_road_incline);
-    #if F_NIVI
-      ptcan_write_msg(f_road_incline_buf);
-    #endif
-    #if F_NBT
-      kcan2_write_msg(f_road_incline_buf);
-    #endif
-    f_road_incline_timer = 0;
-  }
+  #endif
 }
 
 
 void send_f_longitudinal_acceleration(void) {
-  if (f_chassis_longitudinal_timer >= 19) {
+  if (f_chassis_longitudinal_timer >= 20200 && ignition) {
     uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                         // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
     uint16_t raw_value = 0;
-    // Combine the second half of byte3 with byte2 to form 12-bit signed integer.
-    if (pt_msg.buf[2] > 0xF) {
-      raw_value = ((pt_msg.buf[3] & 0xF) << 8 | pt_msg.buf[2]);
-    } else {
-      raw_value = ((pt_msg.buf[3] & 0xF) << 4 | pt_msg.buf[2]);
-    }
+
+    raw_value = ((pt_msg.buf[3] & 0xF) << 8 | pt_msg.buf[2]);                                                                       // Combine the second half of byte3 with byte2 to form 12-bit signed integer.
     int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
     e_longitudinal_acceleration = signed_value * 0.025;                                                                             // Value in m/s^2.
 
@@ -244,11 +243,11 @@ void send_f_longitudinal_acceleration(void) {
 
 
 void send_f_lateral_acceleration(void) {
-  if (f_chassis_lateral_timer >= 20) {
+  if (f_chassis_lateral_timer >= 20400 && ignition) {
     uint8_t f_lateral_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                              // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNY_COG.
+    
     uint16_t raw_value = 0;
-    // Combine byte 4 with the first half of byte 3 to form 12-bit signed integer.
-    raw_value = (pt_msg.buf[4] << 4 | ((pt_msg.buf[3] >> 4) & 0x0F));
+    raw_value = (pt_msg.buf[4] << 4 | ((pt_msg.buf[3] >> 4) & 0x0F));                                                               // Combine byte 4 with the first half of byte 3 to form 12-bit signed integer.
     int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
     e_lateral_acceleration = signed_value * 0.025;                                                                                  // Value in m/s^2.
 
@@ -264,7 +263,7 @@ void send_f_lateral_acceleration(void) {
       f_lateral_acceleration_crc.add(f_lateral_acceleration[i]);
     }
     f_lateral_acceleration[0] = f_lateral_acceleration_crc.calc();
-
+    
     CAN_message_t f_lateral_acceleration_buf = make_msg_buf(0x19A, 6, f_lateral_acceleration);
     ptcan_write_msg(f_lateral_acceleration_buf);
     f_chassis_lateral_timer = 0;
@@ -272,46 +271,50 @@ void send_f_lateral_acceleration(void) {
 }
 
 
-void send_f_yaw_rate(void) {
-  if (f_chassis_yaw_timer >= 21) {
-    uint8_t f_yaw_rate[] = {0xFF, 0xFF, 0, 0x80, 0xFF, 0x20};                                                                       // M4 (VYAW_VEH) 56.0.2. Byte5 - Signal value is valid QU_VYAW_VEH.
+void send_f_yaw_rate_chassis(void) {
+  if (f_chassis_yaw_timer >= 20600) {
     
-    if (vehicle_moving) {
-      uint16_t raw_value = 0;
-      // Combine the second half of byte6 with byte5 to form 12-bit signed integer.
-      if (pt_msg.buf[5] > 0xF) {
-        raw_value = ((pt_msg.buf[6] & 0xF) << 8 | pt_msg.buf[5]);
-      } else {
-        raw_value = ((pt_msg.buf[6] & 0xF) << 4 | pt_msg.buf[5]);
-      }
-      int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
-      e_yaw_rate = signed_value * 0.05;                                                                                             // Value in degrees/sec.
+    uint16_t raw_value = 0;
+    raw_value = ((pt_msg.buf[6] & 0xF) << 8 | pt_msg.buf[5]);                                                                       // Combine the second half of byte6 with byte5 to form 12-bit signed integer.
+    int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
+    e_yaw_rate = signed_value * 0.05;                                                                                               // Value in degrees/sec.
 
-      yaw_rate = round((e_yaw_rate + 163.84) / 0.005);
-      f_yaw_rate[2] = yaw_rate & 0xFF;                                                                                              // Convert and transmit in LE.
-      f_yaw_rate[3] = yaw_rate >> 8;
-    } else {
-      e_yaw_rate = 0;
-      yaw_rate = 0x8000;
-    }
+    if (real_speed == 0) {
+      e_yaw_error = (e_yaw_error + e_yaw_rate) / 2;                                                                                 // Stationary error correction through averaging yaw rate while stationary.
+    } 
 
-    CAN_message_t f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
+    e_yaw_rate = e_yaw_rate + ( -e_yaw_error );
+    f_yaw_rate = round((e_yaw_rate + 163.84) / 0.005);
+    
     #if F_NBT
-      kcan2_write_msg(f_yaw_rate_buf);
+      uint8_t f_extra_chassis_display[] = {0, 0, 0, 0};                                                                             // Used by xDrive status and gyro in GW7. Non F2X GWs use 0x19F!
+      f_extra_chassis_display[0] = f_converted_steering_angle & 0xFF;
+      f_extra_chassis_display[1] = f_converted_steering_angle >> 8;
+      f_extra_chassis_display[2] = f_yaw_rate & 0xFF;                                                                               // Convert and transmit in LE. Identical to 0x19F.
+      f_extra_chassis_display[3] = f_yaw_rate >> 8;
+      
+      kcan2_write_msg(make_msg_buf(0x2F3, 4, f_extra_chassis_display));
     #endif
     
     #if F_NIVI
-      f_yaw_rate[1] = 0xF << 4 | f_yaw_alive_counter;
-      f_yaw_alive_counter == 0xE ? f_yaw_alive_counter = 0 : f_yaw_alive_counter++;
+      if (ignition) {
+        uint8_t f_yaw_rate_msg[] = {0xFF, 0xFF, 0, 0x80, 0xFF, 0x2F};                                                               // M4 (VYAW_VEH) 56.0.2. Byte5 - Signal value is valid QU_VYAW_VEH.
 
-      f_yaw_rate_crc.restart();
-      for (uint8_t i = 1; i < 6; i++) {
-        f_yaw_rate_crc.add(f_yaw_rate[i]);
+        f_yaw_rate_msg[1] = 0xF << 4 | f_yaw_alive_counter;
+        f_yaw_alive_counter == 0xE ? f_yaw_alive_counter = 0 : f_yaw_alive_counter++;
+
+        f_yaw_rate_msg[2] = f_yaw_rate & 0xFF;                                                                                      // Convert and transmit in LE.
+        f_yaw_rate_msg[3] = f_yaw_rate >> 8;
+    
+        f_yaw_rate_msg_crc.restart();
+        for (uint8_t i = 1; i < 6; i++) {
+          f_yaw_rate_msg_crc.add(f_yaw_rate_msg[i]);
+        }
+        f_yaw_rate_msg[0] = f_yaw_rate_msg_crc.calc();
+
+        CAN_message_t f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate_msg);
+        ptcan_write_msg(f_yaw_rate_buf);
       }
-      f_yaw_rate[0] = f_yaw_rate_crc.calc();
-
-      f_yaw_rate_buf = make_msg_buf(0x19F, 6, f_yaw_rate);
-      ptcan_write_msg(f_yaw_rate_buf);
     #endif
     
     f_chassis_yaw_timer = 0;
@@ -321,15 +324,15 @@ void send_f_yaw_rate(void) {
 
 void evaluate_real_speed(void) {
   if (pt_msg.buf[0] > 0xF) {
-    real_speed = round(((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1);                                                         // KM/h
+    real_speed = ((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1;                                                                // KM/h
   } else {
-    real_speed = round(((pt_msg.buf[1] & 0xF) << 4 | pt_msg.buf[0]) * 0.1);
+    real_speed = ((pt_msg.buf[1] & 0xF) << 4 | pt_msg.buf[0]) * 0.1;
   }
 }
 
 
 void send_f_speed_status(void) {
-  if (f_chassis_speed_timer >= 22) {
+  if (f_chassis_speed_timer >= 20800) {
     uint8_t f_speed[] = {0, 0, 0, 0, 0};                                                                                            // Message is the same format as Flexray 55.3.4.
 
     // Second half of byte4 is QU_V_VEH_COG. 1 = Signal valid, 0xF = invalid.
@@ -346,7 +349,7 @@ void send_f_speed_status(void) {
     f_speed[1] = 0xC << 4 | f_speed_alive_counter;
     f_speed_alive_counter == 0xE ? f_speed_alive_counter = 0 : f_speed_alive_counter += 2;                                          // This message increments the alive counter by 2.
     if (e_vehicle_direction == 9 || e_vehicle_direction == 0xA) {
-      uint16_t f_temp_speed = real_speed / 0.015625;
+      uint16_t f_temp_speed = round(real_speed / 0.015625);
       if (speed_mph) {
         f_temp_speed = round(f_temp_speed * 1.6);
       }
@@ -363,7 +366,9 @@ void send_f_speed_status(void) {
     f_speed[0] = f_speed_crc.calc();
     CAN_message_t f_speed_buf = make_msg_buf(0x1A1, 5, f_speed);
     #if F_NIVI
-      ptcan_write_msg(f_speed_buf);
+      if (ignition) {
+        ptcan_write_msg(f_speed_buf);
+      }
     #endif
     #if F_NBT
       kcan2_write_msg(f_speed_buf);
@@ -400,51 +405,72 @@ void send_f_standstill_status(void) {
 }
 
 
+void evaluate_steering_angle(void) {
+  steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
+  // Max left angle is 1005 / 23
+  if (steering_angle >= 435) { 
+    steering_angle = steering_angle - 2849;
+  }
+}
+
+
 void send_f_steering_angle(void) {
-  uint8_t f_steering_angle[] = {0, 0, 0, 0, 0xFF, 0x7F, 0x2F};
-  f_steering_angle[1] = 0xF << 4 | f_steering_angle_alive_counter;
-  f_steering_angle_alive_counter == 0xE ? f_steering_angle_alive_counter = 0 
-                                        : f_steering_angle_alive_counter++;
+  if (f_chassis_steering_effective_timer >= 21000) {
+    uint8_t f_steering_angle_effective[] = {0, 0, 0, 0, 0xF1, 0xFF, 0xFF};
+    
+    f_converted_steering_angle = round((steering_angle + 1440.11) / 0.04395);
+    f_steering_angle_effective[2] = f_converted_steering_angle & 0xFF;                                                              // Transmit in LE.
+    f_steering_angle_effective[3] = f_converted_steering_angle >> 8;
 
-  uint16_t converted_angle = round((steering_angle + 1440.11) / 0.04395);
-  f_steering_angle[2] = converted_angle & 0xFF;                                                                                     // Convert and transmit in LE.
-  f_steering_angle[3] = converted_angle >> 8;
-
-  f_steering_angle_crc.restart();
-  for (uint8_t i = 1; i < 7; i++) {
-    f_steering_angle_crc.add(f_steering_angle[i]);
-  }
-  f_steering_angle[0] = f_steering_angle_crc.calc();
-  CAN_message_t f_steering_angle_buf = make_msg_buf(0x301, 7, f_steering_angle);
-  #if F_NIVI
-    ptcan_write_msg(f_steering_angle_buf);
-  #endif
-  #if F_NBT
-    kcan2_write_msg(f_steering_angle_buf);
-  #endif
-
-
-  uint8_t f_steering_angle_effective[] = {0, 0, 0, 0, 0xF1, 0xFF, 0xFF};
-  f_steering_angle_effective[1] = f_steering_angle[1];
-  f_steering_angle_effective[2] = f_steering_angle[2];
-  f_steering_angle_effective[3] = f_steering_angle[3];
-
-  f_steering_angle_effective_crc.restart();
-  for (uint8_t i = 1; i < 7; i++) {
-    f_steering_angle_effective_crc.add(f_steering_angle_effective[i]);
-  }
-  f_steering_angle_effective[0] = f_steering_angle_effective_crc.calc();
-  CAN_message_t f_steering_angle_effective_buf = make_msg_buf(0x302, 7, f_steering_angle_effective);
-  #if F_NIVI
-    ptcan_write_msg(f_steering_angle_effective_buf);
-  #endif
-  #if F_NBT
-    kcan2_write_msg(f_steering_angle_effective_buf);
-    #if F_NBT_EVO6_GW7
-      uint8_t f_xview_steering[] = {f_steering_angle[2], f_steering_angle[3]};
-      kcan2_write_msg(make_msg_buf(0x2F3, 2, f_xview_steering));
+    CAN_message_t f_steering_angle_effective_buf = make_msg_buf(0x302, 7, f_steering_angle_effective);
+    #if F_NBT
+      kcan2_write_msg(f_steering_angle_effective_buf);
     #endif
-  #endif
+    #if F_NIVI
+      if (ignition) {
+        f_steering_angle_effective[1] = 0xF << 4 | f_steering_angle_effective_alive_counter;
+        f_steering_angle_effective_alive_counter == 0xE ? f_steering_angle_effective_alive_counter = 0 
+                                                        : f_steering_angle_effective_alive_counter++;
+        f_steering_angle_effective_crc.restart();
+        for (uint8_t i = 1; i < 7; i++) {
+          f_steering_angle_effective_crc.add(f_steering_angle_effective[i]);
+        }
+        f_steering_angle_effective[0] = f_steering_angle_effective_crc.calc();
+        f_steering_angle_effective_buf = make_msg_buf(0x302, 7, f_steering_angle_effective);
+        ptcan_write_msg(f_steering_angle_effective_buf);
+      }
+    #endif
+
+    f_chassis_steering_effective_timer = 0;
+  }
+
+  if (f_chassis_steering_timer >= 200000) {
+    uint8_t f_steering_angle[] = {0, 0, 0, 0, 0xFF, 0x7F, 0x2F};
+    f_steering_angle[1] = 0xF << 4 | f_steering_angle_alive_counter;
+    f_steering_angle_alive_counter == 0xE ? f_steering_angle_alive_counter = 0 
+                                          : f_steering_angle_alive_counter++;
+
+    f_converted_steering_angle = round((steering_angle + 1440.11) / 0.04395);
+    f_steering_angle[2] = f_converted_steering_angle & 0xFF;                                                                        // Transmit in LE.
+    f_steering_angle[3] = f_converted_steering_angle >> 8;
+
+    f_steering_angle_crc.restart();
+    for (uint8_t i = 1; i < 7; i++) {
+      f_steering_angle_crc.add(f_steering_angle[i]);
+    }
+    f_steering_angle[0] = f_steering_angle_crc.calc();
+    CAN_message_t f_steering_angle_buf = make_msg_buf(0x301, 7, f_steering_angle);
+    #if F_NIVI
+      if (ignition) {
+        ptcan_write_msg(f_steering_angle_buf);
+      }
+    #endif
+    #if F_NBT
+      kcan2_write_msg(f_steering_angle_buf);
+    #endif
+
+    f_chassis_steering_timer = 0;
+  }
 }
 
 
@@ -600,7 +626,6 @@ void send_f_distance_messages(void) {
   distance[2] = k_msg.buf[0];                                                                                                       // Distance_1_0 from 1A6 bytes are repeated.
   distance[3] = k_msg.buf[1];
   kcan2_write_msg(make_msg_buf(0x1C5, 7, distance));
-
 
   // Counter increases by 0xA until it overflows 0x2FFF, then restarts.
   f_distance_alive_counter == 0x2FF5 ? f_distance_alive_counter = 0x2000 : f_distance_alive_counter += 0xA;  

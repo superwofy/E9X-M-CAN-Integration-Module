@@ -273,3 +273,52 @@ void send_initial_volume_cic(void) {
     }
   }
 }
+
+
+void send_f_driving_dynamics_switch_nbt(void) {
+  if (f_driving_dynamics_timer >= 1001) {
+    uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};                                                                  // Inspired very loosely by 272.4.8...
+    uint8_t new_driving_mode = driving_mode;
+
+    // Not needed for KCAN
+    // f_driving_dynamics[1] = 0xF << 4 | f_driving_dynamics_alive_counter;
+    // f_driving_dynamics_alive_counter == 0xE ? f_driving_dynamics_alive_counter = 0 
+    //                                         : f_driving_dynamics_alive_counter++;
+
+    if (pdc_bus_status != 0xA4 && pdc_bus_status != 0xA5) {                                                                         // The popup interferes with the reverse camera.
+      if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 7 
+          && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] >= 0xF1) {                                            // Sportiest settings.
+        f_driving_dynamics[4] = 6;
+        new_driving_mode = 2;
+      } else if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 0x13 
+                  && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] >= 0xF1) {                                    // Sportiest settings but with MDM.
+        f_driving_dynamics[4] = 5;
+        new_driving_mode = 1;
+      } else {
+        f_driving_dynamics[4] = 0x13;                                                                                               // Blank box with COMFORT title. Used to indicate DSC back ON.
+        new_driving_mode = 0;
+      }
+    }
+
+    // Not needed for KCAN
+    // f_driving_dynamics_crc.restart();
+    // for (uint8_t i = 1; i < 7; i++) {
+    //   f_driving_dynamics_crc.add(f_driving_dynamics[i]);
+    // }
+    // f_driving_dynamics[0] = f_driving_dynamics_crc.calc();
+
+    CAN_message_t f_driving_dynamics_buf = make_msg_buf(0x3A7, 7, f_driving_dynamics);
+    kcan2_write_msg(f_driving_dynamics_buf);
+    f_driving_dynamics_timer = 0;
+
+    if (new_driving_mode != driving_mode) {                                                                                         // Simulate a quick left movement of the ZBE to disimiss COMFORT popup.
+      if (new_driving_mode == 0) {
+        uint8_t zbe_east[] = {0xE1, 0xFD, 0, 0x81, 0xDD, 1};
+        kcan2_write_msg(make_msg_buf(0x267, 6, zbe_east));
+        zbe_east[3] = 0;
+        kcan2_write_msg(make_msg_buf(0x267, 6, zbe_east));
+      }
+      driving_mode = new_driving_mode;
+    }
+  }
+}

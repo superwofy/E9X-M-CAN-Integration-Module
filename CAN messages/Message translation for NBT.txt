@@ -16,9 +16,10 @@ To NBT:
 0x2A5: Brightness.																Translated from BN2000 0x314.
 0x2C1: PDC status.																Translated from BN2000 0x3AF.
 0x2ED: Standstill status.														Translated from BN2000 0x1A0.
-0x2F3: X_VIEW steering angle/heading (certain GATEWAYTABLE)						Translated from BN2000 0xC8
+0x2F3: X_VIEW steering angle/heading, gyro for F2X GWs							Translated from BN2000 0xC8, 1A0.
 0x2F7: Units.																	Expanded from BN2000 0x2F7.
 0x301, 0x302: Steering angle, steering angle effective.							Translated from BN2000 0xC8.
+0x336, 0x338: CC list and CC dialog.											Modified to hide messages that NBT does not support.
 0x369: Flat Tyre Monitor status													Translated from BN2000 0x31D.
 0x380: Patched VIN to activate built-in FSCs.									Obtained from NBT with 0x6F1.
 0x393: Kombi LCD brightness. Used by NBT for CID brightness.					Translated from BN2000 0x2C0.

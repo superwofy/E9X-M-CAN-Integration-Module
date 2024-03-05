@@ -1,0 +1,11 @@
+JOB: STEUERN_RADON
+
+
+ARGS: 1 (On)
+
+22:11:11.403 ->  DCAN:  ID: 6F1 Buffer: 3F 4 31 B8 B 1 0 0
+
+
+ARGS: 0 (Off)
+
+22:11:11.403 ->  DCAN:  ID: 6F1 Buffer: 3F 4 31 B8 B 0 0 0

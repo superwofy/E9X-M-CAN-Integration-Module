@@ -9,7 +9,7 @@ Included are also tools to allow full manipulation of the program section in the
 **Electronics used:**
  
 * Skpang Triple CAN board https://copperhilltech.com/teensy-4-0-triple-can-bus-board-with-two-can-2-0b-and-one-can-fd-port/ (Teensy 4.0, MCP2562s).
-* MCP2515 board for NBT emulation.
+* MCP2515 board for NBT EVO emulation.
 * Small copper heatsink.
 * N-channel MOSFET that can be driven with 3V3. I had some FQP50N06Ls.
 * S8050 NPN transistor or similar (Steering heater switch).
@@ -42,11 +42,12 @@ Included are also tools to allow full manipulation of the program section in the
 
 **I use it to:**
 
-* Emulate K-CAN2 for NBT support.
+* Emulate K-CAN2 for NBT EVO support.
 	* Donor VIN is obtained after every boot when Terminal R is ON. Disable if using own FSCs.
 	* Sport displays are populated with PT-CAN torque data from the DME.
 	* xDrive status data populated with pitch and roll obtained from the alarm siren (SINE).
 	* A BN2000 -> BN2010 message translation overview can be found here: [nbt-messages](CAN%20messages/Message%20translation%20for%20NBT.txt)
+	* Control RAD_ON through the ASD module (pin 7).
 * Control MDrive settings from iDrive.
 	* Control DME throttle map with the M button.
 	* Control DTC/DSC OFF with the M button.
@@ -55,7 +56,7 @@ Included are also tools to allow full manipulation of the program section in the
 	* Control AHL swivel speed mode (sport/comfort) with the M button.
 	* Control the exhaust flap position with the M button.
 	* Control ASD with the M button.
-	* Display M Drive settings menu when holding M button (CIC only)
+	* Display M Drive settings menu when holding M button
 * Display Shiftlights - including startup animation and sync with the M3 KOMBI variable redline.
 * Display a needle sweep animation on startup.
 	* On NBT sports displays do a sweep also.
@@ -84,7 +85,7 @@ Included are also tools to allow full manipulation of the program section in the
 	* Push the stalk down and hold for 1.3s to turn on intermittent mode.
 	* AUTO, stalk pushed up 1 and stalk pushed up 2 disable intermittent mode.
 * Enable use of FXX K-CAN1 controller with CIC.
-* Enable use of FXX VSW01 (VideoSWitch) module with NBT.
+* Enable use of FXX VSW01 (VideoSWitch) module.
 * Enable use of FXX NIVI2/3 module.
 * Enable diagnosis encoding and flashing through Tool32 and E-Sys for F series modules via J2534 passthru over D-CAN.
 	* For E-sys a custom SVT is used. See my example [SVT](SVT.xml).

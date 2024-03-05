@@ -150,7 +150,8 @@ void check_idrive_alive_monitor(void) {
         serial_log("iDrive booting/rebooting.", 2);
         initial_volume_set = false;
         asd_initialized = false;
-        #if F_VSW01 && F_NBT_EVO6_GW7
+        asd_rad_on_initialized = false;
+        #if F_VSW01 && F_VSW01_MANUAL
           vsw_switch_input(4);
         #endif
       }
@@ -163,22 +164,59 @@ void check_idrive_alive_monitor(void) {
 }
 
 
+void initialize_asd(void) {
+  if (!asd_initialized) {
+    if (diag_transmit) {
+      kcan_write_msg(mute_asd_buf);
+      serial_log("Muted ASD output on init.", 2);
+      asd_initialized = true;
+    }
+  }
+}
+
+
+void initialize_asd_rad_on(void) {
+  if (!asd_rad_on_initialized) {
+    if (diag_transmit) {
+      unsigned long time_now = millis();
+      m = {radon_asd_buf, time_now};
+      radon_txq.push(&m);
+      m = {radon_asd_buf, time_now + 1000};                                                                                         // A slight delay is needed after engine OFF.
+      radon_txq.push(&m);
+      serial_log("Sending RAD_ON request to ASD module.", 2);
+      asd_rad_on_initialized = true;
+    }
+  }
+}
+
+
+void check_radon_queue(void) {
+  if (!radon_txq.isEmpty()) {
+    radon_txq.peek(&delayed_tx);
+    if (millis() >= delayed_tx.transmit_time) {
+      kcan_write_msg(delayed_tx.tx_msg);
+      radon_txq.drop();
+    }
+  }
+}
+
+
 void vsw_switch_input(uint8_t input) {
   uint8_t vsw_switch_position[] = {input, 0, 0, 0, 0, 0, 0, vsw_switch_counter};
-  kcan_write_msg(make_msg_buf(0x2FB, 8, vsw_switch_position));
-  vsw_current_input = input;
-  vsw_switch_counter == 0xFE ? vsw_switch_counter = 0xF1 : vsw_switch_counter++;
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent VSW/%d (%s) request.", input, vsw_positions[input]);
-    serial_log(serial_debug_string, 3);
-  #endif
+  if (vsw_current_input != input) {
+    kcan_write_msg(make_msg_buf(0x2FB, 8, vsw_switch_position));
+    vsw_switch_counter == 0xFE ? vsw_switch_counter = 0xF1 : vsw_switch_counter++;
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "Sent VSW/%d (%s) request.", input, vsw_positions[input]);
+      serial_log(serial_debug_string, 3);
+    #endif
+  }
 }
 
 
 void evaluate_vsw_position_request() {
-  vsw_current_input = k_msg.buf[0];
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "HU sent VSW/%d (%s) request.", vsw_current_input, vsw_positions[vsw_current_input]);
+    sprintf(serial_debug_string, "HU sent VSW/%d (%s) request.", k_msg.buf[0], vsw_positions[vsw_current_input]);
     serial_log(serial_debug_string, 3);
   #endif
 }
@@ -253,19 +291,38 @@ void evaluate_faceplate_buttons(void) {
         faceplate_power_mute_pressed = true;
         faceplate_power_mute_pressed_timer = 0;
       }
+    } else {
+      if (faceplate_power_mute_pressed_timer >= 8000) {
+        if (!faceplate_hu_reboot) {
+          if (diag_transmit) {
+            serial_log("Faceplate power/mute button held. Rebooting HU.", 0);
+            unsigned long time_now = millis();
+            m = {f_hu_nbt_reboot_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            time_now += 200;
+            m = {f_hu_nbt_reboot_buf, time_now};
+            serial_diag_kcan2_txq.push(&m);
+            faceplate_hu_reboot = true;                                                                                             // Will ignore the next normal button release action (single press).
+          }
+        }
+      }
     }
   } else {
     if (faceplate_power_mute_pressed) {
-      if (faceplate_power_mute_pressed_timer >= 20) {
-        unsigned long time_now = millis();
-        m = {faceplate_power_mute_buf, time_now};
-        faceplate_buttons_txq.push(&m);
-        time_now += 100;
-        m = {faceplate_a1_released_buf, time_now};
-        faceplate_buttons_txq.push(&m);
-        serial_log("Faceplate power/mute button pressed.", 0);
-        faceplate_power_mute_debounce_timer = 0;
+      if (!faceplate_hu_reboot) {
+        if (faceplate_power_mute_pressed_timer >= 20) {
+          unsigned long time_now = millis();
+          m = {faceplate_power_mute_buf, time_now};
+          faceplate_buttons_txq.push(&m);
+          time_now += 100;
+          m = {faceplate_a1_released_buf, time_now};
+          faceplate_buttons_txq.push(&m);
+          serial_log("Faceplate power/mute button pressed.", 0);
+        }
+      } else {
+        faceplate_hu_reboot = false;
       }
+      faceplate_power_mute_debounce_timer = 0;
       faceplate_power_mute_pressed = false;
     }
   }
@@ -446,22 +503,115 @@ void evaluate_cc_gong_status(void) {
 
 
 void evaluate_idrive_units(void) {
-  uint8_t new_torque_unit = k_msg.buf[4] >> 4, new_power_unit = k_msg.buf[4] & 0xF, new_pressure_unit = k_msg.buf[3] & 0xF;
+  uint8_t new_language = k_msg.buf[0],
+          new_temperature_unit = 0, new_time_format = 0,
+          new_distance_unit = k_msg.buf[2] >> 4, new_consumption_unit = k_msg.buf[2] & 0xF,
+          new_pressure_unit = 0, new_date_format = 0,
+          new_torque_unit = k_msg.buf[4] >> 4, new_power_unit = k_msg.buf[4] & 0xF;
+  #if DEBUG_MODE
+    char language_str[2];
+  #endif
+
+  bitWrite(new_temperature_unit, 0, bitRead(k_msg.buf[1], 4));
+  bitWrite(new_temperature_unit, 1, bitRead(k_msg.buf[1], 5));
+
+  bitWrite(new_time_format, 0, bitRead(k_msg.buf[1], 2));
+  bitWrite(new_time_format, 1, bitRead(k_msg.buf[1], 3));
+
+  bitWrite(new_pressure_unit, 0, bitRead(k_msg.buf[3], 0));
+  bitWrite(new_pressure_unit, 1, bitRead(k_msg.buf[3], 1));
+
+  bitWrite(new_date_format, 0, bitRead(k_msg.buf[3], 3));
+  bitWrite(new_date_format, 1, bitRead(k_msg.buf[3], 4));
+  bitWrite(new_date_format, 2, bitRead(k_msg.buf[3], 5));
+
+  if (new_language > 0) {
+    #if DEBUG_MODE
+      snprintf(language_str, sizeof(language_str), "%u", new_language);
+    #endif
+    uint8_t idrive_bn2000_language[] = {0x1E, 0x66, 0, 1, new_language, 0, 0, 0};
+    kcan_write_msg(make_msg_buf(0x5E2, 8, idrive_bn2000_language));
+  }
+
+  if (new_temperature_unit == 1) {
+    kcan_write_msg(idrive_bn2000_temperature_c_buf);
+  } else if (new_temperature_unit == 2) {
+    kcan_write_msg(idrive_bn2000_temperature_f_buf);
+  }
+  
+  if (new_time_format == 1) {
+    kcan_write_msg(idrive_bn2000_time_12h_buf);
+  } else if (new_time_format == 2) {
+    kcan_write_msg(idrive_bn2000_time_24h_buf);
+  }
+
+  if (new_distance_unit == 4) {
+    kcan_write_msg(idrive_bn2000_distance_km_buf);
+  } else if (new_distance_unit == 8) {
+    kcan_write_msg(idrive_bn2000_distance_mi_buf);
+  }
+
+  if (new_consumption_unit == 1) {
+    kcan_write_msg(idrive_bn2000_consumption_l100km_buf);
+  } else if (new_consumption_unit == 2) {
+    kcan_write_msg(idrive_bn2000_consumption_mpg_buf);
+  } else if (new_consumption_unit == 4) {
+    kcan_write_msg(idrive_bn2000_consumption_kml_buf);
+  }
+
+  if (new_pressure_unit > 0) {
+    // if (new_pressure_unit == 1) {
+    //   kcan_write_msg(idrive_bn2000_pressure_bar_buf);                                                                               // Despite this functionality existing in CIC, KOMBI does not save these.
+    // } else if (new_pressure_unit == 2) {
+    //   kcan_write_msg(idrive_bn2000_pressure_kpa_buf);
+    // } else if (new_pressure_unit == 3) {
+    //   kcan_write_msg(idrive_bn2000_pressure_psi_buf);
+    // }
+
+    bitWrite(pressure_unit_date_format[cas_key_number], 0, bitRead(new_pressure_unit, 0));
+    bitWrite(pressure_unit_date_format[cas_key_number], 1, bitRead(new_pressure_unit, 1));
+  }
+
+  if (new_date_format > 0) {
+    if (new_date_format == 1) {
+      kcan_write_msg(idrive_bn2000_date_ddmmyyyy_buf);
+    } else if (new_date_format == 2) {
+      kcan_write_msg(idrive_bn2000_date_mmddyyyy_buf);
+    } 
+    // Modes 3 and 4 are not supported by the KOMBI. They are stored in the EEPROM instead.
+
+    bitWrite(pressure_unit_date_format[cas_key_number], 3, bitRead(new_date_format, 0));
+    bitWrite(pressure_unit_date_format[cas_key_number], 4, bitRead(new_date_format, 1));
+    bitWrite(pressure_unit_date_format[cas_key_number], 5, bitRead(new_date_format, 2));
+  }
+  
   if (new_torque_unit > 0) {
     torque_unit[cas_key_number] = new_torque_unit;
   }
+  
   if (new_power_unit > 0) {
     power_unit[cas_key_number] = new_power_unit;
   }
-  if (new_pressure_unit > 0) {
-    pressure_unit[cas_key_number] = new_pressure_unit;
-  }
+
   #if DEBUG_MODE
-      sprintf(serial_debug_string, "Received iDrive units: %s/%s/%s.", 
-              torque_unit[cas_key_number] == 1 ? "Nm" : (torque_unit[cas_key_number] == 2 ? "lb-ft" : (torque_unit[cas_key_number] == 3 ? "Kg-m" : "-")), 
-              power_unit[cas_key_number] == 1 ? "kW" :  (power_unit[cas_key_number] == 2 ? "hp" : "-"),
-              pressure_unit[cas_key_number] == 1 ? "bar" : (pressure_unit[cas_key_number] == 2 ? "kPa" : (pressure_unit[cas_key_number] == 3 ? "psi" : "-")));
-      serial_log(serial_debug_string, 3);
+    sprintf(serial_debug_string,
+            "Received iDrive settings: Language:%s Temperature:%s Time:%s Distance:%s Consumption:%s Pressure:%s Date:%s Torque:%s Power:%s.",
+            new_language > 0 ? language_str : "-",
+            new_temperature_unit == 1 ? "C" : (new_temperature_unit == 2 ? "F" : "-"),
+            new_time_format == 1 ? "12h" : (new_time_format == 2 ? "24h" : "-"),
+            new_distance_unit == 4 ? "km" : (new_distance_unit == 8 ? "mi" : "-"),
+            new_consumption_unit == 1 ? "l/100km" : (new_consumption_unit == 2 ? "mpg" : (new_consumption_unit == 4 ? "km/l" : "-")),
+            new_pressure_unit == 1 ? "bar" 
+                                   : (new_pressure_unit == 2 ? "kPa" 
+                                   : (new_pressure_unit == 3 ? "psi" : "-")),
+            new_date_format == 1 ? "dd.mm.yyyy" 
+                                 : (new_date_format == 2 ? "mm/dd/yyyy" 
+                                 : new_date_format == 6 ? "yyyy/mm/dd" 
+                                 : new_date_format == 5 ? "yyyy.mm.dd" 
+                                 : "-"),
+            new_torque_unit == 1 ? "Nm" : (new_torque_unit == 2 ? "lb-ft" : (new_torque_unit == 3 ? "Kg-m" : "-")), 
+            new_power_unit == 1 ? "kW" : (new_power_unit == 2 ? "hp" : "-"));
+    serial_log(serial_debug_string, 3);
   #endif
   convert_f_units(true);
   send_nbt_sport_displays_data(false);                                                                                              // Update the scale for the new units.
@@ -475,8 +625,8 @@ void convert_f_units(bool idrive_units_only) {
       f_units[1] = k_msg.buf[1];
       f_units[2] = k_msg.buf[2];
     }
-    f_units[3] = (k_msg.buf[3] & 0xF0) | pressure_unit[cas_key_number];
-    f_units[4] = (torque_unit[cas_key_number] << 4) | power_unit[cas_key_number];                                                   // The units message is mostly the same with the addition of units in Byte4.
+    f_units[3] = pressure_unit_date_format[cas_key_number];
+    f_units[4] = (torque_unit[cas_key_number] << 4) | power_unit[cas_key_number];
     kcan2_write_msg(make_msg_buf(0x2F7, 6, f_units));
   #endif
 }
@@ -488,7 +638,7 @@ void send_cc_message_text(const char input[], uint16_t dismiss_time) {
     return;       // Disable for now.
   #endif
 
-  nbt_cc_txq.flush();                                                                                                               // Clear any pending dimiss messages.
+  nbt_cc_txq.flush();                                                                                                               // Clear any pending dismiss messages.
   uint8_t input_length = strlen(input);
   uint8_t padded_length = input_length + (3 - (input_length % 3)) % 3;
   char padded_input[padded_length];

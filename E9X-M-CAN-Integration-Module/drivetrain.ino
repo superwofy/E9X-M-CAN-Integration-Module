@@ -28,13 +28,21 @@ void evaluate_engine_status(void) {
       #endif
     }
   } else if (RPM < 200) {                                                                                                           // Less than 50 RPM. Engine stalled or was stopped.
-    if (engine_running) {
-      engine_running = false;
-      serial_log("Engine stopped.", 2);
-      #if IMMOBILIZER_SEQ
-        execute_alarm_after_stall();
-      #endif
-    }
+    execute_engine_off_actions();
+  }
+}
+
+
+void execute_engine_off_actions(void) {
+  if (engine_running) {
+    engine_running = false;
+    serial_log("Engine stopped.", 2);
+    #if ASD89_RAD_ON
+      asd_rad_on_initialized = false;                                                                                               // By default the ASD module turns off RAD_ON when the engine stops.
+    #endif
+    #if IMMOBILIZER_SEQ
+      execute_alarm_after_stall();
+    #endif
   }
 }
 
@@ -49,10 +57,10 @@ void toggle_mdrive_message_active(void) {
       kcan_write_msg(frm_ckm_ahl_komfort_buf);
       serial_log("Set AHL back to comfort mode.", 2);
     #endif
-    #if ASD
+    #if ASD89
       if (diag_transmit) {
         kcan_write_msg(mute_asd_buf);
-        serial_log("Muted ASD.", 2);
+        serial_log("Muted ASD output.", 2);
       }
     #endif
     if (mdrive_power[cas_key_number] == 0x30) {
@@ -67,10 +75,10 @@ void toggle_mdrive_message_active(void) {
     if (mdrive_power[cas_key_number] == 0x20) {                                                                                     // POWER in Sport.
       mdrive_power_active = true;
     } else if (mdrive_power[cas_key_number] == 0x30) {                                                                              // POWER Sport+.
-      #if ASD
+      #if ASD89
         if (diag_transmit) {
           kcan_write_msg(demute_asd_buf);
-          serial_log("De-muted ASD.", 2);
+          serial_log("De-muted ASD output.", 2);
         }
       #endif
       #if EXHAUST_FLAP_CONTROL
@@ -133,21 +141,19 @@ void evaluate_m_mfl_button_press(void) {
       }
       #endif
     }
-    #if !F_NBT
-      if (m_mfl_held_count > 10 && !ignore_m_hold) {                                                                                // Each count is about 100ms
-        #if IMMOBILIZER_SEQ
-        if (immobilizer_released) {
-        #endif
-        if (ignition) {
-          show_mdrive_settings_screen();
-        }
-        #if IMMOBILIZER_SEQ
-        }
-        #endif
-      } else {
-        m_mfl_held_count++;
+    if (m_mfl_held_count > 10 && !ignore_m_hold) {                                                                                // Each count is about 100ms
+      #if IMMOBILIZER_SEQ
+      if (immobilizer_released) {
+      #endif
+      if (ignition) {
+        show_mdrive_settings_screen();
       }
-    #endif
+      #if IMMOBILIZER_SEQ
+      }
+      #endif
+    } else {
+      m_mfl_held_count++;
+    }
   } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
     ignore_m_press = ignore_m_hold = false;
     m_mfl_held_count = 0;
@@ -237,17 +243,40 @@ void show_mdrive_settings_screen(void) {
     if (immobilizer_released) {
     #endif
       serial_log("Steering wheel M button held. Showing settings screen.", 2);
-      kcan_write_msg(idrive_mdrive_settings_menu_a_buf);                                                                            // Send steuern_menu job to iDrive.
-      kcan_write_msg(idrive_mdrive_settings_menu_b_buf);
+      #if F_NBT
+        kcan2_write_msg(idrive_mdrive_settings_menu_nbt_a_buf);
+        mdrive_settings_requested = true;
+      #else
+        kcan_write_msg(idrive_mdrive_settings_menu_cic_a_buf);                                                                      // Send steuern_menu job to iDrive.
+        kcan_write_msg(idrive_mdrive_settings_menu_cic_b_buf);
+        if (!idrive_died) {
+          unsigned long time_now = millis();
+          m = {idrive_button_sound_buf, time_now + 500};
+          idrive_txq.push(&m);
+        }
+      #endif
+    #if IMMOBILIZER_SEQ
+    }
+    #endif
+    ignore_m_hold = true;
+  }
+}
+
+
+void show_mdrive_settings_screen_evo(void) {
+  if (mdrive_settings_requested) {
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x30) {
+      kcan2_write_msg(idrive_mdrive_settings_menu_nbt_b_buf);
+      kcan2_write_msg(idrive_mdrive_settings_menu_nbt_c_buf);
+      mdrive_settings_requested = false;
       if (!idrive_died) {
         unsigned long time_now = millis();
         m = {idrive_button_sound_buf, time_now + 500};
         idrive_txq.push(&m);
       }
-    #if IMMOBILIZER_SEQ
+    } else {
+      mdrive_settings_requested = false;
     }
-    #endif
-    ignore_m_hold = true;
   }
 }
 
@@ -283,10 +312,10 @@ void execute_mdrive_settings_changed_actions() {
     if (mdrive_power[cas_key_number] == 0x20) {                                                                                     // POWER in Sport.
       mdrive_power_active = true;
     } else if (mdrive_power[cas_key_number] == 0x30) {                                                                              // POWER Sport+.
-      #if ASD
+      #if ASD89
         if (diag_transmit) {
           kcan_write_msg(demute_asd_buf);
-          serial_log("De-muted ASD.", 2);
+          serial_log("De-muted ASD output.", 2);
         }
       #endif
       #if EXHAUST_FLAP_CONTROL
@@ -297,10 +326,10 @@ void execute_mdrive_settings_changed_actions() {
       restore_console_power_mode = console_power_mode;                                                                              // We'll need to return to its original state when MDrive is turned OFF.
       console_power_mode = false;                                                                                                   // Turn OFF POWER from console too.
       mdrive_power_active = false;
-      #if ASD
+      #if ASD89
         if (diag_transmit) {
           kcan_write_msg(mute_asd_buf);
-          serial_log("Muted ASD.", 3);
+          serial_log("Muted ASD output.", 3);
         }
       #endif
       #if EXHAUST_FLAP_CONTROL
@@ -692,7 +721,7 @@ void send_f_powertrain_2_status(void) {
 
 
 void send_f_torque_1(void) {
-  if (f_torque_1_timer >= 100) {
+  if (f_torque_1_timer >= 100400) {
     uint8_t f_torque_1[] = {0, 0, 0, 0, 0, 0, 0, 0xF2};                                                                             // Byte7 QU_AVL_RPM_ENG_CRSH hardcoded to 2 - Signal valid.
 
     f_torque_1[1] = 0xF << 4 | f_torque_1_alive_counter;                                                                            // Combine FREI (0xF - unused) and ALIV_TORQ_CRSH_1.
@@ -726,55 +755,6 @@ void send_f_torque_1(void) {
 }
 
 
-void send_f_driving_dynamics_switch_nbt(void) {
-  if (f_driving_dynamics_timer >= 1001) {
-    uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};                                                                  // Inspired very loosely by 272.4.8...
-    uint8_t new_driving_mode = driving_mode;
-
-    // Not needed for KCAN
-    // f_driving_dynamics[1] = 0xF << 4 | f_driving_dynamics_alive_counter;
-    // f_driving_dynamics_alive_counter == 0xE ? f_driving_dynamics_alive_counter = 0 
-    //                                         : f_driving_dynamics_alive_counter++;
-
-    if (pdc_bus_status != 0xA4 && pdc_bus_status != 0xA5) {                                                                         // The popup interferes with the reverse camera.
-      if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 7 
-          && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] >= 0xF1) {                                            // Sportiest settings.
-        f_driving_dynamics[4] = 6;
-        new_driving_mode = 2;
-      } else if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 0x13 
-                  && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] >= 0xF1) {                                    // Sportiest settings but with MDM.
-        f_driving_dynamics[4] = 5;
-        new_driving_mode = 1;
-      } else {
-        f_driving_dynamics[4] = 0x13;                                                                                               // Blank box with COMFORT title. Used to indicate DSC back ON.
-        new_driving_mode = 0;
-      }
-    }
-
-    // Not needed for KCAN
-    // f_driving_dynamics_crc.restart();
-    // for (uint8_t i = 1; i < 7; i++) {
-    //   f_driving_dynamics_crc.add(f_driving_dynamics[i]);
-    // }
-    // f_driving_dynamics[0] = f_driving_dynamics_crc.calc();
-
-    CAN_message_t f_driving_dynamics_buf = make_msg_buf(0x3A7, 7, f_driving_dynamics);
-    kcan2_write_msg(f_driving_dynamics_buf);
-    f_driving_dynamics_timer = 0;
-
-    if (new_driving_mode != driving_mode) {                                                                                         // Simulate a quick left movement of the ZBE to disimiss COMFORT popup.
-      if (new_driving_mode == 0) {
-        uint8_t zbe_east[] = {0xE1, 0xFD, 0, 0x81, 0xDD, 1};
-        kcan2_write_msg(make_msg_buf(0x267, 6, zbe_east));
-        zbe_east[3] = 0;
-        kcan2_write_msg(make_msg_buf(0x267, 6, zbe_east));
-      }
-      driving_mode = new_driving_mode;
-    }
-  }
-}
-
-
 void send_f_driving_dynamics_switch_evo(void) {
   if (f_driving_dynamics_timer >= 1001) {
     uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};
@@ -792,84 +772,57 @@ void send_f_driving_dynamics_switch_evo(void) {
 }
 
 
-void send_f_oil_level(void) {                                                                                                       // Used with OELSTAND_OENS.
-  if (f_oil_level_timer >= 501) {
-    uint8_t f_oil_level[4] = {0, 0xF0, 4, 0xC0};
-    switch(e_oil_level) {
-      case 0xC: {                                                                                                                   // Below MIN
-        f_oil_level[1] = 0;
-        break;
-      }
-      case 0x19: {                                                                                                                  // MIN
-        f_oil_level[1] = 0x10;
-        break;
-      }
-      case 0x26: {                                                                                                                  // Between MIN and OK
-        f_oil_level[1] = 0x20;
-        break;
-      }
-      case 0x35: {                                                                                                                  // OK
-        f_oil_level[1] = 0x30;
-        break;
-      }
-      case 0x45: {                                                                                                                  // Between OK and MAX
-        f_oil_level[1] = 0x40;
-        break;
-      }
-      case 0x55: {                                                                                                                  // State MAX
-        f_oil_level[1] = 0x50;
-        break;
-      }
-      case 0x5F: {                                                                                                                  // Overfilled
-        f_oil_level[1] = 0x70;
-        break;
-      }
-      case 0x78: {                                                                                                                  // No measurement possible
-        f_oil_level[2] = 0x40;
-        break;
-      }
-      case 0x79: {                                                                                                                  // Measurement in progress
-        break;
-      }
-      case 0x7A: {                                                                                                                  // Oil Level Check OK (Oil level sufficient to start engine).
-        f_oil_level[1] = 0x50;
-        break;
-      }
-      case 0x7B: {                                                                                                                  // Measurement OK
-        f_oil_level[1] = 0x50;
-        break;
-      }
-      case 0x7C: {                                                                                                                  // Ignition OFF, no measurement possible
-        f_oil_level[0] = 0xFF;
-        f_oil_level[2] = 0xFF;
-        break;
-      }
-      case 0x7D: {                                                                                                                  // Engine oil level OK, precise measurement in progress.
-        break;
-      }
-      case 0x7E: {                                                                                                                  // Engine oil level OK
-        f_oil_level[1] = 0x50;
-        break;
-      }
-      case 0x7F: {                                                                                                                  // Measurement in progress
-        break;
-      }
-      case 0x80: {                                                                                                                  // Accurate measurement in progress. Measuring time: 1min
-        break;
-      }
-      case 0xFF: {                                                                                                                  // signal invalid
-        f_oil_level[2] = 0x40;
-        break;
+void control_exhaust_flap_user(void) {
+  if (engine_running) {
+    if (exhaust_flap_sport) {                                                                                                       // Flap always open in sport mode.
+      if (exhaust_flap_action_timer >= 500) {
+        if (!exhaust_flap_open) {
+          actuate_exhaust_solenoid(LOW);
+          serial_log("Opened exhaust flap with MDrive.", 2);
+        }
       }
     }
-    kcan2_write_msg(make_msg_buf(0x435, 4, f_oil_level));
-    f_oil_level_timer = 0;
+  } else {
+    #if QUIET_START
+      if (terminal_r && !exhaust_flap_sport) {                                                                                      // Close the flap when Terminal R activates, allow bypass with MDrive.
+        if (exhaust_flap_open) {
+          actuate_exhaust_solenoid(HIGH);                                                                                           // Close the flap (if vacuum still available).
+          serial_log("Quiet start enabled. Exhaust flap closed.", 2);
+        }
+      } else {
+        if (!exhaust_flap_open) {
+          actuate_exhaust_solenoid(LOW);
+          serial_log("Released exhaust flap from quiet start.", 2);
+        }
+      }
+    #endif
   }
-  if (ignition) {
-    if (f_oil_level_measuring_timer >= 60000) {                                                                                     // Periodically and when cycling ignition, re-set the level.
-      kcan2_write_msg(f_oil_level_measuring_buf);
-      f_oil_level_measuring_timer = 0;
-      f_oil_level_timer = 501;
+}
+
+
+void control_exhaust_flap_rpm(void) {
+  if (engine_running) {
+    if (!exhaust_flap_sport) {
+      if (exhaust_flap_action_timer >= exhaust_flap_action_interval) {                                                              // Avoid vacuum drain, oscillation and apply startup delay.
+        if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
+          if (!exhaust_flap_open) {
+            actuate_exhaust_solenoid(LOW);
+            serial_log("Exhaust flap opened at RPM setpoint.", 2);
+          }
+        } else {
+          if (exhaust_flap_open) {
+            actuate_exhaust_solenoid(HIGH);
+            serial_log("Exhaust flap closed.", 2);
+          }
+        }
+      }
     }
   }
+}
+
+
+void actuate_exhaust_solenoid(bool activate) {
+  digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, activate);
+  exhaust_flap_action_timer = 0;
+  exhaust_flap_open = !activate;                                                                                                    // Flap position is the inverse of solenoid state. When active, the flap is closed.
 }

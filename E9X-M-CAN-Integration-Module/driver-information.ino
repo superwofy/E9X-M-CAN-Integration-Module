@@ -441,7 +441,7 @@ void evaluate_pdc_bus_status(void) {
         #endif
         serial_log("Activated PDC with RVC ON.", 2);
         pdc_with_rvc_requested = false;
-        #if F_VSW01 && F_NBT_EVO6_GW7
+        #if F_VSW01 && F_VSW01_MANUAL
           vsw_switch_input(1);
         #endif
       }
@@ -451,6 +451,9 @@ void evaluate_pdc_bus_status(void) {
       serial_log("PDC ON.", 3);
     } else {
       serial_log("PDC OFF.", 3);
+      #if F_VSW01 && F_VSW01_MANUAL
+        vsw_switch_input(4);
+      #endif
     }
     #if AUTO_TOW_VIEW_RVC
       if (pdc_bus_status != 0xA5) {
@@ -462,29 +465,28 @@ void evaluate_pdc_bus_status(void) {
 
 
 void evaluate_f_pdc_function_request(void) {
-  if (k_msg.buf[3] != 4) {                                                                                                          // The first 0x31A should be ignored. Its Byte3 is 4. Next message will be 8.
-    if (k_msg.buf[0] > 0x10) {                                                                                                      // Navigated away from reversing screen.
-      kcan_write_msg(camera_inactive_buf);
-      kcan2_write_msg(camera_inactive_buf);
-      #if F_VSW01 && F_NBT_EVO6_GW7
-        vsw_switch_input(4);
-      #endif
-    } else {
-      if (f_pdc_request != k_msg.buf[1]) {                                                                                          // PDC only, camera OFF.
-        f_pdc_request = k_msg.buf[1];
-        if (f_pdc_request == 1) {
-          kcan_write_msg(camera_off_buf);
-          kcan2_write_msg(camera_off_buf);
-          #if F_VSW01 && F_NBT_EVO6_GW7
-            vsw_switch_input(4);
-          #endif
-        } else if (f_pdc_request == 5) {                                                                                            // Camera ON.
-          kcan_write_msg(camera_on_buf);
-          kcan2_write_msg(camera_on_buf);
-          #if F_VSW01 && F_NBT_EVO6_GW7
-            vsw_switch_input(1);
-          #endif
-        }
+  if (k_msg.buf[0] >> 4 == 1) {                                                                                                     // Navigated away from reversing screen.
+    kcan_write_msg(camera_inactive_buf);
+    kcan2_write_msg(camera_inactive_buf);
+    #if F_VSW01 && F_VSW01_MANUAL
+      vsw_switch_input(4);
+    #endif
+    f_pdc_request = k_msg.buf[0];
+  } else {
+    if (f_pdc_request != k_msg.buf[1]) {                                                                                            // PDC only, camera OFF.
+      f_pdc_request = k_msg.buf[1];
+      if (f_pdc_request == 1) {
+        kcan_write_msg(camera_off_buf);
+        kcan2_write_msg(camera_off_buf);
+        #if F_VSW01 && F_VSW01_MANUAL
+          vsw_switch_input(4);
+        #endif
+      } else if (f_pdc_request == 5) {                                                                                              // Camera ON.
+        kcan_write_msg(camera_on_buf);
+        kcan2_write_msg(camera_on_buf);
+        #if F_VSW01 && F_VSW01_MANUAL
+          vsw_switch_input(1);
+        #endif
       }
     }
   }
@@ -517,9 +519,9 @@ void evaluate_pdc_warning(void) {
 void evaluate_pdc_distance(void) {
   if (!rvc_tow_view_by_driver) {
     uint8_t distance_threshold = 0x36;                                                                                              // There's a slight delay when changing modes. Preempt by switching earlier.
-    if (real_speed >= 5) {                                                                                                          // At higher speeds the delay is very noticeable.
+    if (real_speed >= 5.0) {                                                                                                        // At higher speeds the delay is very noticeable.
       return;
-    } else if (real_speed >= 1) {
+    } else if (real_speed >= 1.0) {
       distance_threshold = 0x40;
     }
 
@@ -694,4 +696,83 @@ void send_nbt_sport_displays_data(bool startup_animation) {
       kcan2_write_msg(nbt_sport_data_buf);
     }
   #endif
+}
+
+
+void process_bn2000_cc_display(void) {
+  if (k_msg.buf[1] == 0xA6 && k_msg.buf[2] == 2) {                                                                                  // Yellow, car lift error.
+    k_msg.buf[1] = 0xFF;
+    k_msg.buf[2] = 0xFF;
+  } else if (k_msg.buf[3] == 0xA6 && k_msg.buf[4] == 2) {
+    k_msg.buf[3] = 0xFF;
+    k_msg.buf[4] = 0xFF;
+  } else if (k_msg.buf[5] == 0xA6 && k_msg.buf[6] == 2) {
+    k_msg.buf[5] = 0xFF;
+    k_msg.buf[6] = 0xFF;
+  }
+
+  if (k_msg.buf[1] == 0xA0 && k_msg.buf[2] == 2) {
+    k_msg.buf[1] = 0xFF;
+    k_msg.buf[2] = 0xFF;
+  } else if (k_msg.buf[3] == 0xA0 && k_msg.buf[4] == 2) {
+    k_msg.buf[3] = 0xFF;
+    k_msg.buf[4] = 0xFF;
+  } else if (k_msg.buf[5] == 0xA0 && k_msg.buf[6] == 2) {
+    k_msg.buf[5] = 0xFF;
+    k_msg.buf[6] = 0xFF;
+  }
+
+  if (k_msg.buf[1] == 0xA1 && k_msg.buf[2] == 2) {                                                                                  // DSC OFF ?
+    k_msg.buf[1] = 0xFF;
+    k_msg.buf[2] = 0xFF;
+  } else if (k_msg.buf[3] == 0xA1 && k_msg.buf[4] == 2) {
+    k_msg.buf[3] = 0xFF;
+    k_msg.buf[4] = 0xFF;
+  } else if (k_msg.buf[5] == 0xA1 && k_msg.buf[6] == 2) {
+    k_msg.buf[5] = 0xFF;
+    k_msg.buf[6] = 0xFF;
+  }
+
+  if (k_msg.buf[1] == 0xA2 && k_msg.buf[2] == 2) {
+    k_msg.buf[1] = 0xFF;
+    k_msg.buf[2] = 0xFF;
+  } else if (k_msg.buf[3] == 0xA2 && k_msg.buf[4] == 2) {
+    k_msg.buf[3] = 0xFF;
+    k_msg.buf[4] = 0xFF;
+  } else if (k_msg.buf[5] == 0xA2 && k_msg.buf[6] == 2) {
+    k_msg.buf[5] = 0xFF;
+    k_msg.buf[6] = 0xFF;
+  }
+
+  if (k_msg.buf[1] == 0x7E && k_msg.buf[2] == 1) {                                                                                  // CC 382 has no text description in NBTE, convert to 236.
+    k_msg.buf[1] = 0xEC;
+    k_msg.buf[2] = 0;
+  } else if (k_msg.buf[3] == 0x7E && k_msg.buf[4] == 1) {
+    k_msg.buf[3] = 0xEC;
+    k_msg.buf[4] = 0;
+  } else if (k_msg.buf[5] == 0x7E && k_msg.buf[6] == 1) {
+    k_msg.buf[5] = 0xEC;
+    k_msg.buf[6] = 0;
+  }
+
+  kcan2_write_msg(k_msg);
+}
+
+
+void process_bn2000_cc_dialog(void) {
+  if (k_msg.buf[0] == 0xA6 && k_msg.buf[1] == 2) {
+    return;
+  } else if (k_msg.buf[0] == 0xA0 && k_msg.buf[1] == 2) {
+    return;
+  } else if (k_msg.buf[0] == 0xA1 && k_msg.buf[1] == 2) {
+    return;
+  } else if (k_msg.buf[0] == 0xA2 && k_msg.buf[1] == 2) {
+    return;
+  } else if (k_msg.buf[0] == 0x7E && k_msg.buf[1] == 1) {
+    k_msg.buf[0] = 0xEC;
+    k_msg.buf[1] = 0;
+    k_msg.buf[2] = 0x20;                                                                                                            // Show the dialog box.
+  } 
+  
+  kcan2_write_msg(k_msg);
 }

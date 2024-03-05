@@ -3,7 +3,7 @@
 
 void read_initialize_eeprom(void) {
   uint16_t stored_eeprom_checksum = EEPROM.read(0) << 8 | EEPROM.read(1);
-  uint16_t calculated_eeprom_checksum = eeprom_crc();
+  uint16_t calculated_eeprom_checksum = calculate_eeprom_crc();
 
   if (stored_eeprom_checksum != calculated_eeprom_checksum){
     sprintf(serial_debug_string, "EEPROM data corrupted. Stored checksum: 0x%X, calculated checksum: 0x%X. Restoring defaults.",
@@ -54,9 +54,10 @@ void read_initialize_eeprom(void) {
     EEPROM.update(43, 0);
     EEPROM.update(44, 0);                                                                                                           // Door locks
     EEPROM.update(45, 0);
-    EEPROM.update(46, 1);                                                                                                           // Pressure units
-    EEPROM.update(47, 1);
-    EEPROM.update(48, 1);
+    EEPROM.update(46, 9);                                                                                                           // Pressure units and date format.
+    EEPROM.update(47, 9);
+    EEPROM.update(48, 9);
+    EEPROM.update(49, 4);                                                                                                           // Loglevel
 
     update_eeprom_checksum();
   } else {
@@ -84,9 +85,9 @@ void read_initialize_eeprom(void) {
       power_unit[1] = EEPROM.read(26);
       torque_unit[2] = EEPROM.read(27);
       power_unit[2] = EEPROM.read(28);
-      pressure_unit[0] = EEPROM.read(46);
-      pressure_unit[1] = EEPROM.read(47);
-      pressure_unit[2] = EEPROM.read(48);
+      pressure_unit_date_format[0] = EEPROM.read(46);
+      pressure_unit_date_format[1] = EEPROM.read(47);
+      pressure_unit_date_format[2] = EEPROM.read(48);
     #endif
     #if AUTO_MIRROR_FOLD
       unfold_with_door_open = EEPROM.read(29) == 1 ? true : false;
@@ -126,14 +127,15 @@ void read_initialize_eeprom(void) {
     serial_commands_unlocked = EEPROM.read(43) == 1 ? true : false;
     doors_locked = EEPROM.read(44) == 1 ? true : false;
     doors_alarmed = EEPROM.read(45) == 1 ? true : false;
+    LOGLEVEL = constrain(EEPROM.read(49), 0, 4);
     serial_log("Loaded data from EEPROM.", 2);
   }
 }
 
 
-uint16_t eeprom_crc(void) {
+uint16_t calculate_eeprom_crc(void) {
   teensy_eeprom_crc.restart();
-  for (uint8_t i = 2; i < 49; i++) {
+  for (uint8_t i = 2; i < 50; i++) {
     teensy_eeprom_crc.add(EEPROM.read(i));
   }
   return teensy_eeprom_crc.calc();
@@ -167,9 +169,9 @@ void update_data_in_eeprom(void) {                                              
     EEPROM.update(26, power_unit[1]);
     EEPROM.update(27, torque_unit[2]);
     EEPROM.update(28, power_unit[2]);
-    EEPROM.update(46, pressure_unit[0]);
-    EEPROM.update(47, pressure_unit[1]);
-    EEPROM.update(48, pressure_unit[2]);
+    EEPROM.update(46, pressure_unit_date_format[0]);
+    EEPROM.update(47, pressure_unit_date_format[1]);
+    EEPROM.update(48, pressure_unit_date_format[2]);
   #endif
   #if AUTO_MIRROR_FOLD
     EEPROM.update(29, unfold_with_door_open);
@@ -193,13 +195,14 @@ void update_data_in_eeprom(void) {                                              
   #endif
   EEPROM.update(44, doors_locked);
   EEPROM.update(45, doors_alarmed);
+  EEPROM.update(49, LOGLEVEL);
   update_eeprom_checksum();
   serial_log("Saved data to EEPROM.", 2);
 }
 
 
 void update_eeprom_checksum(void) {
-  uint16_t new_eeprom_checksum = eeprom_crc();
+  uint16_t new_eeprom_checksum = calculate_eeprom_crc();
   EEPROM.update(0, new_eeprom_checksum >> 8);
   EEPROM.update(1, new_eeprom_checksum & 0xFF);
 }
@@ -227,11 +230,11 @@ void print_current_state(Stream &status_serial) {
           " Terminal R: %s, Ignition: %s\r\n"
           " Engine: %s, RPM: %d, Torque: %.1f Nm, idling: %s\r\n"
           " Coolant temperature: %d °C, Oil temperature %d °C\r\n"
-          " Indicated speed: %d, Real speed: %d %s",
+          " Indicated speed: %d %s, Real speed: %.1f KPH",
           vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF",
           engine_running ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
           engine_coolant_temperature - 48, engine_oil_temperature - 48,
-          indicated_speed, real_speed, speed_mph ? "MPH" : "KPH");
+          indicated_speed, speed_mph ? "MPH" : "KPH", real_speed);
   status_serial.println(serial_debug_string);
   #if HDC
     sprintf(serial_debug_string, " Cruise Control: %s", cruise_control_status ? "ON" : "OFF");
@@ -272,10 +275,11 @@ void print_current_state(Stream &status_serial) {
     if (ignition) {
       sprintf(serial_debug_string, " Sine pitch angle: %.1f, FXX-Converted: %.1f degrees\r\n"
               " Sine roll angle: %.1f, FXX-Converted: %.1f degrees\r\n"
-              " Yaw rate FXX-Converted: %.2f degrees/s",
+              " Yaw rate FXX-Converted: %.2f degrees/s\r\n"
+              " Yaw rate error: %.2f degrees/s",
               sine_pitch_angle, (f_vehicle_pitch_angle - 0x2000) * 0.05 - 64.0,
               sine_roll_angle, (f_vehicle_roll_angle - 0x2000) * 0.05 - 64.0,
-              yaw_rate * 0.005 - 163.84);
+              f_yaw_rate * 0.005 - 163.84, e_yaw_error);
       status_serial.println(serial_debug_string);
     }
   #endif
@@ -469,7 +473,7 @@ void print_current_state(Stream &status_serial) {
 }
 
 
-void serial_log(const char message[], int8_t level) {
+void serial_log(const char message[], uint8_t level) {
   #if DEBUG_MODE
     if (!clearing_dtcs) {
       if (level <= LOGLEVEL) {
@@ -496,10 +500,11 @@ void reset_ignition_variables(void) {                                           
   if (mdrive_status) {
     toggle_mdrive_message_active();
   }
-  engine_running = false;
+  execute_engine_off_actions();
   RPM = 0;
   ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
+  mdrive_settings_requested = false;
   m_mfl_held_count = 0;
   uif_read = false;
   console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                           // When cycling ignition, restore this to its CKM value.
@@ -574,13 +579,14 @@ void reset_ignition_variables(void) {                                           
   #endif
   reverse_gear_status = false;
   sine_pitch_angle_requested = sine_roll_angle_requested = false;
-  #if F_NBT && !F_NBT_EVO6
+  #if F_NBT
     send_f_pdc_function_status(true);                                                                                               // If PDC was active, update NBT with the OFF status.
-    send_f_ftm_status();                                                                                                            // FTM is now inactive. ID3/4 require this to reset the stats displayed.
-    f_oil_level_measuring_timer = 59500;                                                                                            // Measure oil level when ignition is turned ON.
-    kcan2_write_msg(f_oil_level_measuring_buf);                                                                                     // Needed to reset the oil level display when switching ingition OFF.
-    f_oil_level_timer = 0;
-    f_oil_level_measuring_timer = 60000;
+    #if F_VSW01 && F_VSW01_MANUAL
+      vsw_switch_input(4);
+    #endif
+    #if !F_NBT_EVO6
+      send_f_ftm_status();                                                                                                          // FTM is now inactive. ID3/4 require this to reset the stats displayed.
+    #endif
   #endif
 }
 
@@ -605,7 +611,7 @@ void reset_sleep_variables(void) {
   wipe_scheduled = intermittent_wipe_active = false, auto_wipe_active = false;
   frm_mirror_status_requested = false;
   frm_ahl_flc_status_requested = false;
-  fold_lock_button_pressed = fold_unlock_button_pressed = false;
+  fold_lock_button_pressed = false;
   lock_button_pressed = false;
   lock_button_pressed_counter = 0;
   mirror_status_retry = 0;
@@ -614,6 +620,7 @@ void reset_sleep_variables(void) {
   vsw_current_input = 0;
   vsw_switch_counter = 0xF1;
   asd_initialized = false;
+  asd_rad_on_initialized = false;
   comfort_exit_done = false;
   full_indicator = false;
   f_pdc_request = 1;
@@ -627,7 +634,9 @@ void reset_sleep_variables(void) {
   zbe_action_counter = zbe_rotation[2] = zbe_rotation[3] = 0;
   faceplate_volume = 0;
   gong_active = false;
+  faceplate_eject_pressed = faceplate_power_mute_pressed = faceplate_hu_reboot = false;
   faceplate_buttons_txq.flush();
+  radon_txq.flush();
   nbt_cc_txq.flush();
   hazards_flash_txq.flush();
   #if F_NBT

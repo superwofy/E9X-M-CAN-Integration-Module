@@ -6,7 +6,7 @@
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
-int8_t LOGLEVEL = 4;                                                                                                                // 0 - critical, 1 - errors, 2 - info, 3 - extra_info, 4 = debug.
+uint8_t LOGLEVEL = 4;                                                                                                               // 0 - critical, 1 - errors, 2 - info, 3 - extra_info, 4 = debug.
 
 #define PDC_AUTO_OFF 1                                                                                                              // Deactivates PDC when handbrake is pulled.
 #define AUTO_TOW_VIEW_RVC 1                                                                                                         // Turn on top down (tow view) rear view camera option when close to an obstacle.
@@ -21,17 +21,6 @@ int8_t LOGLEVEL = 4;                                                            
 #define MIRROR_UNDIM 1                                                                                                              // Undim electrochromic exterior mirrors when indicating at night.
 #define COMFORT_EXIT 1                                                                                                              // Move driver's seat back when exiting car.
 #define IMMOBILIZER_SEQ 1                                                                                                           // Disable EKP until the M button is pressed X times. Sound the alarm if engine ON without disabling immobilizer.
-#if __has_include ("src/custom-settings.h")                                                                                         // Optionally, create this file to store sensitive settings.
-  #include "src/custom-settings.h"
-#endif
-#if SECRETS
-  uint8_t IMMOBILIZER_SEQ_NUMBER = SECRET_IMMOBILIZER_SEQ;
-  uint8_t IMMOBILIZER_SEQ_ALARM_NUMBER = SECRET_IMMOBILIZER_SEQ_ALARM_NUMBER;
-#else
-  uint8_t IMMOBILIZER_SEQ_NUMBER = 3;                                                                                               // Number of times to press the button for the EKP to be re-activated.
-  uint8_t IMMOBILIZER_SEQ_ALARM_NUMBER = 6;                                                                                         // Number of times to press the button for the alarm to be silenced and EKP re-activated.
-#endif
-uint8_t DONOR_VIN[7] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};                                                                  // VIN number to send to NBT. ASCII to hex.
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack an indicator.
 #define FRONT_FOG_CORNER 1                                                                                                          // Turn ON/OFF corresponding fog light when turning.
 #if FRONT_FOG_CORNER
@@ -40,12 +29,14 @@ uint8_t DONOR_VIN[7] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};              
 #define DIM_DRL 1                                                                                                                   // Dims DLR ON the side that the indicator is ON.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
-#define QUIET_START 1                                                                                                               // Close the exhaust valve as soon as Terminal R is turned ON.
+#define QUIET_START 0                                                                                                               // Close the exhaust valve as soon as Terminal R is turned ON.
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
 #define CONTROL_SHIFTLIGHTS 1                                                                                                       // Display shiftlights, animation and sync with the variable redline of M3 KOMBI.
 #define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine ON. Calibrated for M3 speedo with 335i tacho.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver at low temperatures.
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
+#define MDSC_ZB 0                                                                                                                   // If the MK60E5 is flashed with a 1M or M3 file, MDM is toggled through MDrive status (0x399) only.
+                                                                                                                                    // For DSC OFF, the switch must be wired directly and fed 5V?
 
 const int8_t FOG_CORNER_STEERTING_ANGLE = 87;                                                                                       // Steering angle at which to activate fog corner function.
 const int8_t STEERTING_ANGLE_HYSTERESIS = 48;
@@ -61,10 +52,10 @@ const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
 const uint16_t MAX_UPSHIFT_WARN_RPM = 6500 * 4;
 const uint16_t GONG_UPSHIFT_WARN_RPM = 7000 * 4;
 const int16_t VAR_REDLINE_OFFSET_RPM = -300;                                                                                        // RPM difference between DME requested redline and KOMBI displayed redline. Varies with cluster.
-const uint16_t EXHAUST_FLAP_QUIET_RPM = 3000 * 4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
+const uint16_t EXHAUST_FLAP_QUIET_RPM = 2500 * 4;                                                                                   // RPM setpoint to open the exhaust flap in normal mode (desired RPM * 4).
 const uint16_t LC_RPM = 3700 * 4;                                                                                                   // RPM setpoint to display launch control flag CC (desired RPM * 4). Match with MHD setting.
-const uint16_t LC_RPM_MIN = LC_RPM - (250 * 4);                                                                                     // RPM hysteresis when bouncing off the limiter.
-const uint16_t LC_RPM_MAX = LC_RPM + (250 * 4);
+const uint16_t LC_RPM_MIN = LC_RPM - (200 * 4);                                                                                     // RPM hysteresis when bouncing off the limiter.
+const uint16_t LC_RPM_MAX = LC_RPM + (200 * 4);
 const float MAX_THRESHOLD = 78.0;                                                                                                   // CPU temperature thresholds for the processor clock scaling function.
 const float HIGH_THRESHOLD = 74.0;
 const float MEDIUM_THRESHOLD = 70.0;
@@ -74,6 +65,19 @@ const unsigned long HIGH_UNDERCLOCK = 150 * 1000000;
 const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
 const unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 const unsigned long STANDARD_CLOCK = 528 * 1000000;
+const unsigned long OBD_DETECT_TIMEOUT = 90000;
+#if __has_include ("src/custom-settings.h")                                                                                         // Optionally, create this file to store sensitive settings.
+  #include "src/custom-settings.h"
+#endif
+#if SECRETS
+  uint8_t IMMOBILIZER_SEQ_NUMBER = SECRET_IMMOBILIZER_SEQ;
+  uint8_t IMMOBILIZER_SEQ_ALARM_NUMBER = SECRET_IMMOBILIZER_SEQ_ALARM_NUMBER;
+  String serial_password = secret_serial_password;
+#else
+  uint8_t IMMOBILIZER_SEQ_NUMBER = 3;                                                                                               // Number of times to press the button for the EKP to be re-activated.
+  uint8_t IMMOBILIZER_SEQ_ALARM_NUMBER = 6;                                                                                         // Number of times to press the button for the alarm to be silenced and EKP re-activated.
+  String serial_password = "coldboot";                                                                                              // Default password.
+#endif
 
 /***********************************************************************************************************************************************************************************************************************************************
   F-series retrofits:
@@ -84,10 +88,12 @@ const unsigned long STANDARD_CLOCK = 528 * 1000000;
   #if F_NBT
     #define F_NBT_VIN_PATCH 1                                                                                                       // Requests CPS VIN from NBT before sending 0x380. Disable if using patched NBT binary.
     #define F_NBT_EVO6 1                                                                                                            // Additional changes for ID5 and ID6.
-    #define F_NBT_EVO6_GW7 1                                                                                                        // In NBT EVO ID5/6 GW table 7 allows old oil measurement to work but does not send VSW requests.
     #define F_NBT_CCC_ZBE 0                                                                                                         // Converts CCC ZBE1 messages for use with NBT.
+    #define X_VIEW 0                                                                                                                // Convert the angles required to make the xDrive status 3D graphic work.
+    #define ASD89_RAD_ON 0                                                                                                          // Use the RAD_ON signal from the ASD module to power Diversity.
   #endif
 #endif
+uint8_t DONOR_VIN[7] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};                                                                  // VIN number to send to NBT. ASCII to hex.
 #if F_NBT
   // Stock IKM0S tops out at around 350hp / 500Nm. 
   uint8_t MAX_TORQUE_SCALE_NM = 6;                                                                                                  // Used to scale the NBT sport displays. Torque = (x + 1) * 80. I.e. (6 + 1) * 80 = 560.
@@ -98,6 +104,7 @@ const unsigned long STANDARD_CLOCK = 528 * 1000000;
 #endif
 #ifndef F_VSW01
   #define F_VSW01 0                                                                                                                 // Enable/disable F01 Video Switch diagnosis and wakeup. Tested with p/n 9201542.
+  #define F_VSW01_MANUAL 0                                                                                                          // Manual control of the VSW if used without HU support. CIC, NBTEVO GW7 etc.
 #endif
 #ifndef F_ZBE_KCAN1
   #define F_ZBE_KCAN1 0                                                                                                             // Enable/disable FXX KCAN1 ZBE wakeup functions. Do not use with an EXX or KCAN2 ZBE.
@@ -132,10 +139,10 @@ const char *vsw_positions[] = {"Disabled", "Rear view camera: TRSVC", "Night Vis
   #define REVERSE_BEEP 0                                                                                                            // Play a beep through the speakers when engaging reverse.
 #endif
 #ifndef AUTO_STEERING_HEATER
-  #define AUTO_STEERING_HEATER 0                                                                                                    // Enable automatic heated steering wheel at low temperatures.
+  #define AUTO_STEERING_HEATER 0                                                                                                    // Enable automatic heated steering wheel at low temperatures. Requires transistor.
 #endif
-#ifndef ASD
-  #define ASD 0                                                                                                                     // Enable / Disable mute control of E89 ASD with MDrive. ASD is muted when MDrive POWER Sport+ is inactive.
+#ifndef ASD89
+  #define ASD89 0                                                                                                                   // Enable / Disable mute control of E89 ASD with MDrive. ASD is muted when MDrive POWER Sport+ is inactive.
 #endif
 
 /***********************************************************************************************************************************************************************************************************************************************
@@ -208,10 +215,11 @@ CAN_message_t faceplate_button1_hover_buf, faceplate_button1_press_buf, faceplat
 elapsedMillis nbt_vin_request_timer = 3000, engine_runtime = 0, vehicle_awake_timer = 0, vehicle_awakened_timer = 0;
 float battery_voltage = 0;
 uint16_t faceplate_volume = 0;
-bool faceplate_eject_pressed = false, faceplate_power_mute_pressed = false;
+bool faceplate_eject_pressed = false, faceplate_power_mute_pressed = false, faceplate_hu_reboot = false;
 elapsedMillis faceplate_eject_pressed_timer = 0, faceplate_power_mute_pressed_timer = 0,
               faceplate_power_mute_debounce_timer = 300, faceplate_eject_debounce_timer = 1000;
-cppQueue faceplate_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+cppQueue faceplate_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
+         radon_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint16_t RPM = 0;
@@ -236,8 +244,17 @@ uint8_t dsc_program_status = 0;                                                 
 bool holding_dsc_off_console = false;
 elapsedMillis mdrive_message_timer = 0;
 uint8_t m_mfl_held_count = 0;
-CAN_message_t idrive_mdrive_settings_menu_a_buf, idrive_mdrive_settings_menu_b_buf,
-              gws_sport_on_buf, gws_sport_off_buf;
+CAN_message_t idrive_mdrive_settings_menu_cic_a_buf, idrive_mdrive_settings_menu_cic_b_buf,
+              idrive_mdrive_settings_menu_nbt_a_buf, idrive_mdrive_settings_menu_nbt_b_buf,
+              idrive_mdrive_settings_menu_nbt_c_buf, gws_sport_on_buf, gws_sport_off_buf,
+              idrive_bn2000_time_12h_buf, idrive_bn2000_time_24h_buf, 
+              idrive_bn2000_date_ddmmyyyy_buf, idrive_bn2000_date_mmddyyyy_buf,
+              idrive_bn2000_consumption_l100km_buf, idrive_bn2000_consumption_kml_buf,
+              idrive_bn2000_consumption_mpg_buf, idrive_bn2000_distance_km_buf, idrive_bn2000_distance_mi_buf,
+              idrive_bn2000_pressure_bar_buf, idrive_bn2000_pressure_kpa_buf, idrive_bn2000_pressure_psi_buf,
+              idrive_bn2000_temperature_c_buf, idrive_bn2000_temperature_f_buf;
+
+bool mdrive_settings_requested = false;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms,
               dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
@@ -311,7 +328,7 @@ bool intermittent_wipe_active = false, auto_wipe_active = false;
 cppQueue wiper_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t mirror_status_retry = 0;
 bool mirrors_folded = false, frm_mirror_status_requested = false;
-bool fold_lock_button_pressed = false, fold_unlock_button_pressed = false;
+bool fold_lock_button_pressed = false;
 bool lock_button_pressed = false;
 int16_t lock_button_pressed_counter = 0;
 CAN_message_t frm_mirror_status_request_a_buf, frm_mirror_status_request_b_buf,
@@ -363,35 +380,35 @@ uint8_t f_longitudinal_acceleration_alive_counter = 0;
 float e_lateral_acceleration = 0;
 uint16_t lateral_acceleration = 0x7EF4;                                                                                             // 32500 * 0.002 - 65 = 0 m/s^2.
 uint8_t f_lateral_acceleration_alive_counter = 0;
-float e_yaw_rate = 0;
-uint16_t yaw_rate = 0x8000;                                                                                                         // 32768 * 0.005 - 163.84 = 0 degrees/sec.
+float e_yaw_rate = 0, e_yaw_error = 0;
+uint16_t f_yaw_rate = 0x8000;                                                                                                       // 32768 * 0.005 - 163.84 = 0 degrees/sec.
 uint8_t f_yaw_alive_counter = 0;
-uint16_t real_speed = 0;
+float real_speed = 0;
 uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xFE, rls_time_of_day = 0,
         f_data_powertrain_2_alive_counter = 0, f_torque_1_alive_counter = 0, f_vehicle_status_alive_counter = 0,
         f_driving_dynamics_alive_counter = 0, f_steering_angle_alive_counter = 0, f_pdc_function_status_alive_counter = 0,
         f_ftm_status_alive_counter = 0, f_standstill_status_alive_counter = 0, f_mdrive_alive_counter = 0,
-        f_xview_pitch_alive_counter = 0, f_road_incline_alive_counter = 0;
+        f_xview_pitch_alive_counter = 0, f_road_incline_alive_counter = 0, f_steering_angle_effective_alive_counter = 0;
 uint8_t f_mdrive_settings[5] = {0};
 uint32_t f_distance_alive_counter = 0x2000;
 uint8_t f_drl_ckm_request = 0;
+uint16_t f_converted_steering_angle = 0;
 elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_timer = 500, 
               f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000,
-              f_xview_pitch_timer = 1000, f_road_incline_timer = 100, f_chassis_longitudinal_timer = 20,
-              f_chassis_lateral_timer = 20, f_chassis_yaw_timer = 20, f_chassis_speed_timer = 20, f_torque_1_timer = 100,
-              f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1000, f_oil_level_timer = 500, 
-              f_oil_level_measuring_timer = 50000;
-CAN_message_t f_oil_level_measuring_buf, sine_pitch_angle_request_a_buf, sine_pitch_angle_request_b_buf,
+              f_xview_pitch_timer = 1000, f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1000;
+elapsedMicros f_road_incline_timer = 100000, f_torque_1_timer = 100000, f_chassis_longitudinal_timer = 20000,                       // Higher precision for high sample rate messages.
+              f_chassis_lateral_timer = 20000, f_chassis_yaw_timer = 20000, f_chassis_speed_timer = 20000,
+              f_chassis_steering_timer = 200000, f_chassis_steering_effective_timer = 20000;
+CAN_message_t sine_pitch_angle_request_a_buf, sine_pitch_angle_request_b_buf,
               sine_roll_angle_request_a_buf, sine_roll_angle_request_b_buf, nivi_button_pressed_buf,
               nivi_button_released_buf, f_hu_nbt_reboot_buf;
-uint8_t e_oil_level = 0xFF;                                                                                                         // Initialize to 0xFF in case we never receive status from the oil sensor/DME.
 CRC8 f_vehicle_status_crc(0x1D, 0, 0x64, false, false),                                                                             // SAE J1850 POLY, 0 init and XOR-OUT 0x64 for ARB-ID 0x3C.
      f_torque_1_crc(0x1D, 0, 0x6A, false, false),                                                                                   // SAE J1850 POLY, 0 init and XOR-OUT 0x6A for ARB-ID 0xA5.
      f_terminal_status_crc(0x1D, 0, 0xB1, false, false),                                                                            // SAE J1850 POLY, 0 init and XOR-OUT 0xB1 for ARB-ID 0x12F.
      f_road_incline_crc(0x1D, 0, 0xCE, false, false),                                                                               // SAE J1850 POLY, 0 init and XOR-OUT 0xCE for ARB-ID 0x163.
      f_longitudinal_acceleration_crc(0x1D, 0, 0x5F, false, false),                                                                  // SAE J1850 POLY, 0 init and XOR-OUT 0x5F for ARB-ID 0x199.
      f_lateral_acceleration_crc(0x1D, 0, 0xE5, false, false),                                                                       // SAE J1850 POLY, 0 init and XOR-OUT 0xE5 for ARB-ID 0x19A.
-     f_yaw_rate_crc(0x1D, 0, 1, false, false),                                                                                      // SAE J1850 POLY, 0 init and XOR-OUT 1 for ARB-ID 0x19F.
+     f_yaw_rate_msg_crc(0x1D, 0, 1, false, false),                                                                                  // SAE J1850 POLY, 0 init and XOR-OUT 1 for ARB-ID 0x19F.
      f_speed_crc(0x1D, 0, 0xF, false, false),                                                                                       // SAE J1850 POLY, 0 init and XOR-OUT 0xF for ARB-ID 0x1A1.
      f_standstill_status_crc(0x1D, 0, 0x8F, false, false),                                                                          // SAE J1850 POLY, 0 init and XOR-OUT 0x8F for ARB-ID 0x2DC.     
      f_steering_angle_crc(0x1D, 0, 0xD1, false, false),                                                                             // SAE J1850 POLY, 0 init and XOR-OUT 0xD1 for ARB-ID 0x301.
@@ -445,30 +462,28 @@ elapsedMillis rvc_action_timer = 500;
 uint8_t msa_fake_status_counter = 0;
 CAN_message_t msa_fake_status_buf;
 cppQueue ihk_extra_buttons_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-bool asd_initialized = false;
-CAN_message_t mute_asd_buf, demute_asd_buf,
-              clear_fs_job_uds_nbt_buf, clear_is_job_uds_nbt_buf, clear_fs_job_uds_zbe_buf, 
-              clear_is_job_uds_zbe_buf, clear_fs_job_uds_tbx_buf, clear_is_job_uds_tbx_buf, 
-              clear_fs_job_vsw_buf, clear_is_job_vsw_buf, ccc_zbe_wake_buf, jbe_reboot_buf;
+bool asd_initialized = false, asd_rad_on_initialized = false;
+CAN_message_t mute_asd_buf, demute_asd_buf, radon_asd_buf,
+              clear_fs_uds_nbt_buf, clear_is_uds_nbt_buf, clear_fs_uds_zbe_buf, clear_is_uds_zbe_buf,
+              clear_fs_uds_tbx_buf, clear_is_uds_tbx_buf, clear_fs_uds_vsw_buf, clear_is_uds_vsw_buf,
+              clear_fs_uds_ampt_buf, clear_is_uds_ampt_buf, clear_fs_uds_vm_buf, clear_is_uds_vm_buf,
+              clear_dme_hs_buf, clear_svt_fs_buf, clear_svt_is_buf, ccc_zbe_wake_buf, jbe_reboot_buf;
 extern float tempmonGetTemp(void);
 char serial_debug_string[512];
 char boot_debug_string[8192];
 unsigned long max_loop_timer = 0, loop_timer = 0;
 uint32_t kcan_error_counter = 0, kcan2_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;
-uint8_t torque_unit[4] = {1, 1, 1, 1}, power_unit[4] = {1, 1, 1, 1}, pressure_unit[4] = {1, 1, 1, 1},
+uint8_t torque_unit[] = {1, 1, 1, 1}, power_unit[] = {1, 1, 1, 1}, pressure_unit_date_format[] = {9, 9, 9, 9},
         driving_mode = 0, f_units[] = {0, 0, 0, 0, 0, 0xF1};
 uint8_t engine_coolant_temperature = 48, engine_oil_temperature = 48;                                                               // Celsius temperature is: value - 48.
 CAN_message_t custom_cc_dismiss_buf, custom_cc_clear_buf;
 uint8_t ihka_auto_blower_speed = 5, ihka_auto_blower_state = 3;
 cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-#if SECRETS
-  String serial_password = secret_serial_password;
-#else
-  String serial_password = "coldboot";                                                                                              // Default password.
-#endif
-cppQueue serial_diag_kcan1_txq(sizeof(delayed_can_tx_msg), 384, queue_FIFO),
-         serial_diag_kcan2_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
+cppQueue serial_diag_dcan_txq(sizeof(delayed_can_tx_msg), 384, queue_FIFO),
+         serial_diag_kcan1_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO),  
+         serial_diag_kcan2_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO),
+         serial_diag_ptcan_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
 CAN_message_t power_down_cmd_a_buf, power_down_cmd_b_buf, power_down_cmd_c_buf;
 bool diag_transmit = true, power_down_requested = false;
 elapsedMillis debug_print_timer = 500, diag_deactivate_timer, serial_unlocked_timer = 0;

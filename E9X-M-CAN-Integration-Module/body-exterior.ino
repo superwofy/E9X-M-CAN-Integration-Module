@@ -153,9 +153,7 @@ void evaluate_door_status(void) {
         serial_log("Front right door open.", 2);
         #if RHD
           #if AUTO_MIRROR_FOLD
-            if (unfold_with_door_open) {
-              toggle_mirror_fold(false);
-            }
+            check_unfold_mirrors_door_open();
           #endif
           #if COMFORT_EXIT
             evaluate_comfort_exit();
@@ -172,9 +170,7 @@ void evaluate_door_status(void) {
         serial_log("Front left door open.", 2);
         #if !RHD
           #if AUTO_MIRROR_FOLD
-            if (unfold_with_door_open) {
-              toggle_mirror_fold(false);
-            }
+            check_unfold_mirrors_door_open();
           #endif
           #if COMFORT_EXIT
             evaluate_comfort_exit();
@@ -189,9 +185,7 @@ void evaluate_door_status(void) {
       left_door_open = right_door_open = true;
       serial_log("Both front doors open.", 2);
       #if AUTO_MIRROR_FOLD
-        if (unfold_with_door_open) {
-          toggle_mirror_fold(false);
-        }
+        check_unfold_mirrors_door_open();
       #endif
       #if COMFORT_EXIT
         evaluate_comfort_exit();
@@ -240,62 +234,6 @@ void evaluate_door_status(void) {
 }
 
 
-void control_exhaust_flap_user(void) {
-  if (engine_running) {
-    if (exhaust_flap_sport) {                                                                                                       // Flap always open in sport mode.
-      if (exhaust_flap_action_timer >= 500) {
-        if (!exhaust_flap_open) {
-          actuate_exhaust_solenoid(LOW);
-          serial_log("Opened exhaust flap with MDrive.", 2);
-        }
-      }
-    }
-  } else {
-    #if QUIET_START
-      if (terminal_r && !exhaust_flap_sport) {                                                                                      // Close the flap when Terminal R activates, allow bypass with MDrive.
-        if (exhaust_flap_open) {
-          actuate_exhaust_solenoid(HIGH);                                                                                           // Close the flap (if vacuum still available).
-          serial_log("Quiet start enabled. Exhaust flap closed.", 2);
-        }
-      } else {
-        if (!exhaust_flap_open) {
-          actuate_exhaust_solenoid(LOW);
-          serial_log("Released exhaust flap from quiet start.", 2);
-        }
-      }
-    #endif
-  }
-}
-
-
-void control_exhaust_flap_rpm(void) {
-  if (engine_running) {
-    if (!exhaust_flap_sport) {
-      if (exhaust_flap_action_timer >= exhaust_flap_action_interval) {                                                              // Avoid vacuum drain, oscillation and apply startup delay.
-        if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
-          if (!exhaust_flap_open) {
-            actuate_exhaust_solenoid(LOW);
-            serial_log("Exhaust flap opened at RPM setpoint.", 2);
-          }
-        } else {
-          if (exhaust_flap_open) {
-            actuate_exhaust_solenoid(HIGH);
-            serial_log("Exhaust flap closed.", 2);
-          }
-        }
-      }
-    }
-  }
-}
-
-
-void actuate_exhaust_solenoid(bool activate) {
-  digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, activate);
-  exhaust_flap_action_timer = 0;
-  exhaust_flap_open = !activate;                                                                                                    // Flap position is the inverse of solenoid state. When active, the flap is closed.
-}
-
-
 void evaluate_key_number_remote(void) {
   uint8_t cas_key_number_can = k_msg.buf[0] / 0x11;
   if (cas_key_number_can != cas_key_number) {
@@ -329,7 +267,7 @@ void evaluate_key_number_remote(void) {
 
 void evaluate_remote_button(void) {
   if (k_msg.buf[2] != last_lock_status_can) {                                                                                       // Lock/Unlock messages are sent many times. Should only react to the first.
-    if (k_msg.buf[2] == 4 && !engine_running) {                                                                                     // Ignore if locking car while running.
+    if (k_msg.buf[2] == 4 && !ignition) {                                                                                           // Ignore if locking car with ignition ON.
       if (!left_door_open && !right_door_open) {
         if (!doors_locked || !doors_alarmed) {                                                                                      // This code should only run when the car is locked. Alarm armed/unarmed.
           serial_log("Remote lock button pressed.", 2);
@@ -373,17 +311,9 @@ void evaluate_remote_button(void) {
       lock_button_pressed_counter = 1;
     }
     
-    else if (k_msg.buf[2] == 1 && !engine_running) {                                                                                // Ignore if unlocking car while running.
+    else if (k_msg.buf[2] == 1 && !ignition) {                                                                                      // Ignore if unlocking car with ignition ON/running.
       if (doors_locked || doors_alarmed) {                                                                                          // Only run once when unlocking the car.
         serial_log("Remote unlock button pressed.", 2);
-        #if AUTO_MIRROR_FOLD
-        fold_unlock_button_pressed = true;
-        if (diag_transmit) {
-          serial_log("Checking mirror status.", 2);
-          kcan_write_msg(frm_mirror_status_request_a_buf);
-          frm_mirror_status_requested = true;
-        }
-        #endif
         #if IMMOBILIZER_SEQ
           alarm_led_disable_on_lock = false;
         #endif
@@ -454,11 +384,10 @@ void evaluate_mirror_fold_status(void) {
           toggle_mirror_fold(true);
         }
         fold_lock_button_pressed = false;
-      } else if (fold_unlock_button_pressed) {
+      } else if (unfold_with_door_open) {
         if (mirrors_folded) {
-          serial_log("Will un-fold exterior mirrors when door is opened after unlock button pressed.", 2);
-          unfold_with_door_open = true;
-          fold_unlock_button_pressed = false;
+          serial_log("Un-folding exterior mirrors after driver's door is opened following unlock.", 2);
+          toggle_mirror_fold(false);
         }
       }
     } else {                                                                                                                        // Try again. This will only work if the FRM first sent an error code.
@@ -477,13 +406,26 @@ void evaluate_mirror_fold_status(void) {
 }
 
 
-void toggle_mirror_fold(bool persist_state) {
+void check_unfold_mirrors_door_open(void) {
+  if (unfold_with_door_open) {
+    if (diag_transmit) {
+      serial_log("Checking mirror status.", 2);
+      kcan_write_msg(frm_mirror_status_request_a_buf);
+      frm_mirror_status_requested = true;
+    } else {
+      unfold_with_door_open = false;
+    }
+  }
+}
+
+
+void toggle_mirror_fold(bool new_eeprom_state) {
   unsigned long time_now = millis();
   m = {frm_toggle_fold_mirror_a_buf, time_now + 300};
   mirror_fold_txq.push(&m);
   m = {frm_toggle_fold_mirror_b_buf, time_now + 310};
   mirror_fold_txq.push(&m);
-  unfold_with_door_open = persist_state;
+  unfold_with_door_open = new_eeprom_state;
   eeprom_unsaved = true;
 }
 
@@ -562,17 +504,8 @@ void evaluate_dipped_beam_status(void) {
 }
 
 
-void evaluate_steering_angle(void) {
-  steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
-  // Max left angle is 1005 / 23
-  if (steering_angle >= 435) { 
-    steering_angle = steering_angle - 2849;
-  }
-}
-
-
 void evaluate_corner_fog_activation(void) {
-  if (front_fog_corner_timer >= 300) {
+  if (front_fog_corner_timer >= 300 && ignition) {
     #if FRONT_FOG_CORNER_AHL_SYNC
     if (!front_fog_status && dipped_beam_status && rls_time_of_day > 0 && ahl_active && diag_transmit) {
     #else
@@ -808,8 +741,10 @@ void evaluate_vehicle_pitch_angle(void) {                                       
       sine_pitch_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
       sine_pitch_angle = constrain(sine_pitch_angle, -64.0, 64.0);                                                                  // Boundary check since F message has resolution -64..64.
 
-      xview_grade_percentage = 0x64 + round(100 * tan(0.0174532925 * abs(sine_pitch_angle)));                                       // Max is 0xFE - 154%.
-      xview_pitch_angle = (0x500 + (int)round(sine_pitch_angle * -1) * 0x14) << 4;
+      #if X_VIEW
+        xview_grade_percentage = 0x64 + round(100 * tan(0.0174532925 * abs(sine_pitch_angle)));                                     // Max is 0xFE - 154%.
+        xview_pitch_angle = (0x500 + (int)round( -sine_pitch_angle ) * 0x14) << 4;
+      #endif
       
       f_vehicle_pitch_angle = 0x2000 + round((sine_pitch_angle + 64) / 0.05);                                                       // Make leading 4 bits signal valid (QU_AVL_LOGR_RW).
       if (diag_transmit) {
@@ -856,7 +791,11 @@ void send_f_brightness_status(void) {
     uint8_t f_outside_brightness[] = {0xFE, 0xFE};                                                                                  // Daytime?. The two bytes may represent the two photosensors (driver's/passenger's side in FXX).
     f_outside_brightness[0] = f_outside_brightness[1] = rls_brightness;
     CAN_message_t f_outside_brightness_buf = make_msg_buf(0x2A5, 2, f_outside_brightness);
-    ptcan_write_msg(f_outside_brightness_buf);
+    #if F_NIVI
+      if (ignition) {
+        ptcan_write_msg(f_outside_brightness_buf);
+      }
+    #endif
     #if F_NBT
       kcan2_write_msg(f_outside_brightness_buf);
     #endif
