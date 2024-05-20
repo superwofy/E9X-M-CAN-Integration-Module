@@ -1,0 +1,85 @@
+Time format:
+1E 66 00 01 00 04 00 00                             // 12h
+1E 66 00 01 00 08 00 00                             // 24h
+
+
+Date format:
+1E 66 00 01 00 01 00 00                             // dd.mm.yyyy
+1E 66 00 01 00 02 00 00                             // mm/dd/yyyy
+
+
+Language:
+
+1E 66 00 01 02 00 00 00                             // English
+1E 66 00 01 06 00 00 00                             // French
+1E 66 00 01 04 00 00 00                             // Spanish
+
+
+Consumption:
+
+1E 66 00 01 00 00 01 00                             // l/100km
+1E 66 00 01 00 00 04 00                             // km/l
+1E 66 00 01 00 00 02 00                             // mpg
+
+
+Distance:
+1E 66 00 01 00 00 40 00                             // Km
+1E 66 00 01 00 00 80 00                             // Mi
+
+
+Pressure:
+1E 66 00 01 00 00 00 01                             // bar
+1E 66 00 01 00 00 00 02                             // kPa
+1E 66 00 01 00 00 00 03                             // psi
+
+
+Temperature:
+1E 66 00 01 00 10 00 00                             // C
+1E 66 00 01 00 20 00 00                             // F
+
+
+Home lights:
+1E 48 00 01 00 00 00 00                             // 0
+1E 48 00 01 00 0A 00 00                             // 10s
+1E 48 00 01 00 14 00 00                             // 20s
+.
+.                                                   // 10s increments.
+.
+1E 48 00 01 00 F0 00 00                             // 240s
+
+
+Triple turn signal:
+1E 48 00 01 20 FF 00 00                             // ON
+1E 48 00 01 10 FF 00 00                             // OFF
+
+
+Daytime driving lights:
+1E 48 00 01 00 FF 02 00                             // ON
+1E 48 00 01 00 FF 01 00                             // OFF
+
+
+Welcome light:
+1E 4A 00 01 08 FF 00 00                             // ON
+1E 4A 00 01 04 FF 00 00                             // OFF
+
+
+High beam assistance:
+1E 4A 00 01 20 00 00 00                             // ON
+1E 4A 00 01 10 00 00 00                             // OFF
+
+
+Independent ventilation Timer1:
+11 03 00 01 01 00 FD FF                             // Active: 1:00
+11 03 00 01 02 0B FD FF                             // Active: 2:11
+
+
+Independent ventilation Timer2:
+11 03 00 02 01 00 FD FF                             // Active: 1:00
+11 03 00 02 03 17 FD FF                             // Active: 3:23
+                  FC                                // disable
+
+
+
+0x5E0 - Kombi services is sent to confirm changes
+11 03 00 02 03 14 FD FF                             // Timer 2 set to 03:20
+10 03 00 02 01 FF FF FF                             // ACK, timer 2 ON

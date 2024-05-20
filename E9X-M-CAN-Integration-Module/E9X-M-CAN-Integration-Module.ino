@@ -61,6 +61,9 @@ void loop() {
     #endif
     #if F_NBT
       check_faceplate_buttons_queue();
+      #if CUSTOM_MONITORING_CC
+        send_custom_info_cc();
+      #endif
       check_nbt_cc_queue();
       #if F_NBT_VIN_PATCH
         send_nbt_vin_request();
@@ -93,6 +96,16 @@ void loop() {
       check_dsc_queue();
       check_console_buttons();
       send_mdrive_alive_message(5000);
+      if (veh_mode_timer >= 500) {
+        send_power_mode();                                                                                                          // state_spt request from DME.   
+        #if SERVOTRONIC_SVT70
+          send_servotronic_message();
+          #if F_NBT
+            send_servotronic_sport_plus();
+          #endif
+        #endif
+        veh_mode_timer = 0;
+      }
       #if AUTO_SEAT_HEATING
         check_seatheating_queue();
       #endif
@@ -121,6 +134,9 @@ void loop() {
       #endif
       #if F_NBT
         send_f_standstill_status();
+        #if CUSTOM_MONITORING_CC
+          send_dme_boost_request();
+        #endif
         #if F_NBT_EVO6
           send_f_driving_dynamics_switch_evo();
         #else
@@ -215,17 +231,6 @@ void loop() {
       #if REVERSE_BEEP || DOOR_VOLUME
       else if (k_msg.id == 0x1C6) {                                                                                                 // Monitor PDC warning.
         evaluate_pdc_warning();
-      }
-      #endif
-
-      else if (k_msg.id == 0x1D0) {
-        engine_coolant_temperature = k_msg.buf[0];
-        engine_oil_temperature = k_msg.buf[1];
-      }
-
-      #if MIRROR_UNDIM
-      else if (k_msg.id == 0x1EE) {
-        evaluate_indicator_stalk();
       }
       #endif
 
@@ -326,6 +331,10 @@ void loop() {
       #endif
 
       #if F_NIVI || F_NBT
+      else if (k_msg.id == 0x586) {                                                                                                 // TRSVC CCs.
+        evaluate_trsvc_cc();
+      }
+
       else if (k_msg.id == 0x650) {                                                                                                 // SINE is at address 0x50.
         evaluate_vehicle_pitch_angle();
         evaluate_vehicle_roll_angle();
@@ -369,6 +378,19 @@ void loop() {
     }
     #endif
 
+    else if (k_msg.id == 0x1D0) {
+      evaluate_engine_data();
+    }
+
+    #if MIRROR_UNDIM || F_NBT
+    else if (k_msg.id == 0x1EE) {
+      evaluate_indicator_stalk();
+      #if F_NBT
+        evaluate_high_beam_stalk();
+      #endif
+    }
+    #endif
+
     else if (k_msg.id == 0x23A) {                                                                                                   // Monitor remote function status
       evaluate_key_number_remote();                                                                                                 // Get the key number first (for CKM states).
       evaluate_remote_button();
@@ -408,11 +430,12 @@ void loop() {
     #if AUTO_SEAT_HEATING_PASS
     else if (k_msg.id == 0x2FA) {                                                                                                   // Monitor and update seat status
       evaluate_passenger_seat_status();
-    } 
+    }
     #endif
 
     else if (k_msg.id == 0x2F7) {
-      evaluate_speed_units();
+      evaluate_speed_unit();
+      evaluate_temperature_unit();
       #if F_NBT
         convert_f_units(false);
       #endif
@@ -468,6 +491,10 @@ void loop() {
     #if F_NBT
     else if (k_msg.id == 0x3DF) {                                                                                                   // Received CKM setting for AUTO blower speed.
       evaluate_ihka_auto_ckm();
+    }
+
+    else if (k_msg.id == 0x3F1) {
+      evaluate_hba_ckm();
     }
     #endif
 
@@ -564,18 +591,13 @@ void loop() {
       #endif
       
       else {
-        if (ignition) {              
-          if (pt_msg.id == 0x315) {                                                                                                 // Monitor EDC status message from the JBE.
-            send_power_mode();                                                                                                      // state_spt request from DME.   
-            #if SERVOTRONIC_SVT70
-              send_servotronic_message();
-            #endif
-          }
-
+        if (ignition) {
           #if HDC
-          else if (pt_msg.id == 0x194) {
+          if (pt_msg.id == 0x194) {
             evaluate_cruise_stalk_message();
           }
+          #else
+          if(0);
           #endif
 
           #if !IMMOBILIZER_SEQ
@@ -600,10 +622,17 @@ void loop() {
           else if (pt_msg.id == 0x58E) {                                                                                            // Since the JBE doesn't forward Servotronic errors from SVT70, we have to do it.
             send_svt_kcan_cc_notification();
           }
+          
           else if (pt_msg.id == 0x60E) {                                                                                            // Forward Diagnostic responses from SVT module to DCAN
             if (!uif_read) {
               dcan_write_msg(pt_msg);
             }
+          }
+          #endif
+
+          #if F_NBT && CUSTOM_MONITORING_CC
+          else if (pt_msg.id == 0x612) {
+            evaluate_dme_boost_response();
           }
           #endif
 
@@ -626,13 +655,13 @@ void loop() {
         if (clearing_dtcs) {}                                                                                                       // Ignore 6F1s while this module is clearing DTCs.
 
         // MHD monitoring exceptions:
-        else if (d_msg.buf[0] == 0x12){
-          if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                     // SID 34h requestDownload Service
-            disable_diag_transmit_jobs();
-          }
-        }
-        else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
-        else if (d_msg.buf[0] == 0x40 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+        // else if (d_msg.buf[0] == 0x12){
+        //   if ((d_msg.buf[3] == 0x34 && d_msg.buf[4] == 0x80)) {                                                                     // SID 34h requestDownload Service
+        //     disable_diag_transmit_jobs();
+        //   }
+        // }
+        // else if (d_msg.buf[0] == 0x60 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
+        // else if (d_msg.buf[0] == 0x40 && (d_msg.buf[1] == 0x30 || d_msg.buf[1] == 3)){}
         // End MHD exceptions.
 
         #if SERVOTRONIC_SVT70
@@ -779,7 +808,8 @@ void process_kcan2_message(void) {
   }
 
   else if (k_msg.id == 0x3DC) {
-    f_drl_ckm_request = k_msg.buf[2];
+    evaluate_idrive_lights_settings();                                                                                              // Force light settings through a parser that forwards to KOMBI.
+    return;
   }
 
   else if (k_msg.id == 0x635) {                                                                                                     // TBX diagnostic response.
@@ -797,14 +827,7 @@ void process_kcan2_message(void) {
     show_mdrive_settings_screen_evo();    
   }
 
-
-  else if (k_msg.id == 0x398) {
-    ptcan_write_msg(k_msg);
-  }
-
   else if (k_msg.id == 0x6F1) { return; }                                                                                           // Firewall HU from injecting diagnostic messages to other networks.
     
-  if (terminal_r) {                                                                                                                 // No needed data is sent from KCAN2 modules to the car when KL_R is off. This can stop the car from sleeping.
-    kcan_write_msg(k_msg);                                                                                                          // Write the message received from KCAN2 to the rest of the car.
-  }
+  kcan_write_msg(k_msg);                                                                                                            // Write the message received from KCAN2 to the rest of the car.
 }

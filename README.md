@@ -25,7 +25,7 @@ Included are also tools to allow full manipulation of the program section in the
 **Required hardware:**
 * MSD81 DME.
 * NBT EVO/NBT/CIC iDrive.
-	* ID3 NBT has now replaced the head unit used in this project. Previous CIC functionality is still available but no longer tested.
+	* ID6 EVO has now replaced the head unit used in this project. Previous CIC functionality is still available but no longer tested.
 * MK60E5 or DSC8 (E89 Z4) non-M modules.
 * E9X M3 centre console trim and buttons or similar.
 
@@ -48,6 +48,13 @@ Included are also tools to allow full manipulation of the program section in the
 	* xDrive status data populated with pitch and roll obtained from the alarm siren (SINE).
 	* A BN2000 -> BN2010 message translation overview can be found here: [nbt-messages](CAN%20messages/Message%20translation%20for%20NBT.txt)
 	* Control RAD_ON through the ASD module (pin 7).
+	* Relay information through custom CC dialogs.
+	* Display some rudimentary gauges through custom CC list:
+		* Terminal R: Coolant temperature and Battery voltage.
+		* Ignition: Coolant temperature, Battery voltage and Intake Air Temperature.
+		* Engine running: Coolant temperature, Battery voltage, Intake Air Temperature and Turbo pressure.
+		* Engine running+MDrive: Intake Air Temperature, Turbo pressure and Turbo bar gauge.
+	* Control high beam assistant persistently by pushing away and holding the indicator stalk for 5s.
 * Control MDrive settings from iDrive.
 	* Control DME throttle map with the M button.
 	* Control DTC/DSC OFF with the M button.
@@ -101,13 +108,15 @@ Included are also tools to allow full manipulation of the program section in the
 * Turn on corresponding front fog light when steering angle threshold is exceeded.
 
 
-![oil-level-nbt](Images/NBT/oil-level.jpg "oil-level-nbt")
+![oil-level-evo](Images/EVO/oil-level.jpg "oil-level-evo")
 
-![m-settings-nbt](Images/NBT/mdrive.jpg "m-settings-nbt")
+![cc-gauge1](Images/EVO/cc-gauge1.jpg "cc-gauge1")
 
-![nbt-sport](Images/NBT/sport-displays.jpg "nbt-sport")
+![cc-gauge2](Images/EVO/cc-gauge2.jpg "cc-gauge2")
 
-![m-settings-cic](Images/CIC/idrive-settings.jpg "m-settings-cic")
+![m-settings-evo](Images/EVO/mdrive.jpg "m-settings-evo")
+
+![evo-sport](Images/EVO/sport-displays.jpg "evo-sport")
 
 ![kombi-m](Images/kombi-m.jpg "kombi-m")
 

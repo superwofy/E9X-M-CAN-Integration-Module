@@ -58,6 +58,8 @@ void read_initialize_eeprom(void) {
     EEPROM.update(47, 9);
     EEPROM.update(48, 9);
     EEPROM.update(49, 4);                                                                                                           // Loglevel
+    EEPROM.update(50, 5);                                                                                                           // IHKA auto states
+    EEPROM.update(51, 3);
 
     update_eeprom_checksum();
   } else {
@@ -128,6 +130,8 @@ void read_initialize_eeprom(void) {
     doors_locked = EEPROM.read(44) == 1 ? true : false;
     doors_alarmed = EEPROM.read(45) == 1 ? true : false;
     LOGLEVEL = constrain(EEPROM.read(49), 0, 4);
+    ihka_auto_blower_speed = EEPROM.read(50);
+    ihka_auto_blower_state = EEPROM.read(51);
     serial_log("Loaded data from EEPROM.", 2);
   }
 }
@@ -135,7 +139,7 @@ void read_initialize_eeprom(void) {
 
 uint16_t calculate_eeprom_crc(void) {
   teensy_eeprom_crc.restart();
-  for (uint8_t i = 2; i < 50; i++) {
+  for (uint8_t i = 2; i < 52; i++) {
     teensy_eeprom_crc.add(EEPROM.read(i));
   }
   return teensy_eeprom_crc.calc();
@@ -196,6 +200,8 @@ void update_data_in_eeprom(void) {                                              
   EEPROM.update(44, doors_locked);
   EEPROM.update(45, doors_alarmed);
   EEPROM.update(49, LOGLEVEL);
+  EEPROM.update(50, ihka_auto_blower_speed);
+  EEPROM.update(51, ihka_auto_blower_state);
   update_eeprom_checksum();
   serial_log("Saved data to EEPROM.", 2);
 }
@@ -271,18 +277,21 @@ void print_current_state(Stream &status_serial) {
   } else {
     status_serial.println(" Direction: Unknown");
   }
-  #if F_NBT || F_NIVI
-    if (ignition) {
-      sprintf(serial_debug_string, " Sine pitch angle: %.1f, FXX-Converted: %.1f degrees\r\n"
-              " Sine roll angle: %.1f, FXX-Converted: %.1f degrees\r\n"
-              " Yaw rate FXX-Converted: %.2f degrees/s\r\n"
-              " Yaw rate error: %.2f degrees/s",
-              sine_pitch_angle, (f_vehicle_pitch_angle - 0x2000) * 0.05 - 64.0,
-              sine_roll_angle, (f_vehicle_roll_angle - 0x2000) * 0.05 - 64.0,
-              f_yaw_rate * 0.005 - 163.84, e_yaw_error);
-      status_serial.println(serial_debug_string);
-    }
-  #endif
+   
+  if (ignition) {
+    #if F_NIVI
+    sprintf(serial_debug_string, " Sine pitch angle: %.1f, FXX-Converted: %.1f degrees\r\n"
+            " Sine roll angle: %.1f, FXX-Converted: %.1f degrees\r\n",
+            sine_pitch_angle, (f_vehicle_pitch_angle - 0x2000) * 0.05 - 64.0,
+            sine_roll_angle, (f_vehicle_roll_angle - 0x2000) * 0.05 - 64.0);
+    #endif
+    #if F_NBT
+      sprintf(serial_debug_string, " Yaw rate FXX-Converted: %.2f degrees/s\r\n"
+          " Yaw rate error: %.2f degrees/s",
+          f_yaw_rate * 0.005 - 163.84, e_yaw_error);
+    #endif
+    status_serial.println(serial_debug_string);
+  }
   #if F_NIVI
     sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
             " Lateral acceleration: %.2f g, FXX-Converted: %.2f m/s^2",          
@@ -415,6 +424,10 @@ void print_current_state(Stream &status_serial) {
       status_serial.println(serial_debug_string);
     #endif
   #endif
+  #if F_NBT
+    sprintf(serial_debug_string, " HBA: %s", hba_status == 0xE ? "ON" : "OFF");
+    status_serial.println(serial_debug_string);
+  #endif
   sprintf(serial_debug_string, " Indicators: %s", indicators_on ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
   #if DIM_DRL
@@ -509,7 +522,6 @@ void reset_ignition_variables(void) {                                           
   uif_read = false;
   console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                           // When cycling ignition, restore this to its CKM value.
   edc_mismatch_check_counter = 0;
-  edc_ckm_txq.flush();
   dsc_txq.flush();
   seat_heating_dr_txq.flush();
   seat_heating_pas_txq.flush();
@@ -574,11 +586,14 @@ void reset_ignition_variables(void) {                                           
   pdc_bus_status = 0x80;
   pdc_button_pressed = pdc_with_rvc_requested = false;
   rvc_tow_view_by_module = rvc_tow_view_by_driver = false;
+  dme_boost_requested = false;
   #if IMMOBILIZER_SEQ
     reset_key_cc();
   #endif
   reverse_gear_status = false;
   sine_pitch_angle_requested = sine_roll_angle_requested = false;
+  trsvc_cc_gong = false;
+  svt70_sport_plus = false;
   #if F_NBT
     send_f_pdc_function_status(true);                                                                                               // If PDC was active, update NBT with the OFF status.
     #if F_VSW01 && F_VSW01_MANUAL
@@ -607,7 +622,8 @@ void reset_sleep_variables(void) {
   kombi_needle_txq.flush();
   vehicle_moving = false;
   wiper_txq.flush();
-  wash_message_counter = stalk_down_message_counter = stalk_down_last_press_time = 0;
+  wash_message_counter = wiper_stalk_down_message_counter = wiper_stalk_down_last_press_time = 0;
+  indicator_stalk_pushed_message_counter = 0;
   wipe_scheduled = intermittent_wipe_active = false, auto_wipe_active = false;
   frm_mirror_status_requested = false;
   frm_ahl_flc_status_requested = false;
@@ -635,6 +651,7 @@ void reset_sleep_variables(void) {
   faceplate_volume = 0;
   gong_active = false;
   faceplate_eject_pressed = faceplate_power_mute_pressed = faceplate_hu_reboot = false;
+  comfort_exit_ready = comfort_exit_done = false;                                                                                   // Do not execute comfort exit if car fell asleep.
   faceplate_buttons_txq.flush();
   radon_txq.flush();
   nbt_cc_txq.flush();
@@ -642,11 +659,11 @@ void reset_sleep_variables(void) {
   #if F_NBT
     FACEPLATE_UART.end();                                                                                                           // Close serial connection.
   #endif
+  idrive_alive_timer2 = 0;
   driving_mode = 0;
   update_data_in_eeprom();
   kcan_retry_counter = ptcan_retry_counter = dcan_retry_counter = 0;
   kcan_resend_txq.flush();
   ptcan_resend_txq.flush();
   dcan_resend_txq.flush();
-  f_drl_ckm_request = 0;
 }

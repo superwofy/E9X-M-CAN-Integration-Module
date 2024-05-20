@@ -33,6 +33,19 @@ void evaluate_drl_ckm(void) {
 }
 
 
+void evaluate_hba_ckm(void) {
+  uint8_t new_hba_status = k_msg.buf[0] >> 4;
+  if (new_hba_status != hba_status) {
+    if (new_hba_status == 0xE) {
+      serial_log("HBA CKM ON.", 2);
+    } else {
+      serial_log("HBA CKM OFF.", 2);
+    }
+    hba_status = new_hba_status;
+  }
+}
+
+
 void check_drl_queue(void) {
   if (!dim_drl_txq.isEmpty()) {
     if (diag_transmit) {
@@ -207,18 +220,33 @@ void evaluate_door_status(void) {
   }
 
   uint8_t hood_open_status = bitRead(k_msg.buf[2], 2);
-  if (hood_open_status != last_hood_status) {
-    if (hood_open_status) {
-      serial_log("Hood opened.", 2);
-      #if HOOD_OPEN_GONG
-        if (!vehicle_moving && terminal_r) {
-          play_cc_gong(2);
-        }
-      #endif
-    } else {
-      serial_log("Hood closed.", 2);
+  if (hood_status_debounce >= 500) {
+    if (hood_open_status != last_hood_status) {
+      if (hood_open_status) {
+        serial_log("Hood opened.", 2);
+        #if HOOD_OPEN_GONG
+          if (!vehicle_moving && terminal_r) {
+            #if F_NBT
+              if ((engine_coolant_temperature - 48) >= 80) {
+                play_cc_gong(1);
+                kcan2_write_msg(hood_open_hot_cc_dialog_buf);
+              } else {
+                play_cc_gong(2);
+              }
+            #else
+              play_cc_gong(2);
+            #endif
+          }
+        #endif
+      } else {
+        serial_log("Hood closed.", 2);
+        #if F_NBT
+          kcan2_write_msg(hood_open_hot_cc_dialog_clear_buf);
+        #endif
+      }
+      last_hood_status = hood_open_status;
     }
-    last_hood_status = hood_open_status;
+    hood_status_debounce = 0;
   }
 
   uint8_t trunk_open_status = bitRead(k_msg.buf[2], 0);
@@ -891,7 +919,8 @@ void activate_intermittent_wipers(void) {
   serial_log("Intermittent wiping ON.", 2);
   intermittent_wipe_timer = 0;
   #if F_NBT
-    kcan2_write_msg(idrive_button_sound_buf);
+    kcan2_write_msg(idrive_horn_sound_buf);
+    send_cc_message("Intermittent wiping ON.", true, 3000);
   #else
     kcan_write_msg(idrive_button_sound_buf);                                                                                        // Acoustic indicator.
   #endif
@@ -903,7 +932,8 @@ void disable_intermittent_wipers(void) {
   serial_log("Intermittent wiping OFF.", 2);
   intermittent_wipe_timer = 0;
   #if F_NBT
-    kcan2_write_msg(idrive_button_sound_buf);
+    kcan2_write_msg(idrive_horn_sound_buf);
+    send_cc_message("Intermittent wiping OFF.", true, 3000);
   #else
     kcan_write_msg(idrive_button_sound_buf);                                                                                        // Acoustic indicator.
   #endif
@@ -957,15 +987,16 @@ void check_wiper_queue(void) {
 
 void fix_f_lights_ckm(void) {
   #if F_NBT
-    if (f_drl_ckm_request == 0) {
+    if (f_lights_ckm_request != 0) {
+      k_msg.buf[2] = f_lights_ckm_request;
+      f_lights_ckm_request = 0;
+    } else if (idrive_alive_timer2 <= 15000) {
       if (drl_ckm[cas_key_number]) {
-        f_drl_ckm_request = 0xF6;
+        k_msg.buf[2] = 0xF6;                                                                                            // DRL ON, home lights setting can be changed.
       } else {
-        f_drl_ckm_request = 0xF1;
+        k_msg.buf[2] = 0xF4;
       }
-    }
-
-    uint8_t f_ckm_message[] = {k_msg.buf[0], k_msg.buf[1], f_drl_ckm_request};
-    kcan2_write_msg(make_msg_buf(0x3DD, 3, f_ckm_message));
+    } 
+    kcan2_write_msg(k_msg);
   #endif
 }

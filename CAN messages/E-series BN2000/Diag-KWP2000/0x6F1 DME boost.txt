@@ -1,0 +1,69 @@
+JOB: STATUS_SDF1
+Intake manifold pressure1 / boost pressure1
+
+STAT_ADC_SDF1_WERT              = 1.684570E+000
+STAT_ADC_SDF1_EINH              = V
+STAT_PHY_SDF1_WERT              = 5.596933E+002
+STAT_PHY_SDF1_EINH              = hPa
+JOB_STATUS                      = OKAY
+_TEL_AUFTRAG                    = 6 Bytes
+0000 : 83 12 F1 30 18 01                                  ?.ñ0..
+_TEL_ANTWORT                    = 11 Bytes
+0000 : 87 F1 12 70 18 01 01 59   1A 5E E5                 ?ñ.p...Y  .^å
+
+
+09:37:08.480 ->  DCAN:  ID: 6F1 Buffer: 12 3 30 18 1 0 0 0 
+09:37:08.513 ->  DCAN:  ID: 612 Buffer: F1 10 7 70 18 1 1 59 
+09:37:08.513 ->  DCAN:  ID: 6F1 Buffer: 12 30 0 0 0 0 0 0 
+09:37:08.513 ->  DCAN:  ID: 612 Buffer: F1 21 1A 5E FF FF FF FF 
+
+
+// STAT_PHY_SDF1_WERT = 0x1A5E * 0.08291752636432648 = 559.693302959 hPa
+
+
+
+
+
+JOB: STATUS_SDF2
+Read intake manifold, boost pressure and intake air temperature for N54
+
+STAT_PVDKDS_WERT                = 1.010469E+003
+STAT_PVDKDS_EINH                = hPa
+STAT_PS_IST_WERT                = 0.000000E+000
+STAT_PS_IST_EINH                = hPa
+STAT_TANS_WERT                  = 3.830000E+001
+STAT_TANS_EINH                  = C
+JOB_STATUS                      = OKAY
+_TEL_AUFTRAG                    = 6 Bytes
+0000 : 83 12 F1 30 19 01                                  ?.ñ0..
+_TEL_ANTWORT                    = 13 Bytes
+0000 : 89 F1 12 70 19 01 65 0C   00 00 01 7F 07           ?ñ.p..e.  ....
+
+
+11:07:36.358 ->  DCAN:  ID: 6F1 Buffer: 12 3 30 19 1 0 0 0 
+11:07:36.389 ->  DCAN:  ID: 612 Buffer: F1 10 9 70 19 1 65 C 
+11:07:36.389 ->  DCAN:  ID: 6F1 Buffer: 12 30 0 0 0 0 0 0 
+11:07:36.389 ->  DCAN:  ID: 612 Buffer: F1 21 0 0 1 7F FF FF
+
+
+STAT_PVDKDS_WERT                = 1.012383E+003
+STAT_PVDKDS_EINH                = hPa
+STAT_PS_IST_WERT                = 3.886328E+002
+STAT_PS_IST_EINH                = hPa
+STAT_TANS_WERT                  = 3.680000E+001
+STAT_TANS_EINH                  = C
+JOB_STATUS                      = OKAY
+_TEL_AUFTRAG                    = 6 Bytes
+0000 : 83 12 F1 30 19 01                                  ?.ñ0..
+_TEL_ANTWORT                    = 13 Bytes
+0000 : 89 F1 12 70 19 01 65 3D   26 DD 01 70 2C           ?ñ.p..e=  &Ý.p,
+
+11:10:18.758 ->  DCAN:  ID: 6F1 Buffer: 12 3 30 19 1 0 0 0 
+11:10:18.758 ->  DCAN:  ID: 612 Buffer: F1 10 9 70 19 1 65 3D 
+11:10:18.758 ->  DCAN:  ID: 6F1 Buffer: 12 30 0 0 0 0 0 0 
+11:10:18.758 ->  DCAN:  ID: 612 Buffer: F1 21 26 DD 1 70 FF FF 
+
+
+// STAT_PVDKDS_WERT = 0x653D * 0.0390625 = 1012.3828125 hPa
+// STAT_PS_IST_WERT = 0x26DD * 0.0390625 = 388.6328125 hPa
+// STAT_TANS_WERT = 0x170 * 0.10000000149011612 = 36.800000548 C

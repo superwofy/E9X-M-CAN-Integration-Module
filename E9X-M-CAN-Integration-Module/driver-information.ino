@@ -17,13 +17,13 @@ void evaluate_shiftlight_display(void) {
   if (START_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                             // First yellow segment.                                                              
     activate_shiftlight_segments(shiftlights_start_buf);
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "Displaying first warning at RPM: %d", RPM / 4);
+      sprintf(serial_debug_string, "Displaying first shiftlight warning at RPM: %d", RPM / 4);
       serial_log(serial_debug_string, 3);
     #endif                     
   } else if (MID_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MAX_UPSHIFT_WARN_RPM_) {                                                        // Buildup from second yellow segment to reds.
     activate_shiftlight_segments(shiftlights_mid_buildup_buf);
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "Displaying increasing warning at RPM: %d", RPM / 4);
+      sprintf(serial_debug_string, "Displaying increasing shiftlight warning at RPM: %d", RPM / 4);
       serial_log(serial_debug_string, 3);
     #endif
   } else if (MAX_UPSHIFT_WARN_RPM_ <= RPM) {                                                                                        // Flash all segments.
@@ -32,7 +32,7 @@ void evaluate_shiftlight_display(void) {
       play_cc_gong(1);                                                                                                              // Send an audible warning.
     }
     #if DEBUG_MODE
-      sprintf(serial_debug_string, "Flash max warning at RPM: %d", RPM / 4);
+      sprintf(serial_debug_string, "Flash max shiftlight warning at RPM: %d", RPM / 4);
       serial_log(serial_debug_string, 2);
     #endif
   } else {                                                                                                                          // RPM dropped. Disable lights.
@@ -60,7 +60,7 @@ void evaluate_shiftlight_display(void) {
 void deactivate_shiftlights(void) {
   kcan_write_msg(shiftlights_off_buf);                                                                            
   shiftlights_segments_active = false;
-  serial_log("Deactivated shiftlights segments", 3);
+  serial_log("Deactivated shiftlight segments", 3);
 }
 
 
@@ -167,9 +167,6 @@ void evaluate_lc_display(void) {
     if (clutch_pressed && !vehicle_moving) {
       if (!reverse_gear_status) {
         kcan_write_msg(lc_cc_on_buf);
-        #if F_NBT
-          kcan2_write_msg(lc_cc_on_buf);
-        #endif
         lc_cc_active = true;
         if (dsc_program_status == 0) {
           mdm_with_lc = true;
@@ -201,9 +198,6 @@ void evaluate_lc_display(void) {
 void deactivate_lc_display(void) {
   if (lc_cc_active) {
     kcan_write_msg(lc_cc_off_buf);
-    #if F_NBT
-      kcan2_write_msg(lc_cc_off_buf);
-    #endif
     lc_cc_active = false;
     serial_log("Deactivated Launch Control flag CC.", 2);
     #if CONTROL_SHIFTLIGHTS
@@ -217,10 +211,7 @@ void send_svt_kcan_cc_notification(void) {
   if (pt_msg.buf[1] == 0x49 && pt_msg.buf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
     pt_msg.buf[1] = 0x46;
   }
-  kcan_write_msg(pt_msg);                                                                                                           // Forward the SVT error status to KCAN.
-  #if F_NBT
-    kcan2_write_msg(pt_msg);
-  #endif
+  kcan_write_msg(pt_msg);                                                                                                           // Forward the SVT error status to KCAN (KOMBI).
 }
 
 
@@ -343,9 +334,6 @@ void evaluate_msa_button(void) {
       #if FAKE_MSA
         if (engine_running) {
           kcan_write_msg(msa_deactivated_cc_on_buf);
-          #if F_NBT
-            kcan2_write_msg(msa_deactivated_cc_on_buf);
-          #endif
           serial_log("Sent MSA OFF CC.", 2);
           m = {msa_deactivated_cc_off_buf, millis() + 3000};
           ihk_extra_buttons_cc_txq.push(&m);
@@ -564,9 +552,6 @@ void evaluate_handbrake_status(void) {
           if (!reverse_gear_status && !vehicle_moving && pdc_bus_status > 0x80) {
             unsigned long time_now = millis();
             kcan_write_msg(pdc_button_presssed_buf);
-            #if F_NBT
-              kcan2_write_msg(pdc_button_presssed_buf);
-            #endif
             m = {pdc_button_released_buf, time_now + 100};
             pdc_buttons_txq.push(&m);
             m = {pdc_button_released_buf, time_now + 200};
@@ -602,19 +587,22 @@ void check_pdc_button_queue(void) {
 
 void play_cc_gong(uint8_t gong_count) {
   if (gong_count == 2) {
-    kcan_write_msg(cc_double_gong_buf);
     #if F_NBT
       kcan2_write_msg(cc_double_gong_buf);
+    #else
+      kcan_write_msg(cc_double_gong_buf);
     #endif
   } else if (gong_count == 3) {
-    kcan_write_msg(cc_triple_gong_buf);
     #if F_NBT
       kcan2_write_msg(cc_triple_gong_buf);
+    #else
+      kcan_write_msg(cc_triple_gong_buf);
     #endif
   } else {
-    kcan_write_msg(cc_single_gong_buf);
     #if F_NBT
       kcan2_write_msg(cc_single_gong_buf);
+    #else
+      kcan_write_msg(cc_single_gong_buf);
     #endif
   }
   gong_active = true;
@@ -700,48 +688,126 @@ void send_nbt_sport_displays_data(bool startup_animation) {
 
 
 void process_bn2000_cc_display(void) {
+  #if CUSTOM_MONITORING_CC
+    bool custom_cc_inserted = false;
+  #else
+    bool custom_cc_inserted = true;
+  #endif
+
   if (k_msg.buf[1] == 0xA6 && k_msg.buf[2] == 2) {                                                                                  // Yellow, car lift error.
-    k_msg.buf[1] = 0xFF;
-    k_msg.buf[2] = 0xFF;
+    if (!custom_cc_inserted) {                                                                                                      // If possible, insert the custom CC into these otherwise unusable positions.
+      k_msg.buf[1] = 0x46;
+      k_msg.buf[2] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[1] = 0xFF;
+      k_msg.buf[2] = 0xFF;
+    }
   } else if (k_msg.buf[3] == 0xA6 && k_msg.buf[4] == 2) {
-    k_msg.buf[3] = 0xFF;
-    k_msg.buf[4] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[3] = 0x46;
+      k_msg.buf[4] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[3] = 0xFF;
+      k_msg.buf[4] = 0xFF;
+    }
   } else if (k_msg.buf[5] == 0xA6 && k_msg.buf[6] == 2) {
-    k_msg.buf[5] = 0xFF;
-    k_msg.buf[6] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[5] = 0x46;
+      k_msg.buf[6] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[5] = 0xFF;
+      k_msg.buf[6] = 0xFF;
+    }
   }
 
   if (k_msg.buf[1] == 0xA0 && k_msg.buf[2] == 2) {
-    k_msg.buf[1] = 0xFF;
-    k_msg.buf[2] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[1] = 0x46;
+      k_msg.buf[2] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[1] = 0xFF;
+      k_msg.buf[2] = 0xFF;
+    }
   } else if (k_msg.buf[3] == 0xA0 && k_msg.buf[4] == 2) {
-    k_msg.buf[3] = 0xFF;
-    k_msg.buf[4] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[3] = 0x46;
+      k_msg.buf[4] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[3] = 0xFF;
+      k_msg.buf[4] = 0xFF;
+    }
   } else if (k_msg.buf[5] == 0xA0 && k_msg.buf[6] == 2) {
-    k_msg.buf[5] = 0xFF;
-    k_msg.buf[6] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[5] = 0x46;
+      k_msg.buf[6] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[5] = 0xFF;
+      k_msg.buf[6] = 0xFF;
+    }
   }
 
   if (k_msg.buf[1] == 0xA1 && k_msg.buf[2] == 2) {                                                                                  // DSC OFF ?
-    k_msg.buf[1] = 0xFF;
-    k_msg.buf[2] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[1] = 0x46;
+      k_msg.buf[2] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[1] = 0xFF;
+      k_msg.buf[2] = 0xFF;
+    }
   } else if (k_msg.buf[3] == 0xA1 && k_msg.buf[4] == 2) {
-    k_msg.buf[3] = 0xFF;
-    k_msg.buf[4] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[3] = 0x46;
+      k_msg.buf[4] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[3] = 0xFF;
+      k_msg.buf[4] = 0xFF;
+    }
   } else if (k_msg.buf[5] == 0xA1 && k_msg.buf[6] == 2) {
-    k_msg.buf[5] = 0xFF;
-    k_msg.buf[6] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[5] = 0x46;
+      k_msg.buf[6] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[5] = 0xFF;
+      k_msg.buf[6] = 0xFF;
+    }
   }
 
   if (k_msg.buf[1] == 0xA2 && k_msg.buf[2] == 2) {
-    k_msg.buf[1] = 0xFF;
-    k_msg.buf[2] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[1] = 0x46;
+      k_msg.buf[2] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[1] = 0xFF;
+      k_msg.buf[2] = 0xFF;
+    }
   } else if (k_msg.buf[3] == 0xA2 && k_msg.buf[4] == 2) {
-    k_msg.buf[3] = 0xFF;
-    k_msg.buf[4] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[3] = 0x46;
+      k_msg.buf[4] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[3] = 0xFF;
+      k_msg.buf[4] = 0xFF;
+    }
   } else if (k_msg.buf[5] == 0xA2 && k_msg.buf[6] == 2) {
-    k_msg.buf[5] = 0xFF;
-    k_msg.buf[6] = 0xFF;
+    if (!custom_cc_inserted) {
+      k_msg.buf[5] = 0x46;
+      k_msg.buf[6] = 3;
+      custom_cc_inserted = true;
+    } else {
+      k_msg.buf[5] = 0xFF;
+      k_msg.buf[6] = 0xFF;
+    }
   }
 
   if (k_msg.buf[1] == 0x7E && k_msg.buf[2] == 1) {                                                                                  // CC 382 has no text description in NBTE, convert to 236.
@@ -753,6 +819,19 @@ void process_bn2000_cc_display(void) {
   } else if (k_msg.buf[5] == 0x7E && k_msg.buf[6] == 1) {
     k_msg.buf[5] = 0xEC;
     k_msg.buf[6] = 0;
+  }
+
+  if (!custom_cc_inserted) {                                                                                                        // Try to find a position in the list for the custom CC.
+    if (k_msg.buf[1] == 0 && k_msg.buf[2] == 0) {
+      k_msg.buf[1] = 0x46;
+      k_msg.buf[2] = 3;
+    } else if (k_msg.buf[3] == 0xFE && k_msg.buf[4] == 0xFF) {
+      k_msg.buf[3] = 0x46;
+      k_msg.buf[4] = 3;
+    } else if (k_msg.buf[5] == 0xFE && k_msg.buf[6] == 0xFF) {
+      k_msg.buf[5] = 0x46;
+      k_msg.buf[6] = 3;
+    }
   }
 
   kcan2_write_msg(k_msg);
@@ -775,4 +854,132 @@ void process_bn2000_cc_dialog(void) {
   } 
   
   kcan2_write_msg(k_msg);
+}
+
+
+void send_custom_info_cc(void) {
+  unsigned long custom_cc_interval = 500;
+  if (engine_running) {
+    custom_cc_interval = 300;
+  }
+  if (custom_info_cc_timer >= custom_cc_interval) {
+    if (millis() >= cc_message_expires) {
+      if (!diag_transmit) {
+        char diag_cc_string[46] = {' '};
+        snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %lds.",
+                 (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+        send_cc_message(diag_cc_string, false, 0);
+      } else {
+        char info_cc_string[46] = {' '};
+        if (engine_manifold_sensor < 1201) {                                                                                        // Max resolution for this sensor.
+          boost = engine_manifold_sensor - ambient_pressure;
+        } else {
+          if (engine_cp_sensor < 1000) {                                                                                            // This is a spike that should be filtered.
+          } else {
+            boost = engine_cp_sensor - ambient_pressure;
+          }
+        }
+
+        boost = constrain(boost, -MAX_TURBO_BOOST, MAX_TURBO_BOOST);
+   
+        uint8_t pressure_unit = 1;
+        bitWrite(pressure_unit, 0, bitRead(pressure_unit_date_format[cas_key_number], 0));
+        bitWrite(pressure_unit, 1, bitRead(pressure_unit_date_format[cas_key_number], 1));
+        int coolant_temp = temperature_unit == 1 ? (engine_coolant_temperature - 48) 
+                                                 : (int)round(((engine_coolant_temperature - 48) * 1.8) + 32);
+
+        if (engine_running) {
+          if (mdrive_status) {
+            // Create the boost animation string
+            char boost_bar_string[] = "____________________";
+            uint8_t boost_percentage = round((constrain(boost, 0, MAX_TURBO_BOOST) / MAX_TURBO_BOOST) * 100);                       // 1M overboost: 0.90-0.95 bar.
+            uint8_t boost_bar_string_fill = round((boost_percentage / 100.0) * 20);                                                 // Number of characters to replace dots.
+
+            for (uint8_t i = 0; i < boost_bar_string_fill; i++) {
+              boost_bar_string[i] = 0xB;                                                                                            // This character is not recognized and thus displayed as a box.
+            }
+
+            if (pressure_unit == 1) {
+              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.2f%s   %.20s",
+                    temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                    temperature_unit == 1 ? 'C' : 'F',
+                    boost >= 0 ? "+" : "",
+                    boost * 0.001,
+                    "bar",
+                    boost_bar_string
+              );
+            } else {
+              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.2f%s   %.20s",
+                    temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                    temperature_unit == 1 ? 'C' : 'F',
+                    boost >= 0 ? "+" : "",
+                    pressure_unit == 2 ? boost * 0.1 : boost * 0.0145038,
+                    pressure_unit == 2 ? "kPa" : "psi",
+                    boost_bar_string
+              );
+            }
+          } else {
+            if (pressure_unit == 1) {
+              snprintf(info_cc_string, 46, "W: %d°%c   I: %d°%c   B: %.1fV   T: %s%.2f%s",
+                  coolant_temp,
+                  temperature_unit == 1 ? 'C' : 'F',
+                  temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                  temperature_unit == 1 ? 'C' : 'F',
+                  battery_voltage,
+                  boost >= 0 ? "+" : "",
+                  boost * 0.001,
+                  "bar"
+              );
+            } else {
+              snprintf(info_cc_string, 46, "W: %d°%c   I: %d°%c   B: %.1fV   T: %s%.1f%s",
+                    coolant_temp,
+                    temperature_unit == 1 ? 'C' : 'F',
+                    temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                    temperature_unit == 1 ? 'C' : 'F',
+                    battery_voltage,
+                    boost >= 0 ? "+" : "",
+                    pressure_unit == 2 ? boost * 0.1 : boost * 0.0145038,
+                    pressure_unit == 2 ? "kPa" : "psi"
+              );
+            }
+          }
+        } else if (ignition) {
+          snprintf(info_cc_string, 46, "WT: %d°%c   IAT: %d°%c   BAT: %.2fV",
+                  coolant_temp,
+                  temperature_unit == 1 ? 'C' : 'F',
+                  temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                  temperature_unit == 1 ? 'C' : 'F',
+                  battery_voltage
+          );
+        } else {
+          snprintf(info_cc_string, 46, "WT: %d°%c   BAT: %.2fV",
+                  coolant_temp,
+                  temperature_unit == 1 ? 'C' : 'F',
+                  battery_voltage
+          );
+        }
+        send_cc_message(info_cc_string, false, 0);
+      }
+    }
+    custom_info_cc_timer = 0;
+  }
+}
+
+
+void evaluate_trsvc_cc(void) {
+  if (k_msg.buf[0] == 0x40) {
+    if (k_msg.buf[3] == 0x55) {
+      if (!trsvc_cc_gong) {
+        play_cc_gong(1);
+        trsvc_cc_gong = true;
+      }
+      uint8_t trsvc_cc[] = {k_msg.buf[1], k_msg.buf[2], 0x32, 0xF0, 0, 0xFE, 0xFE, 0xFE};
+      kcan2_write_msg(make_msg_buf(0x338, 8, trsvc_cc));
+      serial_log("Received a TRSVC CC, forwarding to HU.", 2);
+    } else {
+      uint8_t trsvc_cc[] = {k_msg.buf[1], k_msg.buf[2], 0x50, 0xF0, 0, 0xFE, 0xFE, 0xFE};
+      kcan2_write_msg(make_msg_buf(0x338, 8, trsvc_cc));
+      trsvc_cc_gong = false;
+    }
+  }
 }

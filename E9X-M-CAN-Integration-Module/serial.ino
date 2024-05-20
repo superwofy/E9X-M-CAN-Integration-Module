@@ -10,6 +10,10 @@ void serial_debug_interpreter(void) {
       update_eeprom_checksum();
       serial_log("  Serial: Commands locked.", 0);
     }
+    else if (cmd == "diag_bypass") {
+      diag_deactivate_timer = OBD_DETECT_TIMEOUT;
+      serial_log("  Serial: OBD tool detection timeout reset.", 0);
+    }
     else if (cmd == "loglevel_0") {
       LOGLEVEL = 0;
       serial_log("  Serial: LOGLEVEL set to 0.", 0);
@@ -70,9 +74,9 @@ void serial_debug_interpreter(void) {
       print_current_state(Serial);
     }
     else if (cmd == "print_boot_log") {
-      Serial.println("======================== Boot Log ========================");
+      serial_log("======================== Boot Log ========================", 0);
       Serial.print(boot_debug_string);
-      Serial.println("==========================================================");
+      serial_log("==========================================================", 0);
     }
     else if (cmd == "print_can_config") {
       serial_log("========================== KCAN ==========================", 0);
@@ -219,9 +223,6 @@ void serial_debug_interpreter(void) {
       if (engine_running) {
         serial_log("  Serial: Launch Control Display activated.", 0);
         kcan_write_msg(lc_cc_on_buf);
-        #if F_NBT
-          kcan2_write_msg(lc_cc_on_buf);
-        #endif
       } else {
         serial_log("  Serial: Engine must be running for Launch Control Display.", 0);
       }
@@ -229,9 +230,6 @@ void serial_debug_interpreter(void) {
     else if (cmd == "lc_display_off"){
       serial_log("  Serial: Launch Control Display deactivated.", 0);
       kcan_write_msg(lc_cc_off_buf);
-      #if F_NBT
-        kcan2_write_msg(lc_cc_off_buf);
-      #endif
     }
     #endif
     #if EXHAUST_FLAP_CONTROL
@@ -564,8 +562,10 @@ void serial_debug_interpreter(void) {
         serial_log(serial_debug_string, 0);
       }
     }
-    else if (cmd == "custom_cc_test") {
-      send_cc_message_text("Hello world!                  ", 5000);
+    else if (cmd == "custom_cc_test_dialog") {
+      kcan2_write_msg(custom_cc_clear_buf);
+      send_cc_message("Hello world!", true, 10000);
+      serial_log("  Serial: Sending custom CC dialog to HU.", 0);
     }
     else if (cmd == "faceplate_eject") {
       unsigned long time_now = millis();
@@ -660,6 +660,7 @@ void print_help(void) {
   serial_log("  ========================== Help ==========================\r\n"
   "  Commands:\r\n"
   "  lock_serial - Restores the password prompt before accepting serial commands.\r\n"
+  "  diag_bypass - Bypass the OBD tool detection timeout. Use with care!\r\n"
   "  loglevel_0 - Sets LOGLEVEL to 0 - critical.\r\n"
   "  loglevel_1 - Sets LOGLEVEL to 1 - error.\r\n"
   "  loglevel_2 - Sets LOGLEVEL to 2 - info.\r\n"
@@ -731,7 +732,7 @@ void print_help(void) {
   #endif
   #if F_NBT
     serial_log("  hu_reboot - Restart the NBT_HU immediately."
-    "  custom_cc_test - Print hello world as a Check Control notification.\r\n"
+    "  custom_cc_test_dialog - Print hello world as a Check Control dialog box.\r\n"
     "  faceplate_eject - Simulate pressing the eject button on the faceplate.\r\n"
     "  faceplate_mute - Simulate pressing the power/mute button on the faceplate.\r\n"
     "  faceplate_seek_left - Simulate pressing the previous track button on the faceplate.\r\n"

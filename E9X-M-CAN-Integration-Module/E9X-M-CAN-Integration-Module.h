@@ -13,7 +13,7 @@ uint8_t LOGLEVEL = 4;                                                           
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Also disables the door open with ignition warning CC.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster. Do not use with RDC.
-#define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood.
+#define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood. NBT: also shows CC dialog.
 #define FRM_AHL_MODE 1                                                                                                              // Switches FRM AHL mode from Komfort and Sport.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
 #define INTERMITTENT_WIPERS 1                                                                                                       // Inermittent wiping alongside auto wipers when holding the stalk down for 1.3s.
@@ -91,6 +91,7 @@ const unsigned long OBD_DETECT_TIMEOUT = 90000;
     #define F_NBT_CCC_ZBE 0                                                                                                         // Converts CCC ZBE1 messages for use with NBT.
     #define X_VIEW 0                                                                                                                // Convert the angles required to make the xDrive status 3D graphic work.
     #define ASD89_RAD_ON 0                                                                                                          // Use the RAD_ON signal from the ASD module to power Diversity.
+    #define CUSTOM_MONITORING_CC 1                                                                                                  // Print additional information (Water temp, voltage, IAT and boost) in the iDrive CC list.
   #endif
 #endif
 uint8_t DONOR_VIN[7] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};                                                                  // VIN number to send to NBT. ASCII to hex.
@@ -101,6 +102,7 @@ uint8_t DONOR_VIN[7] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};              
   uint8_t MAX_TORQUE_SCALE_KG = 0;                                                                                                  // 80
   uint8_t MAX_POWER_SCALE_KW = 3;                                                                                                   // Power = (x + 1) * 80. I.e. (3 + 1) * 80 = 320. 
   uint8_t MAX_POWER_SCALE_HP = 4;                                                                                                   // 400
+  float MAX_TURBO_BOOST = 950.0;                                                                                                    // In hPa. 1M overboost: 0.90-0.95 bar.
 #endif
 #ifndef F_VSW01
   #define F_VSW01 0                                                                                                                 // Enable/disable F01 Video Switch diagnosis and wakeup. Tested with p/n 9201542.
@@ -228,10 +230,8 @@ bool engine_idling = false;                                                     
 bool handbrake_status = true;
 elapsedMillis handbrake_status_debounce_timer = 300;
 uint8_t dme_ckm[4][2] = {{0xF1, 0xFF}, {0xF1, 0xFF}, {0xF1, 0xFF}, {0xF1, 0xFF}},
-        edc_ckm[] = {0xF1, 0xF1, 0xF1, 0xF1},
         edc_mismatch_check_counter = 0;
 CAN_message_t edc_button_press_buf;
-cppQueue edc_ckm_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t cas_key_number = 3;                                                                                                         // 0 = Key 1, 1 = Key 2...
 bool key_guest_profile = false;
 uint8_t mdrive_dsc[4] = {0x13, 0x13, 0x13, 0xB}, mdrive_power[4] = {0x30, 0x30, 0x30, 0x10},                                        // Defaults for when EEPROM is not initialized.
@@ -242,7 +242,7 @@ unsigned long power_led_delayed_off_action_time;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DTC, 2 = DSC OFF
 bool holding_dsc_off_console = false;
-elapsedMillis mdrive_message_timer = 0;
+elapsedMillis mdrive_message_timer = 0, veh_mode_timer = 0;
 uint8_t m_mfl_held_count = 0;
 CAN_message_t idrive_mdrive_settings_menu_cic_a_buf, idrive_mdrive_settings_menu_cic_b_buf,
               idrive_mdrive_settings_menu_nbt_a_buf, idrive_mdrive_settings_menu_nbt_b_buf,
@@ -252,8 +252,10 @@ CAN_message_t idrive_mdrive_settings_menu_cic_a_buf, idrive_mdrive_settings_menu
               idrive_bn2000_consumption_l100km_buf, idrive_bn2000_consumption_kml_buf,
               idrive_bn2000_consumption_mpg_buf, idrive_bn2000_distance_km_buf, idrive_bn2000_distance_mi_buf,
               idrive_bn2000_pressure_bar_buf, idrive_bn2000_pressure_kpa_buf, idrive_bn2000_pressure_psi_buf,
-              idrive_bn2000_temperature_c_buf, idrive_bn2000_temperature_f_buf;
-
+              idrive_bn2000_temperature_c_buf, idrive_bn2000_temperature_f_buf,
+              idrive_bn2000_hba_on_buf, idrive_bn2000_hba_off_buf, idrive_bn2000_indicator_single_buf,
+              idrive_bn2000_indicator_triple_buf, idrive_bn2000_drl_on_buf, idrive_bn2000_drl_off_buf;
+uint8_t hba_status = 0;
 bool mdrive_settings_requested = false;
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms,
@@ -262,12 +264,14 @@ bool ignore_m_press = false, ignore_m_hold = false, holding_both_console = false
 int8_t clock_mode = -1;
 float cpu_temp = 0, last_cpu_temp = 0, max_cpu_temp = 0;
 CAN_message_t cc_single_gong_buf, cc_double_gong_buf, cc_triple_gong_buf, idrive_button_sound_buf,
-              idrive_beep_sound_buf, idrive_double_beep_sound_buf;
+              idrive_beep_sound_buf, idrive_horn_sound_buf, idrive_power_off_warning_buf;
 bool uif_read = false;
 uint8_t servotronic_message[] = {0, 0xFF};
-CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf,
+CAN_message_t svt70_zero_pwm_buf, svt70_pwm_release_control_buf, shiftlights_start_buf,
+              shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf,
               shiftlights_max_flash_buf, shiftlights_off_buf;
-bool shiftlights_segments_active = false, startup_animation_active = false;
+elapsedMillis svt70_pwm_control_timer = 3000;
+bool svt70_sport_plus = false, shiftlights_segments_active = false, startup_animation_active = false;
 uint8_t ignore_shiftlights_off_counter = 0, ignore_sports_data_counter = 0;
 uint16_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM,
          MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM,
@@ -313,12 +317,15 @@ CAN_message_t left_drl_dim_off, left_drl_dim_buf, left_drl_bright_buf,
               right_drl_dim_off, right_drl_dim_buf, right_drl_bright_buf;
 cppQueue dim_drl_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool ftm_indicator_status = false;
-CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf;
+CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf,
+              hood_open_hot_cc_dialog_buf, hood_open_hot_cc_dialog_clear_buf;
+elapsedMillis hood_status_debounce = 500;
 uint8_t last_hood_status = 0, last_trunk_status = 0;
 CAN_message_t frm_ckm_ahl_komfort_buf, frm_ckm_ahl_sport_buf;
 bool wipe_scheduled = false;
-uint8_t wash_message_counter = 0, stalk_down_message_counter = 0;
-unsigned long stalk_down_last_press_time = 0;
+uint16_t wash_message_counter = 0, wiper_stalk_down_message_counter = 0;
+uint16_t indicator_stalk_pushed_message_counter = 0;
+unsigned long wiper_stalk_down_last_press_time = 0;
 CAN_message_t wipe_single_buf;
 uint8_t intermittent_setting = 0, intermittent_setting_can = 0;
 uint16_t intermittent_intervals[] = {13100, 9100, 5100, 0, 2100},                                                                   // Settings: 1 (12s), 2 (8s), 3 (4s), n/a and 5 (max, 1s). 1100ms is needed for a cycle.
@@ -391,7 +398,7 @@ uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xF
         f_xview_pitch_alive_counter = 0, f_road_incline_alive_counter = 0, f_steering_angle_effective_alive_counter = 0;
 uint8_t f_mdrive_settings[5] = {0};
 uint32_t f_distance_alive_counter = 0x2000;
-uint8_t f_drl_ckm_request = 0;
+uint8_t f_lights_ckm_request = 0;
 uint16_t f_converted_steering_angle = 0;
 elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_timer = 500, 
               f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000,
@@ -439,7 +446,7 @@ cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool left_door_open = false, right_door_open = false, doors_locked = false, doors_alarmed = false;
 elapsedMillis doors_locked_timer = 0;
 uint8_t last_door_status = 0;
-elapsedMillis idrive_alive_timer = 0;
+elapsedMillis idrive_alive_timer = 3000, idrive_alive_timer2 = 0;
 bool idrive_died = false;
 uint8_t zbe_buttons[] = {0xE1, 0xFD, 0, 0, 0, 1}, zbe_rotation[] = {0xE1, 0xFD, 0, 0, 0x80, 0x1E}, zbe_action_counter = 0;
 uint16_t indicated_speed = 0;
@@ -475,12 +482,19 @@ unsigned long max_loop_timer = 0, loop_timer = 0;
 uint32_t kcan_error_counter = 0, kcan2_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;
 uint8_t torque_unit[] = {1, 1, 1, 1}, power_unit[] = {1, 1, 1, 1}, pressure_unit_date_format[] = {9, 9, 9, 9},
-        driving_mode = 0, f_units[] = {0, 0, 0, 0, 0, 0xF1};
+        driving_mode = 0, f_units[] = {0, 0, 0, 0, 0, 0xF1}, temperature_unit = 1;
 uint8_t engine_coolant_temperature = 48, engine_oil_temperature = 48;                                                               // Celsius temperature is: value - 48.
-CAN_message_t custom_cc_dismiss_buf, custom_cc_clear_buf;
+CAN_message_t custom_cc_dismiss_buf, custom_cc_clear_buf, cc_list_clear_buf,
+              dme_boost_request_a_buf, dme_boost_request_b_buf;
+elapsedMillis custom_info_cc_timer = 100, boost_request_timer = 100;
+uint16_t engine_manifold_sensor = 0, engine_cp_sensor = 0, ambient_pressure = 1000;
+int16_t boost = 0;
+int16_t intake_air_temperature = 0;
+bool dme_boost_requested = false, trsvc_cc_gong = false;
+unsigned long cc_message_expires = millis();
 uint8_t ihka_auto_blower_speed = 5, ihka_auto_blower_state = 3;
-cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-cppQueue serial_diag_dcan_txq(sizeof(delayed_can_tx_msg), 384, queue_FIFO),
+cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
+         serial_diag_dcan_txq(sizeof(delayed_can_tx_msg), 384, queue_FIFO),
          serial_diag_kcan1_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO),  
          serial_diag_kcan2_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO),
          serial_diag_ptcan_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);

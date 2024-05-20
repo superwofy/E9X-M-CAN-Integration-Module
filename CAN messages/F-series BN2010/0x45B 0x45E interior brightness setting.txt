@@ -1,0 +1,11 @@
+0x45B setting sent by iDrive:
+
+FF FF FF 00 FF FF FF FF                     // Min
+.
+.                                           // Increase/decrease in 0xC increments
+.
+FF FF FF FE FF FF FF FF                     // Max
+
+
+
+0x45C confirmation sent by FRM? Identical format.
