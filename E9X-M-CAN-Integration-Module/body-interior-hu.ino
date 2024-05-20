@@ -144,7 +144,7 @@ void check_idrive_queue(void) {
 
 void check_idrive_alive_monitor(void) {
   if (terminal_r) {
-    if (idrive_alive_timer >= 3000) {                                                                                               // This message should be received every 1-2s.
+    if (idrive_alive_timer >= 2500) {                                                                                               // This message should be received every 1-2s.
       if (!idrive_died) {
         idrive_died = true;
         serial_log("iDrive booting/rebooting.", 2);
@@ -154,6 +154,7 @@ void check_idrive_alive_monitor(void) {
         #if F_VSW01 && F_VSW01_MANUAL
           vsw_switch_input(4);
         #endif
+        idrive_alive_timer2 = 0;                                                                                                    // Keep track of the iDrive's boot time.
       }
     } else {
       if (idrive_died) {                                                                                                            // It's back.
@@ -530,7 +531,7 @@ void evaluate_idrive_units(void) {
       snprintf(language_str, sizeof(language_str), "%u", new_language);
     #endif
     uint8_t idrive_bn2000_language[] = {0x1E, 0x66, 0, 1, new_language, 0, 0, 0};
-    kcan_write_msg(make_msg_buf(0x5E2, 8, idrive_bn2000_language));
+    kcan_write_msg(make_msg_buf(0x5E2, 8, idrive_bn2000_language));                                                                 // KOMBI does not support/store all EVO languages. Check "coding parameters.txt" for some examples.
   }
 
   if (new_temperature_unit == 1) {
@@ -632,44 +633,54 @@ void convert_f_units(bool idrive_units_only) {
 }
 
 
-void send_cc_message_text(const char input[], uint16_t dismiss_time) {
-
-  #if F_NBT_EVO6
-    return;       // Disable for now.
-  #endif
-
+// NOTE: Max input to this function is 45 characters + NUL.
+void send_cc_message(const char input[], bool dialog, unsigned long new_timeout) {
   nbt_cc_txq.flush();                                                                                                               // Clear any pending dismiss messages.
   uint8_t input_length = strlen(input);
-  uint8_t padded_length = input_length + (3 - (input_length % 3)) % 3;
+  if (input_length > 45) {
+    serial_log("String length exceeded for send_cc_message.", 0);
+    return;
+  }
+  uint8_t padding = (input_length % 3 == 0) ? 0 : 3 - (input_length % 3);
+  uint8_t padded_length = input_length + padding;
   char padded_input[padded_length];
   memset(padded_input, ' ', padded_length);
   strncpy(padded_input, input, input_length);
   
-  uint8_t cc_message_chunk_counter = 0xDF;
+  uint8_t cc_message_chunk_counter = (((padded_length / 3) - 2) << 4) | 0xF;
+
   for (uint8_t i = 0; i < (padded_length / 3); i++) {
     cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 256;
+    uint8_t cc_message_text[] = {0x46, 3, 0x50, 0xF0, cc_message_chunk_counter,
+                                padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
     #if F_NBT_EVO6
-      uint8_t cc_message_text[] = {0x46, 3, 0x32, 0xF0, cc_message_chunk_counter,
-                                  padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
+      if (dialog) {
+        cc_message_text[2] = 0x32;
+      }
     #else
-      uint8_t cc_message_text[] = {0x46, 3, 0x72, 0xF0, cc_message_chunk_counter,
-                                  padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
+      if (dialog) {
+        cc_message_text[2] = 0x72;
+      }
     #endif
     kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text));
   }
   
-  cc_message_chunk_counter = (cc_message_chunk_counter + 3) % 256;
+  cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 256;
+  uint8_t cc_message_text_end[] = {0x46, 3, 0x50, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
   #if F_NBT_EVO6
-    uint8_t cc_message_text_end[] = {0x46, 3, 0x32, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
+    if (dialog) {
+      cc_message_text_end[2] = 0x32;
+    }
   #else
-    uint8_t cc_message_text_end[] = {0x46, 3, 0x72, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
+    if (dialog) {
+      cc_message_text_end[2] = 0x72;
+    }
   #endif
   kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));
-  cc_message_text_end[4] = (cc_message_chunk_counter + 2) % 256;
-  kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));
-  if (dismiss_time > 0) {
-    unsigned long time_now = millis();
-    m = {custom_cc_dismiss_buf, time_now + dismiss_time};
+  
+  if (dialog) {
+    cc_message_expires = millis() + new_timeout;                                                                                    // Do not replace this message with the monitoring CC until the timeout elapses.
+    m = {custom_cc_dismiss_buf, cc_message_expires};
     nbt_cc_txq.push(&m);
   }
 }
@@ -692,5 +703,22 @@ void evaluate_idrive_zero_time(void) {
     return;
   } else {
     kcan_write_msg(k_msg);
+  }
+}
+
+
+void evaluate_idrive_lights_settings(void) {
+  if ((k_msg.buf[0] >> 4) == 9) {
+    kcan_write_msg(idrive_bn2000_indicator_single_buf);
+  } else if ((k_msg.buf[0] >> 4) == 0xA) {
+    kcan_write_msg(idrive_bn2000_indicator_triple_buf);
+  } else if (k_msg.buf[1] == 0xFF && k_msg.buf[2] == 0xF1) {
+    kcan_write_msg(idrive_bn2000_drl_off_buf);
+  } else if (k_msg.buf[1] == 0xFF && k_msg.buf[2] == 0xF2) {
+    kcan_write_msg(idrive_bn2000_drl_on_buf);
+  } else if (k_msg.buf[2] == 0xF4) {
+    uint8_t home_lights_setting[] = {0x1E, 0x48, 0, 1, 0, k_msg.buf[1], 0, 0};
+    kcan_write_msg(make_msg_buf(0x5E2, 8, home_lights_setting));
+    f_lights_ckm_request = k_msg.buf[2];
   }
 }

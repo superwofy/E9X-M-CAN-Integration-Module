@@ -104,6 +104,9 @@ void toggle_mdrive_message_active(void) {
 
   #if F_NBT
     f_driving_dynamics_timer = 1001;
+    #if SERVOTRONIC_SVT70
+      svt70_pwm_control_timer = 3001;
+    #endif
   #endif
 }
 
@@ -249,7 +252,7 @@ void show_mdrive_settings_screen(void) {
       #else
         kcan_write_msg(idrive_mdrive_settings_menu_cic_a_buf);                                                                      // Send steuern_menu job to iDrive.
         kcan_write_msg(idrive_mdrive_settings_menu_cic_b_buf);
-        if (!idrive_died) {
+        if (!idrive_died && diag_transmit) {
           unsigned long time_now = millis();
           m = {idrive_button_sound_buf, time_now + 500};
           idrive_txq.push(&m);
@@ -271,7 +274,7 @@ void show_mdrive_settings_screen_evo(void) {
       mdrive_settings_requested = false;
       if (!idrive_died) {
         unsigned long time_now = millis();
-        m = {idrive_button_sound_buf, time_now + 500};
+        m = {idrive_horn_sound_buf, time_now + 500};
         idrive_txq.push(&m);
       }
     } else {
@@ -350,6 +353,9 @@ void execute_mdrive_settings_changed_actions() {
       #endif
     }
   }
+  #if SERVOTRONIC_SVT70
+    svt70_pwm_control_timer = 3001;
+  #endif 
 }
 
 
@@ -511,9 +517,6 @@ void check_immobilizer_status(void) {
 
             // Visual indicators with Terminal R, 15.
             kcan_write_msg(key_cc_on_buf);                                                                                          // Keep sending this message so that CC is ON until disabled.
-            #if F_NBT
-              kcan2_write_msg(key_cc_on_buf);
-            #endif
             if (led_message_counter > 56) {                                                                                         // Send LED message every 112s to keep it ON.
               kcan_write_msg(alarm_led_on_buf);
               alarm_led_active = true;
@@ -564,9 +567,6 @@ void check_immobilizer_status(void) {
 
 void reset_key_cc(void) {
   kcan_write_msg(key_cc_off_buf);
-  #if F_NBT
-    kcan2_write_msg(key_cc_off_buf);
-  #endif
 }
 
 
@@ -614,18 +614,20 @@ void release_immobilizer(void) {
   alarm_led_txq.push(&m);
   alarm_led_active = false;
   kcan_write_msg(key_cc_off_buf);
-  #if F_NBT
-    kcan2_write_msg(key_cc_off_buf);
-  #endif
-  if (terminal_r) {
-    m = {start_cc_on_buf, time_now + 500};
-    alarm_warnings_txq.push(&m);
-    m = {start_cc_off_buf, time_now + 1000};
-    alarm_warnings_txq.push(&m);
-    serial_log("Sent start ready CC.", 2);
-  } else {
+  #if F_NBT_EVO6
+    send_cc_message("Immobilizer released.", true, 2000);
     play_cc_gong(1);
-  }
+  #else
+    if (terminal_r) {
+      m = {start_cc_on_buf, time_now + 500};
+      alarm_warnings_txq.push(&m);
+      m = {start_cc_off_buf, time_now + 1000};
+      alarm_warnings_txq.push(&m);
+      serial_log("Sent start ready CC.", 2);
+    } else {
+      play_cc_gong(1);
+    }
+  #endif
   immobilizer_activate_release_timer = 0;
 }
 
@@ -635,9 +637,6 @@ void enable_alarm_after_stall(void) {
     alarm_after_engine_stall = true;
     serial_log("Immobilizer still active. Alarm will sound after engine stalls.", 2);    
     kcan_write_msg(key_cc_on_buf);
-    #if F_NBT
-      kcan2_write_msg(key_cc_on_buf);
-    #endif
     if (diag_transmit) {
       kcan_write_msg(alarm_led_on_buf);
       unsigned long time_now = millis();
@@ -661,8 +660,8 @@ void execute_alarm_after_stall(void) {
       alarm_siren_txq.push(&m);
     }
     serial_log("Alarm siren and hazards ON.", 0);
-    #if F_NBT
-      send_cc_message_text("Immobilizer activated!        ", 0);
+    #if F_NBT_EVO6
+      send_cc_message("Immobilizer alarm tripped!", true, 10000);
     #endif
     alarm_active = true;
   }
@@ -825,4 +824,54 @@ void actuate_exhaust_solenoid(bool activate) {
   digitalWrite(EXHAUST_FLAP_SOLENOID_PIN, activate);
   exhaust_flap_action_timer = 0;
   exhaust_flap_open = !activate;                                                                                                    // Flap position is the inverse of solenoid state. When active, the flap is closed.
+}
+
+
+void evaluate_engine_data(void) {
+  engine_coolant_temperature = k_msg.buf[0];
+  engine_oil_temperature = k_msg.buf[1];
+  ambient_pressure = (k_msg.buf[3] * 2) + 598;
+}
+
+
+void send_dme_boost_request(void) {
+  unsigned long boost_request_interval = 1000;
+  if (engine_running) {
+    boost_request_interval = 200;
+  }
+  if (boost_request_timer >= boost_request_interval) {
+    if (diag_transmit) {
+      ptcan_write_msg(dme_boost_request_a_buf);
+      dme_boost_requested = true;
+    }
+    boost_request_timer = 0;
+  }
+}
+
+
+void evaluate_dme_boost_response(void) {
+  if (dme_boost_requested) {
+    if (pt_msg.buf[0] == 0xF1 && pt_msg.buf[1] == 0x10 && pt_msg.buf[4] == 0x19) {
+      if (pt_msg.buf[7] > 0xF) {
+        engine_cp_sensor = round((pt_msg.buf[6] << 8 | pt_msg.buf[7]) * 0.0390625);
+      } else {
+        engine_cp_sensor = round((pt_msg.buf[6] << 4 | pt_msg.buf[7]) * 0.0390625);
+      }
+      ptcan_write_msg(dme_boost_request_b_buf);
+    } else if (pt_msg.buf[0] == 0xF1 && pt_msg.buf[1] == 0x21) {
+      if (pt_msg.buf[3] > 0xF) {
+        engine_manifold_sensor = round((pt_msg.buf[2] << 8 | pt_msg.buf[3]) * 0.0390625);
+      } else {
+        engine_manifold_sensor = round((pt_msg.buf[2] << 4 | pt_msg.buf[3]) * 0.0390625);
+      }
+      if (pt_msg.buf[5] > 0xF) {
+        intake_air_temperature = round((pt_msg.buf[4] << 8 | pt_msg.buf[5]) * 0.10000000149011612);
+      } else {
+        intake_air_temperature = round((pt_msg.buf[4] << 4 | pt_msg.buf[5]) * 0.10000000149011612);
+      }
+      dme_boost_requested = false;
+    }
+  } else {
+    dme_boost_requested = false;
+  }
 }

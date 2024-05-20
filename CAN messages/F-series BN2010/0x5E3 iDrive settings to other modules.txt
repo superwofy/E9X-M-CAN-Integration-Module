@@ -1,0 +1,2 @@
+Independent ventilation Timer2:
+11 03 00 02 03 17 FD FF                             // Active: 3:23, Identical to BN2000 0x5E2

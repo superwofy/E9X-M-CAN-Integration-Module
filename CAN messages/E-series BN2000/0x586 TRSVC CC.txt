@@ -1,0 +1,1 @@
+40 A9 01 55 FF FF FF FF 		// 0x1A9 = 425 = Rear View camera failure.

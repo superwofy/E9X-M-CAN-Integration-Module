@@ -1,0 +1,25 @@
+FE FF 						// No dimming. Interior lighting inactive.
+
+00 FF 						// below min
+
+1C FF 						// Box 1 / min
+
+38 FF 						// Box 2
+
+54 FF 						// Box 3
+
+70 FF 						// Box 4
+
+8D FF 						// Box 5
+
+A9 FF 						// Box 6
+
+C5 FF 						// Box 7
+
+E1 FF 						// Box 8
+
+FD FF 						// Box 9 / max
+
+
+
+This message is sent one-way by the KOMBI. It cannot be adjusted.

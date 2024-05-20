@@ -420,7 +420,7 @@ void check_console_buttons(void) {
       } else {
         if (both_console_buttons_timer >= 10000) {                                                                                  // Hold both buttons for more than 10s.
           #if F_NBT
-            kcan2_write_msg(idrive_button_sound_buf);
+            kcan2_write_msg(idrive_horn_sound_buf);
           #else
             kcan_write_msg(idrive_button_sound_buf);                                                                                // Acknowledge Immobilizer persist ON-OFF with Gong.
           #endif
@@ -428,8 +428,15 @@ void check_console_buttons(void) {
           EEPROM.update(31, immobilizer_persist);
           update_eeprom_checksum();
           #if DEBUG_MODE
-            sprintf(serial_debug_string, "Anti theft now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
+            sprintf(serial_debug_string, "Immobilizer now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
             serial_log(serial_debug_string, 0);
+          #endif
+          #if F_NBT
+            if (!immobilizer_persist) {
+              send_cc_message("Immobilizer deactivated persistently.", true, 5000);
+            } else {
+              send_cc_message("Immobilizer activated persistently.", true, 5000);
+            }
           #endif
           both_console_buttons_timer = 0;                                                                                           // Reset to prevent multiple activations.
         }
@@ -597,13 +604,38 @@ void store_rvc_settings_trsvc(void) {
 
 
 void evaluate_indicator_stalk(void) {
-  if (k_msg.buf[0] == 1 || k_msg.buf[0] == 4) {
-    full_indicator = false;
-  } else if (k_msg.buf[0] == 2 || k_msg.buf[0] == 8) {
-    if (!full_indicator) {
-      full_indicator = true;
-      serial_log("Indicator stalk pushed fully.", 3);
-      undim_mirrors_with_indicators();
+  if (ignition) {
+    if (k_msg.buf[0] == 1 || k_msg.buf[0] == 4) {
+      full_indicator = false;
+    } else if (k_msg.buf[0] == 2 || k_msg.buf[0] == 8) {
+      if (!full_indicator) {
+        full_indicator = true;
+        serial_log("Indicator stalk pushed fully.", 3);
+        undim_mirrors_with_indicators();
+      }
+    }
+  }
+}
+
+
+void evaluate_high_beam_stalk(void) {
+  if (terminal_r) {
+    if (k_msg.buf[0] == 0x10) {                                                                                                     // Stalk pushed away.
+      indicator_stalk_pushed_message_counter++;
+      if (indicator_stalk_pushed_message_counter >= 45) {                                                                           // About 5 seconds.
+        if (hba_status == 0xD) {
+          kcan_write_msg(idrive_bn2000_hba_on_buf);
+          kcan2_write_msg(idrive_horn_sound_buf);
+          send_cc_message("High beam assistant ON.", true, 3000);
+        } else {
+          kcan_write_msg(idrive_bn2000_hba_off_buf);
+          kcan2_write_msg(idrive_horn_sound_buf);
+          send_cc_message("High beam assistant OFF.", true, 3000);
+        }
+        indicator_stalk_pushed_message_counter = 0;
+      }
+    } else {
+      indicator_stalk_pushed_message_counter = 0;
     }
   }
 }
@@ -650,7 +682,7 @@ void evaluate_wiper_stalk_status(void) {
         }
       #endif
       #if INTERMITTENT_WIPERS
-        stalk_down_message_counter = 0;
+        wiper_stalk_down_message_counter = 0;
       #endif
     } 
 
@@ -659,7 +691,7 @@ void evaluate_wiper_stalk_status(void) {
         wash_message_counter = 0;
       #endif
       #if INTERMITTENT_WIPERS
-        stalk_down_message_counter = 0;
+        wiper_stalk_down_message_counter = 0;
       #endif
     }
     
@@ -672,7 +704,7 @@ void evaluate_wiper_stalk_status(void) {
         if (intermittent_wipe_active) {
           disable_intermittent_wipers();
         }
-        stalk_down_message_counter = 0;
+        wiper_stalk_down_message_counter = 0;
       #endif
     }
 
@@ -685,7 +717,7 @@ void evaluate_wiper_stalk_status(void) {
         if (intermittent_wipe_active) {
           disable_intermittent_wipers();
         }
-        stalk_down_message_counter = 0;
+        wiper_stalk_down_message_counter = 0;
       #endif
     }
 
@@ -695,23 +727,23 @@ void evaluate_wiper_stalk_status(void) {
         wash_message_counter = 0;
       #endif
       #if INTERMITTENT_WIPERS
-        if (millis() - stalk_down_last_press_time >= 1100) {                                                                        // If more than 1100ms passed, stalk must have been released.
-          stalk_down_message_counter = 0;
+        if (millis() - wiper_stalk_down_last_press_time >= 1100) {                                                                  // If more than 1100ms passed, stalk must have been released.
+          wiper_stalk_down_message_counter = 0;
         }
 
-        stalk_down_last_press_time = millis();
-        stalk_down_message_counter++;
+        wiper_stalk_down_last_press_time = millis();
+        wiper_stalk_down_message_counter++;
 
         intermittent_wipe_timer = 0;
 
-        if (stalk_down_message_counter >= 4) {
+        if (wiper_stalk_down_message_counter >= 4) {
           if (!intermittent_wipe_active) {
             activate_intermittent_wipers();
             intermittent_wipe_timer = intermittent_intervals[intermittent_setting];
           } else {
             disable_intermittent_wipers();
           }
-          stalk_down_message_counter = 0;
+          wiper_stalk_down_message_counter = 0;
         }
       #endif
     }
@@ -728,7 +760,7 @@ void evaluate_wiper_stalk_status(void) {
             serial_log(serial_debug_string, 3);
           }
         #endif
-        stalk_down_message_counter = 0;
+        wiper_stalk_down_message_counter = 0;
         if (new_intermittent_setting > intermittent_setting) {                                                                      // If wheel moved up, wipe immediately. Else, wait until next interval.
           intermittent_wipe_timer = intermittent_intervals[intermittent_setting] + 100;
           if (!vehicle_moving) {
@@ -764,13 +796,13 @@ void evaluate_ihka_auto_ckm(void) {
   if (ihka_auto_blower_speed != new_speed) {
     if (ignition) {
       if (new_speed == 6) {
-        send_cc_message_text("Air distribution: AUTO Low. ", 4000);
+        send_cc_message("Air distribution: AUTO Low.", true, 4000);
         serial_log("IHKA AUTO Low.", 3);
       } else if (new_speed == 5) {
-        send_cc_message_text("Air distribution: AUTO Medium.", 4000);
+        send_cc_message("Air distribution: AUTO Medium.", true, 4000);
         serial_log("IHKA AUTO Medium.", 3);
       } else if (new_speed == 9) {
-        send_cc_message_text("Air distribution: AUTO High.", 4000);
+        send_cc_message("Air distribution: AUTO High.", true, 4000);
         serial_log("IHKA AUTO High.", 3);
       }
     }
@@ -785,19 +817,25 @@ void evaluate_ihka_auto_state(void) {
     if (new_state == 7) {
       serial_log("IHKA set to AUTO.", 3);
       if (ihka_auto_blower_speed == 6) {
-        send_cc_message_text("Air distribution: AUTO Low. ", 4000);
+        send_cc_message("Air distribution: AUTO Low.", true, 4000);
         serial_log("IHKA AUTO Low.", 3);
       } else if (ihka_auto_blower_speed == 5) {
-        send_cc_message_text("Air distribution: AUTO Medium.", 4000);
+        send_cc_message("Air distribution: AUTO Medium.", true, 4000);
         serial_log("IHKA AUTO Medium.", 3);
       } else if (ihka_auto_blower_speed == 9) {
-        send_cc_message_text("Air distribution: AUTO High.", 4000);
+        send_cc_message("Air distribution: AUTO High.", true, 4000);
         serial_log("IHKA AUTO High.", 3);
       }
     } else {
-      send_cc_message_text("Air distribution: AUTO OFF. ", 2000);
+      send_cc_message("Air distribution: AUTO OFF.", true, 2000);
       serial_log("IHKA AUTO OFF.", 3);
     }
     ihka_auto_blower_state = new_state;
   }
+}
+
+
+void evaluate_temperature_unit(void) {
+  bitWrite(temperature_unit, 0, bitRead(k_msg.buf[1], 4));
+  bitWrite(temperature_unit, 1, bitRead(k_msg.buf[1], 5));
 }

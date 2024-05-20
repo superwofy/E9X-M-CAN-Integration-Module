@@ -17,3 +17,5 @@ KCAN:  ID: 205 Buffer: F5 FF							// Double beep from collision warning
 KCAN:  ID: 205 Buffer: FA FF							// Four beeps in quick succession
 
 KCAN:  ID: 205 Buffer: FB FF							// Two double gongs
+
+KCAN:  ID: 205 Buffer: FD FF							// Single horn sound

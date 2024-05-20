@@ -40,7 +40,13 @@ void cache_can_message_buffers(void) {                                          
           idrive_bn2000_pressure_kpa[] = {0x1E, 0x66, 0, 1, 0, 0, 0, 2},
           idrive_bn2000_pressure_psi[] = {0x1E, 0x66, 0, 1, 0, 0, 0, 3},
           idrive_bn2000_temperature_c[] = {0x1E, 0x66, 0, 1, 0, 0x10, 0, 0},
-          idrive_bn2000_temperature_f[] = {0x1E, 0x66, 0, 1, 0, 0x20, 0, 0};
+          idrive_bn2000_temperature_f[] = {0x1E, 0x66, 0, 1, 0, 0x20, 0, 0},
+          idrive_bn2000_hba_on[] = {0x1E, 0x4A, 0, 1, 0x20, 0, 0, 0},
+          idrive_bn2000_hba_off[] = {0x1E, 0x4A, 0, 1, 0x10, 0, 0, 0},
+          idrive_bn2000_indicator_single[] = {0x1E, 0x48, 0, 1, 0x10, 0xFF, 0, 0},
+          idrive_bn2000_indicator_triple[] = {0x1E, 0x48, 0, 1, 0x20, 0xFF, 0, 0},
+          idrive_bn2000_drl_on[] = {0x1E, 0x48, 0, 1, 0, 0xFF, 2, 0},
+          idrive_bn2000_drl_off[] = {0x1E, 0x48, 0, 1, 0, 0xFF, 1, 0};
   idrive_bn2000_time_12h_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_time_12h);
   idrive_bn2000_time_24h_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_time_24h);
   idrive_bn2000_date_ddmmyyyy_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_date_ddmmyyyy);
@@ -55,38 +61,44 @@ void cache_can_message_buffers(void) {                                          
   idrive_bn2000_pressure_psi_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_pressure_psi);
   idrive_bn2000_temperature_c_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_temperature_c);
   idrive_bn2000_temperature_f_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_temperature_f);
+  idrive_bn2000_hba_on_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_hba_on);
+  idrive_bn2000_hba_off_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_hba_off);
+  idrive_bn2000_indicator_single_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_indicator_single);
+  idrive_bn2000_indicator_triple_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_indicator_triple);
+  idrive_bn2000_drl_on_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_drl_on);
+  idrive_bn2000_drl_off_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_drl_off);
 
   uint8_t gws_sport_on[] = {0, 0, 0, 4, 0, 0, 0},
           gws_sport_off[] = {0, 0, 0, 0, 0, 0, 0};
   gws_sport_on_buf = make_msg_buf(0x1D2, 6, gws_sport_on);
   gws_sport_off_buf = make_msg_buf(0x1D2, 6, gws_sport_off);
 
-  uint8_t cc_single_gong[] = {0xF1, 0xFF};
-  uint8_t cc_double_gong[] = {0xF2, 0xFF};
-  uint8_t cc_triple_gong[] = {0xF3, 0xFF};
+  uint8_t cc_single_gong[] = {0xF1, 0xFF},
+          cc_double_gong[] = {0xF2, 0xFF},
+          cc_triple_gong[] = {0xF3, 0xFF},
+          idrive_horn_sound[] = {0xFD,0xFF},
+          idrive_power_off_warning[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF5};
   cc_single_gong_buf = make_msg_buf(0x205, 2, cc_single_gong);
   cc_double_gong_buf = make_msg_buf(0x205, 2, cc_double_gong);
   cc_triple_gong_buf = make_msg_buf(0x205, 2, cc_triple_gong);
+  idrive_horn_sound_buf = make_msg_buf(0x205, 2, idrive_horn_sound);
+  idrive_power_off_warning_buf = make_msg_buf(0x3B3, 6, idrive_power_off_warning);
 
   #if F_NBT
     #if F_NBT_EVO6
       uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x13, 0},
-              idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0},
+              idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0};
     #else
       uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 7, 0},
-              idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x12, 0},
+              idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x12, 0};
     #endif
-              idrive_double_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0};
     idrive_button_sound_buf = make_msg_buf(0x6F1, 8, idrive_button_sound);
     idrive_beep_sound_buf = make_msg_buf(0x6F1, 8, idrive_beep_sound);
-    idrive_double_beep_sound_buf = make_msg_buf(0x6F1, 8, idrive_double_beep_sound);
   #else
     uint8_t idrive_button_sound[] = {0x63, 3, 0x31, 0x21, 7},
-            idrive_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x12},
-            idrive_double_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x10};
+            idrive_beep_sound[] = {0x63, 3, 0x31, 0x21, 0x12};
     idrive_button_sound_buf = make_msg_buf(0x6F1, 5, idrive_button_sound);
     idrive_beep_sound_buf = make_msg_buf(0x6F1, 5, idrive_beep_sound);
-    idrive_double_beep_sound_buf = make_msg_buf(0x6F1, 5, idrive_double_beep_sound);
   #endif
 
   uint8_t clear_fs_uds_nbt[] = {0x63, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
@@ -120,6 +132,11 @@ void cache_can_message_buffers(void) {                                          
   clear_dme_hs_buf = make_msg_buf(0x6F1, 8, clear_dme_hs);
   clear_svt_fs_buf = make_msg_buf(0x6F1, 8, clear_svt_fs);
   clear_svt_is_buf = make_msg_buf(0x6F1, 8, clear_svt_is);
+
+  uint8_t dme_boost_request_a[] = {0x12, 3, 0x30, 0x19, 1, 0, 0, 0},
+          dme_boost_request_b[] = {0x12, 0x30, 0, 0, 0, 0, 0, 0};
+  dme_boost_request_a_buf = make_msg_buf(0x6F1, 8, dme_boost_request_a);
+  dme_boost_request_b_buf = make_msg_buf(0x6F1, 8, dme_boost_request_b);
 
   uint8_t ccc_zbe_wake[] = {0xFE, 3, 0, 0, 0, 0, 0, 0};
   ccc_zbe_wake_buf = make_msg_buf(0x1AA, 8, ccc_zbe_wake);
@@ -204,8 +221,8 @@ void cache_can_message_buffers(void) {                                          
   uint8_t frm_mirror_undim[] = {0x72, 5, 0x30, 0x11, 7, 0, 0x90, 0};
   frm_mirror_undim_buf = make_msg_buf(0x6F1, 8, frm_mirror_undim);
   
-  uint8_t flash_hazards_single[] = {0, 0xF1};
-  uint8_t flash_hazards_double[] = {0, 0xF2};
+  uint8_t flash_hazards_single[] = {0, 0xF1},
+          flash_hazards_double[] = {0, 0xF2};
   flash_hazards_single_buf = make_msg_buf(0x2B4, 2, flash_hazards_single);
   flash_hazards_double_buf = make_msg_buf(0x2B4, 2, flash_hazards_double);
 
@@ -374,14 +391,21 @@ void cache_can_message_buffers(void) {                                          
   #if F_NBT
     uint8_t vol_request[] = {0x63, 5, 0x31, 1, 0xA0, 0x39, 0};
     vol_request_buf = make_msg_buf(0x6F1, 7, vol_request);
-    uint8_t custom_cc_dismiss[] = {0x46, 3, 0x50, 0xF0, 0, 0, 0, 0};
+    uint8_t custom_cc_dismiss[] = {0x46, 3, 0x50, 0xF0, 0, 0, 0, 0},
+            custom_cc_clear[] = {0x46, 3, 0x70, 0xF0, 0, 0, 0, 0},
+            cc_list_clear[] = {0, 0, 0, 0xFE, 0xFF, 0xFE, 0xFF};
     custom_cc_dismiss_buf = make_msg_buf(0x338, 8, custom_cc_dismiss);
-    uint8_t custom_cc_clear[] = {0x46, 3, 0x70, 0xF0, 0, 0, 0, 0};
     custom_cc_clear_buf = make_msg_buf(0x338, 8, custom_cc_clear);
+    cc_list_clear_buf = make_msg_buf(0x336, 7, cc_list_clear);
   #else
     uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0};
     vol_request_buf = make_msg_buf(0x6F1, 8, vol_request);
   #endif
+
+  uint8_t hood_open_hot_cc_dialog[] = {0xE1, 2, 0x32, 0xF0, 0, 0xFE, 0xFE, 0xFE},
+          hood_open_hot_cc_dialog_clear[] = {0xE1, 2, 0x70, 0xF0, 0, 0xFE, 0xFE, 0xFE};
+  hood_open_hot_cc_dialog_buf = make_msg_buf(0x338, 8, hood_open_hot_cc_dialog);
+  hood_open_hot_cc_dialog_clear_buf = make_msg_buf(0x338, 8, hood_open_hot_cc_dialog_clear);
   
   uint8_t door_open_cc_off[] = {0x40, 0x4F, 1, 0x28, 0xFF, 0xFF, 0xFF, 0xFF};
   door_open_cc_off_buf = make_msg_buf(0x5C0, 8, door_open_cc_off);
@@ -443,6 +467,11 @@ void cache_can_message_buffers(void) {                                          
 
   uint8_t jbe_reboot[] = {0, 2, 0x11, 1, 0, 0, 0, 0};
   jbe_reboot_buf = make_msg_buf(0x6F1, 8, jbe_reboot);
+
+  uint8_t svt70_zero_pwm[] = {0xE, 6, 0x2E, 0xF0, 0, 0, 0x64, 0x55},
+          svt70_pwm_release_control[] = {0xE, 6, 0x2E, 0xF0, 0, 0, 0, 0};
+  svt70_zero_pwm_buf = make_msg_buf(0x6F1, 8, svt70_zero_pwm);
+  svt70_pwm_release_control_buf = make_msg_buf(0x6F1, 8, svt70_pwm_release_control);
 }
 
 
@@ -493,7 +522,7 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 void kcan2_write_msg(const CAN_message_t &msg) {
   #if F_NBT
-    if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 5000 || msg.id == 0x12F || msg.id == 0x130)) {                       // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
+    if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 200 || msg.id == 0x12F || msg.id == 0x130)) {                        // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
       byte send_buf[msg.len];
 
       // Sinkhole for unused messages. Skip to reduce KCAN2 traffic.
@@ -504,9 +533,6 @@ void kcan2_write_msg(const CAN_message_t &msg) {
       else if (msg.id == 0x2C0) { return; }                                                                                         // BN2000 LCD brightness.
       else if (msg.id == 0x317) { return; }                                                                                         // BN2000 PDC button.
       else if (msg.id == 0x31D) { return; }                                                                                         // BN2000 FTM status.
-      else if (msg.id == 0x399) { return; }                                                                                         // BN2000 MDrive / BN2010 Status energy voltage.
-      else if (msg.id >= 0x5FF && msg.id <= 0x6F0) { return; }                                                                      // Diagnosis response and misc. messages from various modules.
-
       #if F_NBT_VIN_PATCH
         else if (msg.id == 0x380) {                                                                                                 // Patch NBT VIN to donor.
           if (donor_vin_initialized) {
@@ -518,7 +544,8 @@ void kcan2_write_msg(const CAN_message_t &msg) {
           }
         }
       #endif 
-      
+      else if (msg.id == 0x399) { return; }                                                                                         // BN2000 MDrive / BN2010 Status energy voltage.
+      else if (msg.id >= 0x5FF && msg.id <= 0x6F0) { return; }                                                                      // Diagnosis response and misc. messages from various modules.
       else {
         for (uint8_t i = 0; i < msg.len; i++) {
           send_buf[i] = msg.buf[i];

@@ -35,8 +35,14 @@ To NBT:
 
 
 From NBT:
-0x291: iDrive units.
+
+0x291: iDrive units/formats. Converted to use 0x5E2.
 0x42F: MDrive settings.
 0x317: ZBE related. Discarded.
 0x31A: PDC bus status request. Converted to 0x3AE. Not forwarded to KCAN.
-0x3DC: Light CKM setting. Stored last byte used to correct 0x3DD.
+0x3DC: Light CKM setting. Converted to use 0x5E2. Stored last byte to correct 0x3DD.
+
+
+Added:
+
+0x5E2: Settings (language, units, lighting) from HU to BN2000 KOMBI.

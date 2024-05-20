@@ -1,0 +1,3 @@
+FF FF FF FF FF F5
+
+If the second half of the last byte is 5, a Note is displayed with text "The iDrive system will be switched off shortly. To save energy, press the radio on/off switch in future."

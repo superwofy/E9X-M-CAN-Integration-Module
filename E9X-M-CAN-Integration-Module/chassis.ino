@@ -81,9 +81,6 @@ void evaluate_reverse_gear_status(void) {
         if (handbrake_status && pdc_bus_status > 0x80) {
           unsigned long time_now = millis();
           kcan_write_msg(pdc_button_presssed_buf);
-          #if F_NBT
-            kcan2_write_msg(pdc_button_presssed_buf);
-          #endif
           m = {pdc_button_released_buf, time_now + 100};
           pdc_buttons_txq.push(&m);
           m = {pdc_button_released_buf, time_now + 200};
@@ -145,9 +142,6 @@ void evaluate_indicated_speed(void) {
           serial_log("HDC deactivated due to high vehicle speed.", 2);
           hdc_active = false;
           kcan_write_msg(hdc_cc_deactivated_on_buf);
-          #if F_NBT
-            kcan2_write_msg(hdc_cc_deactivated_on_buf);
-          #endif
           m = {hdc_cc_deactivated_off_buf, millis() + 2000};
           ihk_extra_buttons_cc_txq.push(&m);
         }
@@ -495,9 +489,6 @@ void evaluate_hdc_button(void) {
             } else {
               hdc_active = true;
               kcan_write_msg(hdc_cc_activated_on_buf);
-              #if F_NBT
-                kcan2_write_msg(hdc_cc_activated_on_buf);
-              #endif
               serial_log("HDC activated with cruise control already ON.", 2);
             }
           }
@@ -531,9 +522,6 @@ void evaluate_cruise_control_status(void) {
       cruise_control_status = true;
       if (hdc_requested) {
         kcan_write_msg(hdc_cc_activated_on_buf);
-        #if F_NBT
-          kcan2_write_msg(hdc_cc_activated_on_buf);
-        #endif
         hdc_active = true;
         hdc_requested = false;
         serial_log("HDC cruise control activated.", 2);
@@ -547,9 +535,6 @@ void evaluate_cruise_control_status(void) {
       if (hdc_active) {
         serial_log("HDC cruise control deactivated by user.", 2);
         kcan_write_msg(hdc_cc_activated_off_buf);
-        #if F_NBT
-          kcan2_write_msg(hdc_cc_activated_off_buf);
-        #endif
         hdc_active = hdc_requested = false;
       } else {
         serial_log("Normal cruise control deactivated.", 2);
@@ -580,7 +565,7 @@ void check_hdc_queue(void) {
 }
 
 
-void evaluate_speed_units(void) {
+void evaluate_speed_unit(void) {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   if (speed_mph) {
     max_hdc_speed = 22;
@@ -607,6 +592,21 @@ void send_servotronic_message(void) {
     servotronic_message[0] += 8;
   }
   ptcan_write_msg(make_msg_buf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
+}
+
+
+void send_servotronic_sport_plus(void) {
+  if (svt70_pwm_control_timer >= 3000) {
+    if (engine_running && diag_transmit) {
+      if (mdrive_status && mdrive_svt[cas_key_number] == 0xF2 && !reverse_gear_status && real_speed > 6) {
+        ptcan_write_msg(svt70_zero_pwm_buf);                                                                                        // This message expires automatically after 15s.
+        svt70_sport_plus = true;
+      } else if (svt70_sport_plus) {
+        ptcan_write_msg(svt70_pwm_release_control_buf);
+        svt70_sport_plus = false;
+      }
+    }
+  }
 }
 
 

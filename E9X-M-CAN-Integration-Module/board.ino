@@ -139,8 +139,6 @@ void configure_flexcan(void) {
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x2A6, STD);                                              // Wiper stalk status from SZL.                                 Cycle time 1s (idle).
     filter_position_counter++;
   #endif
-  filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x315, STD);                                                // Vehicle mode (+EDC) from JBE:                                Cycle time 500ms (idle).
-  filter_position_counter++;
   #if FTM_INDICATOR
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x31D, STD);                                              // FTM status broadcast by DSC:                                 Cycle time 5s (idle).
     filter_position_counter++;
@@ -155,6 +153,10 @@ void configure_flexcan(void) {
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x58E, STD);                                              // Forward SVT CC to KCAN for KOMBI to display:                 Cycle time 10s.
     filter_position_counter++;
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x60E, STD);                                              // Diagnostic responses from SVT module to forward.
+    filter_position_counter++;
+  #endif
+  #if F_NBT && CUSTOM_MONITORING_CC
+    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x612, STD);                                              // Diagnostic responses from DME.
     filter_position_counter++;
   #endif
   #if F_NIVI
@@ -181,7 +183,7 @@ void configure_flexcan(void) {
   DCAN.enableFIFO();
 
   DCAN.FLEXCAN_EnterFreezeMode();
-  filter_set_ok_counter += DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                       // Diagnostic queries from DCAN tool to forward.
+  filter_set_ok_counter += DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                       // Diagnostic queries from OBD tool to forward.
   filter_position_counter++;
   DCAN.setFIFOFilter(REJECT_ALL, filter_position_counter);
   DCAN.FLEXCAN_ExitFreezeMode();
@@ -297,7 +299,7 @@ void check_teensy_cpu_clock(void) {                                             
           max_loop_timer = 0;
         #endif
         #if F_NBT
-          send_cc_message_text("Teensy CPU at max temperature!", 0);
+          send_cc_message("Teensy CPU above crtitical temperature!", true, 20000);
         #endif
       }
     } else {
@@ -317,8 +319,14 @@ void check_teensy_cpu_clock(void) {                                             
 
 void disable_diag_transmit_jobs(void) {                                                                                             // Without this, other KWP jobs sent by Ediabas will receive strange reponse codes.
   if (diag_transmit) {
-    serial_log("Detected OBD port diagnosis request. Pausing module initiated diagnostic jobs.", 0);
+    serial_log("Detected OBD port diagnosis request. Pausing module initiated KWP/UDS jobs.", 0);
     diag_transmit = false;
+    #if F_NBT
+      char diag_cc_string[46] = {' '};
+      snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %lds.",
+               OBD_DETECT_TIMEOUT / 1000);
+      send_cc_message(diag_cc_string, true, 3000);
+    #endif
     #if DOOR_VOLUME
       volume_changed_to = 0;
       volume_restore_offset = 0;

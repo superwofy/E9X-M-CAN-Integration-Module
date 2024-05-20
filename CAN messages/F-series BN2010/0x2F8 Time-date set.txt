@@ -1,0 +1,16 @@
+ID=2F8 (Uhrzeit/Datum) (760 (2F8h) - Zykluszeit: ttyp = 15000.0 ms (tmin = 13500.0 ms, tmax = 16500.0 ms))
+DLC=8
+01 1E 00 1B 4F E0 07 F1
+
+Byte [0], Hour
+Byte [1], Minute
+Byte [2], Seconds
+Byte [3], Day
+Byte [4] (Top 8 bits), Month
+   1F = Jan
+   2F = Feb
+   3F = March
+    ……………..
+    BF = Nov
+    DF = Dec
+Byte [5 & 6], year (07E0 HEX = 2016 DEC)
