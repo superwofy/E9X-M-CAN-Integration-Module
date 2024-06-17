@@ -40,7 +40,6 @@ void read_initialize_eeprom(void) {
     EEPROM.update(29, 0);                                                                                                           // Un-fold exterior mirrors when unlocking
     EEPROM.update(30, 1);                                                                                                           // Immobilizer
     EEPROM.update(31, 1);
-    EEPROM.update(32, 0xFF);                                                                                                        // CPU temp
     EEPROM.update(33, 0x10);                                                                                                        // CIC persistent volume
     EEPROM.update(34, 0);                                                                                                           // Visual acknowledge CKM
     EEPROM.update(35, 0);
@@ -79,8 +78,7 @@ void read_initialize_eeprom(void) {
       dme_ckm[0][0] = EEPROM.read(20);
       dme_ckm[1][0] = EEPROM.read(21);
       dme_ckm[2][0] = EEPROM.read(22);
-    #endif
-    #if F_NBT
+    #else
       torque_unit[0] = EEPROM.read(23);
       power_unit[0] = EEPROM.read(24);
       torque_unit[1] = EEPROM.read(25);
@@ -91,19 +89,11 @@ void read_initialize_eeprom(void) {
       pressure_unit_date_format[1] = EEPROM.read(47);
       pressure_unit_date_format[2] = EEPROM.read(48);
     #endif
-    #if AUTO_MIRROR_FOLD
-      unfold_with_door_open = EEPROM.read(29) == 1 ? true : false;
-    #endif
-    #if IMMOBILIZER_SEQ
-      immobilizer_released = EEPROM.read(30) == 1 ? true : false;
-      immobilizer_persist = EEPROM.read(31) == 1 ? true : false;
-      if (!immobilizer_persist) {
-        immobilizer_released = true;                                                                                                // Deactivate immobilizer at boot if this value is set.
-      }
-    #endif
-    max_cpu_temp = EEPROM.read(32);
-    if (max_cpu_temp == 0xFF) {
-      max_cpu_temp = -40.0;
+    unfold_with_door_open = EEPROM.read(29) == 1 ? true : false;
+    immobilizer_released = EEPROM.read(30) == 1 ? true : false;
+    immobilizer_persist = EEPROM.read(31) == 1 ? true : false;
+    if (!immobilizer_persist) {
+      immobilizer_released = true;                                                                                                  // Deactivate immobilizer at boot if this value is set.
     }
     #if DOOR_VOLUME && !F_NBT
       peristent_volume = EEPROM.read(33);
@@ -116,16 +106,12 @@ void read_initialize_eeprom(void) {
     visual_signal_ckm[0] = EEPROM.read(34) == 1 ? true : false;
     visual_signal_ckm[1] = EEPROM.read(35) == 1 ? true : false;
     visual_signal_ckm[2] = EEPROM.read(36) == 1 ? true : false;
-    #if COMFORT_EXIT
-      auto_seat_ckm[0] = EEPROM.read(37) == 1 ? true : false;
-      auto_seat_ckm[1] = EEPROM.read(38) == 1 ? true : false;
-      auto_seat_ckm[2] = EEPROM.read(39) == 1 ? true : false;
-    #endif
-    #if DIM_DRL
-      drl_ckm[0] = EEPROM.read(40) == 1 ? true : false;
-      drl_ckm[1] = EEPROM.read(41) == 1 ? true : false;
-      drl_ckm[2] = EEPROM.read(42) == 1 ? true : false;
-    #endif
+    auto_seat_ckm[0] = EEPROM.read(37) == 1 ? true : false;
+    auto_seat_ckm[1] = EEPROM.read(38) == 1 ? true : false;
+    auto_seat_ckm[2] = EEPROM.read(39) == 1 ? true : false;
+    drl_ckm[0] = EEPROM.read(40) == 1 ? true : false;
+    drl_ckm[1] = EEPROM.read(41) == 1 ? true : false;
+    drl_ckm[2] = EEPROM.read(42) == 1 ? true : false;
     serial_commands_unlocked = EEPROM.read(43) == 1 ? true : false;
     doors_locked = EEPROM.read(44) == 1 ? true : false;
     doors_alarmed = EEPROM.read(45) == 1 ? true : false;
@@ -165,8 +151,7 @@ void update_data_in_eeprom(void) {                                              
     EEPROM.update(20, dme_ckm[0][0]);
     EEPROM.update(21, dme_ckm[1][0]);
     EEPROM.update(22, dme_ckm[2][0]);
-  #endif
-  #if F_NBT
+  #else
     EEPROM.update(23, torque_unit[0]);
     EEPROM.update(24, power_unit[0]);
     EEPROM.update(25, torque_unit[1]);
@@ -177,33 +162,25 @@ void update_data_in_eeprom(void) {                                              
     EEPROM.update(47, pressure_unit_date_format[1]);
     EEPROM.update(48, pressure_unit_date_format[2]);
   #endif
-  #if AUTO_MIRROR_FOLD
-    EEPROM.update(29, unfold_with_door_open);
-  #endif
-  EEPROM.update(32, round(max_cpu_temp));
+  EEPROM.update(29, unfold_with_door_open);
   #if DOOR_VOLUME && !F_NBT
     EEPROM.update(33, peristent_volume);
   #endif
   EEPROM.update(34, visual_signal_ckm[0]);
   EEPROM.update(35, visual_signal_ckm[1]);
   EEPROM.update(36, visual_signal_ckm[2]);
-  #if COMFORT_EXIT
-    EEPROM.update(37, auto_seat_ckm[0]);
-    EEPROM.update(38, auto_seat_ckm[1]);
-    EEPROM.update(39, auto_seat_ckm[2]);
-  #endif
-  #if DIM_DRL
-    EEPROM.update(40, drl_ckm[0]);
-    EEPROM.update(41, drl_ckm[1]);
-    EEPROM.update(42, drl_ckm[2]);
-  #endif
+  EEPROM.update(37, auto_seat_ckm[0]);
+  EEPROM.update(38, auto_seat_ckm[1]);
+  EEPROM.update(39, auto_seat_ckm[2]);
+  EEPROM.update(40, drl_ckm[0]);
+  EEPROM.update(41, drl_ckm[1]);
+  EEPROM.update(42, drl_ckm[2]);
   EEPROM.update(44, doors_locked);
   EEPROM.update(45, doors_alarmed);
   EEPROM.update(49, LOGLEVEL);
   EEPROM.update(50, ihka_auto_blower_speed);
   EEPROM.update(51, ihka_auto_blower_state);
   update_eeprom_checksum();
-  serial_log("Saved data to EEPROM.", 2);
 }
 
 
@@ -236,7 +213,7 @@ void print_current_state(Stream &status_serial) {
           " Terminal R: %s, Ignition: %s\r\n"
           " Engine: %s, RPM: %d, Torque: %.1f Nm, idling: %s\r\n"
           " Coolant temperature: %d °C, Oil temperature %d °C\r\n"
-          " Indicated speed: %d %s, Real speed: %.1f KPH",
+          " Indicated speed: %.1f %s, Real speed: %.1f KPH",
           vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF",
           engine_running ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
           engine_coolant_temperature - 48, engine_oil_temperature - 48,
@@ -292,7 +269,7 @@ void print_current_state(Stream &status_serial) {
     #endif
     status_serial.println(serial_debug_string);
   }
-  #if F_NIVI
+  #if F_NIVI || F_NBT
     sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
             " Lateral acceleration: %.2f g, FXX-Converted: %.2f m/s^2",          
             e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0,
@@ -424,10 +401,8 @@ void print_current_state(Stream &status_serial) {
       status_serial.println(serial_debug_string);
     #endif
   #endif
-  #if F_NBT
-    sprintf(serial_debug_string, " HBA: %s", hba_status == 0xE ? "ON" : "OFF");
-    status_serial.println(serial_debug_string);
-  #endif
+  sprintf(serial_debug_string, " HBA: %s", hba_status == 0xE ? "ON" : "OFF");
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " Indicators: %s", indicators_on ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
   #if DIM_DRL
@@ -443,10 +418,9 @@ void print_current_state(Stream &status_serial) {
     }
   #endif
 
-  int8_t max_stored_temp = EEPROM.read(32);
   sprintf(serial_debug_string, " ================================= Debug ==================================\r\n"
-          " CPU speed: %ld, MHz CPU temperature: %.2f °C, Max recorded: %.2f °C", 
-          F_CPU_ACTUAL / 1000000, cpu_temp, max_cpu_temp > max_stored_temp ? max_cpu_temp : max_stored_temp);
+          " CPU speed: %ld, MHz CPU temperature: %.2f °C, Max: %.2f °C", 
+          F_CPU_ACTUAL / 1000000, cpu_temp, max_cpu_temp);
   status_serial.println(serial_debug_string);
   if (clock_mode == 0) {
     status_serial.println(" Clock mode: STANDARD_CLOCK");
@@ -548,9 +522,9 @@ void reset_ignition_variables(void) {                                           
     digitalWrite(FOG_LED_PIN, LOW);
   #endif
   #if AUTO_STEERING_HEATER
-    if (transistor_active) {
+    if (steering_heater_transistor_active) {
       digitalWrite(STEERING_HEATER_SWITCH_PIN, LOW);
-      transistor_active = false;
+      steering_heater_transistor_active = false;
     }
   #endif
   front_fog_status = false;
@@ -603,6 +577,8 @@ void reset_ignition_variables(void) {                                           
       send_f_ftm_status();                                                                                                          // FTM is now inactive. ID3/4 require this to reset the stats displayed.
     #endif
   #endif
+  nbt_network_management_next_neighbour = 0x6D;                                                                                     // Driver's seat module.
+  nbt_network_management_timer = 3000;
 }
 
 
@@ -635,10 +611,9 @@ void reset_sleep_variables(void) {
   last_lock_status_can = 0;
   vsw_current_input = 0;
   vsw_switch_counter = 0xF1;
-  asd_initialized = false;
-  asd_rad_on_initialized = false;
+  asd_initialized = asd_rad_on_initialized = false;
   comfort_exit_done = false;
-  full_indicator = false;
+  szl_full_indicator = false;
   f_pdc_request = 1;
   #if IMMOBILIZER_SEQ
     if (immobilizer_persist) {
@@ -651,6 +626,9 @@ void reset_sleep_variables(void) {
   faceplate_volume = 0;
   gong_active = false;
   faceplate_eject_pressed = faceplate_power_mute_pressed = faceplate_hu_reboot = false;
+  requested_hu_off_t1 = requested_hu_off_t2 = nbt_network_management_initialized = false;
+  nbt_bus_sleep = nbt_active_after_terminal_r = false;
+  nbt_network_management_next_neighbour = 0x6D;                                                                                     // Driver's seat module.
   comfort_exit_ready = comfort_exit_done = false;                                                                                   // Do not execute comfort exit if car fell asleep.
   faceplate_buttons_txq.flush();
   radon_txq.flush();
@@ -666,4 +644,6 @@ void reset_sleep_variables(void) {
   kcan_resend_txq.flush();
   ptcan_resend_txq.flush();
   dcan_resend_txq.flush();
+  nbt_network_management_timer = 3000;
+  low_battery_cc_active = false;
 }

@@ -1,143 +1,6 @@
 // Functions that are no longer tested go here. I probably no longer use the necessary hardware anymore.
 
 
-void set_kcan_filters(uint8_t *filter_set_ok_counter, uint8_t *filter_position_counter) {
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0xAA, STD);                                                // RPM, throttle pos:                                           Cycle time 100ms (KCAN).
-  *filter_position_counter = *filter_position_counter + 1; 
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0xEA, STD);                                                // Driver's door lock status.
-  *filter_position_counter = *filter_position_counter + 1;
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x130, STD);                                               // Key/ignition status:                                         Cycle time 100ms.
-  *filter_position_counter = *filter_position_counter + 1;
-  #if HDC
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x193, STD);                                             // Kombi cruise control status:                                 Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if FAKE_MSA || MSA_RVC
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x195, STD);                                             // MSA button status sent by IHKA:                              Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1AA, STD);                                               // iDrive ErgoCommander (rear entertainment?):                  Sent at boot time and when cycling Terminal R.
-  *filter_position_counter = *filter_position_counter + 1;
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1B4, STD);                                               // Kombi status (indicated speed, handbrake):                   Cycle time 100ms (terminal R ON).
-  *filter_position_counter = *filter_position_counter + 1;
-  #if REVERSE_BEEP || DOOR_VOLUME
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1C6, STD);                                             // PDC acoustic message
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1D0, STD);                                               // Engine temperature
-  *filter_position_counter = *filter_position_counter + 1;
-  #if MIRROR_UNDIM
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1EE, STD);                                             // Indicator stalk status from FRM (KCAN only).
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x1F6, STD);                                               // Indicator status:                                            Cycle time 1s. Sent when changed.
-  *filter_position_counter = *filter_position_counter + 1;
-  #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x21A, STD);                                             // FRM Light status:                                            Cycle time 5s (idle). Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if AUTO_SEAT_HEATING_PASS
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x22A, STD);                                             // Passenger's seat heating status:                             Cycle time 10s (idle), 150ms (change).
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if AUTO_SEAT_HEATING
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x232, STD);                                             // Driver's seat heating status:                                Cycle time 10s (idle), 150ms (change).
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x23A, STD);                                               // Remote button and number sent by CAS:                        Sent 3x when changed.
-  *filter_position_counter = *filter_position_counter + 1;
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x273, STD);                                               // iDrive status and ZBE challenge:                             Sent when iDrive is idle or a button is pressed on the ZBE.
-  *filter_position_counter = *filter_position_counter + 1;
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x2CA, STD);                                               // Ambient temperature:                                         Cycle time 1s.
-  *filter_position_counter = *filter_position_counter + 1;                                                                         
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x2F7, STD);                                               // Units from KOMBI:                                            Sent 3x on Terminal R. Sent when changed.
-  *filter_position_counter = *filter_position_counter + 1;
-  #if AUTO_SEAT_HEATING_PASS
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x2FA, STD);                                             // Seat occupancy and belt status:                              Cycle time 5s.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x2FC, STD);                                             // Door, hood status sent by CAS:                               Cycle time 5s. Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if F_NIVI || MIRROR_UNDIM || FRONT_FOG_CORNER
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x314, STD);                                             // RLS light status:                                            Cycle time 3s. Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if MSA_RVC
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x317, STD);                                             // Monitor PDC button status:                                   Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if HDC
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x31A, STD);                                             // HDC button status sent by IHKA:                              Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if PDC_AUTO_OFF
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x34F, STD);                                             // Handbrake status sent by JBBFE:                              Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if AUTO_TOW_VIEW_RVC
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x36D, STD);                                             // Distance status sent by PDC:                                 Sent when active.
-    *filter_position_counter = *filter_position_counter + 1;
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x38F, STD);                                             // Camera settings sent by iDrive:                              Sent when activating camera and when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x39B, STD);                                             // Camera settings status/acknowledge sent by TRSVC:            Sent when activating ignition and when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x3A8, STD);                                               // M Key (CKM) POWER setting from iDrive:                       Sent when changed.
-  *filter_position_counter = *filter_position_counter + 1;
-  #if MSA_RVC || PDC_AUTO_OFF || AUTO_TOW_VIEW_RVC
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x3AF, STD);                                             // PDC bus status:                                              Cycle time 2s (idle). Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x3B0, STD);                                               // Reverse gear status:                                         Cycle time 1s (idle).
-  *filter_position_counter = *filter_position_counter + 1;
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x3BD, STD);                                               // FRM consumer shutdown:                                       Cycle time 5s (idle). Sent when changed.
-  *filter_position_counter = *filter_position_counter + 1;
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x3CA, STD);                                               // iDrive MDrive settings:                                      Sent when changed.
-  *filter_position_counter = *filter_position_counter + 1;
-  *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x3D7, STD);                                               // Door lock CKM settings from DWA:                             Sent when changed.
-  *filter_position_counter = *filter_position_counter + 1;
-  #if COMFORT_EXIT
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x3DB, STD);                                             // Seat CKM settings:                                           Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if DIM_DRL
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x3DD, STD);                                             // Lights CKM settings:                                         Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if F_ZBE_KCAN1 || F_VSW01 || F_NIVI
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x4E0, STD);                                             // Kombi Network management:                                    Sent when Kombi is ON, cycle time 500ms.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if DOOR_VOLUME
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x5C0, STD);                                             // CAS CC notifications:                                        Sent when changed.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if DEBUG_MODE
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x640, STD);                                             // CAS diagnostic responses:                                    Sent when response is requested.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if F_VSW01
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x648, STD);                                             // VSW diagnostic responses:                                    Sent when response is requested.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if F_NIVI
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x650, STD);                                             // SINE diagnostic responses:                                   Sent when response is requested.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if DOOR_VOLUME || F_VSW01
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x663, STD);                                             // iDrive diagnostic responses:                                 Sent when response is requested.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  #if AUTO_MIRROR_FOLD || FRONT_FOG_CORNER
-    *filter_set_ok_counter += KCAN.setFIFOFilter(*filter_position_counter, 0x672, STD);                                             // FRM diagnostic responses:                                    Sent when response is requested.
-    *filter_position_counter = *filter_position_counter + 1;
-  #endif
-  KCAN.setFIFOFilter(REJECT_ALL, *filter_position_counter);                                                                         // Reject unfiltered messages.
-}
-
-
 void update_mdrive_message_settings_cic(void) {
   if (k_msg.buf[4] == 0xEC || k_msg.buf[4] == 0xF4 || k_msg.buf[4] == 0xE4) {                                                       // Reset requested.
     reset_mdrive_settings();
@@ -280,11 +143,6 @@ void send_f_driving_dynamics_switch_nbt(void) {
     uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};                                                                  // Inspired very loosely by 272.4.8...
     uint8_t new_driving_mode = driving_mode;
 
-    // Not needed for KCAN
-    // f_driving_dynamics[1] = 0xF << 4 | f_driving_dynamics_alive_counter;
-    // f_driving_dynamics_alive_counter == 0xE ? f_driving_dynamics_alive_counter = 0 
-    //                                         : f_driving_dynamics_alive_counter++;
-
     if (pdc_bus_status != 0xA4 && pdc_bus_status != 0xA5) {                                                                         // The popup interferes with the reverse camera.
       if (mdrive_status && mdrive_power[cas_key_number] == 0x30 && mdrive_dsc[cas_key_number] == 7 
           && mdrive_edc[cas_key_number] == 0x2A && mdrive_svt[cas_key_number] >= 0xF1) {                                            // Sportiest settings.
@@ -299,13 +157,6 @@ void send_f_driving_dynamics_switch_nbt(void) {
         new_driving_mode = 0;
       }
     }
-
-    // Not needed for KCAN
-    // f_driving_dynamics_crc.restart();
-    // for (uint8_t i = 1; i < 7; i++) {
-    //   f_driving_dynamics_crc.add(f_driving_dynamics[i]);
-    // }
-    // f_driving_dynamics[0] = f_driving_dynamics_crc.calc();
 
     CAN_message_t f_driving_dynamics_buf = make_msg_buf(0x3A7, 7, f_driving_dynamics);
     kcan2_write_msg(f_driving_dynamics_buf);

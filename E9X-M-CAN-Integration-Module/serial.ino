@@ -60,7 +60,7 @@ void serial_debug_interpreter(void) {
             kcan_write_msg(power_down_cmd_a_buf);
           } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                    (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
           }
         } else {
@@ -133,16 +133,8 @@ void serial_debug_interpreter(void) {
             time_now += 50;
           }
           time_now += 50;
-          m = {clear_dme_hs_buf, time_now};
+          m = {clear_hs_kwp_dme_buf, time_now};
           serial_diag_dcan_txq.push(&m);
-          #if F_ZBE_KCAN1 && !F_NBT
-            time_now += 50;
-            m = {clear_fs_uds_zbe_buf, time_now};
-            serial_diag_dcan_txq.push(&m);
-            time_now += 50;
-            m = {clear_is_uds_zbe_buf, time_now};
-            serial_diag_dcan_txq.push(&m);
-          #endif
           #if F_VSW01
             time_now += 50;
             m = {clear_fs_uds_vsw_buf, time_now};
@@ -153,10 +145,10 @@ void serial_debug_interpreter(void) {
           #endif
           #if SERVOTRONIC_SVT70
             time_now += 50;
-            m = {clear_svt_fs_buf, time_now};
+            m = {clear_fs_kwp_svt_buf, time_now};
             serial_diag_ptcan_txq .push(&m);
             time_now += 50;
-            m = {clear_svt_is_buf, time_now};
+            m = {clear_is_kwp_svt_buf, time_now};
             serial_diag_ptcan_txq.push(&m);
           #endif
           #if F_NBT
@@ -191,7 +183,7 @@ void serial_debug_interpreter(void) {
           clearing_dtcs = true;
         } else {
           sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                  (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
           serial_log(serial_debug_string, 0);
         }
       } else {
@@ -204,7 +196,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent CC gong.", 0);
       } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                    (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
       }
     }
@@ -214,7 +206,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent JBE reboot.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -249,7 +241,7 @@ void serial_debug_interpreter(void) {
     }
     else if (cmd == "reset_eeprom") {
       for (uint8_t i = 0; i < 1024; i++) {
-        EEPROM.update(i, 0);
+        EEPROM.update(i, 0xFF);
       }
       serial_log("  Serial: Reset EEPROM values. Rebooting", 0);
       delay(1000);
@@ -263,22 +255,6 @@ void serial_debug_interpreter(void) {
       }
       reset_mdrive_settings();
     } 
-    else if (cmd == "sleep_ptcan") {
-      digitalWrite(PTCAN_STBY_PIN, HIGH);
-      serial_log("  Serial: Deactivated PT-CAN transceiver.", 0);
-    } 
-    else if (cmd == "sleep_dcan") {
-      digitalWrite(DCAN_STBY_PIN, HIGH);
-      serial_log("  Serial: Deactivated D-CAN transceiver.", 0);
-    } 
-    else if (cmd == "wake_ptcan") {
-      digitalWrite(PTCAN_STBY_PIN, HIGH);
-      serial_log("  Serial: Activated PT-CAN transceiver.", 0);
-    } 
-    else if (cmd == "wake_dcan") {
-      digitalWrite(DCAN_STBY_PIN, HIGH);
-      serial_log("  Serial: Activated D-CAN transceiver.", 0);
-    }
     #if AUTO_STEERING_HEATER
     else if (cmd == "toggle_steering_heater") {
       digitalWrite(STEERING_HEATER_SWITCH_PIN, HIGH);
@@ -300,7 +276,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Activated front left fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -310,7 +286,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Deactivated front right fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -320,7 +296,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Deactivated front left fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -331,7 +307,7 @@ void serial_debug_interpreter(void) {
           serial_log("  Serial: Deactivated front fog lights.", 0);
         } else {
           sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                  (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
           serial_log(serial_debug_string, 0);
         }
       } else {
@@ -360,7 +336,7 @@ void serial_debug_interpreter(void) {
             needle_sweep_animation();
           } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                    (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
           }
         #endif
@@ -379,7 +355,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent mirror fold/unfold request.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -395,7 +371,7 @@ void serial_debug_interpreter(void) {
         }
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -407,7 +383,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent undim request.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -472,7 +448,7 @@ void serial_debug_interpreter(void) {
         }
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -558,7 +534,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sending HU reboot job.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -685,11 +661,7 @@ void print_help(void) {
   #endif
   serial_log("  toggle_mdrive - Change MDrive state ON-OFF.\r\n"
     "  reset_eeprom - Sets EEPROM bytes to 0xFF and reboots. EEPROM will be rebuilt on reboot.\r\n"
-    "  reset_mdrive - Reset MDrive settings to defaults.\r\n"
-    "  sleep_ptcan - Deactivates the PT-CAN transceiver.\r\n"
-    "  sleep_dcan - Deactivates the D-CAN transceiver.\r\n"
-    "  wake_ptcan - Activates the PT-CAN transceiver.\r\n"
-    "  wake_dcan - Activates the D-CAN transceiver.", 0);
+    "  reset_mdrive - Reset MDrive settings to defaults.", 0);
   #if AUTO_STEERING_HEATER
     serial_log("  toggle_steering_heater - Operates the steering wheel heater switch.", 0);
   #endif
@@ -784,6 +756,9 @@ void check_serial_diag_actions(void) {
       clearing_dtcs = false;
       diag_transmit = true;
       serial_log("  Serial: Error memories cleared. Cycle Terminal R OFF/ON.", 0);
+      #if F_NBT
+        send_cc_message("Error memories cleared. Cycle Terminal R.", true, 3000);
+      #endif
     }
   }
 

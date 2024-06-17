@@ -100,9 +100,7 @@ void evaluate_reverse_gear_status(void) {
           rvc_tow_view_by_module = false;
         }
       #endif
-      #if REVERSE_BEEP
-        reverse_beep_sent = false;                                                                                                  // Reset the beep flag.
-      #endif
+      reverse_beep_sent = false;                                                                                                    // Reset the beep flag.
     }
   }
 }
@@ -130,26 +128,23 @@ void evaluate_vehicle_moving(void) {
 
 
 void evaluate_indicated_speed(void) {
-  if (vehicle_moving) {
-    if (speed_mph) {
-      indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 16;
-    } else {
-      indicated_speed = (((k_msg.buf[1] - 208 ) * 256) + k_msg.buf[0] ) / 10;
-    }
-    #if HDC
-      if (hdc_active) {
-        if (indicated_speed > hdc_deactivate_speed) {
-          serial_log("HDC deactivated due to high vehicle speed.", 2);
-          hdc_active = false;
-          kcan_write_msg(hdc_cc_deactivated_on_buf);
-          m = {hdc_cc_deactivated_off_buf, millis() + 2000};
-          ihk_extra_buttons_cc_txq.push(&m);
-        }
-      }
-    #endif
-  } else {
-    indicated_speed = 0;
+  indicated_speed = ((k_msg.buf[1] & 0xF) << 8 | k_msg.buf[0]) * 0.1;                                                               // KM/h
+
+  if (speed_mph) {
+    indicated_speed = indicated_speed / 1.609;
   }
+
+  #if HDC
+    if (hdc_active) {
+      if (indicated_speed > hdc_deactivate_speed) {
+        serial_log("HDC deactivated due to high vehicle speed.", 2);
+        hdc_active = false;
+        kcan_write_msg(hdc_cc_deactivated_on_buf);
+        m = {hdc_cc_deactivated_off_buf, millis() + 2000};
+        ihk_extra_buttons_cc_txq.push(&m);
+      }
+    }
+  #endif
 }
 
 
@@ -229,65 +224,89 @@ void send_f_longitudinal_acceleration(void) {
     }
     f_longitudinal_acceleration[0] = f_longitudinal_acceleration_crc.calc();
     
-    CAN_message_t f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
-    ptcan_write_msg(f_longitudinal_acceleration_buf);
+    #if F_NIVI
+      CAN_message_t f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
+      ptcan_write_msg(f_longitudinal_acceleration_buf);
+    #endif
     f_chassis_longitudinal_timer = 0;
   }
 }
 
 
 void send_f_lateral_acceleration(void) {
-  if (f_chassis_lateral_timer >= 20400 && ignition) {
-    uint8_t f_lateral_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                              // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNY_COG.
+  // if (f_chassis_lateral_timer >= 20400 && ignition) {
+  //   uint8_t f_lateral_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                              // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNY_COG.
     
-    uint16_t raw_value = 0;
-    raw_value = (pt_msg.buf[4] << 4 | ((pt_msg.buf[3] >> 4) & 0x0F));                                                               // Combine byte 4 with the first half of byte 3 to form 12-bit signed integer.
+    const double alpha = 0.7;
+    uint16_t raw_value = (pt_msg.buf[4] << 4 | ((pt_msg.buf[3] >> 4) & 0x0F));                                                      // Combine byte 4 with the first half of byte 3 to form 12-bit signed integer.
     int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
     e_lateral_acceleration = signed_value * 0.025;                                                                                  // Value in m/s^2.
 
-    lateral_acceleration = round((e_lateral_acceleration + 65) / 0.002);
-    f_lateral_acceleration[1] = 0xF << 4 | f_lateral_acceleration_alive_counter;
-    f_lateral_acceleration_alive_counter == 0xE ? f_lateral_acceleration_alive_counter = 0 
-                                                : f_lateral_acceleration_alive_counter++;
-    f_lateral_acceleration[2] = lateral_acceleration & 0xFF;                                                                        // Convert and transmit in LE.
-    f_lateral_acceleration[3] = lateral_acceleration >> 8;
-
-    f_lateral_acceleration_crc.restart();
-    for (uint8_t i = 1; i < 6; i++) {
-      f_lateral_acceleration_crc.add(f_lateral_acceleration[i]);
+    if (real_speed == 0) {
+      if (e_lateral_acceleration_error <= e_lateral_acceleration) {                                                                 // If the error is less than the current error, reset it.
+          e_lateral_acceleration_error = e_lateral_acceleration;
+      } else {
+          e_lateral_acceleration_error = alpha * e_lateral_acceleration_error + (1 - alpha) * e_lateral_acceleration;               // Update error using exponential moving average
+      }
     }
-    f_lateral_acceleration[0] = f_lateral_acceleration_crc.calc();
+
+    e_lateral_acceleration += -e_lateral_acceleration_error;
+    lateral_acceleration = round((e_lateral_acceleration + 65) / 0.002);
+
+    // f_lateral_acceleration[1] = 0xF << 4 | f_lateral_acceleration_alive_counter;
+    // f_lateral_acceleration_alive_counter == 0xE ? f_lateral_acceleration_alive_counter = 0 
+    //                                             : f_lateral_acceleration_alive_counter++;
+    // f_lateral_acceleration[2] = lateral_acceleration & 0xFF;                                                                        // Convert and transmit in LE.
+    // f_lateral_acceleration[3] = lateral_acceleration >> 8;
+
+  //   f_lateral_acceleration_crc.restart();
+  //   for (uint8_t i = 1; i < 6; i++) {
+  //     f_lateral_acceleration_crc.add(f_lateral_acceleration[i]);
+  //   }
+  //   f_lateral_acceleration[0] = f_lateral_acceleration_crc.calc();
     
-    CAN_message_t f_lateral_acceleration_buf = make_msg_buf(0x19A, 6, f_lateral_acceleration);
-    ptcan_write_msg(f_lateral_acceleration_buf);
-    f_chassis_lateral_timer = 0;
-  }
+  //   CAN_message_t f_lateral_acceleration_buf = make_msg_buf(0x19A, 6, f_lateral_acceleration);
+  //   #if F_NIVI
+  //     ptcan_write_msg(f_lateral_acceleration_buf);
+  //   #endif
+  //   f_chassis_lateral_timer = 0;
+  // }
 }
 
 
 void send_f_yaw_rate_chassis(void) {
   if (f_chassis_yaw_timer >= 20600) {
     
-    uint16_t raw_value = 0;
-    raw_value = ((pt_msg.buf[6] & 0xF) << 8 | pt_msg.buf[5]);                                                                       // Combine the second half of byte6 with byte5 to form 12-bit signed integer.
+    const double alpha = 0.7;
+    uint16_t raw_value = ((pt_msg.buf[6] & 0xF) << 8 | pt_msg.buf[5]);                                                              // Combine the second half of byte6 with byte5 to form 12-bit signed integer.
     int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
     e_yaw_rate = signed_value * 0.05;                                                                                               // Value in degrees/sec.
 
     if (real_speed == 0) {
-      e_yaw_error = (e_yaw_error + e_yaw_rate) / 2;                                                                                 // Stationary error correction through averaging yaw rate while stationary.
-    } 
+      if (e_yaw_error <= e_yaw_rate) {                                                                                              // If the error is less than the current error, reset it.
+          e_yaw_error = e_yaw_rate;
+      } else {
+          e_yaw_error = alpha * e_yaw_error + (1 - alpha) * e_yaw_rate;                                                             // Update error using exponential moving average
+      }
+    }
 
-    e_yaw_rate = e_yaw_rate + ( -e_yaw_error );
+    e_yaw_rate += -e_yaw_error;
     f_yaw_rate = round((e_yaw_rate + 163.84) / 0.005);
     
     #if F_NBT
-      uint8_t f_extra_chassis_display[] = {0, 0, 0, 0};                                                                             // Used by xDrive status and gyro in GW7. Non F2X GWs use 0x19F!
+      uint8_t f_extra_chassis_display[] = {0, 0, 0, 0, 0, 0, 0, 0};                                                                 // Used by xDrive status and gyro in GW7. Non F2X GWs use 0x19F!
       f_extra_chassis_display[0] = f_converted_steering_angle & 0xFF;
       f_extra_chassis_display[1] = f_converted_steering_angle >> 8;
       f_extra_chassis_display[2] = f_yaw_rate & 0xFF;                                                                               // Convert and transmit in LE. Identical to 0x19F.
       f_extra_chassis_display[3] = f_yaw_rate >> 8;
+      if (real_speed > 0) {
+        f_extra_chassis_display[4] = longitudinal_acceleration & 0xFF;                                                              // Identical to 0x199 and 0x19A.
+        f_extra_chassis_display[5] = longitudinal_acceleration >> 8;
+        f_extra_chassis_display[6] = lateral_acceleration & 0xFF;
+        f_extra_chassis_display[7] = lateral_acceleration >> 8;
+      }
       
-      kcan2_write_msg(make_msg_buf(0x2F3, 4, f_extra_chassis_display));
+      kcan2_write_msg(make_msg_buf(0x2F3, 8, f_extra_chassis_display));
     #endif
     
     #if F_NIVI
@@ -317,11 +336,7 @@ void send_f_yaw_rate_chassis(void) {
 
 
 void evaluate_real_speed(void) {
-  if (pt_msg.buf[0] > 0xF) {
-    real_speed = ((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1;                                                                // KM/h
-  } else {
-    real_speed = ((pt_msg.buf[1] & 0xF) << 4 | pt_msg.buf[0]) * 0.1;
-  }
+  real_speed = ((pt_msg.buf[1] & 0xF) << 8 | pt_msg.buf[0]) * 0.1;                                                                  // KM/h
 }
 
 
@@ -400,11 +415,8 @@ void send_f_standstill_status(void) {
 
 
 void evaluate_steering_angle(void) {
-  steering_angle = ((pt_msg.buf[1] * 256) + pt_msg.buf[0]) / 23;
-  // Max left angle is 1005 / 23
-  if (steering_angle >= 435) { 
-    steering_angle = steering_angle - 2849;
-  }
+  int16_t steering_angle_signed = pt_msg.buf[1] << 8 | pt_msg.buf[0];
+  steering_angle = steering_angle_signed * 0.0428317;
 }
 
 
@@ -568,13 +580,13 @@ void check_hdc_queue(void) {
 void evaluate_speed_unit(void) {
   speed_mph = (k_msg.buf[2] & 0xF0) == 0xB0 ? true : false;
   if (speed_mph) {
-    max_hdc_speed = 22;
-    hdc_deactivate_speed = 37;
-    immobilizer_max_speed = 12;
+    max_hdc_speed = 22.0;
+    hdc_deactivate_speed = 37.0;
+    immobilizer_max_speed = 12.0;
   } else {
-    max_hdc_speed = 35;
-    hdc_deactivate_speed = 60;
-    immobilizer_max_speed = 20;
+    max_hdc_speed = 35.0;
+    hdc_deactivate_speed = 60.0;
+    immobilizer_max_speed = 20.0;
   }
 }
 

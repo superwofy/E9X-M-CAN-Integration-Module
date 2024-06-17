@@ -103,6 +103,10 @@ MMI_ENA_SHIFTLIGHTS                                                     // Enabl
     aktiv
 DSC_VARIANTE                                                            // Changes DSC symbol when disabled, disables DTC mode kombi screen warning
     wert_02
+CC_ID_AKTIV_11
+    // Change the second byte from 0xFF to 0x7D (i.e 11111111 to 01111101)
+    // This disables the Ignition On door open CC.
+    // This is required to make the DOOR_VOLUME feature work.
 
 
 

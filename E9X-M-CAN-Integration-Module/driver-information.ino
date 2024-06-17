@@ -72,13 +72,13 @@ void activate_shiftlight_segments(CAN_message_t message) {
 
 void evaluate_update_shiftlight_sync(void) {
   if (!engine_coolant_warmed_up) {
-    if (pt_msg.buf[0] != last_var_rpm_can) {
-      var_redline_position = ((pt_msg.buf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                                 // This is where the variable redline actually starts on the KOMBI (x4).
+    if (k_msg.buf[0] != last_var_rpm_can) {
+      var_redline_position = ((k_msg.buf[0] * 0x32) + VAR_REDLINE_OFFSET_RPM) * 4;                                                  // This is where the variable redline actually starts on the KOMBI (x4).
       START_UPSHIFT_WARN_RPM_ = var_redline_position;                                                                              
       MID_UPSHIFT_WARN_RPM_ = var_redline_position + 1600;                                                                          // +400 RPM
       MAX_UPSHIFT_WARN_RPM_ = var_redline_position + 2400;                                                                          // +600 RPM
       GONG_UPSHIFT_WARN_RPM_ = var_redline_position + 2800;                                                                         // +700 RPM
-      if (pt_msg.buf[0] == 0x88) {                                                                                                  // DME is sending 6800 RPM.
+      if (k_msg.buf[0] == 0x88) {                                                                                                   // DME is sending 6800 RPM.
         engine_coolant_warmed_up = true;
       }
       #if DEBUG_MODE
@@ -87,7 +87,7 @@ void evaluate_update_shiftlight_sync(void) {
                 (MAX_UPSHIFT_WARN_RPM_ / 4), (GONG_UPSHIFT_WARN_RPM_ / 4), (var_redline_position / 4));
         serial_log(serial_debug_string, 3);
       #endif
-      last_var_rpm_can = pt_msg.buf[0];
+      last_var_rpm_can = k_msg.buf[0];
     }
   } else {
     if (START_UPSHIFT_WARN_RPM_ != START_UPSHIFT_WARN_RPM) {
@@ -268,14 +268,16 @@ void evaluate_reverse_beep(void) {
 
 
 void evaluate_indicate_ftm_status(void) {
-  if (pt_msg.buf[0] == 3 && !ftm_indicator_status) {
-    kcan_write_msg(ftm_indicator_flash_buf);
-    ftm_indicator_status = true;
-    serial_log("Activated FTM indicator.", 2);
-  } else if (pt_msg.buf[0] == 0 && ftm_indicator_status) {
-    kcan_write_msg(ftm_indicator_off_buf);
-    ftm_indicator_status = false;
-    serial_log("Deactivated FTM indicator.", 2);
+  if (ignition) {
+    if (k_msg.buf[0] == 3 && !ftm_indicator_status) {
+      kcan_write_msg(ftm_indicator_flash_buf);
+      ftm_indicator_status = true;
+      serial_log("Activated FTM indicator.", 2);
+    } else if (k_msg.buf[0] == 0 && ftm_indicator_status) {
+      kcan_write_msg(ftm_indicator_off_buf);
+      ftm_indicator_status = false;
+      serial_log("Deactivated FTM indicator.", 2);
+    }
   }
 }
 
@@ -385,9 +387,6 @@ void check_ihk_buttons_cc_queue(void) {
     ihk_extra_buttons_cc_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
-      #if F_NBT
-        kcan2_write_msg(delayed_tx.tx_msg);
-      #endif
       ihk_extra_buttons_cc_txq.drop();
     }
   }
@@ -576,9 +575,6 @@ void check_pdc_button_queue(void) {
     pdc_buttons_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
-      #if F_NBT
-        kcan2_write_msg(delayed_tx.tx_msg);
-      #endif
       pdc_buttons_txq.drop();
     }
   }
@@ -642,12 +638,12 @@ void send_nbt_sport_displays_data(bool startup_animation) {
         nbt_sport_data[1] |= MAX_TORQUE_SCALE_NM;
         max_torque = (1 + MAX_TORQUE_SCALE_NM) * 80;
       } else if (torque_unit[cas_key_number] == 2) {
-        nbt_sport_data[1] |= MAX_TORQUE_SCALE_LB;
-        max_torque = (1 + MAX_TORQUE_SCALE_LB) * 80;
+        nbt_sport_data[1] |= MAX_TORQUE_SCALE_LBFT;
+        max_torque = (1 + MAX_TORQUE_SCALE_LBFT) * 80;
         torque_factor = 0.7376;
       } else if (torque_unit[cas_key_number] == 3) {
-        nbt_sport_data[1] |= MAX_TORQUE_SCALE_KG;
-        max_torque = (1 + MAX_TORQUE_SCALE_KG) * 80;
+        nbt_sport_data[1] |= MAX_TORQUE_SCALE_KGM;
+        max_torque = (1 + MAX_TORQUE_SCALE_KGM) * 80;
         torque_factor = 0.1;
       }
 
@@ -659,7 +655,8 @@ void send_nbt_sport_displays_data(bool startup_animation) {
           if (engine_running) {
             uint16_t raw_value = (k_msg.buf[2] << 4) | (k_msg.buf[1] >> 4);                                                         // 12-bit EXX torque (TORQ_AVL - torque actual-value at the clutch).
             int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
-            engine_torque = signed_value * 0.5 * torque_factor;                                                                     // Signed and scaled Nm value.
+            engine_torque_nm = signed_value * 0.5;                                                                                  // Signed and scaled Nm value.
+            engine_torque = signed_value * 0.5 * torque_factor;
 
             if (engine_torque > max_torque) { engine_torque = max_torque; }                                                         // Ensure we don't exceed the scale.
             if (engine_torque > 10) {                                                                                               // This value can be negative. When coasting? Add a minimum to prevent idle twitching.
@@ -689,123 +686,124 @@ void send_nbt_sport_displays_data(bool startup_animation) {
 
 void process_bn2000_cc_display(void) {
   #if CUSTOM_MONITORING_CC
-    bool custom_cc_inserted = false;
+    bool custom_cc_inserted = false,
+         custom_cc_should_insert = (k_msg.buf[0] >> 4) == (k_msg.buf[0] & 0xF) ? true : false;                                      // To avoid duplication, this ensures that this is the last 0x336 in the chain.
   #else
-    bool custom_cc_inserted = true;
+    bool custom_cc_inserted = true, custom_cc_should_insert = false;
   #endif
 
   if (k_msg.buf[1] == 0xA6 && k_msg.buf[2] == 2) {                                                                                  // Yellow, car lift error.
-    if (!custom_cc_inserted) {                                                                                                      // If possible, insert the custom CC into these otherwise unusable positions.
+    if (!custom_cc_inserted && custom_cc_should_insert) {                                                                           // If possible, insert the custom CC into these otherwise unusable positions.
       k_msg.buf[1] = 0x46;
       k_msg.buf[2] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[1] = 0xFF;
+      k_msg.buf[1] = 0xFE;
       k_msg.buf[2] = 0xFF;
     }
   } else if (k_msg.buf[3] == 0xA6 && k_msg.buf[4] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[3] = 0x46;
       k_msg.buf[4] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[3] = 0xFF;
+      k_msg.buf[3] = 0xFE;
       k_msg.buf[4] = 0xFF;
     }
   } else if (k_msg.buf[5] == 0xA6 && k_msg.buf[6] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[5] = 0x46;
       k_msg.buf[6] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[5] = 0xFF;
+      k_msg.buf[5] = 0xFE;
       k_msg.buf[6] = 0xFF;
     }
   }
 
   if (k_msg.buf[1] == 0xA0 && k_msg.buf[2] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[1] = 0x46;
       k_msg.buf[2] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[1] = 0xFF;
+      k_msg.buf[1] = 0xFE;
       k_msg.buf[2] = 0xFF;
     }
   } else if (k_msg.buf[3] == 0xA0 && k_msg.buf[4] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[3] = 0x46;
       k_msg.buf[4] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[3] = 0xFF;
+      k_msg.buf[3] = 0xFE;
       k_msg.buf[4] = 0xFF;
     }
   } else if (k_msg.buf[5] == 0xA0 && k_msg.buf[6] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[5] = 0x46;
       k_msg.buf[6] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[5] = 0xFF;
+      k_msg.buf[5] = 0xFE;
       k_msg.buf[6] = 0xFF;
     }
   }
 
   if (k_msg.buf[1] == 0xA1 && k_msg.buf[2] == 2) {                                                                                  // DSC OFF ?
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[1] = 0x46;
       k_msg.buf[2] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[1] = 0xFF;
+      k_msg.buf[1] = 0xFE;
       k_msg.buf[2] = 0xFF;
     }
   } else if (k_msg.buf[3] == 0xA1 && k_msg.buf[4] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[3] = 0x46;
       k_msg.buf[4] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[3] = 0xFF;
+      k_msg.buf[3] = 0xFE;
       k_msg.buf[4] = 0xFF;
     }
   } else if (k_msg.buf[5] == 0xA1 && k_msg.buf[6] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[5] = 0x46;
       k_msg.buf[6] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[5] = 0xFF;
+      k_msg.buf[5] = 0xFE;
       k_msg.buf[6] = 0xFF;
     }
   }
 
   if (k_msg.buf[1] == 0xA2 && k_msg.buf[2] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[1] = 0x46;
       k_msg.buf[2] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[1] = 0xFF;
+      k_msg.buf[1] = 0xFE;
       k_msg.buf[2] = 0xFF;
     }
   } else if (k_msg.buf[3] == 0xA2 && k_msg.buf[4] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[3] = 0x46;
       k_msg.buf[4] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[3] = 0xFF;
+      k_msg.buf[3] = 0xFE;
       k_msg.buf[4] = 0xFF;
     }
   } else if (k_msg.buf[5] == 0xA2 && k_msg.buf[6] == 2) {
-    if (!custom_cc_inserted) {
+    if (!custom_cc_inserted && custom_cc_should_insert) {
       k_msg.buf[5] = 0x46;
       k_msg.buf[6] = 3;
       custom_cc_inserted = true;
     } else {
-      k_msg.buf[5] = 0xFF;
+      k_msg.buf[5] = 0xFE;
       k_msg.buf[6] = 0xFF;
     }
   }
@@ -821,8 +819,8 @@ void process_bn2000_cc_display(void) {
     k_msg.buf[6] = 0;
   }
 
-  if (!custom_cc_inserted) {                                                                                                        // Try to find a position in the list for the custom CC.
-    if (k_msg.buf[1] == 0 && k_msg.buf[2] == 0) {
+  if (!custom_cc_inserted && custom_cc_should_insert) {                                                                             // Try to find a position in the list for the custom CC.
+    if (k_msg.buf[1] == 0 && k_msg.buf[2] == 0) {                                                                                   // This should exist when KOMBI sends "list clear": 00 00 00 FE FF FE FF.
       k_msg.buf[1] = 0x46;
       k_msg.buf[2] = 3;
     } else if (k_msg.buf[3] == 0xFE && k_msg.buf[4] == 0xFF) {
@@ -851,9 +849,27 @@ void process_bn2000_cc_dialog(void) {
     k_msg.buf[0] = 0xEC;
     k_msg.buf[1] = 0;
     k_msg.buf[2] = 0x20;                                                                                                            // Show the dialog box.
-  } 
+  }
   
   kcan2_write_msg(k_msg);
+}
+
+
+void process_dme_cc(void) {
+  if ((k_msg.buf[1] == 0xE5 && k_msg.buf[2] == 0) 
+             || (k_msg.buf[1] == 0x13 && k_msg.buf[2] == 2)) {
+    if (k_msg.buf[3] == 0x39) {
+      if (!low_battery_cc_active) {
+        low_battery_cc_active = true;
+        serial_log("Received BN2000 battery low CC.", 2);
+      }
+    } else {
+      if (low_battery_cc_active) {
+        low_battery_cc_active = false;
+        serial_log("Received BN2000 battery low CC OFF.", 2);
+      }
+    }
+  }
 }
 
 
@@ -866,8 +882,8 @@ void send_custom_info_cc(void) {
     if (millis() >= cc_message_expires) {
       if (!diag_transmit) {
         char diag_cc_string[46] = {' '};
-        snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %lds.",
-                 (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+        snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %ds.",
+                 (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         send_cc_message(diag_cc_string, false, 0);
       } else {
         char info_cc_string[46] = {' '};
@@ -900,35 +916,42 @@ void send_custom_info_cc(void) {
             }
 
             if (pressure_unit == 1) {
-              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.2f%s   %.20s",
+              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.2fbar   %.20s",
                     temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
                     temperature_unit == 1 ? 'C' : 'F',
                     boost >= 0 ? "+" : "",
                     boost * 0.001,
-                    "bar",
                     boost_bar_string
               );
-            } else {
-              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.2f%s   %.20s",
+            } else if (pressure_unit == 2) {
+              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.1f%skPa   %.20s",
                     temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
                     temperature_unit == 1 ? 'C' : 'F',
                     boost >= 0 ? "+" : "",
-                    pressure_unit == 2 ? boost * 0.1 : boost * 0.0145038,
-                    pressure_unit == 2 ? "kPa" : "psi",
+                    boost / 10.0,
+                    boost < 99 ? " " : "",
+                    boost_bar_string
+              );
+            } else {
+              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.1f%spsi   %.20s",
+                    temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                    temperature_unit == 1 ? 'C' : 'F',
+                    boost >= 0 ? "+" : "",
+                    boost * 0.0145038,
+                    boost < 689 ? " " : "",                                                                                         // ~10 psi.
                     boost_bar_string
               );
             }
           } else {
             if (pressure_unit == 1) {
-              snprintf(info_cc_string, 46, "W: %d°%c   I: %d°%c   B: %.1fV   T: %s%.2f%s",
+              snprintf(info_cc_string, 46, "W: %d°%c   I: %d°%c   B: %.1fV   T: %s%.2fbar",
                   coolant_temp,
                   temperature_unit == 1 ? 'C' : 'F',
                   temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
                   temperature_unit == 1 ? 'C' : 'F',
                   battery_voltage,
                   boost >= 0 ? "+" : "",
-                  boost * 0.001,
-                  "bar"
+                  boost * 0.001
               );
             } else {
               snprintf(info_cc_string, 46, "W: %d°%c   I: %d°%c   B: %.1fV   T: %s%.1f%s",
@@ -951,11 +974,18 @@ void send_custom_info_cc(void) {
                   temperature_unit == 1 ? 'C' : 'F',
                   battery_voltage
           );
-        } else {
+        } else if (terminal_r) {
           snprintf(info_cc_string, 46, "WT: %d°%c   BAT: %.2fV",
                   coolant_temp,
                   temperature_unit == 1 ? 'C' : 'F',
                   battery_voltage
+          );
+        } else {
+          snprintf(info_cc_string, 46, "WT: %d°%c   BAT: %.2fV   30G-OFF: <%ds",
+                  coolant_temp,
+                  temperature_unit == 1 ? 'C' : 'F',
+                  battery_voltage,
+                  terminal30g_followup_time > 0 ? terminal30g_followup_time * 10 : 10                                               // From timer set to 0, the KL30G relay will be killed in about 18s. See trace timestamp: 1814669398.
           );
         }
         send_cc_message(info_cc_string, false, 0);
@@ -968,7 +998,7 @@ void send_custom_info_cc(void) {
 
 void evaluate_trsvc_cc(void) {
   if (k_msg.buf[0] == 0x40) {
-    if (k_msg.buf[3] == 0x55) {
+    if ((k_msg.buf[3] & 0b11) == 1) {                                                                                                 // ST_CC_MESS_STD - Set.
       if (!trsvc_cc_gong) {
         play_cc_gong(1);
         trsvc_cc_gong = true;
