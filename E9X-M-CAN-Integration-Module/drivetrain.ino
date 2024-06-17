@@ -3,6 +3,7 @@
 
 void evaluate_engine_status(void) {
   RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
+  e_throttle_position = k_msg.buf[3] * 0.39063;
   uint8_t idle_status = (k_msg.buf[6] & 0xF) >> 2;                                                                                  // Get the first two bits of the second half of this byte.
   if (idle_status == 0) {
     engine_idling = true;
@@ -19,9 +20,7 @@ void evaluate_engine_status(void) {
       #if NEEDLE_SWEEP
         needle_sweep_animation();
       #endif
-      #if EXHAUST_FLAP_CONTROL
-        exhaust_flap_action_timer = 0;                                                                                              // Start tracking the exhaust flap.
-      #endif
+      exhaust_flap_action_timer = 0;                                                                                                // Start tracking the exhaust flap.
       serial_log("Engine started.", 2);
       #if IMMOBILIZER_SEQ
         enable_alarm_after_stall();
@@ -37,9 +36,7 @@ void execute_engine_off_actions(void) {
   if (engine_running) {
     engine_running = false;
     serial_log("Engine stopped.", 2);
-    #if ASD89_RAD_ON
-      asd_rad_on_initialized = false;                                                                                               // By default the ASD module turns off RAD_ON when the engine stops.
-    #endif
+    asd_rad_on_initialized = false;                                                                                                 // By default the ASD module turns off RAD_ON when the engine stops.
     #if IMMOBILIZER_SEQ
       execute_alarm_after_stall();
     #endif
@@ -57,16 +54,14 @@ void toggle_mdrive_message_active(void) {
       kcan_write_msg(frm_ckm_ahl_komfort_buf);
       serial_log("Set AHL back to comfort mode.", 2);
     #endif
-    #if ASD89
+    #if ASD89_MDRIVE
       if (diag_transmit) {
         kcan_write_msg(mute_asd_buf);
         serial_log("Muted ASD output.", 2);
       }
     #endif
     if (mdrive_power[cas_key_number] == 0x30) {
-      #if EXHAUST_FLAP_CONTROL
-        exhaust_flap_sport = false;
-      #endif
+      exhaust_flap_sport = false;
     } else if (mdrive_power[cas_key_number] == 0x10) {
       console_power_mode = restore_console_power_mode;
     }                                                                                                                               // Else, POWER unchanged
@@ -75,15 +70,13 @@ void toggle_mdrive_message_active(void) {
     if (mdrive_power[cas_key_number] == 0x20) {                                                                                     // POWER in Sport.
       mdrive_power_active = true;
     } else if (mdrive_power[cas_key_number] == 0x30) {                                                                              // POWER Sport+.
-      #if ASD89
+      #if ASD89_MDRIVE
         if (diag_transmit) {
           kcan_write_msg(demute_asd_buf);
           serial_log("De-muted ASD output.", 2);
         }
       #endif
-      #if EXHAUST_FLAP_CONTROL
-        exhaust_flap_sport = true;                                                                                                  // Exhaust flap always open in Sport+
-      #endif
+      exhaust_flap_sport = true;                                                                                                    // Exhaust flap always open in Sport+
       mdrive_power_active = true;
     } else if (mdrive_power[cas_key_number] == 0x10) {
       restore_console_power_mode = console_power_mode;                                                                              // We'll need to return to its original state when MDrive is turned OFF.
@@ -102,12 +95,9 @@ void toggle_mdrive_message_active(void) {
     mdrive_status = true;
   }
 
-  #if F_NBT
-    f_driving_dynamics_timer = 1001;
-    #if SERVOTRONIC_SVT70
-      svt70_pwm_control_timer = 3001;
-    #endif
-  #endif
+  f_driving_dynamics_timer = 1001;
+  svt70_pwm_control_timer = 3001;
+  veh_mode_timer = 500;
 }
 
 
@@ -131,7 +121,7 @@ void toggle_mdrive_dsc_mode(void) {
 
 
 void evaluate_m_mfl_button_press(void) {
-  if (pt_msg.buf[1] == 0x4C) {                                                                                                      // M button is pressed.
+  if (k_msg.buf[1] == 0x4C) {                                                                                                       // M button is pressed.
     if (!ignore_m_press) {
       ignore_m_press = true;                                                                                                        // Ignore further pressed messages until the button is released.
       #if IMMOBILIZER_SEQ
@@ -157,7 +147,7 @@ void evaluate_m_mfl_button_press(void) {
     } else {
       m_mfl_held_count++;
     }
-  } else if (pt_msg.buf[1] == 0xC && pt_msg.buf[0] == 0xC0 && ignore_m_press) {                                                     // Button is released.
+  } else if (k_msg.buf[1] == 0xC && k_msg.buf[0] == 0xC0 && ignore_m_press) {                                                       // Button is released.
     ignore_m_press = ignore_m_hold = false;
     m_mfl_held_count = 0;
 
@@ -301,11 +291,9 @@ void send_mdrive_message(void) {
 }
 
 
-void send_mdrive_alive_message(uint16_t interval) {
-  if (terminal_r) {
-    if (mdrive_message_timer >= interval) {                                                                                         // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
-      send_mdrive_message();
-    }
+void send_mdrive_alive_message(void) {
+  if (mdrive_message_timer >= 5000) {                                                                                               // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
+    send_mdrive_message();
   }
 }
 
@@ -315,29 +303,25 @@ void execute_mdrive_settings_changed_actions() {
     if (mdrive_power[cas_key_number] == 0x20) {                                                                                     // POWER in Sport.
       mdrive_power_active = true;
     } else if (mdrive_power[cas_key_number] == 0x30) {                                                                              // POWER Sport+.
-      #if ASD89
+      #if ASD89_MDRIVE
         if (diag_transmit) {
           kcan_write_msg(demute_asd_buf);
           serial_log("De-muted ASD output.", 2);
         }
       #endif
-      #if EXHAUST_FLAP_CONTROL
-        exhaust_flap_sport = true;                                                                                                  // Exhaust flap always open in Sport+
-      #endif
+      exhaust_flap_sport = true;                                                                                                    // Exhaust flap always open in Sport+
       mdrive_power_active = true;
     } else if (mdrive_power[cas_key_number] == 0x10) {
       restore_console_power_mode = console_power_mode;                                                                              // We'll need to return to its original state when MDrive is turned OFF.
       console_power_mode = false;                                                                                                   // Turn OFF POWER from console too.
       mdrive_power_active = false;
-      #if ASD89
+      #if ASD89_MDRIVE
         if (diag_transmit) {
           kcan_write_msg(mute_asd_buf);
           serial_log("Muted ASD output.", 3);
         }
       #endif
-      #if EXHAUST_FLAP_CONTROL
-        exhaust_flap_sport = false;
-      #endif
+      exhaust_flap_sport = false;
     }
     toggle_mdrive_dsc_mode();                                                                                                       // Change DSC to the new state.
 
@@ -353,9 +337,7 @@ void execute_mdrive_settings_changed_actions() {
       #endif
     }
   }
-  #if SERVOTRONIC_SVT70
-    svt70_pwm_control_timer = 3001;
-  #endif 
+  svt70_pwm_control_timer = 3001;
 }
 
 
@@ -459,11 +441,9 @@ void send_power_mode(void) {
   if (console_power_mode || mdrive_power_active) {                                                                                  // Activate sport throttle mapping if POWER from console ON or Sport/Sport+ selected in MDrive (active).
     power_mode_only_dme_veh_mode[1] = 0xF2;                                                                                         // Sport
     digitalWrite(POWER_LED_PIN, HIGH);
-    power_led_delayed_off_action = false;
   } else {
     power_mode_only_dme_veh_mode[1] = 0xF1;                                                                                         // Normal
-    power_led_delayed_off_action = true;
-    power_led_delayed_off_action_time = millis() + 105;
+    digitalWrite(POWER_LED_PIN, LOW);
   }
 
   can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
@@ -549,9 +529,6 @@ void check_immobilizer_status(void) {
     alarm_warnings_txq.peek(&delayed_tx);
     if (millis() >= delayed_tx.transmit_time) {
       kcan_write_msg(delayed_tx.tx_msg);
-      #if F_NBT
-        kcan2_write_msg(delayed_tx.tx_msg);
-      #endif
       alarm_warnings_txq.drop();
     }
   }
@@ -601,33 +578,31 @@ void release_immobilizer(void) {
     alarm_siren_txq.flush();                                                                                                        // Clear pending siren requests.
     m = {alarm_siren_return_control_buf, time_now + 100};
     alarm_siren_txq.push(&m);
-    m = {alarm_siren_return_control_buf, time_now + 200};
+    m = {alarm_siren_return_control_buf, time_now + 300};
     alarm_siren_txq.push(&m);
     alarm_after_engine_stall = alarm_active = false;
     serial_log("Alarm OFF.", 0);
   }
   kcan_write_msg(alarm_led_return_control_buf);
   alarm_led_txq.flush();
-  m = {alarm_led_return_control_buf, time_now + 200};                                                                               // Delay 100ms since we already sent a 6F1 to DWA.
+  m = {alarm_led_return_control_buf, time_now + 400};                                                                               // Delay 100ms since we already sent a 6F1 to DWA.
   alarm_led_txq.push(&m);
-  m = {alarm_led_return_control_buf, time_now + 300};
+  m = {alarm_led_return_control_buf, time_now + 600};
   alarm_led_txq.push(&m);
   alarm_led_active = false;
   kcan_write_msg(key_cc_off_buf);
-  #if F_NBT_EVO6
-    send_cc_message("Immobilizer released.", true, 2000);
+  if (terminal_r || nbt_active_after_terminal_r) {
+    #if F_NBT
+      send_cc_message("Immobilizer released.", true, 2000);
+    #endif
+    m = {start_cc_on_buf, time_now + 500};
+    alarm_warnings_txq.push(&m);
+    m = {start_cc_off_buf, time_now + 1000};
+    alarm_warnings_txq.push(&m);
+    serial_log("Sent start ready CC.", 2);
+  } else {
     play_cc_gong(1);
-  #else
-    if (terminal_r) {
-      m = {start_cc_on_buf, time_now + 500};
-      alarm_warnings_txq.push(&m);
-      m = {start_cc_off_buf, time_now + 1000};
-      alarm_warnings_txq.push(&m);
-      serial_log("Sent start ready CC.", 2);
-    } else {
-      play_cc_gong(1);
-    }
-  #endif
+  }
   immobilizer_activate_release_timer = 0;
 }
 
@@ -637,12 +612,10 @@ void enable_alarm_after_stall(void) {
     alarm_after_engine_stall = true;
     serial_log("Immobilizer still active. Alarm will sound after engine stalls.", 2);    
     kcan_write_msg(key_cc_on_buf);
-    if (diag_transmit) {
-      kcan_write_msg(alarm_led_on_buf);
-      unsigned long time_now = millis();
-      m = {cc_single_gong_buf, time_now + 1500};                                                                                    // Audible alert of impending stall.
-      alarm_warnings_txq.push(&m);
-    }
+    kcan_write_msg(alarm_led_on_buf);
+    unsigned long time_now = millis();
+    m = {cc_triple_gong_buf, time_now + 1500};                                                                                      // Audible alert of impending stall.
+    alarm_warnings_txq.push(&m);
   }
 }
 
@@ -726,16 +699,12 @@ void send_f_torque_1(void) {
     f_torque_1[1] = 0xF << 4 | f_torque_1_alive_counter;                                                                            // Combine FREI (0xF - unused) and ALIV_TORQ_CRSH_1.
     f_torque_1_alive_counter == 0xE ? f_torque_1_alive_counter = 0 
                                   : f_torque_1_alive_counter++;
-    
-    uint16_t raw_torque = (k_msg.buf[2] << 4 | ((k_msg.buf[1] >> 4) & 0x0F));                                                       // Extract E torque value to big endian.
-    
+   
+    int16_t raw_torque = 0x800 + round(engine_torque_nm) * 2;
+ 
     // Engine torque
     f_torque_1[2] = raw_torque & 0xFF;                                                                                              // LE encoded.
-    f_torque_1[3] = (raw_torque >> 8) << 4;
-
-    // Gearbox torque
-    f_torque_1[3] = f_torque_1[3] | (raw_torque & 0xF);
-    f_torque_1[4] = raw_torque >> 4;
+    f_torque_1[3] = (raw_torque >> 8);
 
     // Engine RPM (raw, not scaled by 0.25)
     f_torque_1[5] = RPM & 0xFF;                                                                                                     // Transmit in LE.
@@ -750,6 +719,37 @@ void send_f_torque_1(void) {
     CAN_message_t f_torque_1_buf = make_msg_buf(0xA5, 8, f_torque_1);
     kcan2_write_msg(f_torque_1_buf);
     f_torque_1_timer = 0;
+  }
+}
+
+
+void send_f_throttle(void) {
+  if (f_throttle_timer >= 40000) {
+    uint8_t f_throttle[] = {0, 0, 0, 0, 0, 0, 0, 0xC0};
+
+    f_throttle[1] = 1 << 4 | f_throttle_alive_counter;                                                                            // Combine 1 (Normal operation) and ALIV_ANG_ACPD.
+    f_throttle_alive_counter == 0xE ? f_throttle_alive_counter = 0 
+                                  : f_throttle_alive_counter++;
+    
+
+    uint16_t scaled_value = round(e_throttle_position / 0.025);
+    scaled_value = (scaled_value & 0x800) ? (scaled_value | 0xF000) : scaled_value;                                               // 12-bit boundary check.
+
+    f_throttle[2] = scaled_value & 0xF0;                                                                                          // AVL_ANG_ACPD LSB
+    f_throttle[3] = 0x10 | (scaled_value >> 8);                                                                                   // QU_AVL_ANG_ACPD = 1 | AVL_ANG_ACPD MSB
+
+    f_throttle[4] = scaled_value & 0xF0;                                                                                          // AVL_ANG_ACPD_VIRT LSB
+    f_throttle[5] = scaled_value >> 8;                                                                                            // AVL_ANG_ACPD_VIRT MSB
+
+    f_throttle_crc.restart();
+    for (uint8_t i = 1; i < 8; i++) {
+      f_throttle_crc.add(f_throttle[i]);
+    }
+    f_throttle[0] = f_throttle_crc.calc();
+
+    CAN_message_t f_throttle_buf = make_msg_buf(0xD9, 8, f_throttle);
+    kcan2_write_msg(f_throttle_buf);
+    f_throttle_timer = 0;
   }
 }
 
@@ -852,26 +852,14 @@ void send_dme_boost_request(void) {
 void evaluate_dme_boost_response(void) {
   if (dme_boost_requested) {
     if (pt_msg.buf[0] == 0xF1 && pt_msg.buf[1] == 0x10 && pt_msg.buf[4] == 0x19) {
-      if (pt_msg.buf[7] > 0xF) {
-        engine_cp_sensor = round((pt_msg.buf[6] << 8 | pt_msg.buf[7]) * 0.0390625);
-      } else {
-        engine_cp_sensor = round((pt_msg.buf[6] << 4 | pt_msg.buf[7]) * 0.0390625);
-      }
+      engine_cp_sensor = round((pt_msg.buf[6] << 8 | pt_msg.buf[7]) * 0.0390625);
       ptcan_write_msg(dme_boost_request_b_buf);
     } else if (pt_msg.buf[0] == 0xF1 && pt_msg.buf[1] == 0x21) {
-      if (pt_msg.buf[3] > 0xF) {
-        engine_manifold_sensor = round((pt_msg.buf[2] << 8 | pt_msg.buf[3]) * 0.0390625);
-      } else {
-        engine_manifold_sensor = round((pt_msg.buf[2] << 4 | pt_msg.buf[3]) * 0.0390625);
-      }
-      if (pt_msg.buf[5] > 0xF) {
-        intake_air_temperature = round((pt_msg.buf[4] << 8 | pt_msg.buf[5]) * 0.10000000149011612);
-      } else {
-        intake_air_temperature = round((pt_msg.buf[4] << 4 | pt_msg.buf[5]) * 0.10000000149011612);
-      }
+      engine_manifold_sensor = round((pt_msg.buf[2] << 8 | pt_msg.buf[3]) * 0.0390625);
+      intake_air_temperature = round((pt_msg.buf[4] << 8 | pt_msg.buf[5]) * 0.1);
+      dme_boost_requested = false;
+    } else {
       dme_boost_requested = false;
     }
-  } else {
-    dme_boost_requested = false;
   }
 }

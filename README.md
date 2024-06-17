@@ -24,7 +24,7 @@ Included are also tools to allow full manipulation of the program section in the
 
 **Required hardware:**
 * MSD81 DME.
-* NBT EVO/NBT/CIC iDrive.
+* NBT EVO/CIC iDrive.
 	* ID6 EVO has now replaced the head unit used in this project. Previous CIC functionality is still available but no longer tested.
 * MK60E5 or DSC8 (E89 Z4) non-M modules.
 * E9X M3 centre console trim and buttons or similar.
@@ -66,7 +66,7 @@ Included are also tools to allow full manipulation of the program section in the
 	* Display M Drive settings menu when holding M button
 * Display Shiftlights - including startup animation and sync with the M3 KOMBI variable redline.
 * Display a needle sweep animation on startup.
-	* On NBT sports displays do a sweep also.
+	* On NBT EVO sports displays do a sweep also.
 * Display the Launch Control flag (6MT-MHD).
 * Control Centre console buttons and associated LED (POWER, DSC OFF).
 * Fold/Un-fold mirrors when locking/unlocking.
@@ -91,7 +91,6 @@ Included are also tools to allow full manipulation of the program section in the
 * Have intermittent wipers work alongside rain sensing.
 	* Push the stalk down and hold for 1.3s to turn on intermittent mode.
 	* AUTO, stalk pushed up 1 and stalk pushed up 2 disable intermittent mode.
-* Enable use of FXX K-CAN1 controller with CIC.
 * Enable use of FXX VSW01 (VideoSWitch) module.
 * Enable use of FXX NIVI2/3 module.
 * Enable diagnosis encoding and flashing through Tool32 and E-Sys for F series modules via J2534 passthru over D-CAN.

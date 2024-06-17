@@ -68,6 +68,11 @@ void cache_can_message_buffers(void) {                                          
   idrive_bn2000_drl_on_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_drl_on);
   idrive_bn2000_drl_off_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_drl_off);
 
+  uint8_t set_warning_15kph_off[] = {0x3E, 0xF, 0xF0, 0xFE, 0xFF, 0xEE},                                                                // OFF, 15kph.
+          set_warning_15kph_on[] = {0x7E, 0xF, 0xF0, 0xFE, 0xFF, 0xEE};
+  set_warning_15kph_off_buf = make_msg_buf(0x2B8, 6, set_warning_15kph_off);
+  set_warning_15kph_on_buf = make_msg_buf(0x2B8, 6, set_warning_15kph_on);
+
   uint8_t gws_sport_on[] = {0, 0, 0, 4, 0, 0, 0},
           gws_sport_off[] = {0, 0, 0, 0, 0, 0, 0};
   gws_sport_on_buf = make_msg_buf(0x1D2, 6, gws_sport_on);
@@ -76,13 +81,11 @@ void cache_can_message_buffers(void) {                                          
   uint8_t cc_single_gong[] = {0xF1, 0xFF},
           cc_double_gong[] = {0xF2, 0xFF},
           cc_triple_gong[] = {0xF3, 0xFF},
-          idrive_horn_sound[] = {0xFD,0xFF},
-          idrive_power_off_warning[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF5};
+          idrive_horn_sound[] = {0xFD,0xFF};
   cc_single_gong_buf = make_msg_buf(0x205, 2, cc_single_gong);
   cc_double_gong_buf = make_msg_buf(0x205, 2, cc_double_gong);
   cc_triple_gong_buf = make_msg_buf(0x205, 2, cc_triple_gong);
   idrive_horn_sound_buf = make_msg_buf(0x205, 2, idrive_horn_sound);
-  idrive_power_off_warning_buf = make_msg_buf(0x3B3, 6, idrive_power_off_warning);
 
   #if F_NBT
     #if F_NBT_EVO6
@@ -112,7 +115,10 @@ void cache_can_message_buffers(void) {                                          
           clear_fs_uds_ampt[] = {0x37, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
           clear_is_uds_ampt[] = {0x37, 4, 0x31, 1, 0xF, 6, 0, 0},
           clear_fs_uds_vm[] = {0x4B, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_uds_vm[] = {0x4B, 4, 0x31, 1, 0xF, 6, 0, 0};
+          clear_is_uds_vm[] = {0x4B, 4, 0x31, 1, 0xF, 6, 0, 0},
+          clear_hs_kwp_dme[] = {0x12, 2, 0x31, 3, 0, 0, 0, 0},
+          clear_fs_kwp_svt[] = {0xE, 3, 0x14, 0xFF, 0xFF, 0, 0, 0},
+          clear_is_kwp_svt[] = {0xE, 3, 0x31, 6, 0, 0, 0, 0};
   clear_fs_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_nbt);
   clear_is_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_is_uds_nbt);
   clear_fs_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_zbe);
@@ -125,18 +131,16 @@ void cache_can_message_buffers(void) {                                          
   clear_is_uds_ampt_buf = make_msg_buf(0x6F1, 8, clear_is_uds_ampt);
   clear_fs_uds_vm_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_vm);
   clear_is_uds_vm_buf = make_msg_buf(0x6F1, 8, clear_is_uds_vm);
-
-  uint8_t clear_dme_hs[] = {0x12, 2, 0x31, 3, 0, 0, 0, 0},
-          clear_svt_fs[] = {0xE, 3, 0x14, 0xFF, 0xFF, 0, 0, 0},
-          clear_svt_is[] = {0xE, 3, 0x31, 6, 0, 0, 0, 0};
-  clear_dme_hs_buf = make_msg_buf(0x6F1, 8, clear_dme_hs);
-  clear_svt_fs_buf = make_msg_buf(0x6F1, 8, clear_svt_fs);
-  clear_svt_is_buf = make_msg_buf(0x6F1, 8, clear_svt_is);
+  clear_hs_kwp_dme_buf = make_msg_buf(0x6F1, 8, clear_hs_kwp_dme);
+  clear_fs_kwp_svt_buf = make_msg_buf(0x6F1, 8, clear_fs_kwp_svt);
+  clear_is_kwp_svt_buf = make_msg_buf(0x6F1, 8, clear_is_kwp_svt);
 
   uint8_t dme_boost_request_a[] = {0x12, 3, 0x30, 0x19, 1, 0, 0, 0},
-          dme_boost_request_b[] = {0x12, 0x30, 0, 0, 0, 0, 0, 0};
+          dme_boost_request_b[] = {0x12, 0x30, 0, 0, 0, 0, 0, 0},
+          dme_request_consumers_off[] = {0xF, 0, 0, 0, 0, 8, 0xF2};			                                                            // CTR_PCOS - 2, ST_ENERG_PWMG - 2.
   dme_boost_request_a_buf = make_msg_buf(0x6F1, 8, dme_boost_request_a);
   dme_boost_request_b_buf = make_msg_buf(0x6F1, 8, dme_boost_request_b);
+  dme_request_consumers_off_buf = make_msg_buf(0x3B3, 7, dme_request_consumers_off);
 
   uint8_t ccc_zbe_wake[] = {0xFE, 3, 0, 0, 0, 0, 0, 0};
   ccc_zbe_wake_buf = make_msg_buf(0x1AA, 8, ccc_zbe_wake);
@@ -322,11 +326,11 @@ void cache_can_message_buffers(void) {                                          
   right_drl_dim_buf = make_msg_buf(0x6F1, 8, right_drl_dim);
   right_drl_bright_buf = make_msg_buf(0x6F1, 8, right_drl_bright);
 
-  uint8_t f_kombi_network_mgmt[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                               // Network management KOMBI - F-series.
-  f_kombi_network_mgmt_buf = make_msg_buf(0x560, 8, f_kombi_network_mgmt);
+  uint8_t f_kombi_network_management[] = {0, 0, 0, 0, 0x57, 0x2F, 0, 0x60};                                                         // AUTOSAR Network management KOMBI - F-series.
+  f_kombi_network_management_buf = make_msg_buf(0x560, 8, f_kombi_network_management);
 
-  uint8_t f_zgw_network_mgmt[] = {0x40, 0x10, 0x10, 0, 0, 2, 1, 0};                                                                 // Network management ZGW - F-series.
-  f_zgw_network_mgmt_buf = make_msg_buf(0x510, 8, f_zgw_network_mgmt);
+  uint8_t f_zgw_network_management[] = {0, 0, 0, 0, 0xFF, 0xFF, 0, 0x10};                                                           // AUTOSAR Network management ZGW - F-series.
+  f_zgw_network_management_buf = make_msg_buf(0x510, 8, f_zgw_network_management);
 
   uint8_t sine_pitch_angle_request_a[] = {0x50, 2, 0x21, 5},
           sine_pitch_angle_request_b[] = {0x50, 0x30, 0, 2, 0xFF, 0xFF, 0xFF, 0xFF},
@@ -406,9 +410,6 @@ void cache_can_message_buffers(void) {                                          
           hood_open_hot_cc_dialog_clear[] = {0xE1, 2, 0x70, 0xF0, 0, 0xFE, 0xFE, 0xFE};
   hood_open_hot_cc_dialog_buf = make_msg_buf(0x338, 8, hood_open_hot_cc_dialog);
   hood_open_hot_cc_dialog_clear_buf = make_msg_buf(0x338, 8, hood_open_hot_cc_dialog_clear);
-  
-  uint8_t door_open_cc_off[] = {0x40, 0x4F, 1, 0x28, 0xFF, 0xFF, 0xFF, 0xFF};
-  door_open_cc_off_buf = make_msg_buf(0x5C0, 8, door_open_cc_off);
 
   uint8_t hdc_cc_activated_on[] = {0x40, 0x4B, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF},
           hdc_cc_unavailable_on[] = {0x40, 0x4D, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF},
@@ -522,19 +523,11 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 void kcan2_write_msg(const CAN_message_t &msg) {
   #if F_NBT
-    if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 200 || msg.id == 0x12F || msg.id == 0x130)) {                        // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
+    if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 300 || msg.id == 0x12F || msg.id == 0x130)) {                        // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
       byte send_buf[msg.len];
-
-      // Sinkhole for unused messages. Skip to reduce KCAN2 traffic.
-      if (msg.id == 0xAA || msg.id == 0xA8) { return; }                                                                             // BN2000 engine status and torques.
-      else if (msg.id == 0xC4 || msg.id == 0xC8) { return; }                                                                        // BN2000 steering angle.
-      else if (msg.id == 0x1A0) { return; }                                                                                         // BN2000 Speed / BN2010 Gearbox check-control.
-      else if (msg.id == 0x1B6) { return; }                                                                                         // BN2000 Engine heat flow. Unknown in BN2010. It causes NBT EVO to block phone calls.
-      else if (msg.id == 0x2C0) { return; }                                                                                         // BN2000 LCD brightness.
-      else if (msg.id == 0x317) { return; }                                                                                         // BN2000 PDC button.
-      else if (msg.id == 0x31D) { return; }                                                                                         // BN2000 FTM status.
+   
       #if F_NBT_VIN_PATCH
-        else if (msg.id == 0x380) {                                                                                                 // Patch NBT VIN to donor.
+        if (msg.id == 0x380) {                                                                                                      // Patch NBT VIN to donor.
           if (donor_vin_initialized) {
             for (uint8_t i = 0; i < msg.len; i++) {
               send_buf[i] = DONOR_VIN[i];
@@ -544,12 +537,9 @@ void kcan2_write_msg(const CAN_message_t &msg) {
           }
         }
       #endif 
-      else if (msg.id == 0x399) { return; }                                                                                         // BN2000 MDrive / BN2010 Status energy voltage.
-      else if (msg.id >= 0x5FF && msg.id <= 0x6F0) { return; }                                                                      // Diagnosis response and misc. messages from various modules.
-      else {
-        for (uint8_t i = 0; i < msg.len; i++) {
-          send_buf[i] = msg.buf[i];
-        }
+      
+      for (uint8_t i = 0; i < msg.len; i++) {
+        send_buf[i] = msg.buf[i];
       }
 
       if (CAN_OK != KCAN2.sendMsgBuf(msg.id, 0, msg.len, send_buf)) {
@@ -667,3 +657,38 @@ void can_debug_print_buffer(const CAN_message_t &msg) {
   }
 }
 #endif
+
+
+void convert_f_nbt_network_management(void) {
+  uint8_t nbt_nm[] = {0x62, 0x42, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+  if (!nbt_network_management_initialized) {
+    nbt_nm[1] = 1;
+  } else {
+    nbt_nm[0] = nbt_network_management_next_neighbour;
+    if (nbt_bus_sleep) {
+      if (nbt_bus_sleep_ready_timer >= 60000) {                                                                                     // Give the driver 60s to reactivate the HU otherwise the car would kill KCAN activity immediately.
+        nbt_nm[1] = 0x52;                                                                                                           // This timeout is also triggered when the FRM wakes the KCAN adding 60s before deep sleep!
+      }
+    }
+  }
+
+  kcan_write_msg(make_msg_buf(0x4E2, 8, nbt_nm));
+}
+
+
+void send_f_kombi_network_management(void) {
+  #if F_VSW01
+    if (terminal_r) {                                                                                                               // If not Terminal R, allow the VSW to sleep.
+      kcan_write_msg(f_kombi_network_management_buf);
+    }
+  #endif
+  #if F_NBT
+    kcan2_write_msg(f_kombi_network_management_buf);
+  #endif
+  #if F_NIVI
+    if (ignition) {
+      ptcan_write_msg(f_kombi_network_management_buf);
+    }
+  #endif
+}

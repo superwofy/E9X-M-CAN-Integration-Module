@@ -136,9 +136,9 @@ void evaluate_indicator_status_dim(void) {
 
 void undim_mirrors_with_indicators(void) {
   // Makes it easier to see cyclists at night in the city when turning...
-  if (full_indicator) {
+  if (szl_full_indicator) {
     if (rls_time_of_day == 2 && frm_undim_timer >= 10000) {
-      if (engine_running && indicated_speed <= 30) {
+      if (engine_running && indicated_speed <= 30.0) {
         kcan_write_msg(frm_mirror_undim_buf);
         frm_undim_timer = 0;
         serial_log("Undimmed exterior mirrors with indicator.", 2);
@@ -295,48 +295,56 @@ void evaluate_key_number_remote(void) {
 
 void evaluate_remote_button(void) {
   if (k_msg.buf[2] != last_lock_status_can) {                                                                                       // Lock/Unlock messages are sent many times. Should only react to the first.
-    if (k_msg.buf[2] == 4 && !ignition) {                                                                                           // Ignore if locking car with ignition ON.
-      if (!left_door_open && !right_door_open) {
-        if (!doors_locked || !doors_alarmed) {                                                                                      // This code should only run when the car is locked. Alarm armed/unarmed.
-          serial_log("Remote lock button pressed.", 2);
-          fold_lock_button_pressed = true;
-          #if AUTO_MIRROR_FOLD
-            if (diag_transmit) {
-              serial_log("Checking exterior mirror status.", 2);
-              kcan_write_msg(frm_mirror_status_request_a_buf);
-              frm_mirror_status_requested = true;
+    if (k_msg.buf[2] == 4) {
+      if (!ignition) {                                                                                                              // Ignore if locking car with ignition ON.
+        if (!left_door_open && !right_door_open) {
+          if (!doors_locked || !doors_alarmed) {                                                                                    // This code should only run when the car is locked. Alarm armed/unarmed.
+            serial_log("Remote lock button pressed.", 2);
+            fold_lock_button_pressed = true;
+            #if AUTO_MIRROR_FOLD
+              if (diag_transmit) {
+                serial_log("Checking exterior mirror status.", 2);
+                kcan_write_msg(frm_mirror_status_request_a_buf);
+                frm_mirror_status_requested = true;
+              }
+            #endif
+            #if IMMOBILIZER_SEQ
+              unsigned long time_now = millis();
+              m = {alarm_led_return_control_buf, time_now + 100};                                                                   // Release control of the LED so that alarm can control it.
+              alarm_led_txq.push(&m);
+              m = {alarm_led_return_control_buf, time_now + 500};
+              alarm_led_txq.push(&m);
+              alarm_led_active = false;
+              alarm_led_disable_on_lock = true;
+              led_message_counter = 60;                                                                                             // Make sure we're ready once Terminal R cycles.
+              serial_log("Deactivated DWA LED when door locked.", 2);
+            #endif
+            #if COMFORT_EXIT
+              comfort_exit_done = false;
+            #endif
+          } 
+          
+          if (doors_alarmed) {                                                                                                      // Car fully locked.
+            // For remote range see: https://www.spoolstreet.com/threads/e92-key-remote-range-one-solution.9072/
+            if (vehicle_awakened_timer >= 10000) {                                                                                  // Car was already awake.
+              if (doors_locked_timer >= 10000) {                                                                                    // Must be at least 10s to avoid interference with DWA lock button disable sensors.
+                indicate_car_locked(0);
+              }
+            } else {                                                                                                                // Car woke up just now with the remote.
+              indicate_car_locked(100);
             }
-          #endif
-          #if IMMOBILIZER_SEQ
-            unsigned long time_now = millis();
-            m = {alarm_led_return_control_buf, time_now + 100};                                                                     // Release control of the LED so that alarm can control it.
-            alarm_led_txq.push(&m);
-            m = {alarm_led_return_control_buf, time_now + 500};
-            alarm_led_txq.push(&m);
-            alarm_led_active = false;
-            alarm_led_disable_on_lock = true;
-            led_message_counter = 60;                                                                                               // Make sure we're ready once Terminal R cycles.
-            serial_log("Deactivated DWA LED when door locked.", 2);
-          #endif
-          #if COMFORT_EXIT
-            comfort_exit_done = false;
-          #endif
-        } 
-        
-        if (doors_alarmed) {                                                                                                        // Car fully locked.
-          // For remote range see: https://www.spoolstreet.com/threads/e92-key-remote-range-one-solution.9072/
-          if (vehicle_awakened_timer >= 10000) {                                                                                    // Car was already awake.
-            if (doors_locked_timer >= 10000) {                                                                                      // Must be at least 10s to avoid interference with DWA lock button disable sensors.
-              indicate_car_locked(0);
-            }
-          } else {                                                                                                                  // Car woke up just now with the remote.
-            indicate_car_locked(100);
           }
         }
-      }
 
-      lock_button_pressed = true;
-      lock_button_pressed_counter = 1;
+        lock_button_pressed = true;
+        lock_button_pressed_counter = 1;
+      } else {
+        #if F_NBT
+          kcan2_write_msg(cc_double_gong_buf);                                                                                      // Audible reminder that ignition is still ON.
+        #else
+          kcan_write_msg(cc_double_gong_buf);
+        #endif
+      }
     }
     
     else if (k_msg.buf[2] == 1 && !ignition) {                                                                                      // Ignore if unlocking car with ignition ON/running.
@@ -533,14 +541,14 @@ void evaluate_dipped_beam_status(void) {
 
 
 void evaluate_corner_fog_activation(void) {
-  if (front_fog_corner_timer >= 300 && ignition) {
+  if (front_fog_corner_timer >= 1500 && ignition) {
     #if FRONT_FOG_CORNER_AHL_SYNC
     if (!front_fog_status && dipped_beam_status && rls_time_of_day > 0 && ahl_active && diag_transmit) {
     #else
     if (!front_fog_status && dipped_beam_status && rls_time_of_day > 0 && flc_active && diag_transmit) {
     #endif
       
-      int8_t ANGLE, HYSTERESIS;
+      float ANGLE, HYSTERESIS;
       if (indicators_on) {
         ANGLE = FOG_CORNER_STEERTING_ANGLE_INDICATORS;
         HYSTERESIS = STEERTING_ANGLE_HYSTERESIS_INDICATORS;
@@ -549,17 +557,17 @@ void evaluate_corner_fog_activation(void) {
         HYSTERESIS = STEERTING_ANGLE_HYSTERESIS;
       }
       
-      int16_t FOG_MAX_SPEED = 35, FOG_MAX_SPEED_HYSTERESIS;
+      float FOG_MAX_SPEED = 35.0, FOG_MAX_SPEED_HYSTERESIS;
       if (left_fog_on || right_fog_on) {
         if (speed_mph) {
-          FOG_MAX_SPEED = 22;
-          FOG_MAX_SPEED_HYSTERESIS = 3;
+          FOG_MAX_SPEED = 22.0;
+          FOG_MAX_SPEED_HYSTERESIS = 3.0;
         } else {
-          FOG_MAX_SPEED_HYSTERESIS = 5;
+          FOG_MAX_SPEED_HYSTERESIS = 5.0;
         }
       } else {
         if (speed_mph) {
-          FOG_MAX_SPEED = 22;
+          FOG_MAX_SPEED = 22.0;
         }
         FOG_MAX_SPEED_HYSTERESIS = 0;
       }
@@ -946,9 +954,9 @@ void check_intermittent_wipers(void) {
     if (!vehicle_moving) {
       calculated_interval += intermittent_intervals_offset_stopped[intermittent_setting];
     } else {                                                                                                                        // Reduce intervals with speed.
-      if (indicated_speed >= 50) {
+      if (indicated_speed >= 50.0) {
         calculated_interval *= 0.8;
-      } else if (indicated_speed >= 100) {
+      } else if (indicated_speed >= 100.0) {
         calculated_interval *= 0.7;
       }
     }

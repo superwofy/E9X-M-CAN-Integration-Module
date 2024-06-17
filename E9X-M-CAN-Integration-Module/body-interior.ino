@@ -1,10 +1,10 @@
 // General body functions dealing with interior electronics go here.
 
 
-void evaluate_terminal_clutch_keyno_status(void) {
+void check_vehicle_awake(void) {
   vehicle_awake_timer = 0;
   if (!vehicle_awake) {
-    vehicle_awake = true;    
+    vehicle_awake = true;
     serial_log("Vehicle Awake.", 0);
     toggle_transceiver_standby(false);                                                                                              // Re-activate the transceivers.                                                                                         
     vehicle_awakened_timer = 0;
@@ -15,8 +15,12 @@ void evaluate_terminal_clutch_keyno_status(void) {
       vsw_switch_input(4);
     #endif
   }
+}
 
-  bool ignition_ = ignition, terminal_r_ = terminal_r;
+
+void evaluate_terminal_clutch_keyno_status(void) {
+  uint8_t f_terminal_status[] = {0, 0, 0x80, 0xFF, 0, 0, 0x3F, 0xFF};                                                               // Byte2: ST_KL. Spec says it should be 0xF but all traces have 0x8...
+  bool terminal_r_ = terminal_r, ignition_ = ignition, terminal_50_ = terminal_50;
 
   // These must be checked since error states such as 2 or 3 can be set. E.g when PGS is being reset (Byte0 = 0x27).
   terminal_r = (k_msg.buf[0] & 0b11) == 1 ? true : false;                                                                           // 0 OFF, 1 ON, 3 INVALID_SIGNAL ??
@@ -24,7 +28,6 @@ void evaluate_terminal_clutch_keyno_status(void) {
   terminal_50 = ((k_msg.buf[0] & 0b110000) >> 4) == 1 ? true : false;
   key_valid = ((k_msg.buf[0] & 0b11000000) >> 6) == 1 ? true : false;                                                               // Set to 0 when PGS module loses key.
 
-  #if LAUNCH_CONTROL_INDICATOR
   if (ignition) {
     bool clutch_pressed_can = (k_msg.buf[2] & 0b11000000) >> 6;
     if (clutch_pressed != clutch_pressed_can) {
@@ -37,76 +40,35 @@ void evaluate_terminal_clutch_keyno_status(void) {
       }
     }
   }
-  #endif
 
-  #if F_ZBE_KCAN1 || F_VSW01 || F_NIVI || F_NBT                                                                                     // Translate 0x130 to 0x12F for F-series modules.
-    uint8_t f_terminal_status[] = {0, 0, 0, 0xFF, 0, 0, 0x3F, 0xFF};
-    f_terminal_status[2] = 0x80;                                                                                                    // Set ST_KL. Spec says it should be 0xF but all traces have 0x80
+  #if F_VSW01 || F_NIVI || F_NBT                                                                                                    // Translate 0x130 to 0x12F for F-series modules.
     if (terminal_50) {
       f_terminal_status[1] = 0xB << 4;
       f_terminal_status[2] |= 0xD;
     } else if (ignition) {
-      f_terminal_status[1] = 5 << 4;
+      if (vehicle_moving && engine_running) {
+        f_terminal_status[1] = 8 << 4;
+      } else if (engine_idling) {
+        f_terminal_status[1] = 7 << 4;                                                                                              // VSM_STM_STATE_ENG_IDLE
+      } else {
+        f_terminal_status[1] = 5 << 4;
+      }
       f_terminal_status[2] |= 0xA;
     } else if (terminal_r) {
       f_terminal_status[1] = 2 << 4;
       f_terminal_status[2] |= 8;
-    } else if (!frm_consumer_shutdown) {                                                                                            // 30B/30G?
+    } else {                                                                                                                        // 30B/30G?
       if (doors_alarmed) {
         f_terminal_status[1] = 1 << 4;                                                                                              // Driver not present.
       } else {
         f_terminal_status[1] = 2 << 4;
       }
       f_terminal_status[2] |= 6;
-    } else {                                                                                                                        // 30G will be killed shortly...
-      f_terminal_status[1] = 1 << 4;
-      f_terminal_status[2] |= 2;
-    }
-
-    if (engine_running) {
-      f_terminal_status[1] = 7 << 4;                                                                                                // VSM_STM_STATE_ENG_IDLE
     }
 
     f_terminal_status[1] = f_terminal_status[1] | f_terminal_status_alive_counter;                                                  // Combine ST_VEH_CON and ALIV_COU_KL
     f_terminal_status_alive_counter == 0xF ? f_terminal_status_alive_counter = 0 : f_terminal_status_alive_counter++;
     f_terminal_status[4] = (0xF << 4) | key_valid ? 3 : 1;                                                                          // Set ST_KL_KEY_VLD
-
-    f_terminal_status_crc.restart();
-    for (uint8_t i = 1; i < 8; i++) {
-      f_terminal_status_crc.add(f_terminal_status[i]);
-    }
-    f_terminal_status[0] = f_terminal_status_crc.calc();
-
-    CAN_message_t f_terminal_status_buf = make_msg_buf(0x12F, 8, f_terminal_status);
-    if (!frm_consumer_shutdown) {
-      #if F_ZBE_KCAN1 || F_VSW01
-        kcan_write_msg(f_terminal_status_buf);
-      #endif
-      #if F_NBT
-        kcan2_write_msg(f_terminal_status_buf);
-        
-        uint8_t f_vehicle_status[] = {0, 0, 0, 0, 0, 0, 0xE3, 0xFF};
-        if (terminal_r) {
-          f_vehicle_status[1] = 0xA;
-          f_vehicle_status[2] = 2;
-          f_vehicle_status[3] = 0x12;
-          f_vehicle_status[4] = 1;
-          f_vehicle_status[6] = 0x2A;
-        }
-        f_vehicle_status[1] = f_vehicle_status[1] << 4 | f_vehicle_status_alive_counter;
-        f_vehicle_status_alive_counter == 0xE ? f_vehicle_status_alive_counter = 0 
-                                              : f_vehicle_status_alive_counter++;
-        f_vehicle_status_crc.restart();
-        for (uint8_t i = 1; i < 8; i++) {
-          f_vehicle_status_crc.add(f_vehicle_status[i]);
-        }
-        f_vehicle_status[0] = f_vehicle_status_crc.calc();
-        kcan2_write_msg(make_msg_buf(0x3C, 8, f_vehicle_status));
-      #endif
-      #if F_NIVI
-        ptcan_write_msg(f_terminal_status_buf);
-      #endif
-    }
   #endif
 
   #if FAKE_MSA || MSA_RVC
@@ -118,6 +80,29 @@ void evaluate_terminal_clutch_keyno_status(void) {
       msa_fake_status_counter++;
     }
   #endif
+
+  if (terminal_r && !terminal_r_) {                                                                                                 // Terminal R changed from OFF to ON.
+    serial_log("Terminal R ON.", 2);
+    #if FRM_AHL_MODE
+      kcan_write_msg(frm_ckm_ahl_komfort_buf);                                                                                      // Make sure we're in comfort mode on startup.
+    #endif
+    comfort_exit_ready = false;
+    #if F_NBT_CCC_ZBE
+      kcan_write_msg(ccc_zbe_wake_buf);                                                                                             // ZBE1 will now transmit data on 0x1B8.
+    #endif
+    #if F_NBT
+      send_nbt_sport_displays_data(false);                                                                                          // Initialize the sport display scale.
+    #endif
+    f_terminal_status[2] |= 7;
+    nbt_bus_sleep = false;
+  } else if (!terminal_r && terminal_r_) {
+    serial_log("Terminal R OFF.", 2);
+    comfort_exit_ready = true;
+    intermittent_wipe_active = false;
+    f_terminal_status[2] |= 7;
+    nbt_bus_sleep = true;                                                                                                           // Will allow the network to sleep unless the driver presses the faceplate button.
+    nbt_bus_sleep_ready_timer = 0;
+  }
 
   if (ignition && !ignition_) {                                                                                                     // Ignition changed from OFF to ON.
     scale_cpu_speed();
@@ -135,35 +120,62 @@ void evaluate_terminal_clutch_keyno_status(void) {
         last_fog_action_timer = 0;
       }
     #endif
+    f_terminal_status[2] |= 9;
+    nbt_bus_sleep = false;
+    nbt_network_management_next_neighbour = 0x64;                                                                                   // PDC.
+    nbt_network_management_timer = 3000;
   } else if (!ignition && ignition_) {
     reset_ignition_variables();
     scale_cpu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
     serial_log("Ignition OFF. Reset values.", 2);
+    f_terminal_status[2] |= 9;
   }
 
-  if (terminal_r && !terminal_r_) {
-    serial_log("Terminal R ON.", 2);
-    #if FRM_AHL_MODE
-      kcan_write_msg(frm_ckm_ahl_komfort_buf);                                                                                      // Make sure we're in comfort mode on startup.
-    #endif
-    #if COMFORT_EXIT
-      comfort_exit_ready = false;
-    #endif
-    #if F_NBT_CCC_ZBE
-      kcan_write_msg(ccc_zbe_wake_buf);                                                                                             // ZBE1 will now transmit data on 0x1B8.
+  if (terminal_50 && !terminal_50_) {
+    f_terminal_status[1] = 9 << 4;                                                                                                  // Impending start of engine.
+    f_terminal_status[2] |= 0xC;
+    serial_log("Terminal 50 ON - engine starting.", 2);
+  } else if (!terminal_50 && terminal_50) {
+    f_terminal_status[2] |= 0xC;
+    serial_log("Terminal 50 OFF.", 2);
+  }
+
+  #if F_VSW01 || F_NIVI || F_NBT
+    f_terminal_status_crc.restart();
+    for (uint8_t i = 1; i < 8; i++) {
+      f_terminal_status_crc.add(f_terminal_status[i]);
+    }
+    f_terminal_status[0] = f_terminal_status_crc.calc();
+
+    CAN_message_t f_terminal_status_buf = make_msg_buf(0x12F, 8, f_terminal_status);
+    #if F_VSW01
+      kcan_write_msg(f_terminal_status_buf);
     #endif
     #if F_NBT
-      send_nbt_sport_displays_data(false);                                                                                          // Initialize the sport display scale.
+      kcan2_write_msg(f_terminal_status_buf);
+      
+      uint8_t f_vehicle_status[] = {0, 0, 0, 0, 0, 0, 0xE3, 0xFF};
+      if (terminal_r) {
+        f_vehicle_status[1] = 0xA;
+        f_vehicle_status[2] = 2;
+        f_vehicle_status[3] = 0x12;
+        f_vehicle_status[4] = 1;
+        f_vehicle_status[6] = 0x2A;
+      }
+      f_vehicle_status[1] = f_vehicle_status[1] << 4 | f_vehicle_status_alive_counter;
+      f_vehicle_status_alive_counter == 0xE ? f_vehicle_status_alive_counter = 0 
+                                            : f_vehicle_status_alive_counter++;
+      f_vehicle_status_crc.restart();
+      for (uint8_t i = 1; i < 8; i++) {
+        f_vehicle_status_crc.add(f_vehicle_status[i]);
+      }
+      f_vehicle_status[0] = f_vehicle_status_crc.calc();
+      kcan2_write_msg(make_msg_buf(0x3C, 8, f_vehicle_status));
     #endif
-  } else if (!terminal_r && terminal_r_) {
-    serial_log("Terminal R OFF.", 2);
-    #if COMFORT_EXIT
-      comfort_exit_ready = true;
+    #if F_NIVI
+      ptcan_write_msg(f_terminal_status_buf);
     #endif
-    #if INTERMITTENT_WIPERS
-      intermittent_wipe_active = false;
-    #endif
-  }
+  #endif
 }
 
 
@@ -177,15 +189,17 @@ void evaluate_frm_consumer_shutdown(void) {
   if (k_msg.buf[0] == 0xFC) {
     if (!frm_consumer_shutdown) {
       frm_consumer_shutdown = true;
-      serial_log("FRM requested consumers OFF.", 2);
       scale_cpu_speed();                                                                                                            // Reduce power consumption in this state.
-      toggle_transceiver_standby(frm_consumer_shutdown);                                                                            // KCAN is all that's needed to resume operation later.
+      if (vehicle_awakened_timer <= 2000) {
+        serial_log("FRM woke KCAN to reset 30G.", 2);
+      } else {
+        serial_log("FRM requested optional consumers OFF.", 2);
+      }
     }
   } else if (k_msg.buf[0] == 0xFD) {
     if (frm_consumer_shutdown) {
       frm_consumer_shutdown = false;
-      serial_log("FRM requested consumers back ON.", 2);
-      toggle_transceiver_standby(frm_consumer_shutdown);
+      serial_log("FRM requested optional consumers back ON.", 2);
     }
   }
 }
@@ -275,20 +289,22 @@ void check_seatheating_queue(void) {
 
 void evaluate_passenger_seat_status(void) {
   passenger_seat_status = k_msg.buf[1];
-  if (ignition) {
-    if (!passenger_seat_heating_status) {                                                                                           // Check if seat heating is already ON.
-      //This will be ignored if already ON and cycling ignition. Press message will be ignored by IHK anyway.
-      if (!passenger_sent_seat_heating_request) {
-        if (bitRead(passenger_seat_status, 0) && bitRead(passenger_seat_status, 3)) {                                               // Occupied and belted.
-          if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {                                                        // Execute heating requests here so we don't have to wait 15s for the next 0x22A.
-            send_seat_heating_request_pas(false);
-          } else if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_MEDIUM) {
-            send_seat_heating_request_pas(true);
+  if (k_msg.buf[0] != 0xFD) {                                                                                                       // Until byte0 stabilizes at 0xFC, this status is not to be trusted.
+    if (ignition) {
+      if (!passenger_seat_heating_status) {                                                                                         // Check if seat heating is already ON.
+        //This will be ignored if already ON and cycling ignition. Press message will be ignored by IHK anyway.
+        if (!passenger_sent_seat_heating_request) {
+          if (bitRead(passenger_seat_status, 0) && bitRead(passenger_seat_status, 3)) {                                             // Occupied and belted.
+            if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {                                                      // Execute heating requests here so we don't have to wait 15s for the next 0x22A.
+              send_seat_heating_request_pas(false);
+            } else if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_MEDIUM) {
+              send_seat_heating_request_pas(true);
+            }
           }
         }
+      } else {
+        passenger_sent_seat_heating_request = true;                                                                                 // Seat heating already ON. No need to request anymore.
       }
-    } else {
-      passenger_sent_seat_heating_request = true;                                                                                   // Seat heating already ON. No need to request anymore.
     }
   }
 }
@@ -333,16 +349,16 @@ void evaluate_steering_heating_request(void) {
       if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {
         digitalWrite(STEERING_HEATER_SWITCH_PIN, HIGH);
         serial_log("Activated steering wheel heating.", 2);
-        sent_steering_heating_request = transistor_active = true;
-        transistor_active_timer = 0;
+        sent_steering_heating_request = steering_heater_transistor_active = true;
+        steering_heater_transistor_active_timer = 0;
       } else {
         sent_steering_heating_request = true;                                                                                       // If the conditions aren't right, cancel activation for this wake cycle.
       }
     } else {
-      if (transistor_active) {
-        if (transistor_active_timer >= 400) {
+      if (steering_heater_transistor_active) {
+        if (steering_heater_transistor_active_timer >= 400) {
           digitalWrite(STEERING_HEATER_SWITCH_PIN, LOW);                                                                            // Release control of the switch so that the driver can now operate it.
-          transistor_active = false;
+          steering_heater_transistor_active = false;
         }
       }
     }
@@ -350,35 +366,20 @@ void evaluate_steering_heating_request(void) {
 }
 
 
-void send_f_kombi_network_management(void) {
-  kcan_write_msg(f_kombi_network_mgmt_buf);
-  #if F_NBT
-    kcan2_write_msg(f_kombi_network_mgmt_buf);
-  #endif
-  #if F_NIVI
-    if (ignition) {
-      ptcan_write_msg(f_kombi_network_mgmt_buf);
-    }
-  #endif
-    //serial_log("Sent FXX wake-up message.", 2);
-}
-
-
-void send_f_zgw_network_management() {
-  kcan2_write_msg(f_zgw_network_mgmt_buf);
-}
-
-
 void send_f_energy_condition(void) {
   if (f_energy_condition_timer >= 5000) {
     uint8_t f_energy_condition[] = {0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};                                                // Energy good.
-    if (battery_voltage <= 12.4 && battery_voltage > 12.2) {
+
+    if (low_battery_cc_active) {
+      f_energy_condition[2] = 0xF3;
+    } else if (battery_voltage <= 12.4 && battery_voltage > 12.2) {
       f_energy_condition[2] = 0xF1;                                                                                                 // Energy OK (80% to 50% SoC).
     } else if (battery_voltage <= 12.2 && battery_voltage > 11.6) {
       f_energy_condition[2] = 0xF2;                                                                                                 // Energy shortage (50% to 20% SoC).
     } else if (battery_voltage <= 11.6) {
       f_energy_condition[2] = 0xF3;                                                                                                 // Energy severe shortage (less than 20% SoC).
     }
+
     CAN_message_t f_energy_condition_buf = make_msg_buf(0x3A0, 8, f_energy_condition);
     kcan_write_msg(f_energy_condition_buf);
     #if F_NBT
@@ -396,17 +397,7 @@ void send_f_energy_condition(void) {
 
 
 void evaluate_battery_voltage(void) {
-  battery_voltage = (((pt_msg.buf[1] - 240 ) * 256.0) + pt_msg.buf[0]) / 68.0;
-}
-
-
-void check_power_led_state(void) {
-  if (power_led_delayed_off_action) {
-    if (millis() >= power_led_delayed_off_action_time) {
-      digitalWrite(POWER_LED_PIN, LOW);
-      power_led_delayed_off_action = false;
-    }
-  }
+  battery_voltage = ((((k_msg.buf[1] & 0xF) << 8) | k_msg.buf[0]) * 15) / 1000.0;
 }
 
 
@@ -523,13 +514,6 @@ void send_volume_request_periodic(void) {
 }
 
 
-void disable_door_open_ignition_on_cc(void) {
-  if (k_msg.buf[1] == 0x4F && k_msg.buf[2] == 1 && k_msg.buf[3] == 0x29) {
-    kcan_write_msg(door_open_cc_off_buf);
-  }
-}
-
-
 void send_nivi_button_press(void) {
   ptcan_write_msg(nivi_button_pressed_buf);
   ptcan_write_msg(nivi_button_pressed_buf);
@@ -606,10 +590,10 @@ void store_rvc_settings_trsvc(void) {
 void evaluate_indicator_stalk(void) {
   if (ignition) {
     if (k_msg.buf[0] == 1 || k_msg.buf[0] == 4) {
-      full_indicator = false;
+      szl_full_indicator = false;
     } else if (k_msg.buf[0] == 2 || k_msg.buf[0] == 8) {
-      if (!full_indicator) {
-        full_indicator = true;
+      if (!szl_full_indicator) {
+        szl_full_indicator = true;
         serial_log("Indicator stalk pushed fully.", 3);
         undim_mirrors_with_indicators();
       }
@@ -667,7 +651,7 @@ void evaluate_power_down_response(void) {
 
 void evaluate_wiper_stalk_status(void) {
   if (terminal_r) {
-    if (pt_msg.buf[0] == 0x10) {
+    if (k_msg.buf[0] == 0x10) {
       #if WIPE_AFTER_WASH
         if (wash_message_counter >= 2 || wipe_scheduled) {
           serial_log("Washing cycle started.", 2);
@@ -686,7 +670,7 @@ void evaluate_wiper_stalk_status(void) {
       #endif
     } 
 
-    else if (pt_msg.buf[0] == 0) {                                                                                                  // Wiping completely OFF.
+    else if (k_msg.buf[0] == 0) {                                                                                                   // Wiping completely OFF.
       #if WIPE_AFTER_WASH
         wash_message_counter = 0;
       #endif
@@ -695,7 +679,7 @@ void evaluate_wiper_stalk_status(void) {
       #endif
     }
     
-    else if (pt_msg.buf[0] == 1) {                                                                                                  // AUTO button pressed.
+    else if (k_msg.buf[0] == 1) {                                                                                                   // AUTO button pressed.
       #if WIPE_AFTER_WASH
         abort_wipe_after_wash();
         wash_message_counter = 0;
@@ -708,7 +692,7 @@ void evaluate_wiper_stalk_status(void) {
       #endif
     }
 
-    else if (pt_msg.buf[0] == 2 || pt_msg.buf[0] == 3) {                                                                            // Stalk pushed up once / twice.
+    else if (k_msg.buf[0] == 2 || k_msg.buf[0] == 3) {                                                                              // Stalk pushed up once / twice.
       #if WIPE_AFTER_WASH
         abort_wipe_after_wash();
         wash_message_counter = 0;
@@ -721,7 +705,7 @@ void evaluate_wiper_stalk_status(void) {
       #endif
     }
 
-    else if (pt_msg.buf[0] == 8) {                                                                                                  // Stalk pushed down. 9 = stalk pushed down with AUTO ON.
+    else if (k_msg.buf[0] == 8) {                                                                                                   // Stalk pushed down. 9 = stalk pushed down with AUTO ON.
       #if WIPE_AFTER_WASH
         abort_wipe_after_wash();
         wash_message_counter = 0;
@@ -838,4 +822,44 @@ void evaluate_ihka_auto_state(void) {
 void evaluate_temperature_unit(void) {
   bitWrite(temperature_unit, 0, bitRead(k_msg.buf[1], 4));
   bitWrite(temperature_unit, 1, bitRead(k_msg.buf[1], 5));
+}
+
+
+void evaluate_terminal_followup(void) {
+  if (!terminal_r) {
+    if (!(k_msg.buf[0] == 0xFE && k_msg.buf[0] == 0xFF)) {
+
+      terminal30g_followup_time = ((k_msg.buf[1] & 0xF) << 8) | k_msg.buf[0];
+
+      if (terminal30g_followup_time <= 0x37 && terminal30g_followup_time > 0x1E) {                                                // 9.5 minutes.
+        // With CIC, the CID is switched off occasionally at 600s and 280s remaining.
+        // If the power button is pressed, operation continues until 30G is OFF and the CIC is *forcefully* killed.
+        #if F_NBT
+          if (!requested_hu_off_t1) {
+            serial_log("Sent HU OFF at timer1.", 2);
+            kcan2_write_msg(dme_request_consumers_off_buf);
+            requested_hu_off_t1 = true;
+          }
+        #endif
+      } else if (terminal30g_followup_time == 8) {                                                                                // 90 second warning.
+        #if F_NBT
+          send_cc_message("iDrive switching off in 30s to save battery!", true, 5000);
+        #endif
+      } else if (terminal30g_followup_time <= 5) {
+        #if F_NBT
+          serial_log("30G cutoff imminent (<60s) Sent HU OFF at timer2.", 2);
+          kcan2_write_msg(dme_request_consumers_off_buf);                                                                         // Allow the HU to shut down more gracefully. User requests to wake up will be denied.
+          requested_hu_off_t2 = true;
+        #endif
+      } else if (terminal30g_followup_time == 0) {
+        serial_log("Received critical 30G timer message. Deep sleep in less than 20s.", 2);
+        update_data_in_eeprom();
+      } else {
+        #if DEBUG_MODE
+          sprintf(serial_debug_string, "30G will be cut off in %d seconds.", terminal30g_followup_time * 10);
+          serial_log(serial_debug_string, 2);
+        #endif
+      }
+    }
+  }
 }

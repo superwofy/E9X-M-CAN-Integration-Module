@@ -4,12 +4,8 @@
 void send_zbe_acknowledge(void) {
   uint8_t zbe_response[] = {0xE1, 0x9D, 0, 0xFF};
   zbe_response[2] = k_msg.buf[7];
-  #if F_NBT_CCC_ZBE
-    kcan2_write_msg(make_msg_buf(0x277, 4, zbe_response));
-    kcan_write_msg(ccc_zbe_wake_buf);                                                                                               // Reset the ZBE counter upon HU's request.
-  #else
-    kcan_write_msg(make_msg_buf(0x277, 4, zbe_response));
-  #endif
+  kcan2_write_msg(make_msg_buf(0x277, 4, zbe_response));
+  kcan_write_msg(ccc_zbe_wake_buf);                                                                                                 // Reset the ZBE counter upon HU's request.
 }
 
 
@@ -67,8 +63,6 @@ void evaluate_audio_volume_nbt(void) {
             }
             m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 600};
             idrive_txq.push(&m);
-            m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 900};
-            idrive_txq.push(&m);
             volume_reduced = true;
             volume_changed_to = volume_change[6];                                                                                   // Save this value to compare when door is closed back.
             #if DEBUG_MODE
@@ -92,9 +86,7 @@ void evaluate_audio_volume_nbt(void) {
             if (volume_change[6] > 0x33) {
               volume_change[6] = 0x33;                                                                                              // Set a nanny in case the code goes wrong. 0x33 is pretty loud...
             }
-            m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 600};
-            idrive_txq.push(&m);
-            m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 900};                                                            // Make sure the restore is received.
+            m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 600};                                                            // Make sure the restore is received.
             idrive_txq.push(&m);
             #if DEBUG_MODE
               sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X.", volume_change[6]);
@@ -143,23 +135,22 @@ void check_idrive_queue(void) {
 
 
 void check_idrive_alive_monitor(void) {
-  if (terminal_r) {
-    if (idrive_alive_timer >= 2500) {                                                                                               // This message should be received every 1-2s.
-      if (!idrive_died) {
-        idrive_died = true;
-        serial_log("iDrive booting/rebooting.", 2);
-        initial_volume_set = false;
-        asd_initialized = false;
-        asd_rad_on_initialized = false;
-        #if F_VSW01 && F_VSW01_MANUAL
-          vsw_switch_input(4);
-        #endif
-        idrive_alive_timer2 = 0;                                                                                                    // Keep track of the iDrive's boot time.
-      }
-    } else {
-      if (idrive_died) {                                                                                                            // It's back.
-        idrive_died = false;
-      }
+  if (idrive_alive_timer >= 2500) {                                                                                                 // This message should be received every 1-2s.
+    if (!idrive_died) {
+      idrive_died = true;
+      serial_log("iDrive alive monitor timed out.", 2);
+      initial_volume_set = false;
+      asd_initialized = false;
+      asd_rad_on_initialized = false;
+      #if F_VSW01 && F_VSW01_MANUAL
+        vsw_switch_input(4);
+      #endif
+      idrive_alive_timer2 = 0;                                                                                                      // Keep track of the iDrive's boot time.
+    }
+  } else {
+    if (idrive_died) {                                                                                                              // It's back.
+      idrive_died = false;
+      serial_log("iDrive alive again.", 2);
     }
   }
 }
@@ -215,14 +206,6 @@ void vsw_switch_input(uint8_t input) {
 }
 
 
-void evaluate_vsw_position_request() {
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "HU sent VSW/%d (%s) request.", k_msg.buf[0], vsw_positions[vsw_current_input]);
-    serial_log(serial_debug_string, 3);
-  #endif
-}
-
-
 void send_nbt_vin_request(void) {
   if (!donor_vin_initialized) {
     if (nbt_vin_request_timer >= 3000) {
@@ -272,7 +255,7 @@ void evaluate_faceplate_buttons(void) {
     }
   } else {
     if (faceplate_eject_pressed) {
-      if (faceplate_eject_pressed_timer >= 20) {                                                                                    // These inputs are very noisy. Make sure they're actually pressed.
+      if (faceplate_eject_pressed_timer >= 20 && !requested_hu_off_t2) {                                                            // These inputs are very noisy. Make sure they're actually pressed.
         unsigned long time_now = millis();
         m = {faceplate_eject_buf, time_now};
         faceplate_buttons_txq.push(&m);
@@ -286,45 +269,47 @@ void evaluate_faceplate_buttons(void) {
     }
   }
   
-  if (!digitalRead(FACEPLATE_POWER_MUTE_PIN)) {
-    if (!faceplate_power_mute_pressed) {
-      if (faceplate_power_mute_debounce_timer >= 150) {
-        faceplate_power_mute_pressed = true;
-        faceplate_power_mute_pressed_timer = 0;
-      }
-    } else {
-      if (faceplate_power_mute_pressed_timer >= 8000) {
-        if (!faceplate_hu_reboot) {
-          if (diag_transmit) {
-            serial_log("Faceplate power/mute button held. Rebooting HU.", 0);
-            unsigned long time_now = millis();
-            m = {f_hu_nbt_reboot_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 200;
-            m = {f_hu_nbt_reboot_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            faceplate_hu_reboot = true;                                                                                             // Will ignore the next normal button release action (single press).
+  if (!requested_hu_off_t2) {                                                                                                       // 30G is about to be shut OFF. HU must now sleep without interruption.
+    if (!digitalRead(FACEPLATE_POWER_MUTE_PIN)) {
+      if (!faceplate_power_mute_pressed) {
+        if (faceplate_power_mute_debounce_timer >= 150) {
+          faceplate_power_mute_pressed = true;
+          faceplate_power_mute_pressed_timer = 0;
+        }
+      } else {
+        if (faceplate_power_mute_pressed_timer >= 8000) {
+          if (!faceplate_hu_reboot) {
+            if (diag_transmit) {
+              serial_log("Faceplate power/mute button held. Rebooting HU.", 0);
+              unsigned long time_now = millis();
+              m = {f_hu_nbt_reboot_buf, time_now};
+              serial_diag_kcan2_txq.push(&m);
+              time_now += 200;
+              m = {f_hu_nbt_reboot_buf, time_now};
+              serial_diag_kcan2_txq.push(&m);
+              faceplate_hu_reboot = true;                                                                                           // Will ignore the next normal button release action (single press).
+            }
           }
         }
       }
-    }
-  } else {
-    if (faceplate_power_mute_pressed) {
-      if (!faceplate_hu_reboot) {
-        if (faceplate_power_mute_pressed_timer >= 20) {
-          unsigned long time_now = millis();
-          m = {faceplate_power_mute_buf, time_now};
-          faceplate_buttons_txq.push(&m);
-          time_now += 100;
-          m = {faceplate_a1_released_buf, time_now};
-          faceplate_buttons_txq.push(&m);
-          serial_log("Faceplate power/mute button pressed.", 0);
+    } else {
+      if (faceplate_power_mute_pressed) {
+        if (!faceplate_hu_reboot) {
+          if (faceplate_power_mute_pressed_timer >= 20 && !requested_hu_off_t2) {                                                   // With 30G kill imminent, do not allow the HU to be restarted.
+            unsigned long time_now = millis();
+            m = {faceplate_power_mute_buf, time_now};
+            faceplate_buttons_txq.push(&m);
+            time_now += 100;
+            m = {faceplate_a1_released_buf, time_now};
+            faceplate_buttons_txq.push(&m);
+            serial_log("Faceplate power/mute button pressed.", 0);
+          }
+        } else {
+          faceplate_hu_reboot = false;
         }
-      } else {
-        faceplate_hu_reboot = false;
+        faceplate_power_mute_debounce_timer = 0;
+        faceplate_power_mute_pressed = false;
       }
-      faceplate_power_mute_debounce_timer = 0;
-      faceplate_power_mute_pressed = false;
     }
   }
 }
@@ -510,7 +495,7 @@ void evaluate_idrive_units(void) {
           new_pressure_unit = 0, new_date_format = 0,
           new_torque_unit = k_msg.buf[4] >> 4, new_power_unit = k_msg.buf[4] & 0xF;
   #if DEBUG_MODE
-    char language_str[2];
+    char language_str[4];
   #endif
 
   bitWrite(new_temperature_unit, 0, bitRead(k_msg.buf[1], 4));
@@ -633,7 +618,7 @@ void convert_f_units(bool idrive_units_only) {
 }
 
 
-// NOTE: Max input to this function is 45 characters + NUL.
+// NOTE: Max input to this function is 45 characters + NUL terminator.
 void send_cc_message(const char input[], bool dialog, unsigned long new_timeout) {
   nbt_cc_txq.flush();                                                                                                               // Clear any pending dismiss messages.
   uint8_t input_length = strlen(input);
@@ -653,36 +638,34 @@ void send_cc_message(const char input[], bool dialog, unsigned long new_timeout)
     cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 256;
     uint8_t cc_message_text[] = {0x46, 3, 0x50, 0xF0, cc_message_chunk_counter,
                                 padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
-    #if F_NBT_EVO6
-      if (dialog) {
+    
+    if (dialog) {
+      #if F_NBT_EVO6
         cc_message_text[2] = 0x32;
-      }
-    #else
-      if (dialog) {
+      #else
         cc_message_text[2] = 0x72;
-      }
-    #endif
+      #endif
+    }
+    
     kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text));
   }
   
   cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 256;
   uint8_t cc_message_text_end[] = {0x46, 3, 0x50, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
-  #if F_NBT_EVO6
-    if (dialog) {
-      cc_message_text_end[2] = 0x32;
-    }
-  #else
-    if (dialog) {
-      cc_message_text_end[2] = 0x72;
-    }
-  #endif
-  kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));
   
   if (dialog) {
+    #if F_NBT_EVO6
+      cc_message_text_end[2] = 0x32;
+    #else
+      cc_message_text_end[2] = 0x72;
+    #endif
+
     cc_message_expires = millis() + new_timeout;                                                                                    // Do not replace this message with the monitoring CC until the timeout elapses.
     m = {custom_cc_dismiss_buf, cc_message_expires};
     nbt_cc_txq.push(&m);
   }
+  
+  kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));
 }
 
 
@@ -721,4 +704,37 @@ void evaluate_idrive_lights_settings(void) {
     kcan_write_msg(make_msg_buf(0x5E2, 8, home_lights_setting));
     f_lights_ckm_request = k_msg.buf[2];
   }
+}
+
+
+void evaluate_consumer_control(void) {
+  // NOTE: if this message is not sent to the HU it cannot be woken with the faceplate power button after Tetminal R OFF!
+  if (!requested_hu_off_t2) {
+    kcan2_write_msg(k_msg);
+  } else {                                                                                                                          // With 30G cutoff imminent, ensure that only OFF messages are sent.
+    kcan2_write_msg(dme_request_consumers_off_buf);
+  }
+}
+
+
+void evaluate_speed_warning_status(void) {
+  if (((k_msg.buf[1] >> 4) < 0xF) && ((k_msg.buf[2] & 0xF) == 0)) {                                                                 // If less than 15kph, force to 15.
+    if ((k_msg.buf[1] && 0xF) == 1) {
+      kcan_write_msg(set_warning_15kph_on_buf);                                                                                     // The status response should then fix the HU setting.
+    } else {
+      kcan_write_msg(set_warning_15kph_off_buf);
+    }
+  } else {
+    kcan2_write_msg(k_msg);
+  }
+}
+
+
+void evaluate_speed_warning_setting(void) {
+  if (k_msg.buf[0] == 0x6F) {
+    k_msg.buf[0] = 0x7E;
+  } else if (k_msg.buf[0] == 0x2F) {
+    k_msg.buf[0] = 0x3E;
+  }
+  kcan_write_msg(k_msg);
 }

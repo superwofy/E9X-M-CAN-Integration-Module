@@ -89,29 +89,9 @@ void configure_flexcan(void) {
   KCAN.begin();
   KCAN.setBaudRate(100000);                                                                                                         // 100k
   KCAN.enableFIFO();                                                                                                                // Activate FIFO mode.
-  #if !F_NBT
-    KCAN.setMaxMB(48);                                                                                                              // Increase max filters. Max is 128.
-    KCAN.setRFFN(RFFN_48);
-  #endif
-
   KCAN.FLEXCAN_EnterFreezeMode();
-
-  #if !F_NBT                                                                                                                        // For NBT all KCAN messages should be forwarded to KCAN2.
-    set_kcan_filters(&filter_set_ok_counter, &filter_position_counter);
-  #else
-    KCAN.setFIFOFilter(ACCEPT_ALL);
-  #endif
-
-
+  KCAN.setFIFOFilter(ACCEPT_ALL);
   KCAN.FLEXCAN_ExitFreezeMode();
-  if (filter_position_counter != filter_set_ok_counter) {
-    sprintf(serial_debug_string, "KCAN filter initialization failure %d != %d.",
-            filter_set_ok_counter, filter_position_counter);
-  } else {
-    sprintf(serial_debug_string, "KCAN initialized with %d filter(s)%s.", filter_position_counter, F_NBT ? " for NBT" : "");
-  }
-  serial_log(serial_debug_string, 2);
-  filter_position_counter = filter_set_ok_counter = 0;
 
 
   // PTCAN
@@ -132,22 +112,6 @@ void configure_flexcan(void) {
     filter_position_counter++;
   #endif
   filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x1A0, STD);                                                // Real speed:                                                  Cycle time 20ms.
-  filter_position_counter++;
-  filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x1D6, STD);                                                // MFL button status:                                           Cycle time 1s (idle), 100ms (pressed).
-  filter_position_counter++;
-  #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
-    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x2A6, STD);                                              // Wiper stalk status from SZL.                                 Cycle time 1s (idle).
-    filter_position_counter++;
-  #endif
-  #if FTM_INDICATOR
-    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x31D, STD);                                              // FTM status broadcast by DSC:                                 Cycle time 5s (idle).
-    filter_position_counter++;
-  #endif
-  #if CONTROL_SHIFTLIGHTS
-    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x332, STD);                                              // Variable redline position from DME:                          Cycle time 1s.
-    filter_position_counter++;
-  #endif
-  filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x3B4, STD);                                                // Battery voltage from DME.
   filter_position_counter++;
   #if SERVOTRONIC_SVT70
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x58E, STD);                                              // Forward SVT CC to KCAN for KOMBI to display:                 Cycle time 10s.
@@ -184,18 +148,15 @@ void configure_flexcan(void) {
 
   DCAN.FLEXCAN_EnterFreezeMode();
   filter_set_ok_counter += DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                       // Diagnostic queries from OBD tool to forward.
-  filter_position_counter++;
-  DCAN.setFIFOFilter(REJECT_ALL, filter_position_counter);
+  DCAN.setFIFOFilter(REJECT_ALL, 1);
   DCAN.FLEXCAN_ExitFreezeMode();
   
   pinMode(DCAN_STBY_PIN, OUTPUT);
-  if (filter_position_counter != filter_set_ok_counter) {
-    sprintf(serial_debug_string, "DCAN filter initialization failure %d != %d.",
-            filter_set_ok_counter, filter_position_counter);
+  if (1 != filter_set_ok_counter) {
+    serial_log("DCAN filter initialization failure.", 2);
   } else {
-    sprintf(serial_debug_string, "DCAN initialized with %d filter(s).", filter_position_counter);
+    serial_log("DCAN filter initialized.", 2);
   }
-  serial_log(serial_debug_string, 2);
 
   serial_log("FlexCAN module ready.", 2);
 }
@@ -205,6 +166,7 @@ void configure_mcp2515(void) {
   #if F_NBT
     if (CAN_OK != KCAN2.begin(MCP_STDEXT, CAN_500KBPS, MCP_16MHZ)) {
       serial_log("Error initializing MCP2515 for KCAN2.", 2);
+      return;
     } else {
       serial_log("MCP2515 initialized for KCAN2.", 2);
     }
@@ -226,9 +188,6 @@ void toggle_transceiver_standby(bool sleep) {
     }
     #if F_NBT
       if (kcan2_mode == MCP_NORMAL) {
-        uint8_t kcan2_sleep[8] = {0};
-        kcan2_write_msg(make_msg_buf(0x12F, 8, kcan2_sleep));                                                                       // Send one final message before bus shutdown.
-        delay(1);
         kcan2_mode = MCP_SLEEP;
         KCAN2.setMode(kcan2_mode);
         serial_log("Deactivated K-CAN2 transceiver.", 0);
@@ -323,8 +282,8 @@ void disable_diag_transmit_jobs(void) {                                         
     diag_transmit = false;
     #if F_NBT
       char diag_cc_string[46] = {' '};
-      snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %lds.",
-               OBD_DETECT_TIMEOUT / 1000);
+      snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %ds.",
+               (uint16_t) (OBD_DETECT_TIMEOUT / 1000));
       send_cc_message(diag_cc_string, true, 3000);
     #endif
     #if DOOR_VOLUME
@@ -388,4 +347,3 @@ void usb_pll_start() {                                                          
 		return; // everything is as it should be  :-)
 	}
 }
-
