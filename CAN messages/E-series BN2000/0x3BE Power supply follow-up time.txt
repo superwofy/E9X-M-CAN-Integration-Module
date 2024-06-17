@@ -1,0 +1,12 @@
+Byte0 least significant bit
+Byte1 second half most significant bit
+
+Cycle time is event dependent on bus activity not regular.
+	-> E.g if HU is keeping the bus alive, it is sent every 10s.
+
+
+47 F0 -> 0x47 = 71 * 10 = 710 seconds.
+
+
+
+At 00 F0, 30G is cut off completely.

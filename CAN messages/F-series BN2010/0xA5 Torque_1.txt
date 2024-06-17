@@ -1,0 +1,19 @@
+This information may be inaccurate as it conflicts the DME docs.
+However, it displays correctly in the AAIdrive Detailed Vehicle Info widget.
+
+
+
+Byte2 - LSB
+Byte3 - second half: MSB
+
+
+E.g:
+00 00 06 08 00 00 00 C1  - 4nm
+00 00 08 08 00 00 00 C1  - 5nm
+00 00 0B 08 00 00 00 C1  - 6nm
+00 00 FF 08 00 00 00 F2  - 128nm
+00 00 FF 09 00 00 00 F2  - 256nm
+00 00 FF 0A 00 00 00 F2  - 384nm
+00 00 FF 0D 00 00 00 F2  - 768nm
+00 00 FF 0E 00 00 00 F2  - 896nm
+00 00 FF 0F 00 00 00 F2  - 1024nm

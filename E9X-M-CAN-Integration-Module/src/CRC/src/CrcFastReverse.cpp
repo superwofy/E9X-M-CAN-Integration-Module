@@ -1,4 +1,12 @@
+//
+//    FILE: CrcFastReverse.cpp
+//  AUTHOR: vovagorodok
+// PURPOSE: Arduino class for CRC
+//     URL: https://github.com/RobTillaart/CRC
+
+
 #include "CrcFastReverse.h"
+
 
 uint8_t reverse8bits(uint8_t in)
 {
@@ -72,3 +80,4 @@ uint64_t reverse64(uint64_t in)
 {
   return reverse64bits(in);
 }
+

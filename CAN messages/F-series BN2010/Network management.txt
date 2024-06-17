@@ -1,0 +1,20 @@
+The Autosar NM algorithm is based on periodic NM messages sent by every node in the network. The reception of NM messages indicates to the receiving controller that the sending nodes want to keep the network awake. When a node is ready to sleep, this node stops sending its NM messages, but delays the transition to bus sleep mode until no more NM messages are received from other nodes. After the timers NmTimeout (time in which no NM message was received) and NmWaitBusSleepTime (additional sleep time for bus) have expired, each node switches to bus sleep mode.
+
+
+
+Bustyp      MSG_CYCLE_TIME      NmTimeout       NmWaitBusSleepTime
+A-CAN       640 ms              2000 ms         1500 ms
+
+This message is sent on the bus for sleep coordination purposes. Is sent by the respective control unit as long as it is not ready to sleep. This delays the bus going to sleep by a further 2 seconds. Example, the DME sends the following message:
+
+
+28.177849   1   512     Rx  d 8 00 00 00 00 FF FF 00 12
+
+
+
+Signal: NM2_AUTOSAR_RES_FACAN must be assigned 0x00000000 AUTOSAR - reserve [Bytes 0 to 3]
+Signal: NM2_USR_DT_FACAN
+Byte 4 must contain the "Least Significant Byte" of the address of the function that keeps the bus awake.
+Byte 5 must contain the "Most Significant Byte" of the address of the function that keeps the bus awake.
+Byte 6 must contain 0x00 (reserved).
+Byte 7 must contain the diagnostic address of the control unit.

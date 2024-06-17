@@ -30,3 +30,8 @@ Car is unlocked, driver's door is open, Terminal R is OFF.
 23:56:54.068 ->  KCAN:  ID: 3BD Buffer: FC FF 
 23:56:59.047 ->  KCAN:  ID: 3BD Buffer: FC FF 
 23:57:04.062 ->  KCAN:  ID: 3BD Buffer: FC FF 
+
+
+
+The 0xFC request causes bus users to set their Network Management status to 0x52 (Sleep ready).
+The HU is does too except when it is turned on with the faceplate power button. In that case, 0x3BD is ignored.
