@@ -1,5 +1,13 @@
+//
+//    FILE: CRC16.cpp
+//  AUTHOR: Rob Tillaart
+// PURPOSE: Arduino class for CRC16
+//     URL: https://github.com/RobTillaart/CRC
+
+
 #include "CRC16.h"
 #include "CrcFastReverse.h"
+
 
 CRC16::CRC16(uint16_t polynome,
              uint16_t initial,
@@ -100,3 +108,7 @@ uint16_t CRC16::getCRC() const
 {
   return calc();
 }
+
+
+//  -- END OF FILE --
+

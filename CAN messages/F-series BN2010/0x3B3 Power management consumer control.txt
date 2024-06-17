@@ -1,3 +1,71 @@
-FF FF FF FF FF F5
+FF FF FF FF FF F5 FF
 
-If the second half of the last byte is 5, a Note is displayed with text "The iDrive system will be switched off shortly. To save energy, press the radio on/off switch in future."
+If the second half of Byte5 is 5, a Note is displayed with text "The iDrive system will be switched off shortly. To save energy, press the radio on/off switch in future."
+
+
+
+
+SLCTN_SPCOS - Selection of special consumers
+              0 ... No special consumer
+              1 ... PTC auxiliary heater
+              0x0F ... Signal invalid
+
+
+CTR_PWR_SPCOS - Control power special consumers
+              0 - 100%
+              0xFF - Signal invalid
+
+
+CTR_PWR_COS - Control Power Consumer
+              0000 0000 0000 0000 No reduction
+              0--- ---- ---- ---1 Rear window cycled
+              0--- ---- ---- --1- Steering wheel heating cycled, PTC rear 25%
+              0--- ---- ---- -1-- Front seat heating level 2, rear seat heating level 1
+              0--- ---- ---- 1--- Front seat heating 50%, PTC third row of seats 50%
+              0--- ---- ---1 ---- Active seat OFF
+              0--- ---- --1- ---- Rear seat heating level 2, PTC rear 75%, windscreen heating 75%
+              0--- ---- -1-- ---- Mirror heating OFF, PTC rear OFF
+              0--- ---- 1--- ---- PTC rear 50%, windscreen heating 50%, neck warmer OFF
+              0--- ---1 ---- ---- Rear window OFF
+              0--- --1- ---- ---- Front seat heating OFF, rear seat heating OFF
+              0--- -1-- ---- ---- Steering wheel heating OFF, PTC third row of seats / fan 0%, windscreen heating 25%
+              0--- 1--- ---- ---- Seat climate OFF, windscreen heating OFF
+              0--1 ---- ---- ---- Heating fan 75%
+              0-1- ---- ---- ---- Heating fan 50%
+              01-- ---- ---- ---- Heating fan 25%
+              0xFFFF - Signal invalid
+
+
+CTR_CBR - Control of current branches
+          0--- ---0 No control
+          0--- ---1 Control
+          0--- --01 Current branch 1 OFF
+          0--- --11 Current branch 1 ON
+          0--- -0-1 Current branch 2 OFF
+          0--- -1-1 Current branch 2 ON
+          0xFF - Signal invalid
+
+
+RQ_PCOS - Requirements for stationary consumers
+          0 ... No action
+          1 ... Stationary consumers must identify themselves
+          2 ... unoccupied
+          3 ... Signal invalid
+
+
+CTR_PCOS - Control of stationary consumers
+           0 ... No action
+           1 ... Special stationary consumers are allowed to switch on
+           2 ... stationary consumers must switch off
+           3 ... Signal invalid
+
+
+CTR_PWRU_COS - not used, set to 0 / 0xF
+
+
+ST_ENERG_PWMG - Status Energy Power Management
+                0001 Switching off terminal 30 F.
+                0010 No stationary consumers permitted.
+                0100 tbd.
+                1000 Battery charge level 100%
+                1111 Signal invalid

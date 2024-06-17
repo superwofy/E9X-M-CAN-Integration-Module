@@ -1,5 +1,13 @@
+//
+//    FILE: CRC8.cpp
+//  AUTHOR: Rob Tillaart
+// PURPOSE: Arduino class for CRC8;
+//     URL: https://github.com/RobTillaart/CRC
+
+
 #include "CRC8.h"
 #include "CrcFastReverse.h"
+
 
 CRC8::CRC8(uint8_t polynome,
            uint8_t initial,
@@ -100,3 +108,7 @@ uint8_t CRC8::getCRC() const
 {
   return calc();
 }
+
+
+//  -- END OF FILE --
+

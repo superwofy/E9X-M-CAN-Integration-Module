@@ -9,6 +9,8 @@ Time(ms)    Buffer
 1380        10 A2 02 18 00 32 00            First message in the sequence, CC 674, CC 24, CC 50
 1385        11 23 00 FE FF FE FF            Final message, CC 35
 
+Byte0 first half is the total number of messages in the sequence (counting from 0), Byte0 second half is the message number.
+
 
 
 Clear CC list:

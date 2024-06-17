@@ -1,0 +1,32 @@
+Byte0 - 
+    1 - Service request
+    0xC - Request bus/subnetwork
+    0x30 - CBS service notification
+    0x32 - CBS service message 2
+    0x40 - Checkcontrol message standard
+
+    0x41 - Check control message extended
+     
+
+Byte1 - CC-ID LSB
+Byte2 - CC-ID MSB
+
+
+Byte3 LSB to MSB
+ST_IDC_CCLK_CC_MESS_STD - Status Flashing, 2 bits:
+	0 ... no flashing
+	1 ... slow flashing
+	2 ... fast flashing
+	3 ... signal invalid
+
+TRANF_CC_MESS_STD - Transmission type / cycle time [s], 4 bits:
+    1 - 0xE Cycle time [s]
+    0xF ... Check control message disabled
+
+ST_CC_MESS_STD - Status Checkcontrol message, 2 bits:
+    0 ... Reset
+    1 ... Set
+    3 ... Signal invalid
+
+
+Byte4-7 - 0xFF

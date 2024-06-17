@@ -1,0 +1,13 @@
+Address: 0x480 + controller address, DME sends DNM messages with Id 0x492
+
+Data byte 0 contains the controller address of the next participant
+
+Data byte 1 contains bit-coded:
+0x01 Alive signal bit
+0x02 Ring active bit
+0x10 Sleep Indication bit
+0x20 Sleep Acknowledge bit
+0x40 Ring stable bit. Normally this can be observed
+0x42 Ring active
+0x52 Sleep Indication (readiness for sleep)
+0x72 Sleep ack. (shutdown)

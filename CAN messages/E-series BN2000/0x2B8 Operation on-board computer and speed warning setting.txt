@@ -1,0 +1,19 @@
+7E FE FF FE FF EE                       // ON
+3E FE FF FE FF EE                       // OFF
+
+7E 06 F0 FE FF EE                       // ON, 6kph
+7E 32 F0 FE FF EE                       // ON, 50kph
+7E 64 F0 FE FF EE                       // ON, 100kph
+7E 64 F0 FE FF EE                       // ON, 255kph
+7E 4A F1 FE FF EE                       // ON, 330kph
+
+7E FD FF FE FF EE                       // Select current speed as limit (when not moving)
+
+
+
+KOMBI responds on 0x35C:
+xx 60 00 xx                             // OFF, speed set to 6kph
+xx 61 00 xx                             // ON, speed set to 6kph
+xx 21 03 xx                             // ON, speed set to 50kph
+xx F1 0F xx                             // ON, speed set to 255kph
+xx A1 14 xx                             // ON, speed set to 330kph
