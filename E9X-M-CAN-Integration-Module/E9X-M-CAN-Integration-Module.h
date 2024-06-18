@@ -36,7 +36,7 @@ uint8_t LOGLEVEL = 4;                                                           
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver at low temperatures.
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
 #define MDSC_ZB 0                                                                                                                   // If the MK60E5 is flashed with a 1M or M3 file, MDM is toggled through MDrive status (0x399) only.
-                                                                                                                                    // For DSC OFF, the switch must be wired directly and fed 5V?
+                                                                                                                                    // For DSC OFF, the switch must be wired to pin 41. Non-M DSC modules flashed to M3 ZB need a 12V pull-up.
 
 const float FOG_CORNER_STEERTING_ANGLE = 87.0;                                                                                      // Steering angle at which to activate fog corner function.
 const float STEERTING_ANGLE_HYSTERESIS = 48.0;
@@ -190,7 +190,6 @@ cppQueue kcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
 uint8_t kcan_retry_counter = 0, ptcan_retry_counter = 0, dcan_retry_counter = 0, kcan2_mode = 0xE0;
 unsigned long int k2rxId;
 unsigned char k2rxBuf[8], k2len;
-bool eeprom_unsaved = false;
 elapsedMillis eeprom_update_timer = 0;
 delayed_can_tx_msg delayed_tx, m;
 bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = false, vehicle_moving = false,
@@ -386,10 +385,11 @@ bool sine_pitch_angle_requested = false, sine_roll_angle_requested = false;
 uint16_t xview_pitch_angle = 0x5000;                                                                                                // 0 degrees
 uint8_t xview_grade_percentage = 0x64;                                                                                              // 0%
 uint16_t f_vehicle_pitch_angle = 0x2500, f_vehicle_roll_angle = 0x2500;                                                             // 1280 * 0.05 - 64 = 0 degrees, 2 - Valid.
-float e_longitudinal_acceleration = 0;
+float e_longitudinal_acceleration = 0, e_longitudinal_acceleration_error = 0;
 uint16_t longitudinal_acceleration = 0x7EF4, lateral_acceleration = 0x7EF4;                                                         // 32500 * 0.002 - 65 = 0 m/s^2.
 uint8_t f_longitudinal_acceleration_alive_counter = 0;
 float e_lateral_acceleration = 0, e_lateral_acceleration_error = 0;
+const double ema_alpha = 0.7;
 uint8_t f_lateral_acceleration_alive_counter = 0;
 float e_yaw_rate = 0, e_yaw_error = 0;
 uint16_t f_yaw_rate = 0x8000;                                                                                                       // 32768 * 0.005 - 163.84 = 0 degrees/sec.
@@ -497,7 +497,7 @@ uint16_t engine_manifold_sensor = 0, engine_cp_sensor = 0, ambient_pressure = 10
 int16_t boost = 0, intake_air_temperature = 0;
 bool dme_boost_requested = false, trsvc_cc_gong = false;
 unsigned long cc_message_expires = millis();
-uint8_t ihka_auto_blower_speed = 5, ihka_auto_blower_state = 3;
+uint8_t ihka_auto_fan_speed = 5, ihka_auto_fan_state = 3, ihka_recirc_state = 0, ihka_auto_distr_state = 0;
 cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          serial_diag_dcan_txq(sizeof(delayed_can_tx_msg), 384, queue_FIFO),
          serial_diag_kcan1_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO),  
@@ -505,4 +505,6 @@ cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          serial_diag_ptcan_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
 CAN_message_t power_down_cmd_a_buf, power_down_cmd_b_buf, power_down_cmd_c_buf;
 bool diag_transmit = true, power_down_requested = false;
-elapsedMillis debug_print_timer = 500, diag_deactivate_timer, serial_unlocked_timer = 0;
+elapsedMillis debug_print_timer = 500, diag_deactivate_timer, serial_unlocked_timer = 0, slcan_timer = 0;
+bool debug_print_connected = false, slcan_connected = false, slcan_enabled = true, timestamp = true;
+uint8_t slcan_bus = 1;                                                                                                              // KCAN.

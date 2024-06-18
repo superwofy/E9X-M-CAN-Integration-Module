@@ -105,6 +105,8 @@ Included are also tools to allow full manipulation of the program section in the
 * Reduce audio volume when opening doors. Restore when closing.
 * Dim corresponding front DRL when indicator is on.
 * Turn on corresponding front fog light when steering angle threshold is exceeded.
+* Access KCAN/KCAN2 frames over the third USB Serial port with SavvyCAN.
+	* Set CAN Bus Speed to 100000 for KCAN and 500000 for KCAN2.
 
 
 ![oil-level-evo](Images/EVO/oil-level.jpg "oil-level-evo")
@@ -147,7 +149,7 @@ A serial interface with a set of commands is implemented to allow manipulation d
 Board: Teensy 4.0  
 Optimize: Faster with LTO  
 CPU Speed: 396 MHz  
-USB Type: Dual Serial for debugging, Single for normal operation.  
+USB Type: Triple Serial for debugging, Single for normal operation.  
 
 
 To make some startup time critical functions work, the following changes should be made to startup.c:  

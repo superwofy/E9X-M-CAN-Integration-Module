@@ -59,6 +59,8 @@ void read_initialize_eeprom(void) {
     EEPROM.update(49, 4);                                                                                                           // Loglevel
     EEPROM.update(50, 5);                                                                                                           // IHKA auto states
     EEPROM.update(51, 3);
+    EEPROM.update(52, 0);
+    EEPROM.update(53, 0);
 
     update_eeprom_checksum();
   } else {
@@ -116,8 +118,10 @@ void read_initialize_eeprom(void) {
     doors_locked = EEPROM.read(44) == 1 ? true : false;
     doors_alarmed = EEPROM.read(45) == 1 ? true : false;
     LOGLEVEL = constrain(EEPROM.read(49), 0, 4);
-    ihka_auto_blower_speed = EEPROM.read(50);
-    ihka_auto_blower_state = EEPROM.read(51);
+    ihka_auto_fan_speed = EEPROM.read(50);
+    ihka_auto_fan_state = EEPROM.read(51);
+    ihka_recirc_state = EEPROM.read(52);
+    ihka_auto_distr_state = EEPROM.read(53);
     serial_log("Loaded data from EEPROM.", 2);
   }
 }
@@ -125,7 +129,7 @@ void read_initialize_eeprom(void) {
 
 uint16_t calculate_eeprom_crc(void) {
   teensy_eeprom_crc.restart();
-  for (uint8_t i = 2; i < 52; i++) {
+  for (uint8_t i = 2; i < 54; i++) {
     teensy_eeprom_crc.add(EEPROM.read(i));
   }
   return teensy_eeprom_crc.calc();
@@ -178,8 +182,10 @@ void update_data_in_eeprom(void) {                                              
   EEPROM.update(44, doors_locked);
   EEPROM.update(45, doors_alarmed);
   EEPROM.update(49, LOGLEVEL);
-  EEPROM.update(50, ihka_auto_blower_speed);
-  EEPROM.update(51, ihka_auto_blower_state);
+  EEPROM.update(50, ihka_auto_fan_speed);
+  EEPROM.update(51, ihka_auto_fan_state);
+  EEPROM.update(52, ihka_recirc_state);
+  EEPROM.update(53, ihka_auto_distr_state);
   update_eeprom_checksum();
 }
 
@@ -456,7 +462,6 @@ void print_current_state(Stream &status_serial) {
   #endif
   status_serial.println(serial_debug_string);
   status_serial.println();
-  debug_print_timer = 0;
 }
 
 

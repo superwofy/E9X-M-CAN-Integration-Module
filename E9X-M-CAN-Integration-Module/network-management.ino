@@ -515,6 +515,14 @@ void kcan_write_msg(const CAN_message_t &msg) {
     }
     kcan_error_counter++;
   } else {
+    #if defined(USB_TRIPLE_SERIAL)
+      if (millis() >= 2000 && SerialUSB2.dtr()) {
+        if (slcan_bus == 1) {
+          xfer_can2tty(msg);                                                                                                        // This allows the SLCAN interface to see messages sent by the program on KCAN.
+        }
+      }
+    #endif
+
     kcan_error_counter = 0;
     kcan_resend_txq.flush();
   }
@@ -550,6 +558,14 @@ void kcan2_write_msg(const CAN_message_t &msg) {
         #endif
         kcan2_error_counter++;
       }
+
+      #if defined(USB_TRIPLE_SERIAL)
+      if (millis() >= 2000 && SerialUSB2.dtr()) {
+        if (slcan_bus == 2) {
+          xfer_can2tty(msg);                                                                                                        // This allows the SLCAN interface to see messages sent by the program on KCAN2.
+        }
+      }
+      #endif
     }
   #endif
 }

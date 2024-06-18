@@ -403,40 +403,40 @@ void evaluate_battery_voltage(void) {
 
 void check_console_buttons(void) {
   #if IMMOBILIZER_SEQ
-  if (immobilizer_released) {
-    if (!digitalRead(POWER_BUTTON_PIN) && !digitalRead(DSC_BUTTON_PIN)) {
-      if (!holding_both_console) {
-        both_console_buttons_timer = 0;
-        holding_both_console = true;
-      } else {
-        if (both_console_buttons_timer >= 10000) {                                                                                  // Hold both buttons for more than 10s.
-          #if F_NBT
-            kcan2_write_msg(idrive_horn_sound_buf);
-          #else
-            kcan_write_msg(idrive_button_sound_buf);                                                                                // Acknowledge Immobilizer persist ON-OFF with Gong.
-          #endif
-          immobilizer_persist = !immobilizer_persist;
-          EEPROM.update(31, immobilizer_persist);
-          update_eeprom_checksum();
-          #if DEBUG_MODE
-            sprintf(serial_debug_string, "Immobilizer now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
-            serial_log(serial_debug_string, 0);
-          #endif
-          #if F_NBT
-            if (!immobilizer_persist) {
-              send_cc_message("Immobilizer deactivated persistently.", true, 5000);
-            } else {
-              send_cc_message("Immobilizer activated persistently.", true, 5000);
-            }
-          #endif
-          both_console_buttons_timer = 0;                                                                                           // Reset to prevent multiple activations.
+    if (immobilizer_released) {
+      if (!digitalRead(POWER_BUTTON_PIN) && !digitalRead(DSC_BUTTON_PIN)) {
+        if (!holding_both_console) {
+          both_console_buttons_timer = 0;
+          holding_both_console = true;
+        } else {
+          if (both_console_buttons_timer >= 10000) {                                                                                // Hold both buttons for more than 10s.
+            #if F_NBT
+              kcan2_write_msg(idrive_horn_sound_buf);
+            #else
+              kcan_write_msg(idrive_button_sound_buf);                                                                              // Acknowledge Immobilizer persist ON-OFF with Gong.
+            #endif
+            immobilizer_persist = !immobilizer_persist;
+            EEPROM.update(31, immobilizer_persist);
+            update_eeprom_checksum();
+            #if DEBUG_MODE
+              sprintf(serial_debug_string, "Immobilizer now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
+              serial_log(serial_debug_string, 0);
+            #endif
+            #if F_NBT
+              if (!immobilizer_persist) {
+                send_cc_message("Immobilizer deactivated persistently.", true, 5000);
+              } else {
+                send_cc_message("Immobilizer activated persistently.", true, 5000);
+              }
+            #endif
+            both_console_buttons_timer = 0;                                                                                         // Reset to prevent multiple activations.
+          }
         }
+        return;                                                                                                                     // Prevent nuisance mode changes while holding both buttons.
+      } else {
+        holding_both_console = false;
       }
-      return;                                                                                                                       // Prevent nuisance mode changes while holding both buttons.
-    } else {
-      holding_both_console = false;
     }
-  }
   #endif
 
   if (!digitalRead(POWER_BUTTON_PIN)) {
@@ -462,55 +462,35 @@ void check_console_buttons(void) {
     }
   }
 
-  #if !MDSC_ZB
-  if (!digitalRead(DSC_BUTTON_PIN)) {
-    if (!holding_dsc_off_console) {
-      holding_dsc_off_console = true;
-      dsc_off_button_hold_timer = 0;
-    }
-    
-    if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                            // DSC OFF sequence should only be sent after user holds button for a configured time.
-      if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
-        if (dsc_program_status != 2) {                                                                                              // If the button is held after DSC OFF, no more messages are sent until release.
-          serial_log("Console: DSC OFF button held.", 2);
-          send_dsc_mode(2);
-        }
-        dsc_off_button_debounce_timer = 0;
+  #if !MDSC_ZB                                                                                                                      // For M3 DSC the switch must be wired directly to pin 41 of X18303.
+    if (!digitalRead(DSC_BUTTON_PIN)) {
+      if (!holding_dsc_off_console) {
+        holding_dsc_off_console = true;
+        dsc_off_button_hold_timer = 0;
       }
-    }      
-  } else {                                                                                                                          // A quick tap re-enables everything.
-    if (holding_dsc_off_console) {
-      if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
-        if (dsc_program_status != 0) {
-          serial_log("Console: DSC button tapped.", 2);
-          send_dsc_mode(0);
+      
+      if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                          // DSC OFF sequence should only be sent after user holds button for a configured time.
+        if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
+          if (dsc_program_status != 2) {                                                                                            // If the button is held after DSC OFF, no more messages are sent until release.
+            serial_log("Console: DSC OFF button held.", 2);
+            send_dsc_mode(2);
+          }
+          dsc_off_button_debounce_timer = 0;
         }
-        dsc_off_button_debounce_timer = 0;
+      }      
+    } else {                                                                                                                        // A quick tap re-enables everything.
+      if (holding_dsc_off_console) {
+        if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
+          if (dsc_program_status != 0) {
+            serial_log("Console: DSC button tapped.", 2);
+            send_dsc_mode(0);
+          }
+          dsc_off_button_debounce_timer = 0;
+        }
+        holding_dsc_off_console = false;
       }
-      holding_dsc_off_console = false;
     }
-  }
   #endif
-}
-
-
-void send_volume_request_periodic(void) {
-  if (terminal_r) {
-    #if F_NBT
-    if (idrive_txq.isEmpty() && !volume_reduced && volume_request_periodic_timer >= 5000 && !ignore_m_hold) {                       // Do not interfere while MDrive settings screen is being shown.
-    #else
-    if (idrive_txq.isEmpty() && initial_volume_set && !volume_reduced && volume_request_periodic_timer >= 5000) {
-    #endif
-      if (diag_transmit) {
-        #if F_NBT
-          kcan2_write_msg(vol_request_buf);
-        #else
-          kcan_write_msg(vol_request_buf);
-        #endif
-        volume_request_periodic_timer = 0;
-      }
-    }
-  }
 }
 
 
@@ -532,13 +512,11 @@ void evaluate_dr_seat_ckm(void) {
     if (!auto_seat_ckm[cas_key_number]) {
       serial_log("Automatic seat position CKM ON.", 2);
       auto_seat_ckm[cas_key_number] = true;
-      eeprom_unsaved = true;
     }
   } else {
     if (auto_seat_ckm[cas_key_number]) {
       serial_log("Automatic seat position CKM OFF.", 2);
       auto_seat_ckm[cas_key_number] = false;
-      eeprom_unsaved = true;
     }
   }
 }
@@ -635,7 +613,7 @@ void evaluate_power_down_response(void) {
       } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x23) {
         kcan_write_msg(power_down_cmd_c_buf);
       } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 3 && k_msg.buf[2] == 0x71 && k_msg.buf[3] == 5) {
-        serial_log("Power-down command sent successfully. Car will assume deep sleep in ~15s.", 0);
+        serial_log("Power-down command sent successfully. Car will kill KL30G and assume deep sleep in ~15s.", 0);
         power_down_requested = false;
       } else {
         power_down_requested = false;
@@ -643,7 +621,7 @@ void evaluate_power_down_response(void) {
       }
     } else {
       power_down_requested = false;
-      serial_log("Power-down command aborted due to OBD tool presence.", 0);
+      serial_log("Power-down command rejected due to OBD tool presence.", 0);
     }
   }
 }
@@ -760,15 +738,6 @@ void evaluate_wiper_stalk_status(void) {
 }
 
 
-void send_f_kombi_lcd_brightness(void) {
-  uint8_t f_kombi_lcd_brightness[] = {k_msg.buf[0], 0x32, k_msg.buf[2], 0xFD};                                                      // Byte1 is fixed.
-  if (rls_time_of_day == 2) {
-    f_kombi_lcd_brightness[3] = 0xFE;                                                                                               // This makes the NBT switch to night mode.
-  }
-  kcan2_write_msg(make_msg_buf(0x393, 4, f_kombi_lcd_brightness));
-}
-
-
 void send_climate_popup_acknowledge(void) {
   uint8_t climate_popup_acknowledge[] = {k_msg.buf[0], (uint8_t)((k_msg.buf[1] + 1) % 256)};
   kcan_write_msg(make_msg_buf(0x339, 2, climate_popup_acknowledge));                                                                // This reply is required to allow cycling through AUTO blower modes.
@@ -777,44 +746,73 @@ void send_climate_popup_acknowledge(void) {
 
 void evaluate_ihka_auto_ckm(void) {
   uint8_t new_speed = k_msg.buf[0] >> 4;
-  if (ihka_auto_blower_speed != new_speed) {
+  if (ihka_auto_fan_speed != new_speed) {
     if (ignition) {
       if (new_speed == 6) {
-        send_cc_message("Air distribution: AUTO Low.", true, 4000);
-        serial_log("IHKA AUTO Low.", 3);
+        send_cc_message("Fan speed AUTO Low.", true, 4000);
+        serial_log("Fan speed CKM AUTO Medium.", 3);
       } else if (new_speed == 5) {
-        send_cc_message("Air distribution: AUTO Medium.", true, 4000);
-        serial_log("IHKA AUTO Medium.", 3);
+        send_cc_message("Fan speed AUTO Medium.", true, 4000);
+        serial_log("Fan speed CKM AUTO Medium.", 3);
       } else if (new_speed == 9) {
-        send_cc_message("Air distribution: AUTO High.", true, 4000);
-        serial_log("IHKA AUTO High.", 3);
+        send_cc_message("Fan speed AUTO High.", true, 4000);
+        serial_log("Fan speed CKM AUTO High.", 3);
       }
     }
-    ihka_auto_blower_speed = new_speed;
+    ihka_auto_fan_speed = new_speed;
   }
 }
 
 
 void evaluate_ihka_auto_state(void) {
-  uint8_t new_state = k_msg.buf[6] >> 4;
-  if (ihka_auto_blower_state != new_state) {
-    if (new_state == 7) {
-      serial_log("IHKA set to AUTO.", 3);
-      if (ihka_auto_blower_speed == 6) {
-        send_cc_message("Air distribution: AUTO Low.", true, 4000);
-        serial_log("IHKA AUTO Low.", 3);
-      } else if (ihka_auto_blower_speed == 5) {
-        send_cc_message("Air distribution: AUTO Medium.", true, 4000);
-        serial_log("IHKA AUTO Medium.", 3);
-      } else if (ihka_auto_blower_speed == 9) {
-        send_cc_message("Air distribution: AUTO High.", true, 4000);
-        serial_log("IHKA AUTO High.", 3);
+  uint8_t new_fan_state = k_msg.buf[6] >> 4, 
+          new_distr_state = k_msg.buf[4] >> 4;
+
+  if ((ihka_auto_fan_state != new_fan_state) || (ihka_auto_distr_state != new_distr_state)) {
+    String climate_message = "";
+
+    if (new_distr_state == 2) {
+      climate_message += "Air distribution AUTO";
+    } else {
+      climate_message += "Air distribution manual";
+    }
+
+    if (new_fan_state == 7) {
+      if (ihka_auto_fan_speed == 6) {
+        climate_message += ", fan speed AUTO Low.";
+      } else if (ihka_auto_fan_speed == 5) {
+        climate_message += ", fan speed AUTO Mid.";
+      } else if (ihka_auto_fan_speed == 9) {
+        climate_message += ", fan speed AUTO High.";
       }
     } else {
-      send_cc_message("Air distribution: AUTO OFF.", true, 2000);
-      serial_log("IHKA AUTO OFF.", 3);
+      climate_message += ", fan speed manual.";
     }
-    ihka_auto_blower_state = new_state;
+
+    serial_log(climate_message.c_str(), 3);
+    send_cc_message(climate_message.c_str(), true, 2000);
+    ihka_auto_fan_state = new_fan_state;
+    ihka_auto_distr_state = new_distr_state;
+  }
+}
+
+
+void evaluate_ihka_recirculation(void) {
+  uint8_t new_state = 0;
+  bitWrite(new_state, 0, bitRead(k_msg.buf[0], 4));
+  bitWrite(new_state, 1, bitRead(k_msg.buf[0], 5));
+  if (ihka_recirc_state != new_state) {
+    if (new_state == 0) {
+      serial_log("IHKA recirculation OFF.", 3);
+      send_cc_message("Air recirculation: OFF.", true, 4000);
+    } else if (new_state == 1) {
+      serial_log("IHKA recirculation AUTO.", 3);
+      send_cc_message("Air recirculation: AUTO.", true, 4000);
+    } else if (new_state == 2) {
+      serial_log("IHKA recirculation ON.", 3);
+      send_cc_message("Air recirculation: ON.", true, 4000);
+    }
+    ihka_recirc_state = new_state;
   }
 }
 
@@ -848,7 +846,7 @@ void evaluate_terminal_followup(void) {
       } else if (terminal30g_followup_time <= 5) {
         #if F_NBT
           serial_log("30G cutoff imminent (<60s) Sent HU OFF at timer2.", 2);
-          kcan2_write_msg(dme_request_consumers_off_buf);                                                                         // Allow the HU to shut down more gracefully. User requests to wake up will be denied.
+          kcan2_write_msg(dme_request_consumers_off_buf);                                                                         // Allow the HU to shut down more gracefully. User requests to wake up will be ignored.
           requested_hu_off_t2 = true;
         #endif
       } else if (terminal30g_followup_time == 0) {

@@ -2,8 +2,10 @@
 
 
 void configure_IO(void) {
-  pinMode(POWER_BUTTON_PIN, INPUT_PULLUP);                                                                                                 
-  pinMode(DSC_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(POWER_BUTTON_PIN, INPUT_PULLUP);
+  #if !MDSC_ZB                                                                                                 
+    pinMode(DSC_BUTTON_PIN, INPUT_PULLUP);
+  #endif
   pinMode(POWER_LED_PIN, OUTPUT);
   #if FRONT_FOG_LED_INDICATOR
     pinMode(FOG_LED_PIN, OUTPUT);

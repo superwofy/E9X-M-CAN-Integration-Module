@@ -205,13 +205,22 @@ void send_f_road_incline(void) {
 void send_f_longitudinal_acceleration(void) {
   if (f_chassis_longitudinal_timer >= 20200 && ignition) {
     uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                         // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
-    uint16_t raw_value = 0;
-
-    raw_value = ((pt_msg.buf[3] & 0xF) << 8 | pt_msg.buf[2]);                                                                       // Combine the second half of byte3 with byte2 to form 12-bit signed integer.
+    uint16_t raw_value = ((pt_msg.buf[3] & 0xF) << 8 | pt_msg.buf[2]);                                                              // Combine the second half of byte3 with byte2 to form 12-bit signed integer.
     int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
     e_longitudinal_acceleration = signed_value * 0.025;                                                                             // Value in m/s^2.
 
+    if (real_speed == 0) {
+      if (e_longitudinal_acceleration_error <= e_longitudinal_acceleration) {                                                       // If the error is less than the current longitudional acceleration, reset it.
+          e_longitudinal_acceleration_error = e_longitudinal_acceleration;
+      } else {
+          e_longitudinal_acceleration_error = ema_alpha * e_longitudinal_acceleration_error                                         // Update error using exponential moving average
+                                              + (1 - ema_alpha) * e_longitudinal_acceleration;
+      }
+    }
+
+    e_longitudinal_acceleration += -e_longitudinal_acceleration_error;
     longitudinal_acceleration = round((e_longitudinal_acceleration + 65) / 0.002);
+
     f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
     f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
                                                      : f_longitudinal_acceleration_alive_counter++;
@@ -237,16 +246,16 @@ void send_f_lateral_acceleration(void) {
   // if (f_chassis_lateral_timer >= 20400 && ignition) {
   //   uint8_t f_lateral_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                              // Similar to 55.0.2. Byte7 fixed 0x2F - Signal value is valid QU_ACLNY_COG.
     
-    const double alpha = 0.7;
     uint16_t raw_value = (pt_msg.buf[4] << 4 | ((pt_msg.buf[3] >> 4) & 0x0F));                                                      // Combine byte 4 with the first half of byte 3 to form 12-bit signed integer.
     int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
     e_lateral_acceleration = signed_value * 0.025;                                                                                  // Value in m/s^2.
 
     if (real_speed == 0) {
-      if (e_lateral_acceleration_error <= e_lateral_acceleration) {                                                                 // If the error is less than the current error, reset it.
+      if (e_lateral_acceleration_error <= e_lateral_acceleration) {                                                                 // If the error is less than the current lateral acceleration, reset it.
           e_lateral_acceleration_error = e_lateral_acceleration;
       } else {
-          e_lateral_acceleration_error = alpha * e_lateral_acceleration_error + (1 - alpha) * e_lateral_acceleration;               // Update error using exponential moving average
+          e_lateral_acceleration_error = ema_alpha * e_lateral_acceleration_error 
+                                         + (1 - ema_alpha) * e_lateral_acceleration;                                                // Update error using exponential moving average
       }
     }
 
@@ -277,16 +286,15 @@ void send_f_lateral_acceleration(void) {
 void send_f_yaw_rate_chassis(void) {
   if (f_chassis_yaw_timer >= 20600) {
     
-    const double alpha = 0.7;
     uint16_t raw_value = ((pt_msg.buf[6] & 0xF) << 8 | pt_msg.buf[5]);                                                              // Combine the second half of byte6 with byte5 to form 12-bit signed integer.
     int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
     e_yaw_rate = signed_value * 0.05;                                                                                               // Value in degrees/sec.
 
     if (real_speed == 0) {
-      if (e_yaw_error <= e_yaw_rate) {                                                                                              // If the error is less than the current error, reset it.
+      if (e_yaw_error <= e_yaw_rate) {                                                                                              // If the error is less than the current yaw, reset it.
           e_yaw_error = e_yaw_rate;
       } else {
-          e_yaw_error = alpha * e_yaw_error + (1 - alpha) * e_yaw_rate;                                                             // Update error using exponential moving average
+          e_yaw_error = ema_alpha * e_yaw_error + (1 - ema_alpha) * e_yaw_rate;                                                     // Update error using exponential moving average
       }
     }
 
@@ -299,12 +307,10 @@ void send_f_yaw_rate_chassis(void) {
       f_extra_chassis_display[1] = f_converted_steering_angle >> 8;
       f_extra_chassis_display[2] = f_yaw_rate & 0xFF;                                                                               // Convert and transmit in LE. Identical to 0x19F.
       f_extra_chassis_display[3] = f_yaw_rate >> 8;
-      if (real_speed > 0) {
-        f_extra_chassis_display[4] = longitudinal_acceleration & 0xFF;                                                              // Identical to 0x199 and 0x19A.
-        f_extra_chassis_display[5] = longitudinal_acceleration >> 8;
-        f_extra_chassis_display[6] = lateral_acceleration & 0xFF;
-        f_extra_chassis_display[7] = lateral_acceleration >> 8;
-      }
+      f_extra_chassis_display[4] = longitudinal_acceleration & 0xFF;                                                                // Identical to 0x199 and 0x19A.
+      f_extra_chassis_display[5] = longitudinal_acceleration >> 8;
+      f_extra_chassis_display[6] = lateral_acceleration & 0xFF;
+      f_extra_chassis_display[7] = lateral_acceleration >> 8;
       
       kcan2_write_msg(make_msg_buf(0x2F3, 8, f_extra_chassis_display));
     #endif

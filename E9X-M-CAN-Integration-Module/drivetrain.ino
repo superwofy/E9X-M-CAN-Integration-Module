@@ -380,8 +380,6 @@ void update_mdrive_message_settings_nbt(void) {
       }
     }
 
-    eeprom_unsaved = true;
-
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
           mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
@@ -467,7 +465,6 @@ void update_dme_power_ckm(void) {
     serial_log(serial_debug_string, 3);
   #endif
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
-  eeprom_unsaved = true;
 }
 
 

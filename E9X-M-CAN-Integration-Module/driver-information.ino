@@ -915,33 +915,63 @@ void send_custom_info_cc(void) {
               boost_bar_string[i] = 0xB;                                                                                            // This character is not recognized and thus displayed as a box.
             }
 
-            if (pressure_unit == 1) {
-              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.2fbar   %.20s",
-                    temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
-                    temperature_unit == 1 ? 'C' : 'F',
-                    boost >= 0 ? "+" : "",
-                    boost * 0.001,
-                    boost_bar_string
-              );
-            } else if (pressure_unit == 2) {
-              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.1f%skPa   %.20s",
-                    temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
-                    temperature_unit == 1 ? 'C' : 'F',
-                    boost >= 0 ? "+" : "",
-                    boost / 10.0,
-                    boost < 99 ? " " : "",
-                    boost_bar_string
-              );
-            } else {
-              snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.1f%spsi   %.20s",
-                    temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
-                    temperature_unit == 1 ? 'C' : 'F',
-                    boost >= 0 ? "+" : "",
-                    boost * 0.0145038,
-                    boost < 689 ? " " : "",                                                                                         // ~10 psi.
-                    boost_bar_string
-              );
-            }
+            #if RHD
+              if (pressure_unit == 1) {
+                snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.2fbar   %.20s",
+                      temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                      temperature_unit == 1 ? 'C' : 'F',
+                      boost >= 0 ? "+" : "",
+                      boost * 0.001,
+                      boost_bar_string
+                );
+              } else if (pressure_unit == 2) {
+                snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.1f%skPa   %.20s",
+                      temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                      temperature_unit == 1 ? 'C' : 'F',
+                      boost >= 0 ? "+" : "",
+                      boost / 10.0,
+                      boost < 99 ? " " : "",
+                      boost_bar_string
+                );
+              } else {
+                snprintf(info_cc_string, 46, "I: %d°%c   T: %s%.1f%spsi   %.20s",
+                      temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                      temperature_unit == 1 ? 'C' : 'F',
+                      boost >= 0 ? "+" : "",
+                      boost * 0.0145038,
+                      boost < 689 ? " " : "",                                                                                       // ~10 psi.
+                      boost_bar_string
+                );
+              }
+            #else                                                                                                                   // For LHD, bring the bar graph closer to the driver's view.
+              if (pressure_unit == 1) {
+                snprintf(info_cc_string, 46, "%.20s   T: %s%.2fbar   I: %d°%c",
+                      boost_bar_string,
+                      boost >= 0 ? "+" : "",
+                      boost * 0.001,
+                      temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                      temperature_unit == 1 ? 'C' : 'F'
+                );
+              } else if (pressure_unit == 2) {
+                snprintf(info_cc_string, 46, "%.20s   T: %s%.1f%skPa   I: %d°%c",
+                      boost_bar_string,
+                      boost >= 0 ? "+" : "",
+                      boost / 10.0,
+                      boost < 99 ? " " : "",
+                      temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                      temperature_unit == 1 ? 'C' : 'F'
+                );
+              } else {
+                snprintf(info_cc_string, 46, "%.20s   T: %s%.1f%spsi   I: %d°%c",
+                      boost_bar_string,
+                      boost >= 0 ? "+" : "",
+                      boost * 0.0145038,
+                      boost < 689 ? " " : "",
+                      temperature_unit == 1 ? intake_air_temperature : (int)round((intake_air_temperature * 1.8) + 32),
+                      temperature_unit == 1 ? 'C' : 'F'
+                );
+              }
+            #endif
           } else {
             if (pressure_unit == 1) {
               snprintf(info_cc_string, 46, "W: %d°%c   I: %d°%c   B: %.1fV   T: %s%.2fbar",
