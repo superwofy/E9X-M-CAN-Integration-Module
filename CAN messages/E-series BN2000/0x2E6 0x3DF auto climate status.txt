@@ -1,6 +1,9 @@
 0x2E6
-byte6 = 0x7F        auto fan control
-byte6 = 0x3F        manual fan control
+Byte6 = 0x7F        auto fan control
+Byte6 = 0x3F        manual fan control
+
+Byte4 = 0           auto air distribution OFF
+Byte4 = 0x20        auto air distribution ON
 
 
 

@@ -2,7 +2,7 @@
 
 
 void serial_debug_interpreter(void) {
-  String cmd = Serial.readStringUntil('\n', 64);                                                                                    // Limit command the size to prevent overflow.
+  String cmd = Serial.readStringUntil('\n', 64);                                                                                    // Limit command the size to prevent overflow. NULL terminator not included.
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
     if (cmd == "lock_serial") {
       serial_commands_unlocked = false;
@@ -348,10 +348,9 @@ void serial_debug_interpreter(void) {
     #if AUTO_MIRROR_FOLD
     else if (cmd == "toggle_mirror_fold") {
       if (diag_transmit) {
-        bool unfold_with_door_open_ = unfold_with_door_open, eeprom_unsaved_ = eeprom_unsaved;                                      // Back these values up.
+        bool unfold_with_door_open_ = unfold_with_door_open;                                                                        // Back this value up.
         toggle_mirror_fold(false);
         unfold_with_door_open = unfold_with_door_open_;
-        eeprom_unsaved = eeprom_unsaved_;
         serial_log("  Serial: Sent mirror fold/unfold request.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
@@ -769,3 +768,160 @@ void check_serial_diag_actions(void) {
     serial_log("  Serial: Locked after timeout.", 0);
   }
 }
+
+
+#if defined(USB_TRIPLE_SERIAL)
+// Adapted from https://github.com/MotorsportUJI/teensy4.1-slcan
+// To connect use SavvyCAN with LAWICEL / SLCAN Serial.
+// Serial Port: ttyACM2, Serial Port Speed: 2000000, CAN Bus Speed: 100000 (KCAN) / 500000 (KCAN2).
+
+void evaluate_slcancmd(char *buf) {                                                                                                 // LAWICEL protocol. Only commands supported by SavvyCAN are implemented.
+  switch (buf[0]) {
+    case 'O':                                                                                                                       // OPEN SLCAN.
+      slcan_enabled = true;
+      SerialUSB2.write('\r');                                                                                                       // ACK.
+      break;
+    case 'C':                                                                                                                       // Close SLCAN.
+      slcan_enabled = false;
+      SerialUSB2.write('\r');
+      break;
+    case 't':                                                                                                                       // Send std frame.
+      if (slcan_enabled) {
+        CAN_message_t outMsg;
+        outMsg.id = (hex_to_int(buf[1]) << 8) | (hex_to_int(buf[2]) << 4) | hex_to_int(buf[3]);                                     // Parse the 7-bit ID (3 hex characters).
+        if (outMsg.id == 0x380) {
+          SerialUSB2.write('\a');                                                                                                   // Do not allow this message as it can cause the HU to lock.
+          break;
+        }
+        outMsg.len = hex_to_int(buf[4]);                                                                                            // Parse the length (1 hex character).
+        for (uint8_t i = 0; i < outMsg.len; i++) {
+          outMsg.buf[i] = (hex_to_int(buf[5 + (i * 2)]) << 4) | hex_to_int(buf[6 + (i * 2)]);                                       // Parse the CAN data bytes (each 2 hex characters).
+        }
+
+        // Since messages from entertainment modules on KCAN2 should be sent to KCAN for the rest of the car and vice-versa,
+        // the two busses are essentially stitched together. SLCAN traffic from SavvyCAN will follow the same.
+        if (slcan_bus == 1) {
+          kcan_write_msg(outMsg);
+
+          k_msg = outMsg;                                                                                                           // React to this KCAN message.
+          process_kcan_message();                                                                                                   // Corrected replication to KCAN2 will take place here too.
+        }
+        #if F_NBT
+          else if (slcan_bus == 2) {
+            kcan2_write_msg(outMsg);
+
+            k_msg = outMsg;                                                                                                         // React to this KCAN2 message.
+            process_kcan2_message();                                                                                                // Corrected replication to KCAN will take place here too.
+          }
+        #endif
+
+      }
+      SerialUSB2.write('\r');
+      break;
+    case 'T':                                                                                                                       // Send ext frame. Not supported.
+      SerialUSB2.write('\a');                                                                                                       // NACK.
+      break;
+    case 'r':                                                                                                                       // Send std rtr frame. Not supported.
+      SerialUSB2.write('\a');
+      break;
+    case 'R':                                                                                                                       // Send ext rtr frame. Not supported.
+      SerialUSB2.write('\a');
+      break;
+    case 'Z':                                                                                                                       // Enable/disable timestamps.
+      switch (buf[1]) {
+        case '0':                                                                                                                   // Timestamps OFF.
+          timestamp = false;
+          serial_log("SLCAN interface timestamps OFF.", 0);
+          SerialUSB2.write('\r');
+          break;
+        case '1':                                                                                                                   // Timestamps ON.
+          timestamp = true;
+          serial_log("SLCAN interface timestamps ON.", 0);
+          SerialUSB2.write('\r');
+          break;
+        default:
+          break;
+      }
+      break;
+    case 's':                                                                                                                       // CUSTOM CAN bit-rate. Not supported.
+      SerialUSB2.write('\a');
+      break;
+    case 'S':                                                                                                                       // CAN bit-rate.
+      switch (buf[1]) {
+        case '3':                                                                                                                   // 100k
+          slcan_bus = 1;
+          SerialUSB2.write('\r');
+          serial_log("SLCAN interface connected to KCAN (100k).", 0);
+          break;
+        #if F_NBT
+        case '6':                                                                                                                   // 500k
+          slcan_bus = 2;
+          SerialUSB2.write('\r');
+          serial_log("SLCAN interface connected to KCAN2 (500k).", 0);
+          break;
+        #endif
+        default:
+          SerialUSB2.write('\a');
+          break;
+      }
+      SerialUSB2.write('\r');
+      break;
+    default:                                                                                                                        // Unknown/Unimplemented command.
+      SerialUSB2.write('\a');
+      break;
+  }
+}
+
+
+int hex_to_int(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  return 0;
+}
+
+
+void read_slcan_cmd() {
+  if (SerialUSB2.available() > 0) {
+    char cmdbuf[32];
+    int length = SerialUSB2.readBytesUntil('\r', cmdbuf, 32);                                                                       // Read up to 32 bytes or until '\r'.
+    cmdbuf[length] = '\0';                                                                                                          // Null-terminate the command.
+    
+    if (length < 32) {
+      evaluate_slcancmd(cmdbuf);
+    } else {
+      SerialUSB2.write('\a');                                                                                                       // Buffer overflow, send NACK.
+    }
+  }
+}
+
+
+void xfer_can2tty(CAN_message_t inMsg) {
+  if (slcan_enabled) {
+    static uint8_t hexval[17] = "0123456789ABCDEF";
+    String command = "t";
+
+    command = command + char(hexval[ (inMsg.id >> 8) & 0xF ]);
+    command = command + char(hexval[ (inMsg.id >> 4) & 0xF ]);
+    command = command + char(hexval[ inMsg.id & 0xF ]);
+    command = command + char(hexval[ inMsg.len ]);
+
+    for(uint8_t i = 0; i < inMsg.len; i++){
+      command = command + char(hexval[ inMsg.buf[i] >> 4 ]);
+      command = command + char(hexval[ inMsg.buf[i] & 0xF ]);
+    }
+
+    if (timestamp) {
+      // Currently, timestamp is not implemented in SavvyCAN :(. See https://github.com/collin80/SavvyCAN/pull/801
+      // unsigned long time_now = slcan_timer % 60000;
+      command = command + char(hexval[ (slcan_timer >> 12) & 0xF ]);
+      command = command + char(hexval[ (slcan_timer >> 8) & 0xF ]);
+      command = command + char(hexval[ (slcan_timer >> 4) & 0xF ]);
+      command = command + char(hexval[ slcan_timer & 0xF ]);
+    }
+    command = command + '\r';
+    SerialUSB2.print(command);
+    SerialUSB2.send_now();
+  }
+}
+#endif

@@ -21,13 +21,11 @@ void evaluate_drl_ckm(void) {
     if (!drl_ckm[cas_key_number]) {
       serial_log("DRL CKM ON.", 2);
       drl_ckm[cas_key_number] = true;
-      eeprom_unsaved = true;
     }
   } else {
     if (drl_ckm[cas_key_number]) {
       serial_log("DRL CKM OFF.", 2);
       drl_ckm[cas_key_number] = false;
-      eeprom_unsaved = true;
     }
   }
 }
@@ -462,7 +460,6 @@ void toggle_mirror_fold(bool new_eeprom_state) {
   m = {frm_toggle_fold_mirror_b_buf, time_now + 310};
   mirror_fold_txq.push(&m);
   unfold_with_door_open = new_eeprom_state;
-  eeprom_unsaved = true;
 }
 
 
@@ -845,13 +842,11 @@ void evaluate_door_lock_ckm(void) {
     if (!visual_signal_ckm[cas_key_number]) {
       serial_log("Visual signal CKM ON.", 2);
       visual_signal_ckm[cas_key_number] = true;
-      eeprom_unsaved = true;
     }
   } else {
     if (visual_signal_ckm[cas_key_number]) {
       serial_log("Visual signal CKM OFF.", 2);
       visual_signal_ckm[cas_key_number] = false;
-      eeprom_unsaved = true;
     }
   }
 }
@@ -872,27 +867,23 @@ void evaluate_drivers_door_lock_status(void) {                                  
           }
         #endif
         doors_locked = doors_alarmed = true;
-        eeprom_unsaved = true;
       }
     } else if (k_msg.buf[0] == 0x82) {
       if (!doors_locked) {
         serial_log("Doors locked, alarm not set.", 2);
         doors_locked = true;
         doors_alarmed = false;
-        eeprom_unsaved = true;
       }
     } else {
       if (doors_locked || doors_alarmed) {
         serial_log("Doors unlocked.", 2);
         doors_locked = doors_alarmed = false;
-        eeprom_unsaved = true;
       }
     }
   } else {
     if (doors_locked || doors_alarmed) {
       serial_log("Doors unlocked.", 2);
       doors_locked = doors_alarmed = false;
-      eeprom_unsaved = true;
     }
   }
 }

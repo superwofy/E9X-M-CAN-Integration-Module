@@ -31,6 +31,26 @@ void send_volume_request_door(void) {
 }
 
 
+void send_volume_request_periodic(void) {
+  if (terminal_r) {
+    #if F_NBT
+    if (idrive_txq.isEmpty() && !volume_reduced && volume_request_periodic_timer >= 5000 && !ignore_m_hold) {                       // Do not interfere while MDrive settings screen is being shown.
+    #else
+    if (idrive_txq.isEmpty() && initial_volume_set && !volume_reduced && volume_request_periodic_timer >= 5000) {
+    #endif
+      if (diag_transmit) {
+        #if F_NBT
+          kcan2_write_msg(vol_request_buf);
+        #else
+          kcan_write_msg(vol_request_buf);
+        #endif
+        volume_request_periodic_timer = 0;
+      }
+    }
+  }
+}
+
+
 void evaluate_audio_volume_nbt(void) {
   if (k_msg.buf[0] == 0xF1 && k_msg.buf[4] == 0xA0 && k_msg.buf[5] == 0x39) {                                                      // status_volumeaudio response.
     if (k_msg.buf[6] > 0) {                                                                                                        // Otherwise, probably muted.
@@ -621,7 +641,7 @@ void convert_f_units(bool idrive_units_only) {
 // NOTE: Max input to this function is 45 characters + NUL terminator.
 void send_cc_message(const char input[], bool dialog, unsigned long new_timeout) {
   nbt_cc_txq.flush();                                                                                                               // Clear any pending dismiss messages.
-  uint8_t input_length = strlen(input);
+  uint8_t input_length = strlen(input);                                                                                             // Length excluding NUL terminator!
   if (input_length > 45) {
     serial_log("String length exceeded for send_cc_message.", 0);
     return;
@@ -630,7 +650,7 @@ void send_cc_message(const char input[], bool dialog, unsigned long new_timeout)
   uint8_t padded_length = input_length + padding;
   char padded_input[padded_length];
   memset(padded_input, ' ', padded_length);
-  strncpy(padded_input, input, input_length);
+  memcpy(padded_input, input, input_length);
   
   uint8_t cc_message_chunk_counter = (((padded_length / 3) - 2) << 4) | 0xF;
 
@@ -737,4 +757,14 @@ void evaluate_speed_warning_setting(void) {
     k_msg.buf[0] = 0x3E;
   }
   kcan_write_msg(k_msg);
+}
+
+
+void send_f_lcd_brightness(void) {
+  k_msg.buf[0] = constrain(k_msg.buf[0] + 0x10, 0, 0xFE);                                                                           // Byte0 used for brightness. 0 to 0xFE - increased to bias CID brightness.
+  uint8_t f_lcd_brightness[] = {k_msg.buf[0], 0x32, k_msg.buf[2], 0xFD};                                                            // Byte1 is fixed at 0x32.
+  if (rls_time_of_day == 2) {
+    f_lcd_brightness[3] = 0xFE;                                                                                                     // This makes the NBT switch to night mode.
+  }
+  kcan2_write_msg(make_msg_buf(0x393, 4, f_lcd_brightness));
 }

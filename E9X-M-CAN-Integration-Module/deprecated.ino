@@ -12,8 +12,6 @@ void update_mdrive_message_settings_cic(void) {
     mdrive_edc[cas_key_number] = k_msg.buf[2];                                                                                      // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
     mdrive_svt[cas_key_number] = k_msg.buf[4];                                                                                      // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
 
-    eeprom_unsaved = true;
-
     #if DEBUG_MODE
       sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
           mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
