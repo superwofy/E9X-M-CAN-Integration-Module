@@ -131,6 +131,7 @@ void configure_flexcan(void) {
   #endif
   PTCAN.setFIFOFilter(REJECT_ALL, filter_position_counter);
   PTCAN.FLEXCAN_ExitFreezeMode();
+  ptcan_mode = 1;
 
   pinMode(PTCAN_STBY_PIN, OUTPUT);
   if (filter_position_counter != filter_set_ok_counter) {
@@ -152,6 +153,7 @@ void configure_flexcan(void) {
   filter_set_ok_counter += DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                       // Diagnostic queries from OBD tool to forward.
   DCAN.setFIFOFilter(REJECT_ALL, 1);
   DCAN.FLEXCAN_ExitFreezeMode();
+  dcan_mode = 1;
   
   pinMode(DCAN_STBY_PIN, OUTPUT);
   if (1 != filter_set_ok_counter) {
@@ -178,38 +180,24 @@ void configure_mcp2515(void) {
 }
 
 
-void toggle_transceiver_standby(bool sleep) {
-  if (sleep) {
-    if (!digitalRead(PTCAN_STBY_PIN)) {
-      digitalWrite(PTCAN_STBY_PIN, HIGH);
-      serial_log("Deactivated PT-CAN transceiver.", 0);
-    }
-    if (!digitalRead(DCAN_STBY_PIN)) {
-      digitalWrite(DCAN_STBY_PIN, HIGH);
-      serial_log("Deactivated D-CAN transceiver.", 0);
-    }
-    #if F_NBT
-      if (kcan2_mode == MCP_NORMAL) {
-        kcan2_mode = MCP_SLEEP;
-        KCAN2.setMode(kcan2_mode);
-        serial_log("Deactivated K-CAN2 transceiver.", 0);
-      }
-    #endif
-  } else {
-    if (digitalRead(PTCAN_STBY_PIN)) {
-      digitalWrite(PTCAN_STBY_PIN, LOW);
-      serial_log("Activated PT-CAN transceiver.", 0);
-    }
-    if (digitalRead(DCAN_STBY_PIN)) {
-      digitalWrite(DCAN_STBY_PIN, LOW);
-      serial_log("Activated D-CAN transceiver.", 0);
-    }
-    #if F_NBT
-      kcan2_mode = MCP_NORMAL;
-      KCAN2.setMode(kcan2_mode);
-      serial_log("Activated K-CAN2 transceiver.", 0);
-    #endif
+void transceivers_standby(void) {
+  if (ptcan_mode == 1) {
+    digitalWrite(PTCAN_STBY_PIN, HIGH);
+    ptcan_mode = 0;
+    serial_log("Deactivated PT-CAN transceiver.", 0);
   }
+  if (dcan_mode == 1) {
+    digitalWrite(DCAN_STBY_PIN, HIGH);
+    dcan_mode = 0;
+    serial_log("Deactivated D-CAN transceiver.", 0);
+  }
+  #if F_NBT
+    if (kcan2_mode == MCP_NORMAL) {
+      kcan2_mode = MCP_SLEEP;
+      KCAN2.setMode(kcan2_mode);
+      serial_log("Deactivated K-CAN2 transceiver.", 0);
+    }
+  #endif
 }
 
 
@@ -285,7 +273,7 @@ void disable_diag_transmit_jobs(void) {                                         
     #if F_NBT
       char diag_cc_string[46] = {' '};
       snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %ds.",
-               (uint16_t) (OBD_DETECT_TIMEOUT / 1000));
+               (int) (OBD_DETECT_TIMEOUT / 1000));
       send_cc_message(diag_cc_string, true, 3000);
     #endif
     #if DOOR_VOLUME

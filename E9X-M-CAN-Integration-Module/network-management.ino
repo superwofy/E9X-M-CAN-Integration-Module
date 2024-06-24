@@ -572,68 +572,84 @@ void kcan2_write_msg(const CAN_message_t &msg) {
 
 
 void ptcan_write_msg(const CAN_message_t &msg) {
-  if (msg.id == 0x6F1 && !diag_transmit) {
-    if (msg.buf[0] == 0x17 && msg.buf[2] == 0x30 && (msg.buf[1] == 4 || msg.buf[1] == 2)) {                                         // Exception for EKP disable.
-    } else if (msg.buf[0] == 0xE || msg.buf[0] == 0x57) {                                                                           // Exception for SVT70 and NiVi diag.
-    } else {
-      #if DEBUG_MODE
-        serial_log("6F1 message not sent to PTCAN due to OBD tool presence.", 2);
-        can_debug_print_buffer(msg);
-      #endif
-      return;
+  if (ptcan_mode == 1) {
+    if (msg.id == 0x6F1 && !diag_transmit) {
+      if (msg.buf[0] == 0x17 && msg.buf[2] == 0x30 && (msg.buf[1] == 4 || msg.buf[1] == 2)) {                                       // Exception for EKP disable.
+      } else if (msg.buf[0] == 0xE || msg.buf[0] == 0x57) {                                                                         // Exception for SVT70 and NiVi diag.
+      } else {
+        #if DEBUG_MODE
+          serial_log("6F1 message not sent to PTCAN due to OBD tool presence.", 2);
+          can_debug_print_buffer(msg);
+        #endif
+        return;
+      }
     }
-  }
 
-  uint8_t result = PTCAN.write(msg);
-  if (result != 1) {
-    if (ptcan_retry_counter < 10) {                                                                                                 // Safeguard to avoid polluting the network in case of unrecoverable issue.
-      m = {msg, millis() + 50};
-      ptcan_resend_txq.push(&m);
-      ptcan_retry_counter++;
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "PTCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
-        serial_log(serial_debug_string, 1);
-        can_debug_print_buffer(msg);
-      #endif
+    uint8_t result = PTCAN.write(msg);
+    if (result != 1) {
+      if (ptcan_retry_counter < 10) {                                                                                               // Safeguard to avoid polluting the network in case of unrecoverable issue.
+        m = {msg, millis() + 50};
+        ptcan_resend_txq.push(&m);
+        ptcan_retry_counter++;
+        #if DEBUG_MODE
+          sprintf(serial_debug_string, "PTCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
+          serial_log(serial_debug_string, 1);
+          can_debug_print_buffer(msg);
+        #endif
+      } else {
+        serial_log("PTCAN resend max counter exceeded.", 1);
+      }
+      ptcan_error_counter++;
     } else {
-      serial_log("PTCAN resend max counter exceeded.", 1);
+      ptcan_retry_counter = 0;
+      ptcan_resend_txq.flush();
     }
-    ptcan_error_counter++;
   } else {
-    ptcan_retry_counter = 0;
-    ptcan_resend_txq.flush();
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "PTCAN transmission for ID: %lX aborted while transceiver is in standby.", msg.id);
+      serial_log(serial_debug_string, 1);
+      can_debug_print_buffer(msg);
+    #endif
   }
 }
 
 
 void dcan_write_msg(const CAN_message_t &msg) {
-  if (vehicle_awake) {
-    uint8_t result = DCAN.write(msg);
-    if (result != 1) {
-      if (dcan_retry_counter < 10) {                                                                                                // Safeguard to avoid polluting the network in case of unrecoverable issue.
-        m = {msg, millis() + 50};
-        dcan_resend_txq.push(&m);
-        dcan_retry_counter++;
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
-          serial_log(serial_debug_string, 1);
-          can_debug_print_buffer(msg);
-        #endif
+  if (dcan_mode == 1) {
+    if (vehicle_awake) {
+      uint8_t result = DCAN.write(msg);
+      if (result != 1) {
+        if (dcan_retry_counter < 10) {                                                                                              // Safeguard to avoid polluting the network in case of unrecoverable issue.
+          m = {msg, millis() + 50};
+          dcan_resend_txq.push(&m);
+          dcan_retry_counter++;
+          #if DEBUG_MODE
+            sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
+            serial_log(serial_debug_string, 1);
+            can_debug_print_buffer(msg);
+          #endif
+        } else {
+          serial_log("DCAN resend max counter exceeded.", 1);
+        }
+        dcan_error_counter++;
       } else {
-        serial_log("DCAN resend max counter exceeded.", 1);
+        dcan_retry_counter = 0;
+        dcan_resend_txq.flush();
       }
-      dcan_error_counter++;
-    } else {
-      dcan_retry_counter = 0;
-      dcan_resend_txq.flush();
     }
+    #if DEBUG_MODE
+    else {
+      sprintf(serial_debug_string, "DCAN write failed for ID: %lX because vehicle is asleep.", msg.id);
+      serial_log(serial_debug_string, 1);
+    }
+    #endif
+  } else {
+    #if DEBUG_MODE
+      sprintf(serial_debug_string, "DCAN transmission for ID: %lX aborted while transceiver is in standby.", msg.id);
+      serial_log(serial_debug_string, 1);
+      can_debug_print_buffer(msg);
+    #endif
   }
-  #if DEBUG_MODE
-  else {
-    sprintf(serial_debug_string, "DCAN write failed for ID: %lX because vehicle is asleep.", msg.id);
-    serial_log(serial_debug_string, 1);
-  }
-  #endif
 }
 
 

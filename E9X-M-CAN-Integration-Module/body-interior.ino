@@ -6,14 +6,11 @@ void check_vehicle_awake(void) {
   if (!vehicle_awake) {
     vehicle_awake = true;
     serial_log("Vehicle Awake.", 0);
-    toggle_transceiver_standby(false);                                                                                              // Re-activate the transceivers.                                                                                         
     vehicle_awakened_timer = 0;
     #if F_NBT
       FACEPLATE_UART.begin(38400, SERIAL_8E1);
     #endif
-    #if F_VSW01 && F_VSW01_MANUAL
-      vsw_switch_input(4);
-    #endif
+    alarm_led_message_timer = 100000;
   }
 }
 
@@ -127,7 +124,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   } else if (!ignition && ignition_) {
     reset_ignition_variables();
     scale_cpu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
-    serial_log("Ignition OFF. Reset values.", 2);
+    serial_log("Ignition OFF.", 2);
     f_terminal_status[2] |= 9;
   }
 
@@ -200,6 +197,29 @@ void evaluate_frm_consumer_shutdown(void) {
     if (frm_consumer_shutdown) {
       frm_consumer_shutdown = false;
       serial_log("FRM requested optional consumers back ON.", 2);
+
+      if (ptcan_mode == 0) {
+        digitalWrite(PTCAN_STBY_PIN, LOW);
+        ptcan_mode = 1;
+        serial_log("Activated PT-CAN transceiver.", 0);
+      }
+
+      if (dcan_mode == 0) {
+        digitalWrite(DCAN_STBY_PIN, LOW);
+        dcan_mode = 1;
+        serial_log("Activated D-CAN transceiver.", 0);
+      }
+
+      #if F_NBT
+        if (kcan2_mode == MCP_SLEEP) {
+          kcan2_mode = MCP_NORMAL;
+          KCAN2.setMode(kcan2_mode);
+          serial_log("Activated K-CAN2 transceiver.", 0);
+        }
+      #endif
+      #if F_VSW01 && F_VSW01_MANUAL
+        vsw_switch_input(4);
+      #endif
     }
   }
 }
@@ -615,6 +635,7 @@ void evaluate_power_down_response(void) {
       } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 3 && k_msg.buf[2] == 0x71 && k_msg.buf[3] == 5) {
         serial_log("Power-down command sent successfully. Car will kill KL30G and assume deep sleep in ~15s.", 0);
         power_down_requested = false;
+        transceivers_standby();
       } else {
         power_down_requested = false;
         serial_log("Power-down command aborted due to error.", 0);
@@ -749,13 +770,13 @@ void evaluate_ihka_auto_ckm(void) {
   if (ihka_auto_fan_speed != new_speed) {
     if (ignition) {
       if (new_speed == 6) {
-        send_cc_message("Fan speed AUTO Low.", true, 4000);
+        send_cc_message("Fan speed: AUTO Low intensity.", true, 4000);
         serial_log("Fan speed CKM AUTO Medium.", 3);
       } else if (new_speed == 5) {
-        send_cc_message("Fan speed AUTO Medium.", true, 4000);
+        send_cc_message("Fan speed: AUTO Medium intensity.", true, 4000);
         serial_log("Fan speed CKM AUTO Medium.", 3);
       } else if (new_speed == 9) {
-        send_cc_message("Fan speed AUTO High.", true, 4000);
+        send_cc_message("Fan speed: AUTO High intensity.", true, 4000);
         serial_log("Fan speed CKM AUTO High.", 3);
       }
     }
@@ -829,25 +850,27 @@ void evaluate_terminal_followup(void) {
 
       terminal30g_followup_time = ((k_msg.buf[1] & 0xF) << 8) | k_msg.buf[0];
 
-      if (terminal30g_followup_time <= 0x37 && terminal30g_followup_time > 0x1E) {                                                // 9.5 minutes.
+      if (terminal30g_followup_time <= 0x37 && terminal30g_followup_time > 0x1E) {                                                  // 9.5 minutes.
         // With CIC, the CID is switched off occasionally at 600s and 280s remaining.
         // If the power button is pressed, operation continues until 30G is OFF and the CIC is *forcefully* killed.
         #if F_NBT
-          if (!requested_hu_off_t1) {
+          if (!requested_hu_off_t1 && kcan2_mode == MCP_NORMAL) {
             serial_log("Sent HU OFF at timer1.", 2);
             kcan2_write_msg(dme_request_consumers_off_buf);
             requested_hu_off_t1 = true;
           }
         #endif
-      } else if (terminal30g_followup_time == 8) {                                                                                // 90 second warning.
+      } else if (terminal30g_followup_time == 8) {                                                                                  // 90 second warning.
         #if F_NBT
           send_cc_message("iDrive switching off in 30s to save battery!", true, 5000);
         #endif
       } else if (terminal30g_followup_time <= 5) {
         #if F_NBT
-          serial_log("30G cutoff imminent (<60s) Sent HU OFF at timer2.", 2);
-          kcan2_write_msg(dme_request_consumers_off_buf);                                                                         // Allow the HU to shut down more gracefully. User requests to wake up will be ignored.
-          requested_hu_off_t2 = true;
+          if (kcan2_mode == MCP_NORMAL) {
+            serial_log("30G cutoff imminent (<60s) Sent HU OFF at timer2.", 2);
+            kcan2_write_msg(dme_request_consumers_off_buf);                                                                         // Allow the HU to shut down more gracefully. User requests to wake up will be ignored.
+            requested_hu_off_t2 = true;
+          }
         #endif
       } else if (terminal30g_followup_time == 0) {
         serial_log("Received critical 30G timer message. Deep sleep in less than 20s.", 2);

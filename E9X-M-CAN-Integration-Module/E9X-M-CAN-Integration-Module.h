@@ -188,6 +188,7 @@ cppQueue kcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          ptcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          dcan_resend_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t kcan_retry_counter = 0, ptcan_retry_counter = 0, dcan_retry_counter = 0, kcan2_mode = 0xE0;
+uint8_t ptcan_mode = 0, dcan_mode = 0;
 unsigned long int k2rxId;
 unsigned char k2rxBuf[8], k2len;
 elapsedMillis eeprom_update_timer = 0;
@@ -368,8 +369,8 @@ cppQueue alarm_led_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          alarm_warnings_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          ekp_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          alarm_siren_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-bool alarm_after_engine_stall = false, alarm_active = false, alarm_led_active = false, alarm_led_disable_on_lock = false;
-uint8_t led_message_counter = 60;
+bool alarm_after_engine_stall = false, alarm_active = false, alarm_led_disable_on_lock = false;
+elapsedMillis alarm_led_message_timer = 100000;
 CAN_message_t alarm_led_on_buf, alarm_led_return_control_buf, alarm_siren_on_buf, alarm_siren_return_control_buf;
 bool reverse_beep_sent = false, pdc_too_close = false;
 elapsedMillis reverse_beep_resend_timer = 2000;
@@ -404,6 +405,7 @@ uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xF
 uint8_t f_mdrive_settings[5] = {0};
 uint32_t f_distance_alive_counter = 0x2000;
 uint8_t f_lights_ckm_request = 0;
+CAN_message_t f_lights_ckm_delayed_msg;
 uint16_t f_converted_steering_angle = 0;
 elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_timer = 500, 
               f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000,
@@ -449,9 +451,9 @@ uint8_t volume_restore_offset = 0, volume_changed_to, peristent_volume = 0;
 elapsedMillis volume_request_periodic_timer = 3000, volume_request_door_timer = 300;
 CAN_message_t vol_request_buf;
 cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-bool left_door_open = false, right_door_open = false, doors_locked = false, doors_alarmed = false;
+bool left_door_open = false, right_door_open = false, doors_locked = false, doors_alarmed = false, windows_closed = false;
 elapsedMillis doors_locked_timer = 0;
-uint8_t last_door_status = 0;
+uint8_t front_left_window_status = 0xFC, front_right_window_status = 0xFC, last_door_status = 0, sunroof_status = 0;
 elapsedMillis idrive_alive_timer = 3000, idrive_alive_timer2 = 0;
 bool idrive_died = false;
 uint8_t zbe_buttons[] = {0xE1, 0xFD, 0, 0, 0, 1}, zbe_rotation[] = {0xE1, 0xFD, 0, 0, 0x80, 0x1E}, zbe_action_counter = 0;

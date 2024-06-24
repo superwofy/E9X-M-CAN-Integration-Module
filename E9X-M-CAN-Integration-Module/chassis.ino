@@ -598,18 +598,20 @@ void evaluate_speed_unit(void) {
 
 
 void send_servotronic_message(void) {
-  servotronic_message[0] += 0x10;                                                                                                   // Increase alive counter.
-  if (servotronic_message[0] > 0xEF) {                                                                                              // Alive(first half of byte) must be between 0..E.
-    servotronic_message[0] = 0;
+  if (ptcan_mode == 1) {
+    servotronic_message[0] += 0x10;                                                                                                 // Increase alive counter.
+    if (servotronic_message[0] > 0xEF) {                                                                                            // Alive(first half of byte) must be between 0..E.
+      servotronic_message[0] = 0;
+    }
+    
+    servotronic_message[0] &= 0xF0;                                                                                                 // Discard current mode
+    if (mdrive_status && mdrive_svt[cas_key_number] >= 0xF1) {                                                                      // Servotronic in sport mode.
+      servotronic_message[0] += 9;
+    } else {
+      servotronic_message[0] += 8;
+    }
+    ptcan_write_msg(make_msg_buf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
   }
-  
-  servotronic_message[0] &= 0xF0;                                                                                                   // Discard current mode
-  if (mdrive_status && mdrive_svt[cas_key_number] >= 0xF1) {                                                                        // Servotronic in sport mode.
-    servotronic_message[0] += 9;
-  } else {
-    servotronic_message[0] += 8;
-  }
-  ptcan_write_msg(make_msg_buf(SVT_FAKE_EDC_MODE_CANID, 2, servotronic_message));
 }
 
 
