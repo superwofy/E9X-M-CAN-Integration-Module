@@ -627,6 +627,7 @@ void reset_sleep_variables(void) {
       }
     }
   #endif
+  alarm_led_message_timer = 100000;
   zbe_action_counter = zbe_rotation[2] = zbe_rotation[3] = 0;
   faceplate_volume = 0;
   gong_active = false;

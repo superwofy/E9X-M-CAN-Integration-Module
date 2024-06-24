@@ -275,19 +275,21 @@ void show_mdrive_settings_screen_evo(void) {
 
 
 void send_mdrive_message(void) {
-  mdrive_message_bn2000[0] += 10;
-  if (mdrive_message_bn2000[0] > 0xEF) {                                                                                            // Alive(first half of byte) must be between 0..E.
-    mdrive_message_bn2000[0] = 0;
+  if (ptcan_mode == 1) {
+    mdrive_message_bn2000[0] += 10;
+    if (mdrive_message_bn2000[0] > 0xEF) {                                                                                          // Alive(first half of byte) must be between 0..E.
+      mdrive_message_bn2000[0] = 0;
+    }
+    can_checksum_update(0x399, 6, mdrive_message_bn2000);                                                                           // Recalculate checksum. No module seems to check this - MDSC?
+    ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message_bn2000));                                                                 // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
+    mdrive_message_timer = 0;
+    #if F_NBT
+      mdrive_message_bn2010[0] = f_mdrive_alive_counter;
+      kcan2_write_msg(make_msg_buf(0x42E, 8, mdrive_message_bn2010));
+      f_mdrive_alive_counter == 0xE ? f_mdrive_alive_counter = 0 
+                                    : f_mdrive_alive_counter++;
+    #endif
   }
-  can_checksum_update(0x399, 6, mdrive_message_bn2000);                                                                             // Recalculate checksum. No module seems to check this - MDSC?
-  ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message_bn2000));                                                                   // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
-  mdrive_message_timer = 0;
-  #if F_NBT
-    mdrive_message_bn2010[0] = f_mdrive_alive_counter;
-    kcan2_write_msg(make_msg_buf(0x42E, 8, mdrive_message_bn2010));
-    f_mdrive_alive_counter == 0xE ? f_mdrive_alive_counter = 0 
-                                  : f_mdrive_alive_counter++;
-  #endif
 }
 
 
@@ -431,21 +433,23 @@ void can_checksum_update(uint16_t canid, uint8_t len,  uint8_t *message) {
 
 
 void send_power_mode(void) {
-  power_mode_only_dme_veh_mode[0] += 0x10;                                                                                          // Increase alive counter.
-  if (power_mode_only_dme_veh_mode[0] > 0xEF) {                                                                                     // Alive(first half of byte) must be between 0..E.
-    power_mode_only_dme_veh_mode[0] = 0;
-  }
+  if (ptcan_mode == 1) {
+    power_mode_only_dme_veh_mode[0] += 0x10;                                                                                        // Increase alive counter.
+    if (power_mode_only_dme_veh_mode[0] > 0xEF) {                                                                                   // Alive(first half of byte) must be between 0..E.
+      power_mode_only_dme_veh_mode[0] = 0;
+    }
 
-  if (console_power_mode || mdrive_power_active) {                                                                                  // Activate sport throttle mapping if POWER from console ON or Sport/Sport+ selected in MDrive (active).
-    power_mode_only_dme_veh_mode[1] = 0xF2;                                                                                         // Sport
-    digitalWrite(POWER_LED_PIN, HIGH);
-  } else {
-    power_mode_only_dme_veh_mode[1] = 0xF1;                                                                                         // Normal
-    digitalWrite(POWER_LED_PIN, LOW);
-  }
+    if (console_power_mode || mdrive_power_active) {                                                                                // Activate sport throttle mapping if POWER from console ON or Sport/Sport+ selected in MDrive (active).
+      power_mode_only_dme_veh_mode[1] = 0xF2;                                                                                       // Sport
+      digitalWrite(POWER_LED_PIN, HIGH);
+    } else {
+      power_mode_only_dme_veh_mode[1] = 0xF1;                                                                                       // Normal
+      digitalWrite(POWER_LED_PIN, LOW);
+    }
 
-  can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
-  ptcan_write_msg(make_msg_buf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode));
+    can_checksum_update(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode);
+    ptcan_write_msg(make_msg_buf(DME_FAKE_VEH_MODE_CANID, 2, power_mode_only_dme_veh_mode));
+  }
 }
 
 
@@ -471,18 +475,18 @@ void update_dme_power_ckm(void) {
 void check_immobilizer_status(void) {
   if (vehicle_awakened_timer >= 2000) {                                                                                             // Delay ensures that time passed after Teensy (re)started to receive messages.
     if (!immobilizer_released) {
-      if (vehicle_awakened_timer >= 10000) {                                                                                        // Delay so we don't interfere with normal DWA behavior indicating alarm faults. Also when doing 30G reset.
+      if (vehicle_awakened_timer >= 8000) {                                                                                         // Delay so we don't interfere with normal DWA behavior indicating alarm faults. Also when doing 30G reset.
 
         // Check frm_consumer_shutdown so that we don't activate when half-waking. Open trunk, lock button while locked...
-        if (!terminal_r && !alarm_led_active && !frm_consumer_shutdown && !alarm_led_disable_on_lock) {
-          kcan_write_msg(alarm_led_on_buf);                                                                                         // Visual indicator when driver just got in and did not activate anything / car woke. Timeout 120s.
-          alarm_led_active = true;                                                                                                  // Sending this multiple times keeps the car awake.
-          serial_log("Sent DWA LED ON with Terminal R off.", 2);
-          led_message_counter = 60;                                                                                                 // Make sure we're ready once Terminal R cycles.
+        if (!frm_consumer_shutdown && !alarm_led_disable_on_lock) {
+          if (alarm_led_message_timer >= 98000) {                                                                                   // Visual indicator that the immobilizer is active. Timeout 120s. Send periodically to keep it ON.
+            kcan_write_msg(alarm_led_on_buf);
+            alarm_led_message_timer = 0;
+          }
         }
       }
 
-      // This could be temporarily bypassed if the car is started and driven very very quickly?
+      // This could be temporarily bypassed if the car is started very very quickly and driven?
       // It will reactivate once indicated_speed <= immobilizer_max_speed. Think Speed (1994)...
       if (!vehicle_moving || (indicated_speed <= immobilizer_max_speed)) {                                                          // Make sure we don't cut this OFF while the car is in (quick) motion!!!
         if (immobilizer_timer >= immobilizer_send_interval) {
@@ -494,13 +498,6 @@ void check_immobilizer_status(void) {
 
             // Visual indicators with Terminal R, 15.
             kcan_write_msg(key_cc_on_buf);                                                                                          // Keep sending this message so that CC is ON until disabled.
-            if (led_message_counter > 56) {                                                                                         // Send LED message every 112s to keep it ON.
-              kcan_write_msg(alarm_led_on_buf);
-              alarm_led_active = true;
-              led_message_counter = 0;
-            } else {
-              led_message_counter++;
-            }
           }
           immobilizer_timer = 0;
           immobilizer_send_interval = 2000;
@@ -551,9 +548,9 @@ void activate_immobilizer(void) {
   ekp_txq.flush();
   EEPROM.update(30, immobilizer_released);
   update_eeprom_checksum();                                                                                                         // Update now in case we lose power before sleep.
-  alarm_led_active = false;
   immobilizer_activate_release_timer = 0;
   serial_log("Immobilizer activated.", 2);
+  alarm_led_message_timer = 100000;
 }
 
 
@@ -582,11 +579,10 @@ void release_immobilizer(void) {
   }
   kcan_write_msg(alarm_led_return_control_buf);
   alarm_led_txq.flush();
-  m = {alarm_led_return_control_buf, time_now + 400};                                                                               // Delay 100ms since we already sent a 6F1 to DWA.
+  m = {alarm_led_return_control_buf, time_now + 500};                                                                               // Delay since we already sent a 6F1 to DWA.
   alarm_led_txq.push(&m);
-  m = {alarm_led_return_control_buf, time_now + 600};
+  m = {alarm_led_return_control_buf, time_now + 800};
   alarm_led_txq.push(&m);
-  alarm_led_active = false;
   kcan_write_msg(key_cc_off_buf);
   if (terminal_r || nbt_active_after_terminal_r) {
     #if F_NBT
@@ -594,7 +590,7 @@ void release_immobilizer(void) {
     #endif
     m = {start_cc_on_buf, time_now + 500};
     alarm_warnings_txq.push(&m);
-    m = {start_cc_off_buf, time_now + 1000};
+    m = {start_cc_off_buf, time_now + 1500};
     alarm_warnings_txq.push(&m);
     serial_log("Sent start ready CC.", 2);
   } else {

@@ -883,7 +883,7 @@ void send_custom_info_cc(void) {
       if (!diag_transmit) {
         char diag_cc_string[46] = {' '};
         snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %ds.",
-                 (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                 (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         send_cc_message(diag_cc_string, false, 0);
       } else {
         char info_cc_string[46] = {' '};

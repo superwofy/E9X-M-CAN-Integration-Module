@@ -148,9 +148,9 @@ void undim_mirrors_with_indicators(void) {
 
 void indicate_trunk_opened(uint16_t boot_delay) {
   if (visual_signal_ckm[cas_key_number] && !engine_running && !hazards_on) {
-    serial_log("Flashing trunk hazards.", 2);
+    serial_log("Trunk remote button pressed. Flashing hazards 2x.", 2);
     unsigned long time_now = millis();
-    m = {flash_hazards_single_buf, boot_delay + time_now + 100};
+    m = {flash_hazards_double_buf, boot_delay + time_now + 100};
     hazards_flash_txq.push(&m);
   }
 }
@@ -312,10 +312,9 @@ void evaluate_remote_button(void) {
               alarm_led_txq.push(&m);
               m = {alarm_led_return_control_buf, time_now + 500};
               alarm_led_txq.push(&m);
-              alarm_led_active = false;
               alarm_led_disable_on_lock = true;
-              led_message_counter = 60;                                                                                             // Make sure we're ready once Terminal R cycles.
-              serial_log("Deactivated DWA LED when door locked.", 2);
+              alarm_led_message_timer = 100000;                                                                                     // Reset in case LED will need to be enabled soon.
+              serial_log("Deactivated DWA LED when doors locked.", 2);
             #endif
             #if COMFORT_EXIT
               comfort_exit_done = false;
@@ -350,6 +349,7 @@ void evaluate_remote_button(void) {
         serial_log("Remote unlock button pressed.", 2);
         #if IMMOBILIZER_SEQ
           alarm_led_disable_on_lock = false;
+          alarm_led_message_timer = 100000;
         #endif
       }
 
@@ -732,7 +732,7 @@ void evaluate_ahl_flc_status(void) {
           sprintf(serial_debug_string, "Received status AHL: %s FLC: %s",
                   ahl_active ? "ON" : "OFF", flc_active ? "ON" : "OFF");
           serial_log(serial_debug_string, 2);
-        #endif      
+        #endif
       }
       frm_ahl_flc_status_requested = false;
     } else {
@@ -891,12 +891,12 @@ void evaluate_drivers_door_lock_status(void) {                                  
 
 void indicate_car_locked(uint16_t boot_delay) {
   if (visual_signal_ckm[cas_key_number] && !hazards_on) {
-    serial_log("Car finder triggered. Flashing hazards 4 times.", 2);
+    serial_log("Car finder triggered. Flashing hazards 3x.", 2);
     hazards_flash_txq.flush();                                                                                                      // Cancel pending flashes.
     unsigned long time_now = millis();
     m = {flash_hazards_double_buf, boot_delay + time_now + 100};                                                                    // Minimum time between messages is 1.3s.
     hazards_flash_txq.push(&m);
-    m = {flash_hazards_double_buf, boot_delay + time_now + 1450};
+    m = {flash_hazards_single_buf, boot_delay + time_now + 1450};
     hazards_flash_txq.push(&m);
   }
 }
@@ -991,11 +991,47 @@ void fix_f_lights_ckm(void) {
       f_lights_ckm_request = 0;
     } else if (idrive_alive_timer2 <= 15000) {
       if (drl_ckm[cas_key_number]) {
-        k_msg.buf[2] = 0xF6;                                                                                            // DRL ON, home lights setting can be changed.
+        k_msg.buf[2] = 0xF6;                                                                                                        // DRL ON, home lights setting can be changed.
       } else {
         k_msg.buf[2] = 0xF4;
       }
-    } 
+      f_lights_ckm_delayed_msg = k_msg;                                                                                             // Save this message for after iDrive boots.
+    }
     kcan2_write_msg(k_msg);
   #endif
+}
+
+
+void evaluate_front_windows_position(void) {
+  if (k_msg.id == 0x3B6) {
+    front_left_window_status = k_msg.buf[1];
+  } else if (k_msg.id == 0x3B8) {
+    front_right_window_status = k_msg.buf[1];
+  }
+  indicate_comfort_closure();
+}
+
+
+void evaluate_sunroof_position(void) {
+  sunroof_status = k_msg.buf[0] + k_msg.buf[1];                                                                                     // Byte0 - longitudinal position, Byte1 - tilt. All 0 when closed.
+  indicate_comfort_closure();
+}
+
+
+void indicate_comfort_closure(void) {
+  bool windows_closed_ = front_left_window_status == 0xFC 
+                         && front_right_window_status == 0xFC
+                         && sunroof_status == 0;
+  if (windows_closed != windows_closed_) {
+    if (lock_button_pressed && windows_closed_) {
+      if (visual_signal_ckm[cas_key_number] && !hazards_on) {
+        serial_log("Comfort close complete. Flashing hazards 1x.", 2);
+        hazards_flash_txq.flush();                                                                                                  // Cancel any pending flashes.
+        unsigned long time_now = millis();
+        m = {flash_hazards_single_buf, time_now + 800};                                                                             // Slight delay to ensure flash is visible after other flashes.
+        hazards_flash_txq.push(&m);
+      }
+    }
+    windows_closed = windows_closed_;
+  }
 }

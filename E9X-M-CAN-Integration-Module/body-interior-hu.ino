@@ -155,24 +155,31 @@ void check_idrive_queue(void) {
 
 
 void check_idrive_alive_monitor(void) {
-  if (idrive_alive_timer >= 2500) {                                                                                                 // This message should be received every 1-2s.
-    if (!idrive_died) {
-      idrive_died = true;
-      serial_log("iDrive alive monitor timed out.", 2);
-      initial_volume_set = false;
-      asd_initialized = false;
-      asd_rad_on_initialized = false;
-      #if F_VSW01 && F_VSW01_MANUAL
-        vsw_switch_input(4);
-      #endif
-      idrive_alive_timer2 = 0;                                                                                                      // Keep track of the iDrive's boot time.
+  #if F_NBT
+    if (kcan2_mode == MCP_NORMAL) {                                                                                                     // No reason to check the alive timer if KCAN2 is in standby.
+  #endif
+      if (idrive_alive_timer >= 2500) {                                                                                                 // This message should be received every 1-2s.
+        if (!idrive_died) {
+          idrive_died = true;
+          serial_log("iDrive alive monitor timed out.", 2);
+          initial_volume_set = false;
+          asd_initialized = false;
+          asd_rad_on_initialized = false;
+          #if F_VSW01 && F_VSW01_MANUAL
+            vsw_switch_input(4);
+          #endif
+          idrive_alive_timer2 = 0;                                                                                                      // Keep track of the iDrive's boot time.
+        }
+      } else {
+        if (idrive_died) {                                                                                                              // It's back.
+          idrive_died = false;
+          serial_log("iDrive alive again.", 2);
+          kcan2_write_msg(f_lights_ckm_delayed_msg);
+        }
+      }
+  #if F_NBT
     }
-  } else {
-    if (idrive_died) {                                                                                                              // It's back.
-      idrive_died = false;
-      serial_log("iDrive alive again.", 2);
-    }
-  }
+  #endif
 }
 
 
@@ -189,7 +196,7 @@ void initialize_asd(void) {
 
 void initialize_asd_rad_on(void) {
   if (!asd_rad_on_initialized) {
-    if (diag_transmit) {
+    if (diag_transmit && !frm_consumer_shutdown) {                                                                                  // This should not run during the 30G reset wake operation.
       unsigned long time_now = millis();
       m = {radon_asd_buf, time_now};
       radon_txq.push(&m);

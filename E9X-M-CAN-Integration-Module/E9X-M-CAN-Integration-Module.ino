@@ -163,7 +163,7 @@ void loop() {
       if (vehicle_awake_timer >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring.
         serial_log("Vehicle Sleeping.", 0);
-        toggle_transceiver_standby(true);
+        transceivers_standby();
         scale_cpu_speed();
         reset_sleep_variables();
       }
@@ -636,6 +636,12 @@ void process_kcan_message() {
   }
 
   #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
+  else if (k_msg.id == 0x252) {
+    if (k_msg.buf[0] != 0xCE) {                                                                                                     // If the wipers went up while an after-wipe is scheduled (AUTO for example), abort the cycle.
+      abort_wipe_after_wash();
+    }
+  }
+
   else if (k_msg.id == 0x2A6) {                                                                                                     // Wiper stalk status from SZL. Cycle time 1s (idle).
     evaluate_wiper_stalk_status();
   }
@@ -726,6 +732,14 @@ void process_kcan_message() {
 
   else if (k_msg.id == 0x3B4) {                                                                                                     // Monitor battery voltage from DME.
     evaluate_battery_voltage();
+  }
+
+  else if (k_msg.id == 0x3B6 || k_msg.id == 0x3B8) {                                                                                // Front left and front right power window status.
+    evaluate_front_windows_position();
+  }
+
+  else if (k_msg.id == 0x3BA) {                                                                                                     // Sunroof position status.
+    evaluate_sunroof_position();
   }
 
   else if (k_msg.id == 0x3BD) {                                                                                                     // Received consumer shutdown message from FRM. Cycle time 5s (idle). Sent when changed.

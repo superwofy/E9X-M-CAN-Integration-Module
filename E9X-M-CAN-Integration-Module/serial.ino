@@ -60,7 +60,7 @@ void serial_debug_interpreter(void) {
             kcan_write_msg(power_down_cmd_a_buf);
           } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
           }
         } else {
@@ -91,6 +91,31 @@ void serial_debug_interpreter(void) {
       uint8_t clocksrc[4] = {60, 24, 80, 0};
       sprintf(serial_debug_string, "  Serial: FlexCAN clock speed is %d MHz.", clocksrc[(CCM_CSCMR2 & 0x300) >> 8]);
       serial_log(serial_debug_string, 0);
+    }
+    else if (cmd == "clear_dme_dtcs") {
+      if (ignition) {
+        if (diag_transmit) {
+          serial_log("  Serial: Clearing DME error and shadow memories - please wait.", 0);
+          unsigned long time_now = millis();
+          uint8_t clear_fs[] = {0x12, 3, 0x14, 0xFF, 0xFF, 0, 0, 0};
+          m = {make_msg_buf(0x6F1, 8, clear_fs), time_now};
+          serial_diag_dcan_txq.push(&m);
+          time_now += 50;
+          uint8_t clear_is[] = {0x12, 3, 0x31, 6, 0, 0, 0, 0};
+          m = {make_msg_buf(0x6F1, 8, clear_is), time_now};
+          serial_diag_dcan_txq.push(&m);
+          time_now += 50;
+          m = {clear_hs_kwp_dme_buf, time_now};
+          serial_diag_dcan_txq.push(&m);
+          clearing_dtcs = true;
+        } else {
+          sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+          serial_log(serial_debug_string, 0);
+        }
+      } else {
+        serial_log("  Serial: Activate ignition first.", 0);
+      }
     }
     else if (cmd == "clear_all_dtcs") {                                                                                             // Should take around 6s to complete.
       if (ignition) {
@@ -183,7 +208,7 @@ void serial_debug_interpreter(void) {
           clearing_dtcs = true;
         } else {
           sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
           serial_log(serial_debug_string, 0);
         }
       } else {
@@ -196,7 +221,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent CC gong.", 0);
       } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
       }
     }
@@ -206,7 +231,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent JBE reboot.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -276,7 +301,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Activated front left fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -286,7 +311,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Deactivated front right fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -296,7 +321,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Deactivated front left fog light.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -307,7 +332,7 @@ void serial_debug_interpreter(void) {
           serial_log("  Serial: Deactivated front fog lights.", 0);
         } else {
           sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
           serial_log(serial_debug_string, 0);
         }
       } else {
@@ -336,7 +361,7 @@ void serial_debug_interpreter(void) {
             needle_sweep_animation();
           } else {
             sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
             serial_log(serial_debug_string, 0);
           }
         #endif
@@ -354,7 +379,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent mirror fold/unfold request.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -370,7 +395,7 @@ void serial_debug_interpreter(void) {
         }
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -382,7 +407,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent undim request.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -447,7 +472,7 @@ void serial_debug_interpreter(void) {
         }
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -533,7 +558,7 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sending HU reboot job.", 0);
       } else {
         sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (uint16_t) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
         serial_log(serial_debug_string, 0);
       }
     }
@@ -647,6 +672,7 @@ void print_help(void) {
   "  print_status - Prints a set of current runtime variables.\r\n"
   "  print_boot_log - Prints the first 10s of serial messages and timing information.\r\n"
   "  print_can_config - Prints the configuration of the FlexCAN module.\r\n"
+  "  clear_dme_dtcs - Clear the error memories of the DME.\r\n"
   "  clear_all_dtcs - Clear the error memories of every module on the bus.\r\n"
   "  cc_gong - Create an audible check-control gong.\r\n"
   "  jbe_reboot - Reboot the gateway. Use when troubleshooting DCAN errors.", 0);
