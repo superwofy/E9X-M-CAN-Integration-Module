@@ -7,7 +7,7 @@ void check_vehicle_awake(void) {
     vehicle_awake = true;
     serial_log("Vehicle Awake.", 0);
     vehicle_awakened_timer = 0;
-    #if F_NBT
+    #if F_NBTE
       FACEPLATE_UART.begin(38400, SERIAL_8E1);
     #endif
     alarm_led_message_timer = 100000;
@@ -38,7 +38,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     }
   }
 
-  #if F_VSW01 || F_NIVI || F_NBT                                                                                                    // Translate 0x130 to 0x12F for F-series modules.
+  #if F_VSW01 || F_NIVI || F_NBTE                                                                                                   // Translate 0x130 to 0x12F for F-series modules.
     if (terminal_50) {
       f_terminal_status[1] = 0xB << 4;
       f_terminal_status[2] |= 0xD;
@@ -84,14 +84,16 @@ void evaluate_terminal_clutch_keyno_status(void) {
       kcan_write_msg(frm_ckm_ahl_komfort_buf);                                                                                      // Make sure we're in comfort mode on startup.
     #endif
     comfort_exit_ready = false;
-    #if F_NBT_CCC_ZBE
+    #if F_NBTE_CCC_ZBE
       kcan_write_msg(ccc_zbe_wake_buf);                                                                                             // ZBE1 will now transmit data on 0x1B8.
     #endif
-    #if F_NBT
+    #if F_NBTE
       send_nbt_sport_displays_data(false);                                                                                          // Initialize the sport display scale.
     #endif
     f_terminal_status[2] |= 7;
     nbt_bus_sleep = false;
+    activate_optional_transceivers();                                                                                               // Re-activate transceivers with Terminal R in case the FRM message was missed.
+    car_locked_indicator_counter = 0;
   } else if (!terminal_r && terminal_r_) {
     serial_log("Terminal R OFF.", 2);
     comfort_exit_ready = true;
@@ -137,7 +139,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     serial_log("Terminal 50 OFF.", 2);
   }
 
-  #if F_VSW01 || F_NIVI || F_NBT
+  #if F_VSW01 || F_NIVI || F_NBTE
     f_terminal_status_crc.restart();
     for (uint8_t i = 1; i < 8; i++) {
       f_terminal_status_crc.add(f_terminal_status[i]);
@@ -148,7 +150,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     #if F_VSW01
       kcan_write_msg(f_terminal_status_buf);
     #endif
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(f_terminal_status_buf);
       
       uint8_t f_vehicle_status[] = {0, 0, 0, 0, 0, 0, 0xE3, 0xFF};
@@ -179,6 +181,8 @@ void evaluate_terminal_clutch_keyno_status(void) {
 void evaluate_frm_consumer_shutdown(void) {
   // The FRM sends this request after the vehicle has been sleeping for a predefined time.
   // This can be observed when the car wakes up and turns off the interior lights. It then goes to deep sleep.
+    // A special case is when the iDrive is still awake after pressing the power/mute button and its NM is keeping the car awake.
+    // In that context, the consumers OFF message is sent
   // OR
   // If the car is locked, FC is sent immediately.
   // OR
@@ -197,26 +201,7 @@ void evaluate_frm_consumer_shutdown(void) {
     if (frm_consumer_shutdown) {
       frm_consumer_shutdown = false;
       serial_log("FRM requested optional consumers back ON.", 2);
-
-      if (ptcan_mode == 0) {
-        digitalWrite(PTCAN_STBY_PIN, LOW);
-        ptcan_mode = 1;
-        serial_log("Activated PT-CAN transceiver.", 0);
-      }
-
-      if (dcan_mode == 0) {
-        digitalWrite(DCAN_STBY_PIN, LOW);
-        dcan_mode = 1;
-        serial_log("Activated D-CAN transceiver.", 0);
-      }
-
-      #if F_NBT
-        if (kcan2_mode == MCP_SLEEP) {
-          kcan2_mode = MCP_NORMAL;
-          KCAN2.setMode(kcan2_mode);
-          serial_log("Activated K-CAN2 transceiver.", 0);
-        }
-      #endif
+      activate_optional_transceivers();
       #if F_VSW01 && F_VSW01_MANUAL
         vsw_switch_input(4);
       #endif
@@ -230,9 +215,9 @@ void evaluate_seat_heating_status(void) {
     driver_seat_heating_status = !k_msg.buf[0] ? false : true;
     if (!driver_seat_heating_status) {                                                                                              // Check if seat heating is already ON.
       if (!driver_sent_seat_heating_request) { 
-        if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {
+        if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {
           send_seat_heating_request_driver(false);
-        } else if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_MEDIUM) {
+        } else if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_MEDIUM) {
           send_seat_heating_request_driver(true);
         }
       }
@@ -246,9 +231,9 @@ void evaluate_seat_heating_status(void) {
     if (!passenger_seat_heating_status) {
       if (!passenger_sent_seat_heating_request) {
         if (passenger_seat_status == 9) {                                                                                           // Occupied and belted.
-          if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {
+          if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {
             send_seat_heating_request_pas(false);
-          } else if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_MEDIUM) {
+          } else if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_MEDIUM) {
             send_seat_heating_request_pas(true);
           }
         }
@@ -282,8 +267,10 @@ void send_seat_heating_request_driver(bool medium) {
     seat_heating_dr_txq.push(&m);
   }
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent [%s] driver's seat heating request at ambient temp: %.1fC.",
-            medium ? "medium" : "high", ambient_temperature_real);
+    sprintf(serial_debug_string, "Sent [%s] driver's seat heating request at %s temp: %.1fC.",
+            medium ? "medium" : "high",
+            interior_temperature > ambient_temperature_real ? "interior" : "ambient",
+            interior_temperature);
     serial_log(serial_debug_string, 2);
   #endif
 }
@@ -315,9 +302,9 @@ void evaluate_passenger_seat_status(void) {
         //This will be ignored if already ON and cycling ignition. Press message will be ignored by IHK anyway.
         if (!passenger_sent_seat_heating_request) {
           if (bitRead(passenger_seat_status, 0) && bitRead(passenger_seat_status, 3)) {                                             // Occupied and belted.
-            if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {                                                      // Execute heating requests here so we don't have to wait 15s for the next 0x22A.
+            if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {                           // Execute heating requests here so we don't have to wait 15s for the next 0x22A.
               send_seat_heating_request_pas(false);
-            } else if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_MEDIUM) {
+            } else if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_MEDIUM) {
               send_seat_heating_request_pas(true);
             }
           }
@@ -351,8 +338,10 @@ void send_seat_heating_request_pas(bool medium) {
     seat_heating_pas_txq.push(&m);
   }
   #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent [%s] passenger's seat heating request at ambient temp: %.1fC.",
-            medium ? "medium" : "high", ambient_temperature_real);
+    sprintf(serial_debug_string, "Sent [%s] passenger's seat heating request at %s temp: %.1fC.",
+            medium ? "medium" : "high",
+            interior_temperature > ambient_temperature_real ? "interior" : "ambient",
+            interior_temperature);
     serial_log(serial_debug_string, 2);
   #endif
 }
@@ -366,7 +355,7 @@ void evaluate_steering_heating_request(void) {
 
   if (engine_runtime >= AUTO_HEATING_START_DELAY && engine_runtime <= 10000) {                                                               
     if (!sent_steering_heating_request) {
-      if (ambient_temperature_real <= AUTO_SEAT_HEATING_TRESHOLD_HIGH) {
+      if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {
         digitalWrite(STEERING_HEATER_SWITCH_PIN, HIGH);
         serial_log("Activated steering wheel heating.", 2);
         sent_steering_heating_request = steering_heater_transistor_active = true;
@@ -402,7 +391,7 @@ void send_f_energy_condition(void) {
 
     CAN_message_t f_energy_condition_buf = make_msg_buf(0x3A0, 8, f_energy_condition);
     kcan_write_msg(f_energy_condition_buf);
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(f_energy_condition_buf);
     #endif
     #if F_NIVI
@@ -430,7 +419,7 @@ void check_console_buttons(void) {
           holding_both_console = true;
         } else {
           if (both_console_buttons_timer >= 10000) {                                                                                // Hold both buttons for more than 10s.
-            #if F_NBT
+            #if F_NBTE
               kcan2_write_msg(idrive_horn_sound_buf);
             #else
               kcan_write_msg(idrive_button_sound_buf);                                                                              // Acknowledge Immobilizer persist ON-OFF with Gong.
@@ -442,7 +431,7 @@ void check_console_buttons(void) {
               sprintf(serial_debug_string, "Immobilizer now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
               serial_log(serial_debug_string, 0);
             #endif
-            #if F_NBT
+            #if F_NBTE
               if (!immobilizer_persist) {
                 send_cc_message("Immobilizer deactivated persistently.", true, 5000);
               } else {
@@ -524,7 +513,7 @@ void send_nivi_button_press(void) {
 
 
 void evaluate_dr_seat_ckm(void) {
-  #if F_NBT
+  #if F_NBTE
   if (k_msg.buf[0] == 0xFA) {
   #else
   if (k_msg.buf[0] == 0xFC) {
@@ -545,12 +534,12 @@ void evaluate_dr_seat_ckm(void) {
 void evaluate_comfort_exit(void) {
   if (comfort_exit_ready && auto_seat_ckm[cas_key_number]) {
     kcan_write_msg(dr_seat_move_back_buf);
-    comfort_exit_done = true;
     comfort_exit_ready = false;
     serial_log("Moved driver's seat back for comfort exit.", 2);
-  } else {
-    comfort_exit_ready = comfort_exit_done = false;
   }
+
+  // If the door is opened and conditions are not satisfied, disable if it is re-opened and conditions are satsisfied.
+  comfort_exit_ready = false;
 }
 
 
@@ -635,7 +624,7 @@ void evaluate_power_down_response(void) {
       } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 3 && k_msg.buf[2] == 0x71 && k_msg.buf[3] == 5) {
         serial_log("Power-down command sent successfully. Car will kill KL30G and assume deep sleep in ~15s.", 0);
         power_down_requested = false;
-        transceivers_standby();
+        deactivate_optional_transceivers();
       } else {
         power_down_requested = false;
         serial_log("Power-down command aborted due to error.", 0);
@@ -853,7 +842,7 @@ void evaluate_terminal_followup(void) {
       if (terminal30g_followup_time <= 0x37 && terminal30g_followup_time > 0x1E) {                                                  // 9.5 minutes.
         // With CIC, the CID is switched off occasionally at 600s and 280s remaining.
         // If the power button is pressed, operation continues until 30G is OFF and the CIC is *forcefully* killed.
-        #if F_NBT
+        #if F_NBTE
           if (!requested_hu_off_t1 && kcan2_mode == MCP_NORMAL) {
             serial_log("Sent HU OFF at timer1.", 2);
             kcan2_write_msg(dme_request_consumers_off_buf);
@@ -861,11 +850,11 @@ void evaluate_terminal_followup(void) {
           }
         #endif
       } else if (terminal30g_followup_time == 8) {                                                                                  // 90 second warning.
-        #if F_NBT
+        #if F_NBTE
           send_cc_message("iDrive switching off in 30s to save battery!", true, 5000);
         #endif
       } else if (terminal30g_followup_time <= 5) {
-        #if F_NBT
+        #if F_NBTE
           if (kcan2_mode == MCP_NORMAL) {
             serial_log("30G cutoff imminent (<60s) Sent HU OFF at timer2.", 2);
             kcan2_write_msg(dme_request_consumers_off_buf);                                                                         // Allow the HU to shut down more gracefully. User requests to wake up will be ignored.
@@ -877,10 +866,15 @@ void evaluate_terminal_followup(void) {
         update_data_in_eeprom();
       } else {
         #if DEBUG_MODE
-          sprintf(serial_debug_string, "30G will be cut off in %d seconds.", terminal30g_followup_time * 10);
+          sprintf(serial_debug_string, "30G relay will be cut off in %d seconds.", terminal30g_followup_time * 10);
           serial_log(serial_debug_string, 2);
         #endif
       }
     }
   }
+}
+
+
+void evaluate_interior_temperature(void) {
+  interior_temperature = (k_msg.buf[3] / 6.0);
 }

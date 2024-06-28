@@ -224,7 +224,7 @@ void evaluate_door_status(void) {
         serial_log("Hood opened.", 2);
         #if HOOD_OPEN_GONG
           if (!vehicle_moving && terminal_r) {
-            #if F_NBT
+            #if F_NBTE
               if ((engine_coolant_temperature - 48) >= 80) {
                 play_cc_gong(1);
                 kcan2_write_msg(hood_open_hot_cc_dialog_buf);
@@ -238,7 +238,7 @@ void evaluate_door_status(void) {
         #endif
       } else {
         serial_log("Hood closed.", 2);
-        #if F_NBT
+        #if F_NBTE
           kcan2_write_msg(hood_open_hot_cc_dialog_clear_buf);
         #endif
       }
@@ -279,7 +279,7 @@ void evaluate_key_number_remote(void) {
     
     key_guest_profile = false;
 
-    #if !F_NBT
+    #if !F_NBTE
       console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;
       if (vehicle_awakened_timer >= 10000) {                                                                                        // Make sure the car was awake first...
         send_dme_power_ckm();                                                                                                       // Update iDrive in case key remote changed
@@ -317,9 +317,13 @@ void evaluate_remote_button(void) {
               serial_log("Deactivated DWA LED when doors locked.", 2);
             #endif
             #if COMFORT_EXIT
-              comfort_exit_done = false;
+              comfort_exit_ready = false;
             #endif
-          } 
+            #if F_NBTE
+              nbt_bus_sleep = true;                                                                                                 // Car locked, allow network to sleep.
+              nbt_bus_sleep_ready_timer = 50000;
+            #endif
+          }
           
           if (doors_alarmed) {                                                                                                      // Car fully locked.
             // For remote range see: https://www.spoolstreet.com/threads/e92-key-remote-range-one-solution.9072/
@@ -336,7 +340,7 @@ void evaluate_remote_button(void) {
         lock_button_pressed = true;
         lock_button_pressed_counter = 1;
       } else {
-        #if F_NBT
+        #if F_NBTE
           kcan2_write_msg(cc_double_gong_buf);                                                                                      // Audible reminder that ignition is still ON.
         #else
           kcan_write_msg(cc_double_gong_buf);
@@ -345,6 +349,7 @@ void evaluate_remote_button(void) {
     }
     
     else if (k_msg.buf[2] == 1 && !ignition) {                                                                                      // Ignore if unlocking car with ignition ON/running.
+      car_locked_indicator_counter = 0;
       if (doors_locked || doors_alarmed) {                                                                                          // Only run once when unlocking the car.
         serial_log("Remote unlock button pressed.", 2);
         #if IMMOBILIZER_SEQ
@@ -829,7 +834,7 @@ void send_f_brightness_status(void) {
         ptcan_write_msg(f_outside_brightness_buf);
       }
     #endif
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(f_outside_brightness_buf);
     #endif
     f_outside_brightness_timer = 0;
@@ -890,14 +895,27 @@ void evaluate_drivers_door_lock_status(void) {                                  
 
 
 void indicate_car_locked(uint16_t boot_delay) {
-  if (visual_signal_ckm[cas_key_number] && !hazards_on) {
-    serial_log("Car finder triggered. Flashing hazards 3x.", 2);
-    hazards_flash_txq.flush();                                                                                                      // Cancel pending flashes.
-    unsigned long time_now = millis();
-    m = {flash_hazards_double_buf, boot_delay + time_now + 100};                                                                    // Minimum time between messages is 1.3s.
-    hazards_flash_txq.push(&m);
-    m = {flash_hazards_single_buf, boot_delay + time_now + 1450};
-    hazards_flash_txq.push(&m);
+  if (car_locked_indicator_counter < 10) {                                                                                          // Limit excessive activation of this (10 max).
+    if (visual_signal_ckm[cas_key_number] && !hazards_on) {
+      if (!bitRead(last_trunk_status, 0)) {                                                                                         // Check that the trunk is shut.
+        serial_log("Car locked indicator triggered. Flashing 3x.", 2);
+        hazards_flash_txq.flush();                                                                                                  // Cancel pending flashes.
+        kcan_write_msg(stop_flashing_lights_buf);
+        if (!alarm_active) {
+          alarm_siren_txq.flush();
+        }
+        unsigned long time_now = millis();
+        if (car_locked_indicator_counter > 1) {                                                                                     // Should make the car easier to find at night. On the 3rd activation.
+          m = {flash_hazards_angel_eyes_xenons_buf, boot_delay + time_now + 50};
+        } else {
+          m = {flash_hazards_angel_eyes_buf, boot_delay + time_now + 50};
+        }
+        hazards_flash_txq.push(&m);
+        m = {stop_flashing_lights_buf, boot_delay + time_now + 1900};                                                               // Enough delay for 3x flashes.
+        hazards_flash_txq.push(&m);
+        car_locked_indicator_counter++;
+      }
+    }
   }
 }
 
@@ -917,7 +935,7 @@ void activate_intermittent_wipers(void) {
   intermittent_wipe_active = true;
   serial_log("Intermittent wiping ON.", 2);
   intermittent_wipe_timer = 0;
-  #if F_NBT
+  #if F_NBTE
     kcan2_write_msg(idrive_horn_sound_buf);
     send_cc_message("Intermittent wiping ON.", true, 3000);
   #else
@@ -930,7 +948,7 @@ void disable_intermittent_wipers(void) {
   intermittent_wipe_active = false;
   serial_log("Intermittent wiping OFF.", 2);
   intermittent_wipe_timer = 0;
-  #if F_NBT
+  #if F_NBTE
     kcan2_write_msg(idrive_horn_sound_buf);
     send_cc_message("Intermittent wiping OFF.", true, 3000);
   #else
@@ -985,11 +1003,11 @@ void check_wiper_queue(void) {
 
 
 void fix_f_lights_ckm(void) {
-  #if F_NBT
+  #if F_NBTE
     if (f_lights_ckm_request != 0) {
       k_msg.buf[2] = f_lights_ckm_request;
       f_lights_ckm_request = 0;
-    } else if (idrive_alive_timer2 <= 15000) {
+    } else if (idrive_run_timer <= 15000) {
       if (drl_ckm[cas_key_number]) {
         k_msg.buf[2] = 0xF6;                                                                                                        // DRL ON, home lights setting can be changed.
       } else {
@@ -1025,10 +1043,11 @@ void indicate_comfort_closure(void) {
   if (windows_closed != windows_closed_) {
     if (lock_button_pressed && windows_closed_) {
       if (visual_signal_ckm[cas_key_number] && !hazards_on) {
-        serial_log("Comfort close complete. Flashing hazards 1x.", 2);
+        serial_log("Comfort close complete. Flashing hazards 1x long.", 2);
         hazards_flash_txq.flush();                                                                                                  // Cancel any pending flashes.
+        kcan_write_msg(stop_flashing_lights_buf);
         unsigned long time_now = millis();
-        m = {flash_hazards_single_buf, time_now + 800};                                                                             // Slight delay to ensure flash is visible after other flashes.
+        m = {flash_hazards_single_long_buf, time_now + 300};                                                                        // Slight delay to ensure flash is visible after other flashes.
         hazards_flash_txq.push(&m);
       }
     }

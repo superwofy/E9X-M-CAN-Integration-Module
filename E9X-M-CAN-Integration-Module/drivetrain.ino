@@ -189,7 +189,7 @@ void update_mdrive_can_message(void) {
     mdrive_message_bn2000[4] = 0x81;                                                                                                // SVT sport (or Sport+ from NBT), MDrive OFF.
   }
 
-  #if F_NBT
+  #if F_NBTE
     if (mdrive_dsc[cas_key_number] == 7) {                                                                                          // DSC OFF.
       mdrive_message_bn2010[1] = 1;
     } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M).
@@ -236,7 +236,7 @@ void show_mdrive_settings_screen(void) {
     if (immobilizer_released) {
     #endif
       serial_log("Steering wheel M button held. Showing settings screen.", 2);
-      #if F_NBT
+      #if F_NBTE
         kcan2_write_msg(idrive_mdrive_settings_menu_nbt_a_buf);
         mdrive_settings_requested = true;
       #else
@@ -283,7 +283,7 @@ void send_mdrive_message(void) {
     can_checksum_update(0x399, 6, mdrive_message_bn2000);                                                                           // Recalculate checksum. No module seems to check this - MDSC?
     ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message_bn2000));                                                                 // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
     mdrive_message_timer = 0;
-    #if F_NBT
+    #if F_NBTE
       mdrive_message_bn2010[0] = f_mdrive_alive_counter;
       kcan2_write_msg(make_msg_buf(0x42E, 8, mdrive_message_bn2010));
       f_mdrive_alive_counter == 0xE ? f_mdrive_alive_counter = 0 
@@ -396,7 +396,7 @@ void update_mdrive_message_settings_nbt(void) {
 
 
 void reset_mdrive_settings(void) {
-  #if F_NBT                                                                                                                         // NBT does not have "Unchanged" settings.
+  #if F_NBTE                                                                                                                        // NBT does not have "Unchanged" settings.
     mdrive_dsc[cas_key_number] = 0xB;                                                                                               // DSC ON
     mdrive_power[cas_key_number] = 0x10;                                                                                            // Normal
     mdrive_edc[cas_key_number] = 0x21;                                                                                              // Comfort
@@ -585,7 +585,7 @@ void release_immobilizer(void) {
   alarm_led_txq.push(&m);
   kcan_write_msg(key_cc_off_buf);
   if (terminal_r || nbt_active_after_terminal_r) {
-    #if F_NBT
+    #if F_NBTE
       send_cc_message("Immobilizer released.", true, 2000);
     #endif
     m = {start_cc_on_buf, time_now + 500};
@@ -626,7 +626,7 @@ void execute_alarm_after_stall(void) {
       alarm_siren_txq.push(&m);
     }
     serial_log("Alarm siren and hazards ON.", 0);
-    #if F_NBT_EVO6
+    #if F_NBTE
       send_cc_message("Immobilizer alarm tripped!", true, 10000);
     #endif
     alarm_active = true;
@@ -677,7 +677,7 @@ void send_f_powertrain_2_status(void) {
     #if F_NIVI
       ptcan_write_msg(f_data_powertrain_2_buf);
     #endif
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(f_data_powertrain_2_buf);
     #endif
     f_data_powertrain_2_timer = 0;

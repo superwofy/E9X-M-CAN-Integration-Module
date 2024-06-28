@@ -1,9 +1,29 @@
 0x45B setting sent by iDrive:
 
-FF FF FF 00 FF FF FF FF                     // Min
-.
-.                                           // Increase/decrease in 0xC increments
-.
+FF FF FF 00 FF FF FF FF                     // Box 1
+
+
+FF FF FF 13 FF FF FF FF
+FF FF FF 1F FF FF FF FF                     // Increase/decrease in 0xC increments  20 boxes in total.
+FF FF FF 2B FF FF FF FF 
+FF FF FF 37 FF FF FF FF 
+FF FF FF 43 FF FF FF FF 
+FF FF FF 4F FF FF FF FF 
+FF FF FF 5B FF FF FF FF 
+FF FF FF 67 FF FF FF FF 
+FF FF FF 73 FF FF FF FF 
+FF FF FF 7F FF FF FF FF 
+FF FF FF 8B FF FF FF FF 
+FF FF FF 97 FF FF FF FF 
+FF FF FF A3 FF FF FF FF 
+FF FF FF AF FF FF FF FF 
+FF FF FF BB FF FF FF FF 
+FF FF FF C7 FF FF FF FF 
+FF FF FF D3 FF FF FF FF 
+FF FF FF DF FF FF FF FF 
+FF FF FF EB FF FF FF FF 
+
+
 FF FF FF FE FF FF FF FF                     // Max
 
 

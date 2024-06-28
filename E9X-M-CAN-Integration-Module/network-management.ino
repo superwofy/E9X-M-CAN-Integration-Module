@@ -87,14 +87,9 @@ void cache_can_message_buffers(void) {                                          
   cc_triple_gong_buf = make_msg_buf(0x205, 2, cc_triple_gong);
   idrive_horn_sound_buf = make_msg_buf(0x205, 2, idrive_horn_sound);
 
-  #if F_NBT
-    #if F_NBT_EVO6
-      uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x13, 0},
-              idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0};
-    #else
-      uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 7, 0},
-              idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x12, 0};
-    #endif
+  #if F_NBTE
+    uint8_t idrive_button_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x13, 0},
+            idrive_beep_sound[] = {0x63, 5, 0x31, 1, 0xA0, 0, 0x10, 0};
     idrive_button_sound_buf = make_msg_buf(0x6F1, 8, idrive_button_sound);
     idrive_beep_sound_buf = make_msg_buf(0x6F1, 8, idrive_beep_sound);
   #else
@@ -226,9 +221,17 @@ void cache_can_message_buffers(void) {                                          
   frm_mirror_undim_buf = make_msg_buf(0x6F1, 8, frm_mirror_undim);
   
   uint8_t flash_hazards_single[] = {0, 0xF1},
-          flash_hazards_double[] = {0, 0xF2};
-  flash_hazards_single_buf = make_msg_buf(0x2B4, 2, flash_hazards_single);
+          flash_hazards_double[] = {0, 0xF2},
+          flash_hazards_single_long[] = {0, 0xF3},
+          flash_hazards_angel_eyes[] = {5, 0},
+          flash_hazards_angel_eyes_xenons[] = {7, 0},
+          stop_flashing_lights[] = {0, 0};
+  flash_hazards_single_buf = make_msg_buf(0x2B4, 2, flash_hazards_single);                                                          // Minimum time between flash messages is 1.3s.
   flash_hazards_double_buf = make_msg_buf(0x2B4, 2, flash_hazards_double);
+  flash_hazards_single_long_buf = make_msg_buf(0x2B4, 2, flash_hazards_single_long);
+  flash_hazards_angel_eyes_buf = make_msg_buf(0x2B4, 2, flash_hazards_angel_eyes);
+  flash_hazards_angel_eyes_xenons_buf = make_msg_buf(0x2B4, 2, flash_hazards_angel_eyes_xenons);
+  stop_flashing_lights_buf = make_msg_buf(0x2B4, 2, stop_flashing_lights);
 
   uint8_t alarm_siren_on[] = {0x41, 3, 0x31, 4, 2, 0, 0, 0},
           alarm_siren_return_control[] = {0x41, 3, 0x31, 4, 3, 0, 0, 0},
@@ -392,7 +395,7 @@ void cache_can_message_buffers(void) {                                          
   oil_needle_min_buf = make_msg_buf(0x6F1, 8, oil_needle_min);
   oil_needle_release_buf = make_msg_buf(0x6F1, 8, oil_needle_release);
 
-  #if F_NBT
+  #if F_NBTE
     uint8_t vol_request[] = {0x63, 5, 0x31, 1, 0xA0, 0x39, 0};
     vol_request_buf = make_msg_buf(0x6F1, 7, vol_request);
     uint8_t custom_cc_dismiss[] = {0x46, 3, 0x50, 0xF0, 0, 0, 0, 0},
@@ -530,11 +533,11 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 
 void kcan2_write_msg(const CAN_message_t &msg) {
-  #if F_NBT
+  #if F_NBTE
     if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 300 || msg.id == 0x12F || msg.id == 0x130)) {                        // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
       byte send_buf[msg.len];
    
-      #if F_NBT_VIN_PATCH
+      #if F_NBTE_VIN_PATCH
         if (msg.id == 0x380) {                                                                                                      // Patch NBT VIN to donor.
           if (donor_vin_initialized) {
             for (uint8_t i = 0; i < msg.len; i++) {
@@ -699,8 +702,8 @@ void convert_f_nbt_network_management(void) {
   } else {
     nbt_nm[0] = nbt_network_management_next_neighbour;
     if (nbt_bus_sleep) {
-      if (nbt_bus_sleep_ready_timer >= 60000) {                                                                                     // Give the driver 60s to reactivate the HU otherwise the car would kill KCAN activity immediately.
-        nbt_nm[1] = 0x52;                                                                                                           // This timeout is also triggered when the FRM wakes the KCAN adding 60s before deep sleep!
+      if (nbt_bus_sleep_ready_timer >= 50000) {                                                                                     // Give the driver time to reactivate the HU otherwise the car would kill KCAN activity immediately.
+        nbt_nm[1] = 0x52;                                                                                                           // This timeout is also triggered when the FRM wakes the KCAN before deep sleep!
       }
     }
   }
@@ -715,7 +718,7 @@ void send_f_kombi_network_management(void) {
       kcan_write_msg(f_kombi_network_management_buf);
     }
   #endif
-  #if F_NBT
+  #if F_NBTE
     kcan2_write_msg(f_kombi_network_management_buf);
   #endif
   #if F_NIVI

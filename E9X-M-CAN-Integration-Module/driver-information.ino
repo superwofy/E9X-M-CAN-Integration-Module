@@ -155,7 +155,7 @@ void needle_sweep_animation(void) {
     kombi_needle_txq.push(&m);
     serial_log("Sending needle sweep animation.", 3);
 
-    #if F_NBT
+    #if F_NBTE
       send_nbt_sport_displays_data(true);
     #endif
   }
@@ -246,7 +246,7 @@ void evaluate_reverse_beep(void) {
         if (!pdc_too_close) {
           serial_log("Sending reverse beep.", 2);
           if (!idrive_died) {
-            #if F_NBT
+            #if F_NBTE
               kcan2_write_msg(idrive_beep_sound_buf);
             #else
               kcan_write_msg(idrive_beep_sound_buf);
@@ -282,43 +282,22 @@ void evaluate_indicate_ftm_status(void) {
 }
 
 
-void send_f_ftm_status(void) {
+void send_f_evo_ftm_status(void) {
   uint8_t f_ftm_status[] = {0, 0, 0, 0, 0};
   f_ftm_status[1] = 0xF << 4 | f_ftm_status_alive_counter;
   f_ftm_status_alive_counter == 0xE ? f_ftm_status_alive_counter = 0 
                                     : f_ftm_status_alive_counter++;
 
-  #if F_NBT_EVO6
-    if (k_msg.buf[0] == 0) {
-      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
-    } else if (k_msg.buf[0] == 1) {
-      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;
-    } else if (k_msg.buf[0] == 3) {
-      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
-    } else {
-      f_ftm_status[2] = 0xA1;
-      f_ftm_status[3] = 0x30;
-    }
-  #else
-    if (ignition) {
-      if (k_msg.buf[0] == 0) {                                                                                                      // Active
-        if (engine_running) {
-          f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
-        } else {
-          f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
-        }
-      } else if (k_msg.buf[0] == 3) {                                                                                               // Re-setting
-        f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
-      } else if (k_msg.buf[0] == 1) {
-        f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;                                                                 // Failure
-      } else {                                                                                                                      // Other, e.g pressure low.
-        f_ftm_status[2] = 0xA1;
-        f_ftm_status[3] = 0x30;
-      }
-    } else {
-      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
-    }
-  #endif
+  if (k_msg.buf[0] == 0) {
+    f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
+  } else if (k_msg.buf[0] == 1) {
+    f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;
+  } else if (k_msg.buf[0] == 3) {
+    f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+  } else {
+    f_ftm_status[2] = 0xA1;
+    f_ftm_status[3] = 0x30;
+  }
 
   f_ftm_status_crc.restart();
   for (uint8_t i = 1; i < 5; i++) {
@@ -344,31 +323,31 @@ void evaluate_msa_button(void) {
       #if MSA_RVC
         if (pdc_bus_status == 0xA5) {
           kcan_write_msg(camera_off_buf);
-          #if F_NBT
+          #if F_NBTE
             kcan2_write_msg(camera_off_buf);
           #endif
           serial_log("Deactivated RVC with PDC ON.", 2);
         } else if (pdc_bus_status == 0xA4) {
           kcan_write_msg(pdc_off_camera_off_buf);
-          #if F_NBT
+          #if F_NBTE
             kcan2_write_msg(pdc_off_camera_off_buf);
           #endif
           serial_log("Deactivated RVC.", 2);
         } else if (pdc_bus_status == 0xA1) {
           kcan_write_msg(camera_on_buf);
-          #if F_NBT
+          #if F_NBTE
             kcan2_write_msg(camera_on_buf);
           #endif
           serial_log("Activated RVC with PDC displayed.", 2);
         } else if (pdc_bus_status == 0x81) {
           kcan_write_msg(pdc_on_camera_on_buf);
-          #if F_NBT
+          #if F_NBTE
             kcan2_write_msg(pdc_on_camera_on_buf);
           #endif
           serial_log("Activated RVC from PDC ON, not displayed.", 2);
         } else if (pdc_bus_status == 0x80) {
           kcan_write_msg(pdc_off_camera_on_buf);
-          #if F_NBT
+          #if F_NBTE
             kcan2_write_msg(pdc_off_camera_on_buf);
           #endif
           serial_log("Activated RVC from PDC OFF.", 2);
@@ -412,18 +391,18 @@ void evaluate_pdc_bus_status(void) {
     #if MSA_RVC
       if (pdc_bus_status == 0xA4 && k_msg.buf[2] == 0x81) {
         kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when navingating away from RVC only.
-        #if F_NBT
+        #if F_NBTE
           kcan2_write_msg(pdc_off_camera_off_buf);
         #endif
       } else if (pdc_bus_status == 0xA4 && k_msg.buf[2] == 0xA1) {
         kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when turning off RVC from iDrive UI.
-        #if F_NBT
+        #if F_NBTE
           kcan2_write_msg(pdc_off_camera_off_buf);
         #endif
       }
       if (pdc_with_rvc_requested && k_msg.buf[2] == 0x80) {
         kcan_write_msg(pdc_on_camera_on_buf);
-        #if F_NBT
+        #if F_NBTE
           kcan2_write_msg(pdc_on_camera_on_buf);
         #endif
         serial_log("Activated PDC with RVC ON.", 2);
@@ -518,7 +497,7 @@ void evaluate_pdc_distance(void) {
         serial_log("Rear inner sensors RED, enabling camera tow view.", 3);
         CAN_message_t new_rvc_settings = make_msg_buf(0x38F, 4, rvc_settings);
         kcan_write_msg(new_rvc_settings);
-        #if F_NBT
+        #if F_NBTE
           kcan2_write_msg(new_rvc_settings);
         #endif
         rvc_tow_view_by_module = true;
@@ -530,7 +509,7 @@ void evaluate_pdc_distance(void) {
         serial_log("Disabled camera tow view after inner sensors no longer RED.", 2);
         CAN_message_t new_rvc_settings = make_msg_buf(0x38F, 4, rvc_settings);
         kcan_write_msg(new_rvc_settings);
-        #if F_NBT
+        #if F_NBTE
           kcan2_write_msg(new_rvc_settings);
         #endif
         rvc_tow_view_by_module = false;
@@ -583,19 +562,19 @@ void check_pdc_button_queue(void) {
 
 void play_cc_gong(uint8_t gong_count) {
   if (gong_count == 2) {
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(cc_double_gong_buf);
     #else
       kcan_write_msg(cc_double_gong_buf);
     #endif
   } else if (gong_count == 3) {
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(cc_triple_gong_buf);
     #else
       kcan_write_msg(cc_triple_gong_buf);
     #endif
   } else {
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(cc_single_gong_buf);
     #else
       kcan_write_msg(cc_single_gong_buf);
@@ -622,7 +601,7 @@ void send_f_pdc_function_status(bool disable) {
 
 
 void send_nbt_sport_displays_data(bool startup_animation) {
-  #if F_NBT
+  #if F_NBTE
     if (terminal_r) {
       uint8_t nbt_sport_data[] = {0, 0, 0, 0xFF};
       float max_power = 0, max_torque = 0, power_factor = 1, torque_factor = 1;                                                     // kW and Nm
@@ -897,7 +876,7 @@ void send_custom_info_cc(void) {
         }
 
         boost = constrain(boost, -MAX_TURBO_BOOST, MAX_TURBO_BOOST);
-   
+       
         uint8_t pressure_unit = 1;
         bitWrite(pressure_unit, 0, bitRead(pressure_unit_date_format[cas_key_number], 0));
         bitWrite(pressure_unit, 1, bitRead(pressure_unit_date_format[cas_key_number], 1));
@@ -908,7 +887,7 @@ void send_custom_info_cc(void) {
           if (mdrive_status) {
             // Create the boost animation string
             char boost_bar_string[] = "____________________";
-            uint8_t boost_percentage = round((constrain(boost, 0, MAX_TURBO_BOOST) / MAX_TURBO_BOOST) * 100);                       // 1M overboost: 0.90-0.95 bar.
+            uint8_t boost_percentage = round((constrain(boost, 0, MAX_TURBO_BOOST) / MAX_TURBO_BOOST) * 100);
             uint8_t boost_bar_string_fill = round((boost_percentage / 100.0) * 20);                                                 // Number of characters to replace dots.
 
             for (uint8_t i = 0; i < boost_bar_string_fill; i++) {
