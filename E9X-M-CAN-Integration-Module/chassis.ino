@@ -24,7 +24,7 @@ void send_dsc_mode(uint8_t mode) {
       serial_log("Sending DSC OFF.", 2);
     }
     dsc_program_status = mode;
-    #if F_NBT
+    #if F_NBTE
       f_driving_dynamics_timer = 1001;
     #endif
   #endif
@@ -58,7 +58,7 @@ void evaluate_reverse_gear_status(void) {
         if (pdc_bus_status == 0xA4) {
           if (diag_transmit) {
             kcan_write_msg(pdc_on_camera_on_buf);
-            #if F_NBT
+            #if F_NBTE
               kcan2_write_msg(pdc_on_camera_on_buf);
             #endif
             serial_log("Activated full PDC and camera with reverse gear.", 2);
@@ -94,7 +94,7 @@ void evaluate_reverse_gear_status(void) {
           serial_log("Disabled camera tow view after reverse gear OFF.", 2);
           CAN_message_t new_rvc_settings = make_msg_buf(0x38F, 4, rvc_settings);
           kcan_write_msg(new_rvc_settings);
-          #if F_NBT
+          #if F_NBTE
             kcan2_write_msg(new_rvc_settings);
           #endif
           rvc_tow_view_by_module = false;
@@ -301,7 +301,7 @@ void send_f_yaw_rate_chassis(void) {
     e_yaw_rate += -e_yaw_error;
     f_yaw_rate = round((e_yaw_rate + 163.84) / 0.005);
     
-    #if F_NBT
+    #if F_NBTE
       uint8_t f_extra_chassis_display[] = {0, 0, 0, 0, 0, 0, 0, 0};                                                                 // Used by xDrive status and gyro in GW7. Non F2X GWs use 0x19F!
       f_extra_chassis_display[0] = f_converted_steering_angle & 0xFF;
       f_extra_chassis_display[1] = f_converted_steering_angle >> 8;
@@ -385,7 +385,7 @@ void send_f_speed_status(void) {
         ptcan_write_msg(f_speed_buf);
       }
     #endif
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(f_speed_buf);
     #endif
     f_chassis_speed_timer = 0;
@@ -412,7 +412,7 @@ void send_f_standstill_status(void) {
     }
     f_standstill_status[0] = f_standstill_status_crc.calc();
     CAN_message_t f_standstill_status_buf = make_msg_buf(0x2ED, 3, f_standstill_status);
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(f_standstill_status_buf);
     #endif
     f_standstill_status_timer = 0;
@@ -435,7 +435,7 @@ void send_f_steering_angle(void) {
     f_steering_angle_effective[3] = f_converted_steering_angle >> 8;
 
     CAN_message_t f_steering_angle_effective_buf = make_msg_buf(0x302, 7, f_steering_angle_effective);
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(f_steering_angle_effective_buf);
     #endif
     #if F_NIVI
@@ -477,7 +477,7 @@ void send_f_steering_angle(void) {
         ptcan_write_msg(f_steering_angle_buf);
       }
     #endif
-    #if F_NBT
+    #if F_NBTE
       kcan2_write_msg(f_steering_angle_buf);
     #endif
 

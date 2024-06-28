@@ -20,7 +20,7 @@ void configure_IO(void) {
   #endif
 
   uint8_t disable_pins[40] = {1};                                                                                                   // Disable unused pins to save a tiny bit of current.
-  #if F_NBT
+  #if F_NBTE
     pinMode(MCP2515_INT_PIN, INPUT_PULLUP);
     pinMode(FACEPLATE_EJECT_PIN, INPUT_PULLUP);
     pinMode(FACEPLATE_POWER_MUTE_PIN, INPUT_PULLUP);
@@ -105,7 +105,7 @@ void configure_flexcan(void) {
 
   PTCAN.FLEXCAN_EnterFreezeMode();
 
-  #if FRONT_FOG_CORNER || F_NIVI || F_NBT
+  #if FRONT_FOG_CORNER || F_NIVI || F_NBTE
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0xC4, STD);                                               // Steering angle:                                              Cycle time 10ms.
     filter_position_counter++;
   #endif
@@ -121,7 +121,7 @@ void configure_flexcan(void) {
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x60E, STD);                                              // Diagnostic responses from SVT module to forward.
     filter_position_counter++;
   #endif
-  #if F_NBT && CUSTOM_MONITORING_CC
+  #if F_NBTE && CUSTOM_MONITORING_CC
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x612, STD);                                              // Diagnostic responses from DME.
     filter_position_counter++;
   #endif
@@ -167,7 +167,7 @@ void configure_flexcan(void) {
 
 
 void configure_mcp2515(void) {
-  #if F_NBT
+  #if F_NBTE
     if (CAN_OK != KCAN2.begin(MCP_STDEXT, CAN_500KBPS, MCP_16MHZ)) {
       serial_log("Error initializing MCP2515 for KCAN2.", 2);
       return;
@@ -180,7 +180,7 @@ void configure_mcp2515(void) {
 }
 
 
-void transceivers_standby(void) {
+void deactivate_optional_transceivers(void) {
   if (ptcan_mode == 1) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
     ptcan_mode = 0;
@@ -191,11 +191,36 @@ void transceivers_standby(void) {
     dcan_mode = 0;
     serial_log("Deactivated D-CAN transceiver.", 0);
   }
-  #if F_NBT
+  #if F_NBTE
     if (kcan2_mode == MCP_NORMAL) {
       kcan2_mode = MCP_SLEEP;
       KCAN2.setMode(kcan2_mode);
       serial_log("Deactivated K-CAN2 transceiver.", 0);
+      nbt_bus_sleep = true;
+      nbt_bus_sleep_ready_timer = 50000;
+    }
+  #endif
+}
+
+
+void activate_optional_transceivers(void) {
+  if (ptcan_mode == 0) {
+    digitalWrite(PTCAN_STBY_PIN, LOW);
+    ptcan_mode = 1;
+    serial_log("Activated PT-CAN transceiver.", 0);
+  }
+
+  if (dcan_mode == 0) {
+    digitalWrite(DCAN_STBY_PIN, LOW);
+    dcan_mode = 1;
+    serial_log("Activated D-CAN transceiver.", 0);
+  }
+
+  #if F_NBTE
+    if (kcan2_mode == MCP_SLEEP) {
+      kcan2_mode = MCP_NORMAL;
+      KCAN2.setMode(kcan2_mode);
+      serial_log("Activated K-CAN2 transceiver.", 0);
     }
   #endif
 }
@@ -247,7 +272,7 @@ void check_teensy_cpu_clock(void) {                                             
         #if DEBUG_MODE
           max_loop_timer = 0;
         #endif
-        #if F_NBT
+        #if F_NBTE
           send_cc_message("Teensy CPU above crtitical temperature!", true, 20000);
         #endif
       }
@@ -270,7 +295,7 @@ void disable_diag_transmit_jobs(void) {                                         
   if (diag_transmit) {
     serial_log("Detected OBD port diagnosis request. Pausing module initiated KWP/UDS jobs.", 0);
     diag_transmit = false;
-    #if F_NBT
+    #if F_NBTE
       char diag_cc_string[46] = {' '};
       snprintf(diag_cc_string, 46, "OBD tool detected: KWP/UDS jobs OFF for %ds.",
                (int) (OBD_DETECT_TIMEOUT / 1000));

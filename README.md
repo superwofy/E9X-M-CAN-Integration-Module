@@ -75,8 +75,9 @@ Included are also tools to allow full manipulation of the program section in the
 * Indicate that the windows and sunroof are fully closed by remote (flash hazards 1x).
 * Indicate when the trunk is opened by remote (flash hazards 2x).
 	* Visual signal for locking/unlocking must be ON.
-* Indicate when the car is locked and the lock button is pressed (flash hazards 3x).
+* Indicate when the car is locked and the lock button is pressed (flash hazards + angel eyes 3x).
 	* Car must be locked for at least 10s and Visual signal for locking/unlocking must be ON.
+	* After 3 activations, xenons flash as well.
 * Force sleep mode (KL30G OFF) by holding remote lock button for 20s - for testing.
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 	* If engine is started without releasing this immobilizer, alarm will sound once engine stalls.

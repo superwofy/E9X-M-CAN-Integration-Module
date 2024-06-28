@@ -51,7 +51,6 @@ void loop() {
     check_diag_transmit_status();
     #if DOOR_VOLUME
       check_idrive_queue();
-      send_volume_request_periodic();
     #endif
     #if NEEDLE_SWEEP
       check_kombi_needle_queue();
@@ -72,10 +71,10 @@ void loop() {
       check_fog_corner_queue();
     #endif
     check_idrive_alive_monitor();
-    #if F_VSW01 || F_NIVI || F_NBT
+    #if F_VSW01 || F_NIVI || F_NBTE
       send_f_energy_condition();
     #endif
-    #if F_NBT
+    #if F_NBTE
       evaluate_faceplate_buttons();
       evaluate_faceplate_uart();
       check_faceplate_buttons_queue();
@@ -83,7 +82,7 @@ void loop() {
         send_custom_info_cc();
       #endif
       check_nbt_cc_queue();
-      #if F_NBT_VIN_PATCH
+      #if F_NBTE_VIN_PATCH
         send_nbt_vin_request();
       #endif
       send_f_standstill_status();
@@ -100,7 +99,7 @@ void loop() {
       #if INTERMITTENT_WIPERS
         check_intermittent_wipers();
       #endif
-      #if F_NIVI || F_NBT
+      #if F_NIVI || F_NBTE
         send_f_brightness_status();
       #endif
       if (eeprom_update_timer >= 60000) {                                                                                           // Periodically update EEPROM.
@@ -117,7 +116,7 @@ void loop() {
         send_power_mode();                                                                                                          // state_spt request from DME.   
         #if SERVOTRONIC_SVT70
           send_servotronic_message();
-          #if F_NBT
+          #if F_NBTE
             send_servotronic_sport_plus();
           #endif
         #endif
@@ -146,24 +145,20 @@ void loop() {
         #endif
         send_f_road_incline();
       #endif
-      #if F_NIVI || F_NBT
+      #if F_NIVI || F_NBTE
         send_f_powertrain_2_status();
-        #if F_NBT
+        #if F_NBTE
           #if CUSTOM_MONITORING_CC
             send_dme_boost_request();
           #endif
-          #if F_NBT_EVO6
-            send_f_driving_dynamics_switch_evo();
-          #else
-            send_f_driving_dynamics_switch_nbt();
-          #endif
+          send_f_driving_dynamics_switch_evo();
         #endif
       #endif
     } else {
       if (vehicle_awake_timer >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring.
         serial_log("Vehicle Sleeping.", 0);
-        transceivers_standby();
+        deactivate_optional_transceivers();
         scale_cpu_speed();
         reset_sleep_variables();
       }
@@ -174,7 +169,7 @@ void loop() {
 /***********************************************************************************************************************************************************************************************************************************************
   K-CAN2 reception section.
 ***********************************************************************************************************************************************************************************************************************************************/
-  #if F_NBT
+  #if F_NBTE
     if (!digitalRead(MCP2515_INT_PIN)) {
       KCAN2.readMsgBuf(&k2rxId, &k2len, k2rxBuf);
 
@@ -209,23 +204,23 @@ void loop() {
       if (pt_msg.id == 0x1A0) {
         evaluate_real_speed();
         evaluate_vehicle_moving();
-        #if F_NBT
+        #if F_NBTE
           send_f_lateral_acceleration();
         #endif
-        #if F_NIVI || F_NBT
+        #if F_NIVI || F_NBTE
           send_f_longitudinal_acceleration();
           send_f_speed_status();
           send_f_yaw_rate_chassis();                                                                                                // Equivalent to Gyro.
         #endif
       }
       
-      #if FRONT_FOG_CORNER || F_NIVI || F_NBT
+      #if FRONT_FOG_CORNER || F_NIVI || F_NBTE
       else if (pt_msg.id == 0xC4) {
         evaluate_steering_angle();
         #if FRONT_FOG_CORNER
           evaluate_corner_fog_activation();
         #endif
-        #if F_NIVI || F_NBT
+        #if F_NIVI || F_NBTE
           send_f_steering_angle();
         #endif
       }
@@ -253,7 +248,7 @@ void loop() {
           if(0);
           #endif
 
-          #if F_NBT && CUSTOM_MONITORING_CC
+          #if F_NBTE && CUSTOM_MONITORING_CC
           else if (pt_msg.id == 0x612) {
             evaluate_dme_boost_response();
           }
@@ -314,7 +309,7 @@ void loop() {
         }
         #endif
 
-        #if F_NBT
+        #if F_NBTE
         else if (d_msg.buf[0] == 0x35) {                                                                                            // TBX address is 0x35.
           kcan2_write_msg(d_msg);
           disable_diag_transmit_jobs();
@@ -384,7 +379,7 @@ void process_kcan_message() {
     }
   #endif
 
-  #if F_NBT
+  #if F_NBTE
     if (k_msg.id != 0xAA &&                                                                                                         // BN2000 engine status and torques.
         k_msg.id != 0xA8 &&
         k_msg.id != 0xC4 &&                                                                                                         // BN2000 steering angle.
@@ -425,7 +420,7 @@ void process_kcan_message() {
       #endif
     }
 
-    #if F_NBT
+    #if F_NBTE
     else if (k_msg.id == 0xA8) {                                                                                                    // Crankshaft torque.
       send_nbt_sport_displays_data(false);
       send_f_torque_1();                                                                                                            // Visible using AAIdrive.
@@ -493,7 +488,7 @@ void process_kcan_message() {
     }
     #endif
 
-    #if F_NBT
+    #if F_NBTE
     else if (k_msg.id == 0x23D) {
       send_climate_popup_acknowledge();
     }
@@ -530,7 +525,7 @@ void process_kcan_message() {
       evaluate_pdc_distance();
     }
     
-    #if !F_NBT
+    #if !F_NBTE
     else if (k_msg.id == 0x38F) {                                                                                                   // Camera settings request from iDrive. Sent when activating camera and when changed.
       store_rvc_settings_idrive();
     }
@@ -541,16 +536,16 @@ void process_kcan_message() {
     }
     #endif
 
-    #if MSA_RVC || PDC_AUTO_OFF || AUTO_TOW_VIEW_RVC || F_NBT
+    #if MSA_RVC || PDC_AUTO_OFF || AUTO_TOW_VIEW_RVC || F_NBTE
     else if (k_msg.id == 0x3AF) {                                                                                                   // Monitor PDC bus status. Cycle time 2s (idle). Sent when changed.
       evaluate_pdc_bus_status();
-      #if F_NBT
+      #if F_NBTE
         send_f_pdc_function_status(false);
       #endif
     }
     #endif
 
-    #if !F_NBT
+    #if !F_NBTE
     else if (k_msg.id == 0x3A8) {                                                                                                   // Received POWER M Key (CKM) settings from iDrive. Sent when changed.
       update_dme_power_ckm();
     }
@@ -563,13 +558,13 @@ void process_kcan_message() {
       #endif
     }
 
-    #if !F_NBT
+    #if !F_NBTE
     else if (k_msg.id == 0x3CA) {                                                                                                   // Receive settings from iDrive (BN2000). Sent when changed.
       update_mdrive_message_settings_cic();
     }
     #endif
 
-    #if F_NIVI || F_NBT
+    #if F_NIVI || F_NBTE
     else if (k_msg.id == 0x586) {                                                                                                   // TRSVC CCs.
       evaluate_trsvc_cc();
     }
@@ -589,19 +584,19 @@ void process_kcan_message() {
     evaluate_terminal_clutch_keyno_status();
   }
 
-  #if F_NBT
+  #if F_NBTE
   else if (k_msg.id == 0x1A6) {                                                                                                     // Distance message from DSC. Cycle time 100ms.
     send_f_distance_messages();
   }
   #endif
 
-  #if !F_NBT
+  #if !F_NBTE
   else if (k_msg.id == 0x1AA) {                                                                                                     // Time POWER CKM message with iDrive ErgoCommander. Sent at boot time and Terminal R cycling.
     send_dme_power_ckm();
   }
   #endif
 
-  #if F_NBT_CCC_ZBE
+  #if F_NBTE_CCC_ZBE
   else if (k_msg.id == 0x1B8) {                                                                                                     // Convert old CCC controller data for NBT.
     convert_zbe1_message();
   }
@@ -617,14 +612,18 @@ void process_kcan_message() {
   }
   #endif
 
-  #if MIRROR_UNDIM || F_NBT
+  #if MIRROR_UNDIM || F_NBTE
   else if (k_msg.id == 0x1EE) {                                                                                                     // Indicator stalk status from FRM (KCAN only). Read-only message whose state can't be changed.
     evaluate_indicator_stalk();
-    #if F_NBT
+    #if F_NBTE
       evaluate_high_beam_stalk();
     #endif
   }
   #endif
+
+  else if (k_msg.id == 0x202) {                                                                                                     // Interior ambient light brightness status sent by KOMBI.
+    send_f_interior_ambient_light_brightness();
+  }
 
   else if (k_msg.id == 0x205) {
     evaluate_cc_gong_status();
@@ -636,18 +635,12 @@ void process_kcan_message() {
   }
 
   #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
-  else if (k_msg.id == 0x252) {
-    if (k_msg.buf[0] != 0xCE) {                                                                                                     // If the wipers went up while an after-wipe is scheduled (AUTO for example), abort the cycle.
-      abort_wipe_after_wash();
-    }
-  }
-
   else if (k_msg.id == 0x2A6) {                                                                                                     // Wiper stalk status from SZL. Cycle time 1s (idle).
     evaluate_wiper_stalk_status();
   }
   #endif
 
-  #if F_NBT
+  #if F_NBTE
   else if (k_msg.id == 0x2C0) {                                                                                                     // Kombi LCD brightness. Cycle time 10s.
     send_f_lcd_brightness();
   }
@@ -672,7 +665,7 @@ void process_kcan_message() {
   else if (k_msg.id == 0x2F7) {                                                                                                     // Units from KOMBI. Sent 3x on Terminal R. Sent when changed.
     evaluate_speed_unit();
     evaluate_temperature_unit();
-    #if F_NBT
+    #if F_NBTE
       convert_f_units(false);
     #endif
   }
@@ -683,20 +676,24 @@ void process_kcan_message() {
   }
   #endif
 
-  #if F_NBT || F_NIVI || MIRROR_UNDIM || FRONT_FOG_CORNER
+  #if F_NBTE || F_NIVI || MIRROR_UNDIM || FRONT_FOG_CORNER
   else if (k_msg.id == 0x314) {                                                                                                     // RLS light status. Cycle time 3s. Sent when changed.
     evaluate_rls_light_status();
   }
   #endif
 
-  #if FTM_INDICATOR || F_NBT
+  #if FTM_INDICATOR || F_NBTE
   else if (k_msg.id == 0x31D) {                                                                                                     // FTM status broadcast by DSC. Cycle time 5s (idle). Sent when changed.
     #if FTM_INDICATOR
       evaluate_indicate_ftm_status();
     #endif
-    #if F_NBT
-      send_f_ftm_status();
+    #if F_NBTE
+      send_f_evo_ftm_status();
     #endif
+  }
+
+  else if (k_msg.id == 0x32E) {
+    evaluate_interior_temperature();
   }
 
   else if (k_msg.id == 0x336) {
@@ -708,9 +705,9 @@ void process_kcan_message() {
   }
   #endif
 
-  #if !F_NBT
+  #if !F_NBTE
   else if (k_msg.id == 0x34A) {                                                                                                     // GPS position, appears consistently regardless of Terminal status. Cycle time 1s.
-    idrive_alive_timer = 0;
+    idrive_watchdog_timer = 0;
     #if DOOR_VOLUME 
       send_initial_volume_cic();
     #endif
@@ -720,7 +717,7 @@ void process_kcan_message() {
   }
   #endif
 
-  #if F_NBT
+  #if F_NBTE
   else if (k_msg.id == 0x35C) {                                                                                                     // EVO does not support settings less than 15kph.
     evaluate_speed_warning_status();
   }
@@ -767,7 +764,7 @@ void process_kcan_message() {
   }
   #endif
 
-  #if F_NBT
+  #if F_NBTE
   else if (k_msg.id == 0x3DF) {                                                                                                     // Received CKM setting for AUTO blower speed.
     evaluate_ihka_auto_ckm();
   }
@@ -777,24 +774,26 @@ void process_kcan_message() {
     evaluate_hba_ckm();
   }
   
-  #if F_VSW01 || F_NIVI || F_NBT
+  #if F_VSW01 || F_NIVI || F_NBTE
   else if (k_msg.id >= 0x480 && k_msg.id <= 0x4FF) {                                                                                // BN2000 OSEK NM IDs (not all).
     if (k_msg.id == 0x4E0) {                                                                                                        // KOMBI network management. Sent when KOMBI is ON, cycle time 500ms.
       send_f_kombi_network_management();
     }
-    #if F_NBT
+    #if F_NBTE
       else if (k_msg.id == 0x480) {                                                                                                 // JBE NM message. Cycle time 1s. This is slower than BN2010's 640ms but less than timeout (2s).
         kcan2_write_msg(f_zgw_network_management_buf);
       }
 
-      if (k_msg.buf[0] == 0x62) {                                                                                                   // HU is registered and its previous neighbour (between 0x480 and 0x4E1 inclusive) requested NM status.
-        nbt_network_management_initialized = true;
-        convert_f_nbt_network_management();
-        nbt_network_management_timer = 0;
-      } else if (nbt_network_management_timer >= 3000) {                                                                            // Registration/timeout handled here. Timeout will occur when nodes appear/disappear.
-        nbt_network_management_initialized = false;                                                                                 // If PDC or the driver's seat module are missing this system will fail!
-        convert_f_nbt_network_management();
-        nbt_network_management_timer = 2500;                                                                                        // Retry in 500ms.
+      if (kcan2_mode == MCP_NORMAL) {                                                                                               // Only participate in NM if the KNCA2 bus is active.
+        if (k_msg.buf[0] == 0x62) {                                                                                                 // HU is registered and its previous neighbour (between 0x480 and 0x4E1 inclusive) requested NM status.
+          nbt_network_management_initialized = true;
+          convert_f_nbt_network_management();
+          nbt_network_management_timer = 0;
+        } else if (nbt_network_management_timer >= 3000) {                                                                          // Registration/timeout handled here. Timeout will occur when nodes appear/disappear.
+          nbt_network_management_initialized = false;                                                                               // If PDC or the driver's seat module are missing this system will fail!
+          convert_f_nbt_network_management();
+          nbt_network_management_timer = 2500;                                                                                      // Retry in 500ms.
+        }
       }
     #endif
   }
@@ -804,7 +803,7 @@ void process_kcan_message() {
     process_dme_cc();
   }
 
-  #if DOOR_VOLUME && !F_NBT
+  #if DOOR_VOLUME && !F_NBTE
   else if (k_msg.id == 0x663) {                                                                                                     // iDrive diagnostic response. Sent when requested.
     #if DOOR_VOLUME
       evaluate_audio_volume_cic();
@@ -870,7 +869,7 @@ void process_kcan2_message() {
 
   if (k_msg.id == 0xBF) { return; }                                                                                                 // Skip touchpad data message. This message is only for BN2010.
   
-  #if F_NBT_CCC_ZBE
+  #if F_NBTE_CCC_ZBE
   else if (k_msg.id == 0x273) {                                                                                                     // NBT tried to initialize a controller.
     send_zbe_acknowledge();                                                                                                         // Without this response, rotation data is ignored.
   }
@@ -890,7 +889,7 @@ void process_kcan2_message() {
   }
 
   else if (k_msg.id == 0x34A) {                                                                                                     // GPS position, appears consistently regardless of Terminal status. Cycle time 1s.
-    idrive_alive_timer = 0;
+    idrive_watchdog_timer = 0;
     #if ASD89_MDRIVE
       initialize_asd();
     #endif
@@ -921,7 +920,7 @@ void process_kcan2_message() {
   }
 
   else if (k_msg.id == 0x663) {                                                                                                     // iDrive diagnostic response.
-    #if F_NBT_VIN_PATCH
+    #if F_NBTE_VIN_PATCH
       evaluate_nbt_vin_response();
     #endif
     #if DOOR_VOLUME
@@ -943,14 +942,15 @@ void process_kcan2_message() {
           nbt_active_after_terminal_r = true;
         } else if (k_msg.buf[3] == 0) {
           nbt_bus_sleep = true;
+          nbt_bus_sleep_ready_timer = 0;
           nbt_active_after_terminal_r = false;
         }
       }
     }
 
-    if (idrive_alive_timer >= 15000 && idrive_died) {                                                                               // HU must have crashed/became unresponsive. Allow the car to kill KCAN.
+    if (idrive_watchdog_timer >= 15000 && idrive_died) {                                                                            // HU must have crashed/became unresponsive. Allow the car to kill KCAN.
       nbt_bus_sleep = true;
-      nbt_bus_sleep_ready_timer = 60000;
+      nbt_bus_sleep_ready_timer = 50000;
     }
   }
 }

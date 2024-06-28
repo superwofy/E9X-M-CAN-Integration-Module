@@ -124,7 +124,7 @@ void serial_debug_interpreter(void) {
           unsigned long time_now = millis();
           uint8_t clear_fs[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0};
           for (uint8_t i = 0; i < 0x8C; i++) {
-            #if F_NBT
+            #if F_NBTE
               if (i == 0x63 || i == 0x67 || i == 0x35 || i == 0x48) {                                                               // NBT, ZBE, TBX, VSW.
                 continue;
               }
@@ -142,7 +142,7 @@ void serial_debug_interpreter(void) {
           time_now += 50;
           uint8_t clear_is[] = {0, 3, 0x31, 6, 0, 0, 0, 0};
           for (uint8_t i = 0; i < 0x8C; i++) {
-            #if F_NBT
+            #if F_NBTE
               if (i == 0x63 || i == 0x67 || i == 0x35 || i == 0x48) {
                 continue;
               }
@@ -176,7 +176,7 @@ void serial_debug_interpreter(void) {
             m = {clear_is_kwp_svt_buf, time_now};
             serial_diag_ptcan_txq.push(&m);
           #endif
-          #if F_NBT
+          #if F_NBTE
             time_now = millis();
             m = {clear_fs_uds_nbt_buf, time_now};
             serial_diag_kcan2_txq.push(&m);
@@ -455,13 +455,13 @@ void serial_debug_interpreter(void) {
               alarm_warnings_txq.peek(&delayed_tx);
               if (millis() >= delayed_tx.transmit_time) {
                 kcan_write_msg(delayed_tx.tx_msg);
-                #if F_NBT
+                #if F_NBTE
                   kcan2_write_msg(delayed_tx.tx_msg);
                 #endif
                 alarm_warnings_txq.drop();
               }
             }
-            idrive_alive_timer = 0;
+            idrive_watchdog_timer = 0;
             execute_alarm_after_stall();
             serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.", 0);
           } else {
@@ -481,7 +481,7 @@ void serial_debug_interpreter(void) {
     else if (cmd == "activate_rvc") {
       if (ignition) {
         kcan_write_msg(pdc_off_camera_on_buf);
-        #if F_NBT
+        #if F_NBTE
           kcan2_write_msg(pdc_off_camera_on_buf);
         #endif
         serial_log("  Serial: Activated RVC on display.", 0);
@@ -546,7 +546,7 @@ void serial_debug_interpreter(void) {
       vsw_switch_input(5);
     }
     #endif
-    #if F_NBT
+    #if F_NBTE
     else if (cmd == "hu_reboot") {
       if (diag_transmit) {
         unsigned long time_now = millis();
@@ -668,7 +668,7 @@ void print_help(void) {
   "  loglevel_4 - Sets LOGLEVEL to 4 - debug.\r\n"
   "  module_reboot - Saves EEPROM data and restarts the program.\r\n"
   "  test_watchdog - Create an infinite loop to test the watchdog reset.\r\n"
-  "  power_down - Assume sleep mode immediately. KL30G will be turned OFF.\r\n"
+  "  power_down - Assume sleep mode immediately. 30G relay will be turned OFF.\r\n"
   "  print_status - Prints a set of current runtime variables.\r\n"
   "  print_boot_log - Prints the first 10s of serial messages and timing information.\r\n"
   "  print_can_config - Prints the configuration of the FlexCAN module.\r\n"
@@ -727,7 +727,7 @@ void print_help(void) {
     "  vsw_4 - Sets the VideoSwitch to input 4 (A40*1B Pins: 4 FBAS+, 22 FBAS-, 40 Shield).\r\n"
     "  vsw_5 - Sets the VideoSwitch to input 5 (A40*1B Pins: 5 FBAS+, 23 FBAS-, 41 Shield).", 0);
   #endif
-  #if F_NBT
+  #if F_NBTE
     serial_log("  hu_reboot - Restart the NBT_HU immediately."
     "  custom_cc_test_dialog - Print hello world as a Check Control dialog box.\r\n"
     "  faceplate_eject - Simulate pressing the eject button on the faceplate.\r\n"
@@ -760,7 +760,7 @@ void check_serial_diag_actions(void) {
         serial_diag_kcan1_txq.drop();
       }
     }
-    #if F_NBT 
+    #if F_NBTE 
       if (!serial_diag_kcan2_txq.isEmpty()) {
         serial_diag_kcan2_txq.peek(&delayed_tx);
         if (millis() >= delayed_tx.transmit_time) {
@@ -781,7 +781,7 @@ void check_serial_diag_actions(void) {
       clearing_dtcs = false;
       diag_transmit = true;
       serial_log("  Serial: Error memories cleared. Cycle Terminal R OFF/ON.", 0);
-      #if F_NBT
+      #if F_NBTE
         send_cc_message("Error memories cleared. Cycle Terminal R.", true, 3000);
       #endif
     }
@@ -832,7 +832,7 @@ void evaluate_slcancmd(char *buf) {                                             
           k_msg = outMsg;                                                                                                           // React to this KCAN message.
           process_kcan_message();                                                                                                   // Corrected replication to KCAN2 will take place here too.
         }
-        #if F_NBT
+        #if F_NBTE
           else if (slcan_bus == 2) {
             kcan2_write_msg(outMsg);
 
@@ -879,7 +879,7 @@ void evaluate_slcancmd(char *buf) {                                             
           SerialUSB2.write('\r');
           serial_log("SLCAN interface connected to KCAN (100k).", 0);
           break;
-        #if F_NBT
+        #if F_NBTE
         case '6':                                                                                                                   // 500k
           slcan_bus = 2;
           SerialUSB2.write('\r');
@@ -938,7 +938,6 @@ void xfer_can2tty(CAN_message_t inMsg) {
     }
 
     if (timestamp) {
-      // Currently, timestamp is not implemented in SavvyCAN :(. See https://github.com/collin80/SavvyCAN/pull/801
       // unsigned long time_now = slcan_timer % 60000;
       command = command + char(hexval[ (slcan_timer >> 12) & 0xF ]);
       command = command + char(hexval[ (slcan_timer >> 8) & 0xF ]);

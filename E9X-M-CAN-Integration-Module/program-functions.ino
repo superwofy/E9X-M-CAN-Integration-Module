@@ -76,7 +76,7 @@ void read_initialize_eeprom(void) {
     mdrive_power[2] = EEPROM.read(15);
     mdrive_edc[2] = EEPROM.read(16);
     mdrive_svt[2] = EEPROM.read(17);
-    #if !F_NBT                                                                                                                      // NBT does not have M-Key settings.
+    #if !F_NBTE                                                                                                                      // NBT does not have M-Key settings.
       dme_ckm[0][0] = EEPROM.read(20);
       dme_ckm[1][0] = EEPROM.read(21);
       dme_ckm[2][0] = EEPROM.read(22);
@@ -97,7 +97,7 @@ void read_initialize_eeprom(void) {
     if (!immobilizer_persist) {
       immobilizer_released = true;                                                                                                  // Deactivate immobilizer at boot if this value is set.
     }
-    #if DOOR_VOLUME && !F_NBT
+    #if DOOR_VOLUME && !F_NBTE
       peristent_volume = EEPROM.read(33);
       if (peristent_volume > 0x33) {
         peristent_volume = 0x15;
@@ -151,7 +151,7 @@ void update_data_in_eeprom(void) {                                              
     EEPROM.update(16, mdrive_edc[2]);
     EEPROM.update(17, mdrive_svt[2]);
   }
-  #if !F_NBT
+  #if !F_NBTE
     EEPROM.update(20, dme_ckm[0][0]);
     EEPROM.update(21, dme_ckm[1][0]);
     EEPROM.update(22, dme_ckm[2][0]);
@@ -167,7 +167,7 @@ void update_data_in_eeprom(void) {                                              
     EEPROM.update(48, pressure_unit_date_format[2]);
   #endif
   EEPROM.update(29, unfold_with_door_open);
-  #if DOOR_VOLUME && !F_NBT
+  #if DOOR_VOLUME && !F_NBTE
     EEPROM.update(33, peristent_volume);
   #endif
   EEPROM.update(34, visual_signal_ckm[0]);
@@ -268,21 +268,21 @@ void print_current_state(Stream &status_serial) {
             sine_pitch_angle, (f_vehicle_pitch_angle - 0x2000) * 0.05 - 64.0,
             sine_roll_angle, (f_vehicle_roll_angle - 0x2000) * 0.05 - 64.0);
     #endif
-    #if F_NBT
+    #if F_NBTE
       sprintf(serial_debug_string, " Yaw rate FXX-Converted: %.2f degrees/s\r\n"
           " Yaw rate error: %.2f degrees/s",
           f_yaw_rate * 0.005 - 163.84, e_yaw_error);
     #endif
     status_serial.println(serial_debug_string);
   }
-  #if F_NIVI || F_NBT
+  #if F_NIVI || F_NBTE
     sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
             " Lateral acceleration: %.2f g, FXX-Converted: %.2f m/s^2",          
             e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0,
             e_lateral_acceleration * 0.10197162129779283, lateral_acceleration * 0.002 - 65.0);
     status_serial.println(serial_debug_string);
   #endif
-  #if F_NBT || F_NIVI || MIRROR_UNDIM
+  #if F_NBTE || F_NIVI || MIRROR_UNDIM
     sprintf(serial_debug_string, " Outside brightness: 0x%X, %s.", rls_brightness, 
             rls_time_of_day == 0 ? "Daytime" : rls_time_of_day == 1 ? "Twilight" : "Darkness");
     status_serial.println(serial_debug_string);
@@ -337,13 +337,13 @@ void print_current_state(Stream &status_serial) {
   }
   status_serial.println();
   sprintf(serial_debug_string, " Console POWER: %s\r\n"
-          #if !F_NBT
+          #if !F_NBTE
             " POWER CKM: %s\r\n"
           #endif
           " Key profile number: %d\r\n"
           " ============================== Body ===============================",
           console_power_mode ? "ON" : "OFF",
-          #if !F_NBT
+          #if !F_NBTE
             dme_ckm[cas_key_number][0] == 0xF1 ? "Normal" : "Sport",
           #endif
           cas_key_number + 1);
@@ -358,11 +358,17 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " PDC: %s", pdc_bus_status > 0x80 ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
   #endif
-  if (ambient_temperature_real != 87.5) {
-      sprintf(serial_debug_string, " Ambient temp: %.1f °C", ambient_temperature_real);
-    } else {
-      sprintf(serial_debug_string, " Ambient temp: Unknown");
-    }
+  if (ambient_temperature_real != -255.0) {
+    sprintf(serial_debug_string, " Ambient temp: %.1f °C", ambient_temperature_real);
+  } else {
+    sprintf(serial_debug_string, " Ambient temp: Unknown");
+  }
+  status_serial.println(serial_debug_string);
+  if (ambient_temperature_real != -255.0) {
+    sprintf(serial_debug_string, " Interior temp: %.1f °C", interior_temperature);
+  } else {
+    sprintf(serial_debug_string, " Interior temp: Unknown");
+  }
   status_serial.println(serial_debug_string);
   #if AUTO_SEAT_HEATING
     sprintf(serial_debug_string, " Driver's seat heating: %s", driver_seat_heating_status ? "ON" : "OFF");
@@ -451,7 +457,7 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Max loop execution time: %ld μs", max_loop_timer);
   }
   status_serial.println(serial_debug_string);
-  #if F_NBT
+  #if F_NBTE
     sprintf(serial_debug_string, " KCAN errors: %ld, KCAN2 errors: %ld, PTCAN errors: %ld, DCAN errors: %ld\r\n"
             " ==========================================================================",
             kcan_error_counter, kcan2_error_counter, ptcan_error_counter, dcan_error_counter);
@@ -573,19 +579,15 @@ void reset_ignition_variables(void) {                                           
   sine_pitch_angle_requested = sine_roll_angle_requested = false;
   trsvc_cc_gong = false;
   svt70_sport_plus = false;
-  #if F_NBT
+  #if F_NBTE
     send_f_pdc_function_status(true);                                                                                               // If PDC was active, update NBT with the OFF status.
     #if F_VSW01 && F_VSW01_MANUAL
       vsw_switch_input(4);
-    #endif
-    #if !F_NBT_EVO6
-      send_f_ftm_status();                                                                                                          // FTM is now inactive. ID3/4 require this to reset the stats displayed.
     #endif
   #endif
   nbt_network_management_next_neighbour = 0x6D;                                                                                     // Driver's seat module.
   nbt_network_management_timer = 3000;
 }
-
 
 
 void reset_sleep_variables(void) {
@@ -614,10 +616,10 @@ void reset_sleep_variables(void) {
   mirror_status_retry = 0;
   mirror_fold_txq.flush();
   last_lock_status_can = 0;
+  car_locked_indicator_counter = 0;
   vsw_current_input = 0;
   vsw_switch_counter = 0xF1;
   asd_initialized = asd_rad_on_initialized = false;
-  comfort_exit_done = false;
   szl_full_indicator = false;
   f_pdc_request = 1;
   #if IMMOBILIZER_SEQ
@@ -635,15 +637,15 @@ void reset_sleep_variables(void) {
   requested_hu_off_t1 = requested_hu_off_t2 = nbt_network_management_initialized = false;
   nbt_bus_sleep = nbt_active_after_terminal_r = false;
   nbt_network_management_next_neighbour = 0x6D;                                                                                     // Driver's seat module.
-  comfort_exit_ready = comfort_exit_done = false;                                                                                   // Do not execute comfort exit if car fell asleep.
+  comfort_exit_ready = false;                                                                                                       // Do not execute comfort exit if car fell asleep.
   faceplate_buttons_txq.flush();
   radon_txq.flush();
   nbt_cc_txq.flush();
   hazards_flash_txq.flush();
-  #if F_NBT
+  #if F_NBTE
     FACEPLATE_UART.end();                                                                                                           // Close serial connection.
   #endif
-  idrive_alive_timer2 = 0;
+  idrive_run_timer = 0;
   driving_mode = 0;
   update_data_in_eeprom();
   kcan_retry_counter = ptcan_retry_counter = dcan_retry_counter = 0;
@@ -652,4 +654,5 @@ void reset_sleep_variables(void) {
   dcan_resend_txq.flush();
   nbt_network_management_timer = 3000;
   low_battery_cc_active = false;
+  frm_consumer_shutdown = true;                                                                                                     // When going to sleep the FRM may not set this if the car wasn't awake long enough.
 }

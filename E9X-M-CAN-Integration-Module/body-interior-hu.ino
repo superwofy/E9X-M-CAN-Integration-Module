@@ -10,19 +10,19 @@ void send_zbe_acknowledge(void) {
 
 
 void send_volume_request_door(void) {
-  if (terminal_r) {
+  if (terminal_r || nbt_active_after_terminal_r) {
     if (diag_transmit) {
       if (!idrive_txq.isEmpty()) {                                                                                                  // If there are pending volume change actions we need to wait for them to complete.                                                                                           
         m = {vol_request_buf, millis() + 900};
         idrive_txq.push(&m);
       } else {
         if (volume_request_door_timer >= 300) {                                                                                     // Basic debounce to account for door not fully shut.
-          #if F_NBT
+          #if F_NBTE
             kcan2_write_msg(vol_request_buf);
           #else
             kcan_write_msg(vol_request_buf);
           #endif
-          volume_request_door_timer = volume_request_periodic_timer = 0;
+          volume_request_door_timer = 0;
           serial_log("Requested volume from iDrive with door status change.", 2);
         }
       }
@@ -31,29 +31,9 @@ void send_volume_request_door(void) {
 }
 
 
-void send_volume_request_periodic(void) {
-  if (terminal_r) {
-    #if F_NBT
-    if (idrive_txq.isEmpty() && !volume_reduced && volume_request_periodic_timer >= 5000 && !ignore_m_hold) {                       // Do not interfere while MDrive settings screen is being shown.
-    #else
-    if (idrive_txq.isEmpty() && initial_volume_set && !volume_reduced && volume_request_periodic_timer >= 5000) {
-    #endif
-      if (diag_transmit) {
-        #if F_NBT
-          kcan2_write_msg(vol_request_buf);
-        #else
-          kcan_write_msg(vol_request_buf);
-        #endif
-        volume_request_periodic_timer = 0;
-      }
-    }
-  }
-}
-
-
 void evaluate_audio_volume_nbt(void) {
-  if (k_msg.buf[0] == 0xF1 && k_msg.buf[4] == 0xA0 && k_msg.buf[5] == 0x39) {                                                      // status_volumeaudio response.
-    if (k_msg.buf[6] > 0) {                                                                                                        // Otherwise, probably muted.
+  if (k_msg.buf[0] == 0xF1 && k_msg.buf[4] == 0xA0 && k_msg.buf[5] == 0x39) {                                                       // status_volumeaudio response.
+    if (k_msg.buf[6] > 0) {                                                                                                         // Otherwise, probably muted.
       uint8_t volume_change[] = {0x63, 6, 0x31, 1, 0xA0, 0x36, 0, 0};
       if (!volume_reduced) {
         if (peristent_volume != k_msg.buf[6]) {
@@ -133,7 +113,7 @@ void check_idrive_queue(void) {
       idrive_txq.peek(&delayed_tx);
       if (millis() >= delayed_tx.transmit_time) {
         if (vehicle_awake) {
-          #if F_NBT
+          #if F_NBTE
             kcan2_write_msg(delayed_tx.tx_msg);
             if (delayed_tx.tx_msg.buf[4] == 0xA0 && delayed_tx.tx_msg.buf[5] == 0x36) {
               serial_log("Sent volume change job to iDrive.", 2);
@@ -155,10 +135,10 @@ void check_idrive_queue(void) {
 
 
 void check_idrive_alive_monitor(void) {
-  #if F_NBT
-    if (kcan2_mode == MCP_NORMAL) {                                                                                                     // No reason to check the alive timer if KCAN2 is in standby.
+  #if F_NBTE
+    if (kcan2_mode == MCP_NORMAL) {                                                                                                 // No reason to check the alive timer if KCAN2 is in standby.
   #endif
-      if (idrive_alive_timer >= 2500) {                                                                                                 // This message should be received every 1-2s.
+      if (idrive_watchdog_timer >= 2500) {                                                                                          // This message should be received every 1-2s.
         if (!idrive_died) {
           idrive_died = true;
           serial_log("iDrive alive monitor timed out.", 2);
@@ -168,16 +148,16 @@ void check_idrive_alive_monitor(void) {
           #if F_VSW01 && F_VSW01_MANUAL
             vsw_switch_input(4);
           #endif
-          idrive_alive_timer2 = 0;                                                                                                      // Keep track of the iDrive's boot time.
+          idrive_run_timer = 0;                                                                                                     // Keep track of the iDrive's boot time.
         }
       } else {
-        if (idrive_died) {                                                                                                              // It's back.
+        if (idrive_died) {                                                                                                          // It's back.
           idrive_died = false;
           serial_log("iDrive alive again.", 2);
           kcan2_write_msg(f_lights_ckm_delayed_msg);
         }
       }
-  #if F_NBT
+  #if F_NBTE
     }
   #endif
 }
@@ -354,7 +334,7 @@ void check_faceplate_buttons_queue(void) {
 
 
 void evaluate_faceplate_uart(void) {
-  #if F_NBT
+  #if F_NBTE
     uint8_t faceplate_status_message[7] = {0};
 
     if (vehicle_awakened_timer >= 500) {
@@ -457,7 +437,7 @@ void evaluate_faceplate_uart(void) {
 
 
 void convert_zbe1_message(void) {
-  #if F_NBT_CCC_ZBE
+  #if F_NBTE_CCC_ZBE
     zbe_action_counter = (zbe_action_counter + 1) % 0x100;                                                                          // Increase counter and reset when past 0xFF.
     zbe_buttons[2] = zbe_action_counter;
 
@@ -632,7 +612,7 @@ void evaluate_idrive_units(void) {
 
 
 void convert_f_units(bool idrive_units_only) {
-  #if F_NBT
+  #if F_NBTE
     if (!idrive_units_only) {
       f_units[0] = k_msg.buf[0];
       f_units[1] = k_msg.buf[1];
@@ -667,11 +647,7 @@ void send_cc_message(const char input[], bool dialog, unsigned long new_timeout)
                                 padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
     
     if (dialog) {
-      #if F_NBT_EVO6
-        cc_message_text[2] = 0x32;
-      #else
-        cc_message_text[2] = 0x72;
-      #endif
+      cc_message_text[2] = 0x32;
     }
     
     kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text));
@@ -681,12 +657,7 @@ void send_cc_message(const char input[], bool dialog, unsigned long new_timeout)
   uint8_t cc_message_text_end[] = {0x46, 3, 0x50, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
   
   if (dialog) {
-    #if F_NBT_EVO6
-      cc_message_text_end[2] = 0x32;
-    #else
-      cc_message_text_end[2] = 0x72;
-    #endif
-
+    cc_message_text_end[2] = 0x32;
     cc_message_expires = millis() + new_timeout;                                                                                    // Do not replace this message with the monitoring CC until the timeout elapses.
     m = {custom_cc_dismiss_buf, cc_message_expires};
     nbt_cc_txq.push(&m);
@@ -774,4 +745,44 @@ void send_f_lcd_brightness(void) {
     f_lcd_brightness[3] = 0xFE;                                                                                                     // This makes the NBT switch to night mode.
   }
   kcan2_write_msg(make_msg_buf(0x393, 4, f_lcd_brightness));
+}
+
+
+void send_f_interior_ambient_light_brightness(void) {
+  #if F_NBTE
+    uint8_t f_interior_ambient_light_brightness[] = {0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0xFF};
+    switch (k_msg.buf[0]) {
+      case 0:
+        f_interior_ambient_light_brightness[3] = 0x1F;
+        break;
+      case 0x1C:
+        f_interior_ambient_light_brightness[3] = 0x37;
+        break;
+      case 0x38:
+        f_interior_ambient_light_brightness[3] = 0x4F;
+        break;
+      case 0x54:
+        f_interior_ambient_light_brightness[3] = 0x67;
+        break;
+      case 0x70:
+        f_interior_ambient_light_brightness[3] = 0x7F;
+        break;
+      case 0x8D:
+        f_interior_ambient_light_brightness[3] = 0x97;
+        break;
+      case 0xA9:
+        f_interior_ambient_light_brightness[3] = 0xAF;
+        break;
+      case 0xC5:
+        f_interior_ambient_light_brightness[3] = 0xC7;
+        break;
+      case 0xE1:
+        f_interior_ambient_light_brightness[3] = 0xDF;
+        break;
+      case 0xFD:
+        f_interior_ambient_light_brightness[3] = 0xFE;
+        break;
+    }
+    kcan2_write_msg(make_msg_buf(0x45C, 8, f_interior_ambient_light_brightness));
+  #endif
 }

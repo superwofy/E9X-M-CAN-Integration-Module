@@ -44,8 +44,8 @@ const float FOG_CORNER_STEERTING_ANGLE_INDICATORS = 45.0;
 const float STEERTING_ANGLE_HYSTERESIS_INDICATORS = 15.0;
 const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                     // New CAN-ID replacing 0x326 in SVT70 firmware bin. This stops it from changing modes together with EDC.
 const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
-const double AUTO_SEAT_HEATING_TRESHOLD_HIGH = 9.0;                                                                                 // Degrees Celsius temperature, heater fully on.
-const double AUTO_SEAT_HEATING_TRESHOLD_MEDIUM = 12.0;                                                                              // Degrees Celsius temperature, heater on middle position.
+const double AUTO_SEAT_HEATING_THRESHOLD_HIGH = 12.0;                                                                               // Degrees Celsius temperature, heater fully on.
+const double AUTO_SEAT_HEATING_THRESHOLD_MEDIUM = 15.0;                                                                             // Degrees Celsius temperature, heater on middle position.
 const uint16_t AUTO_HEATING_START_DELAY = 2 * 1000;                                                                                 // Time to wait for battery voltage to catch up after starting (time in seconds * 1000)
 const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                   // RPM setpoints when warmed up (warning = desired RPM * 4).
 const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
@@ -83,12 +83,11 @@ const unsigned long OBD_DETECT_TIMEOUT = 90000;
   F-series retrofits:
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#ifndef F_NBT
-  #define F_NBT 0                                                                                                                   // Emulate KCAN2 to integrate HU_NBT/HU_NBT2 into Exx cars. Tested with p/n 9318750 HW07 and B140 HW2.3.
-  #if F_NBT
-    #define F_NBT_VIN_PATCH 1                                                                                                       // Requests CPS VIN from NBT before sending 0x380. Disable if using patched NBT binary.
-    #define F_NBT_EVO6 1                                                                                                            // Additional changes for ID5 and ID6.
-    #define F_NBT_CCC_ZBE 0                                                                                                         // Converts CCC ZBE1 messages for use with NBT.
+#ifndef F_NBTE
+  #define F_NBTE 0                                                                                                                  // Emulate KCAN2 to integrate HU_NBT2 ID5/ID6 into Exx cars.
+  #if F_NBTE
+    #define F_NBTE_VIN_PATCH 1                                                                                                      // Requests CPS VIN from NBT before sending 0x380. Disable if using patched NBT binary.
+    #define F_NBTE_CCC_ZBE 0                                                                                                        // Converts CCC ZBE1 messages for use with NBT.
     #define X_VIEW 0                                                                                                                // Convert the angles required to make the xDrive status 3D graphic work.
     #define ASD89_RAD_ON 0                                                                                                          // Use RAD_ON from the ASD module to power Diversity. Pin 7 of ASD must be wired to pin 3 of Diversity.
     #define CUSTOM_MONITORING_CC 1                                                                                                  // Print additional information (Water temp, voltage, IAT and boost) in the iDrive CC list.
@@ -164,7 +163,7 @@ const char *vsw_positions[] = {"Disabled", "Rear view camera: TRSVC", "Night Vis
 #include "src/CRC/src/CRC16.h"
 #include "src/wdt4/Watchdog_t4.h"                                                                                                   // https://github.com/tonton81/WDT_T4
 #include "src/queue/cppQueue.h"                                                                                                     // https://github.com/SMFSW/Queue
-#if F_NBT
+#if F_NBTE
   #include "src/MCP_CAN_lib/mcp_can.h"                                                                                              // https://github.com/coryjfowler/MCP_CAN_lib
 #endif
 #include "usb_dev.h"
@@ -172,7 +171,7 @@ extern "C" uint32_t set_arm_clock(uint32_t frequency);
 FlexCAN_T4<CAN1, RX_SIZE_1024, TX_SIZE_128> KCAN;
 FlexCAN_T4<CAN2, RX_SIZE_512, TX_SIZE_128> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_64> DCAN;
-#if F_NBT
+#if F_NBTE
   MCP_CAN KCAN2(SPI_CS_PIN);
   #define FACEPLATE_UART Serial5
 #endif
@@ -256,13 +255,13 @@ bool requested_hu_off_t1 = false, requested_hu_off_t2 = false,
 // Since E9X cars are quite similar, we can predict the neighbours without having to observe the network.
 // All E92s have PDC which means when ignition is ON the nearest neighbour to 0x4E2 (CCC) is 0x4E4.
 // With ignition OFF, it must be the Driver's seat module. Unless there's a ZBE1 installed.
-#if F_NBT_CCC_ZBE
+#if F_NBTE_CCC_ZBE
   uint8_t nbt_network_management_next_neighbour = 0x67;                                                                             // ZBE1.
 #else 
   uint8_t nbt_network_management_next_neighbour = 0x6D;                                                                             // Driver's seat module.
 #endif
 
-elapsedMillis nbt_bus_sleep_ready_timer = 60000, nbt_network_management_timer = 1000;                                               // Start registering 2s from now.
+elapsedMillis nbt_bus_sleep_ready_timer = 0, nbt_network_management_timer = 1000;                                                   // Start NM registration 2s from now.
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms,
               dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
@@ -350,11 +349,13 @@ bool szl_full_indicator = false;
 cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 elapsedMillis frm_undim_timer = 10000;
 uint8_t auto_seat_ckm[4] = {0, 0, 0, 0};
-bool comfort_exit_ready = false, comfort_exit_done = false;
+bool comfort_exit_ready = false;
 CAN_message_t dr_seat_move_back_buf;
 uint8_t last_lock_status_can = 0;
 bool unfold_with_door_open = false;
-CAN_message_t flash_hazards_single_buf, flash_hazards_double_buf;
+CAN_message_t flash_hazards_single_buf, flash_hazards_double_buf, flash_hazards_single_long_buf,
+              flash_hazards_angel_eyes_buf, flash_hazards_angel_eyes_xenons_buf, stop_flashing_lights_buf;
+uint8_t car_locked_indicator_counter = 0;
 cppQueue hazards_flash_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t visual_signal_ckm[4] = {0, 0, 0, 0};
 bool hazards_on = false;
@@ -436,7 +437,7 @@ elapsedMillis exhaust_flap_action_timer;                                        
 unsigned long exhaust_flap_action_interval = 1000;
 CAN_message_t lc_cc_on_buf, lc_cc_off_buf;
 bool lc_cc_active = false, mdm_with_lc = false;
-float ambient_temperature_real = 87.5;
+float ambient_temperature_real = -255.0, interior_temperature = -255.0;                                                             // Set below the minimum ranges.
 bool driver_seat_heating_status = false, driver_sent_seat_heating_request = false;
 CAN_message_t seat_heating_button_pressed_dr_buf, seat_heating_button_released_dr_buf;
 cppQueue seat_heating_dr_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -448,13 +449,13 @@ bool sent_steering_heating_request = false, steering_heater_transistor_active = 
 elapsedMillis steering_heater_transistor_active_timer;
 bool volume_reduced = false, initial_volume_set = false, pdc_tone_on = false;
 uint8_t volume_restore_offset = 0, volume_changed_to, peristent_volume = 0;
-elapsedMillis volume_request_periodic_timer = 3000, volume_request_door_timer = 300;
+elapsedMillis volume_request_door_timer = 300;
 CAN_message_t vol_request_buf;
 cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool left_door_open = false, right_door_open = false, doors_locked = false, doors_alarmed = false, windows_closed = false;
 elapsedMillis doors_locked_timer = 0;
 uint8_t front_left_window_status = 0xFC, front_right_window_status = 0xFC, last_door_status = 0, sunroof_status = 0;
-elapsedMillis idrive_alive_timer = 3000, idrive_alive_timer2 = 0;
+elapsedMillis idrive_watchdog_timer = 3000, idrive_run_timer = 0;
 bool idrive_died = false;
 uint8_t zbe_buttons[] = {0xE1, 0xFD, 0, 0, 0, 1}, zbe_rotation[] = {0xE1, 0xFD, 0, 0, 0x80, 0x1E}, zbe_action_counter = 0;
 float indicated_speed = 0;
