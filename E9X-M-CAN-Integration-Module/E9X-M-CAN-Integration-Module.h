@@ -65,7 +65,7 @@ const unsigned long HIGH_UNDERCLOCK = 150 * 1000000;
 const unsigned long MEDIUM_UNDERCLOCK = 396 * 1000000;
 const unsigned long MILD_UNDERCLOCK = 450 * 1000000;
 const unsigned long STANDARD_CLOCK = 528 * 1000000;
-const unsigned long OBD_DETECT_TIMEOUT = 90000;
+const unsigned long OBD_DETECT_TIMEOUT = 120000;                                                                                    // Timeout before resuming 6F1 transmission after a diagnostic tool is detected.
 #if __has_include ("src/custom-settings.h")                                                                                         // Optionally, create this file to store sensitive settings.
   #include "src/custom-settings.h"
 #endif
@@ -99,7 +99,7 @@ uint8_t MAX_TORQUE_SCALE_LBFT = 5;                                              
 uint8_t MAX_TORQUE_SCALE_KGM = 0;                                                                                                   // 80
 uint8_t MAX_POWER_SCALE_KW = 3;                                                                                                     // Power = (x + 1) * 80. I.e. (3 + 1) * 80 = 320. 
 uint8_t MAX_POWER_SCALE_HP = 4;                                                                                                     // 400
-const float MAX_TURBO_BOOST = 950.0;                                                                                                // In hPa. 1M overboost: 0.90-0.95 bar.
+float MAX_TURBO_BOOST = 950.0;                                                                                                      // In hPa. 1M overboost: 0.90-0.95 bar.
 
 #ifndef F_VSW01
   #define F_VSW01 0                                                                                                                 // Enable/disable F01 Video Switch diagnosis and wakeup. Tested with p/n 9201542.
@@ -121,11 +121,6 @@ const char *vsw_positions[] = {"Disabled", "Rear view camera: TRSVC", "Night Vis
 #ifndef FAKE_MSA
   #define FAKE_MSA 0                                                                                                                // Display Auto Start-Stop OFF CC message when the Auto Start-Stop button is pressed. Must be coded in IHK.
 #endif
-#if !FAKE_MSA
-  #ifndef MSA_RVC
-    #define MSA_RVC 0                                                                                                               // Turn on the OEM rear camera (TRSVC and E84 PDC ECUs) when pressing MSA button. E70 button from 61319202037.
-  #endif
-#endif                                                                                                                              // RVC can be controlled independently of PDC with this button.
 #ifndef REVERSE_BEEP
   #define REVERSE_BEEP 0                                                                                                            // Play a beep through the speakers when engaging reverse.
 #endif
@@ -231,8 +226,8 @@ uint8_t mdrive_dsc[4] = {0x13, 0x13, 0x13, 0xB}, mdrive_power[4] = {0x30, 0x30, 
         mdrive_edc[4] = {0x2A, 0x2A, 0x2A, 0x21}, mdrive_svt[4] = {0xF1, 0xF1, 0xF1, 0xE9};
 bool mdrive_status = false, mdrive_power_active = false, console_power_mode, restore_console_power_mode = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
-uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DTC, 2 = DSC OFF
-bool holding_dsc_off_console = false;
+uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DSC OFF, 4 = DTC/MDM. 
+bool holding_dsc_off_console = false, dsc_mode_change_disable = false;
 elapsedMillis mdrive_message_timer = 0, veh_mode_timer = 0;
 uint8_t m_mfl_held_count = 0;
 CAN_message_t idrive_mdrive_settings_menu_cic_a_buf, idrive_mdrive_settings_menu_cic_b_buf,
@@ -469,7 +464,6 @@ CAN_message_t set_hdc_cruise_control_buf, cancel_hdc_cruise_control_buf,
 cppQueue hdc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 CAN_message_t msa_deactivated_cc_on_buf, msa_deactivated_cc_off_buf;
 uint8_t pdc_bus_status = 0x80;
-bool pdc_button_pressed = false, pdc_with_rvc_requested = false;
 CAN_message_t camera_off_buf, camera_on_buf, camera_inactive_buf, pdc_off_camera_on_buf, pdc_on_camera_on_buf,
               pdc_off_camera_off_buf, pdc_button_presssed_buf, pdc_button_released_buf;
 cppQueue pdc_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
@@ -507,7 +501,7 @@ cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          serial_diag_kcan2_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO),
          serial_diag_ptcan_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
 CAN_message_t power_down_cmd_a_buf, power_down_cmd_b_buf, power_down_cmd_c_buf;
-bool diag_transmit = true, power_down_requested = false;
+bool diag_transmit = true, diag_timeout_active = true, power_down_requested = false;
 elapsedMillis debug_print_timer = 500, diag_deactivate_timer, serial_unlocked_timer = 0, slcan_timer = 0;
 bool debug_print_connected = false, slcan_connected = false, slcan_enabled = true, timestamp = true;
 uint8_t slcan_bus = 1;                                                                                                              // KCAN.

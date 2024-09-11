@@ -1,3 +1,6 @@
+0x2FB is only sent for certain GATEWAYTABLE values. E.g. table_5 implements VSW while table_7 (F25) does not.
+
+
 Counter byte[7] does not matter.
 
 18:30:39.861 -> 0x2FB   DLC: 8  Data: 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0xF1			/// F-series CIC Boot / Zero / Off?

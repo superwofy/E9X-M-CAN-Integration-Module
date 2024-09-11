@@ -116,12 +116,12 @@ void loop() {
         send_power_mode();                                                                                                          // state_spt request from DME.   
         #if SERVOTRONIC_SVT70
           send_servotronic_message();
-          #if F_NBTE
-            send_servotronic_sport_plus();
-          #endif
         #endif
         veh_mode_timer = 0;
       }
+      #if SERVOTRONIC_SVT70 && F_NBTE
+        send_servotronic_sport_plus();
+      #endif
       #if AUTO_SEAT_HEATING
         check_seatheating_queue();
       #endif
@@ -436,11 +436,15 @@ void process_kcan_message() {
     }
     #endif
 
-    #if FAKE_MSA || MSA_RVC
+    #if FAKE_MSA
     else if (k_msg.id == 0x195) {                                                                                                   // Monitor state of MSA button. Sent when changed.
       evaluate_msa_button();
     }
     #endif
+
+    else if (k_msg.id == 0x19E) {
+      evaluate_dsc_status();
+    }
 
     else if (k_msg.id == 0x1B4) {                                                                                                   // Monitor KOMBI status (indicated speed, handbrake). Cycle time 100ms (terminal R ON).
       evaluate_indicated_speed();
@@ -502,12 +506,6 @@ void process_kcan_message() {
     }
     #endif
 
-    #if MSA_RVC
-    else if (k_msg.id == 0x317) {                                                                                                   // Received PDC button press from IHKA. Sent when changed.
-      evaluate_pdc_button();
-    }
-    #endif
-
     #if CONTROL_SHIFTLIGHTS
     else if (k_msg.id == 0x332) {                                                                                                   // Monitor variable redline broadcast from DME. Cycle time 1s.
       evaluate_update_shiftlight_sync();
@@ -536,7 +534,7 @@ void process_kcan_message() {
     }
     #endif
 
-    #if MSA_RVC || PDC_AUTO_OFF || AUTO_TOW_VIEW_RVC || F_NBTE
+    #if PDC_AUTO_OFF || AUTO_TOW_VIEW_RVC || F_NBTE
     else if (k_msg.id == 0x3AF) {                                                                                                   // Monitor PDC bus status. Cycle time 2s (idle). Sent when changed.
       evaluate_pdc_bus_status();
       #if F_NBTE

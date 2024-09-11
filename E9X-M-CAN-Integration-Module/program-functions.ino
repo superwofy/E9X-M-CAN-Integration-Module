@@ -239,9 +239,11 @@ void print_current_state(Stream &status_serial) {
     if (dsc_program_status == 0) {
       status_serial.println(" DSC: Fully ON");
     } else if (dsc_program_status == 1) {
+      status_serial.println(" DSC: Fully OFF");
+    } else if (dsc_program_status == 4) {
       status_serial.println(" DSC: DTC/MDM mode");
     } else {
-      status_serial.println(" DSC: Fully OFF");
+      status_serial.println(" DSC: Unknown/Error");
     }
   } else {
     status_serial.println(" DSC: Asleep");
@@ -354,10 +356,8 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Handbrake: %s", handbrake_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
   #endif
-  #if MSA_RVC
-    sprintf(serial_debug_string, " PDC: %s", pdc_bus_status > 0x80 ? "ON" : "OFF");
-    status_serial.println(serial_debug_string);
-  #endif
+  sprintf(serial_debug_string, " PDC: %s", pdc_bus_status > 0x80 ? "ON" : "OFF");
+  status_serial.println(serial_debug_string);
   if (ambient_temperature_real != -255.0) {
     sprintf(serial_debug_string, " Ambient temp: %.1f °C", ambient_temperature_real);
   } else {
@@ -508,6 +508,7 @@ void reset_ignition_variables(void) {                                           
   console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                           // When cycling ignition, restore this to its CKM value.
   edc_mismatch_check_counter = 0;
   dsc_txq.flush();
+  dsc_mode_change_disable = false;
   seat_heating_dr_txq.flush();
   seat_heating_pas_txq.flush();
   reverse_beep_sent = pdc_too_close = false;
@@ -569,7 +570,6 @@ void reset_ignition_variables(void) {                                           
   msa_button_pressed = false;
   msa_fake_status_counter = 0;
   pdc_bus_status = 0x80;
-  pdc_button_pressed = pdc_with_rvc_requested = false;
   rvc_tow_view_by_module = rvc_tow_view_by_driver = false;
   dme_boost_requested = false;
   #if IMMOBILIZER_SEQ
@@ -578,7 +578,6 @@ void reset_ignition_variables(void) {                                           
   reverse_gear_status = false;
   sine_pitch_angle_requested = sine_roll_angle_requested = false;
   trsvc_cc_gong = false;
-  svt70_sport_plus = false;
   #if F_NBTE
     send_f_pdc_function_status(true);                                                                                               // If PDC was active, update NBT with the OFF status.
     #if F_VSW01 && F_VSW01_MANUAL
@@ -622,6 +621,7 @@ void reset_sleep_variables(void) {
   asd_initialized = asd_rad_on_initialized = false;
   szl_full_indicator = false;
   f_pdc_request = 1;
+  svt70_sport_plus = false;
   #if IMMOBILIZER_SEQ
     if (immobilizer_persist) {
       if (immobilizer_released) {
@@ -652,6 +652,7 @@ void reset_sleep_variables(void) {
   kcan_resend_txq.flush();
   ptcan_resend_txq.flush();
   dcan_resend_txq.flush();
+  diag_transmit = diag_timeout_active = true;
   nbt_network_management_timer = 3000;
   low_battery_cc_active = false;
   frm_consumer_shutdown = true;                                                                                                     // When going to sleep the FRM may not set this if the car wasn't awake long enough.

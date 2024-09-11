@@ -772,6 +772,8 @@ void MCP_CAN::mcp2515_read_canMsg( const INT8U buffer_sidh_addr)        /* read 
     ctrl = mcp2515_readRegister( mcp_addr-1 );
     m_nDlc = mcp2515_readRegister( mcp_addr+4 );
 
+    if(m_nDlc > MAX_CHAR_IN_MESSAGE) m_nDlc = MAX_CHAR_IN_MESSAGE;    
+   
     if (ctrl & 0x08)
         m_nRtr = 1;
     else
@@ -1078,7 +1080,10 @@ INT8U MCP_CAN::setMsg(INT32U id, INT8U rtr, INT8U ext, INT8U len, INT8U *pData)
     m_nRtr    = rtr;
     m_nExtFlg = ext;
     m_nDlc    = len;
-    for(i = 0; i<MAX_CHAR_IN_MESSAGE; i++)
+    
+    if(m_nDlc > MAX_CHAR_IN_MESSAGE) m_nDlc = MAX_CHAR_IN_MESSAGE;
+    
+    for(i = 0; i<m_nDlc; i++)
         m_nDta[i] = *(pData+i);
 	
     return MCP2515_OK;
@@ -1095,7 +1100,7 @@ INT8U MCP_CAN::clearMsg()
     m_nExtFlg   = 0;
     m_nRtr      = 0;
     m_nfilhit   = 0;
-    for(int i = 0; i<m_nDlc; i++ )
+    for(int i = 0; i<MAX_CHAR_IN_MESSAGE; i++ )
       m_nDta[i] = 0x00;
 
     return MCP2515_OK;
@@ -1211,6 +1216,8 @@ INT8U MCP_CAN::readMsgBuf(INT32U *id, INT8U *ext, INT8U *len, INT8U buf[])
     if(readMsg() == CAN_NOMSG)
 	return CAN_NOMSG;
 	
+    if(m_nDlc > MAX_CHAR_IN_MESSAGE) m_nDlc = MAX_CHAR_IN_MESSAGE;    
+    
     *id  = m_nID;
     *len = m_nDlc;
     *ext = m_nExtFlg;
@@ -1235,6 +1242,8 @@ INT8U MCP_CAN::readMsgBuf(INT32U *id, INT8U *len, INT8U buf[])
     if (m_nRtr)
         m_nID |= 0x40000000;
 	
+    if(m_nDlc > MAX_CHAR_IN_MESSAGE) m_nDlc = MAX_CHAR_IN_MESSAGE;    
+   
     *id  = m_nID;
     *len = m_nDlc;
     

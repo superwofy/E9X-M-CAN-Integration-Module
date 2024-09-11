@@ -739,10 +739,11 @@ void evaluate_speed_warning_setting(void) {
 
 
 void send_f_lcd_brightness(void) {
-  k_msg.buf[0] = constrain(k_msg.buf[0] + 0x10, 0, 0xFE);                                                                           // Byte0 used for brightness. 0 to 0xFE - increased to bias CID brightness.
-  uint8_t f_lcd_brightness[] = {k_msg.buf[0], 0x32, k_msg.buf[2], 0xFD};                                                            // Byte1 is fixed at 0x32.
+  uint8_t f_lcd_brightness[] = {k_msg.buf[0], 0x32, k_msg.buf[2], 0xFD};                                                            // Byte0 used for brightness (0 to 0xFE). Byte1 is fixed at 0x32.
   if (rls_time_of_day == 2) {
     f_lcd_brightness[3] = 0xFE;                                                                                                     // This makes the NBT switch to night mode.
+  } else {
+    f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x10, 0, 0xFE);                                                           // Increased to bias CID brightness during the day and at dusk only.
   }
   kcan2_write_msg(make_msg_buf(0x393, 4, f_lcd_brightness));
 }

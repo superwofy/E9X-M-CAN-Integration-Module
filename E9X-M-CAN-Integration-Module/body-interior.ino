@@ -68,7 +68,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     f_terminal_status[4] = (0xF << 4) | key_valid ? 3 : 1;                                                                          // Set ST_KL_KEY_VLD
   #endif
 
-  #if FAKE_MSA || MSA_RVC
+  #if FAKE_MSA
     if (ignition) {
       if (msa_fake_status_counter == 5){
         kcan_write_msg(msa_fake_status_buf);                                                                                        // Send this message every 500ms to keep the IHKA module happy.
@@ -106,6 +106,10 @@ void evaluate_terminal_clutch_keyno_status(void) {
   if (ignition && !ignition_) {                                                                                                     // Ignition changed from OFF to ON.
     scale_cpu_speed();
     serial_log("Ignition ON.", 2);
+
+    #if F_NBTE
+      send_nbt_sport_displays_data(false);
+    #endif
 
     #if DIM_DRL                                                                                                                     // These resets are required if quickly (less than 15s) switching igniton 
       if (((millis() - last_drl_action_timer) < 15000)) {
@@ -441,6 +445,7 @@ void check_console_buttons(void) {
             both_console_buttons_timer = 0;                                                                                         // Reset to prevent multiple activations.
           }
         }
+        dsc_off_button_hold_timer = 0;
         return;                                                                                                                     // Prevent nuisance mode changes while holding both buttons.
       } else {
         holding_both_console = false;
@@ -480,13 +485,25 @@ void check_console_buttons(void) {
       
       if (dsc_off_button_hold_timer >= dsc_hold_time_ms) {                                                                          // DSC OFF sequence should only be sent after user holds button for a configured time.
         if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
-          if (dsc_program_status != 2) {                                                                                            // If the button is held after DSC OFF, no more messages are sent until release.
-            serial_log("Console: DSC OFF button held.", 2);
-            send_dsc_mode(2);
+          if (dsc_program_status != 1 && !dsc_mode_change_disable) {                                                                // If the button is held after DSC OFF, no more messages are sent until release.
+            serial_log("Console: DSC OFF requested.", 2);
+            send_dsc_mode(1);
           }
           dsc_off_button_debounce_timer = 0;
         }
-      }      
+      }
+
+      if (dsc_off_button_hold_timer >= 15000) {                                                                                     // Emulate BMW's safety feature when a purse/other object rests on the DSC OFF button.
+        if (!dsc_mode_change_disable) {
+          send_dsc_mode(0);
+          serial_log("Console: DSC OFF button obstruction detected! Cycle ignition to reset.", 2);
+          #if F_NBTE
+            kcan2_write_msg(cc_single_gong_buf);
+            send_cc_message("DSC OFF button obstruction detected!", true, 5000);
+          #endif
+          dsc_mode_change_disable = true;
+        }
+      }
     } else {                                                                                                                        // A quick tap re-enables everything.
       if (holding_dsc_off_console) {
         if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
