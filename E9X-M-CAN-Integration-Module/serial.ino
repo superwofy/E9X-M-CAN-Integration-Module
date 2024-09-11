@@ -10,9 +10,11 @@ void serial_debug_interpreter(void) {
       update_eeprom_checksum();
       serial_log("  Serial: Commands locked.", 0);
     }
-    else if (cmd == "diag_bypass") {
+    else if (cmd == "bypass_diag") {
       diag_deactivate_timer = OBD_DETECT_TIMEOUT;
-      serial_log("  Serial: OBD tool detection timeout reset.", 0);
+      diag_timeout_active = false;
+      diag_transmit = true;
+      serial_log("  Serial: OBD tool detection timeout disabled for the current session! Sleep/Reboot to reset.", 0);
     }
     else if (cmd == "loglevel_0") {
       LOGLEVEL = 0;
@@ -59,9 +61,7 @@ void serial_debug_interpreter(void) {
             power_down_requested = true;
             kcan_write_msg(power_down_cmd_a_buf);
           } else {
-            sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-            serial_log(serial_debug_string, 0);
+            obd_timeout_warning();
           }
         } else {
           serial_log("  Serial: Terminal R must be OFF.", 0);
@@ -109,9 +109,7 @@ void serial_debug_interpreter(void) {
           serial_diag_dcan_txq.push(&m);
           clearing_dtcs = true;
         } else {
-          sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-          serial_log(serial_debug_string, 0);
+          obd_timeout_warning();
         }
       } else {
         serial_log("  Serial: Activate ignition first.", 0);
@@ -207,9 +205,7 @@ void serial_debug_interpreter(void) {
           #endif
           clearing_dtcs = true;
         } else {
-          sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-          serial_log(serial_debug_string, 0);
+          obd_timeout_warning();
         }
       } else {
         serial_log("  Serial: Activate ignition first.", 0);
@@ -220,9 +216,7 @@ void serial_debug_interpreter(void) {
         play_cc_gong(1);
         serial_log("  Serial: Sent CC gong.", 0);
       } else {
-            sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-            serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     else if (cmd == "jbe_reboot") {
@@ -230,9 +224,7 @@ void serial_debug_interpreter(void) {
         dcan_write_msg(jbe_reboot_buf);
         serial_log("  Serial: Sent JBE reboot.", 0);
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     #if LAUNCH_CONTROL_INDICATOR
@@ -300,9 +292,7 @@ void serial_debug_interpreter(void) {
         left_fog_soft(true);
         serial_log("  Serial: Activated front left fog light.", 0);
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     else if (cmd == "front_right_fog_off") {
@@ -310,9 +300,7 @@ void serial_debug_interpreter(void) {
         kcan_write_msg(front_right_fog_off_buf);
         serial_log("  Serial: Deactivated front right fog light.", 0);
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     else if (cmd == "front_left_fog_off") {
@@ -320,9 +308,7 @@ void serial_debug_interpreter(void) {
         kcan_write_msg(front_left_fog_off_buf);
         serial_log("  Serial: Deactivated front left fog light.", 0);
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     else if (cmd == "front_fogs_off") {
@@ -331,9 +317,7 @@ void serial_debug_interpreter(void) {
           kcan_write_msg(front_fogs_all_off_buf);
           serial_log("  Serial: Deactivated front fog lights.", 0);
         } else {
-          sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                  (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-          serial_log(serial_debug_string, 0);
+          obd_timeout_warning();
         }
       } else {
         serial_log("  Serial: Activate ignition first.", 0);
@@ -360,9 +344,7 @@ void serial_debug_interpreter(void) {
             }
             needle_sweep_animation();
           } else {
-            sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                    (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-            serial_log(serial_debug_string, 0);
+            obd_timeout_warning();
           }
         #endif
       } else {
@@ -378,9 +360,7 @@ void serial_debug_interpreter(void) {
         unfold_with_door_open = unfold_with_door_open_;
         serial_log("  Serial: Sent mirror fold/unfold request.", 0);
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     else if (cmd == "mirror_fold_status") {
@@ -394,9 +374,7 @@ void serial_debug_interpreter(void) {
           serial_log("  Serial: Checking mirror status.", 0);
         }
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     #endif
@@ -406,9 +384,7 @@ void serial_debug_interpreter(void) {
         kcan_write_msg(frm_mirror_undim_buf);
         serial_log("  Serial: Sent undim request.", 0);
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     #endif
@@ -471,22 +447,7 @@ void serial_debug_interpreter(void) {
           serial_log("  Serial: Activate ignition first.", 0);
         }
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
-      }
-    }
-    #endif
-    #if MSA_RVC
-    else if (cmd == "activate_rvc") {
-      if (ignition) {
-        kcan_write_msg(pdc_off_camera_on_buf);
-        #if F_NBTE
-          kcan2_write_msg(pdc_off_camera_on_buf);
-        #endif
-        serial_log("  Serial: Activated RVC on display.", 0);
-      } else {
-        serial_log("  Serial: Activate ignition first.", 0);
+        obd_timeout_warning();
       }
     }
     #endif
@@ -557,9 +518,7 @@ void serial_debug_interpreter(void) {
         serial_diag_kcan2_txq.push(&m);
         serial_log("  Serial: Sending HU reboot job.", 0);
       } else {
-        sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
-                (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
-        serial_log(serial_debug_string, 0);
+        obd_timeout_warning();
       }
     }
     else if (cmd == "custom_cc_test_dialog") {
@@ -660,7 +619,7 @@ void print_help(void) {
   serial_log("  ========================== Help ==========================\r\n"
   "  Commands:\r\n"
   "  lock_serial - Restores the password prompt before accepting serial commands.\r\n"
-  "  diag_bypass - Bypass the OBD tool detection timeout. Use with care!\r\n"
+  "  bypass_diag - Bypass the OBD tool detection timeout for currrent session. Use with care!\r\n"
   "  loglevel_0 - Sets LOGLEVEL to 0 - critical.\r\n"
   "  loglevel_1 - Sets LOGLEVEL to 1 - error.\r\n"
   "  loglevel_2 - Sets LOGLEVEL to 2 - info.\r\n"
@@ -715,9 +674,6 @@ void print_help(void) {
     "  alarm_led_on - Activates the Alarm interior mirror LED.\r\n"
     "  alarm_led_off - Deactivates the Alarm interior mirror LED.\r\n"
     "  test_trip_stall_alarm - Simulates tripping the EKP immobilizer without disabling it first.", 0);
-  #endif
-  #if MSA_RVC
-    serial_log("  activate_rvc - Activates the reversing camera and displays the feed on the CID.", 0);
   #endif
   #if F_VSW01
     serial_log("  vsw_0 - Sets the VideoSwitch to input 0 - disabled.\r\n"
@@ -793,6 +749,13 @@ void check_serial_diag_actions(void) {
     update_eeprom_checksum();
     serial_log("  Serial: Locked after timeout.", 0);
   }
+}
+
+
+void obd_timeout_warning(void) {
+  sprintf(serial_debug_string, "  Serial: Function unavailable for %d seconds due to OBD tool presence.", 
+          (int) (OBD_DETECT_TIMEOUT - diag_deactivate_timer) / 1000);
+  serial_log(serial_debug_string, 0);
 }
 
 

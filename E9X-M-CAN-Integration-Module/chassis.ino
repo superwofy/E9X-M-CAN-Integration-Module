@@ -3,31 +3,50 @@
 
 void send_dsc_mode(uint8_t mode) {
   #if !MDSC_ZB
-    unsigned long time_now = millis();
-    if (mode == 0) {
-      m = {dsc_on_buf, time_now};
-      dsc_txq.push(&m);
-      m = {dsc_on_buf, time_now + 20};
-      dsc_txq.push(&m);
-      serial_log("Sending DSC ON.", 2);
-    } else if (mode == 1) {
-      m = {dsc_mdm_dtc_buf, time_now};
-      dsc_txq.push(&m);
-      m = {dsc_mdm_dtc_buf, time_now + 20};
-      dsc_txq.push(&m);
-      serial_log("Sending DTC/MDM.", 2);
-    } else {
-      m = {dsc_off_buf, time_now};
-      dsc_txq.push(&m);
-      m = {dsc_off_buf, time_now + 20};
-      dsc_txq.push(&m);
-      serial_log("Sending DSC OFF.", 2);
+    if (!dsc_mode_change_disable) {
+      unsigned long time_now = millis();
+      if (mode == 0) {
+        m = {dsc_on_buf, time_now};
+        dsc_txq.push(&m);
+        m = {dsc_on_buf, time_now + 20};
+        dsc_txq.push(&m);
+        serial_log("Sending DSC ON.", 2);
+      } else if (mode == 4) {
+        m = {dsc_mdm_dtc_buf, time_now};
+        dsc_txq.push(&m);
+        m = {dsc_mdm_dtc_buf, time_now + 20};
+        dsc_txq.push(&m);
+        serial_log("Sending DTC/MDM.", 2);
+      } else {
+        m = {dsc_off_buf, time_now};
+        dsc_txq.push(&m);
+        m = {dsc_off_buf, time_now + 20};
+        dsc_txq.push(&m);
+        serial_log("Sending DSC OFF.", 2);
+      }
+      #if F_NBTE
+        f_driving_dynamics_timer = 500;                                                                                             // Allow some delay to detect mode change through 0x19E.
+      #endif
     }
-    dsc_program_status = mode;
-    #if F_NBTE
-      f_driving_dynamics_timer = 1001;
-    #endif
   #endif
+}
+
+
+// 0 - DSC ON
+// 1 - DSC OFF
+// 2 - DSC FAULT
+// 3 - reserved
+// 4 - DTC / MDM
+// 5 - ABS FAULT
+// 6 - UNDER VOLTAGE
+// 7 - SIGNAL INVALID
+void evaluate_dsc_status(void) {
+  uint8_t new_mode = ((k_msg.buf[1] >> 2) & 7);                                                                                     // 3-bit ST_DSC.
+  if (new_mode != dsc_program_status) {
+    dsc_program_status = new_mode;
+    sprintf(serial_debug_string, "New DSC mode: %d.", new_mode);
+    serial_log(serial_debug_string, 2);
+  }
 }
 
 
@@ -52,17 +71,6 @@ void evaluate_reverse_gear_status(void) {
           serial_log("Resetting corner fogs with reverse ON.", 2);
           kcan_write_msg(front_fogs_all_off_buf);
           left_fog_on = right_fog_on = false;
-        }
-      #endif
-      #if MSA_RVC
-        if (pdc_bus_status == 0xA4) {
-          if (diag_transmit) {
-            kcan_write_msg(pdc_on_camera_on_buf);
-            #if F_NBTE
-              kcan2_write_msg(pdc_on_camera_on_buf);
-            #endif
-            serial_log("Activated full PDC and camera with reverse gear.", 2);
-          }
         }
       #endif
     }
@@ -616,14 +624,22 @@ void send_servotronic_message(void) {
 
 
 void send_servotronic_sport_plus(void) {
-  if (svt70_pwm_control_timer >= 3000) {
-    if (engine_running && diag_transmit) {
-      if (mdrive_status && mdrive_svt[cas_key_number] == 0xF2 && !reverse_gear_status && real_speed > 6) {
-        ptcan_write_msg(svt70_zero_pwm_buf);                                                                                        // This message expires automatically after 15s.
-        svt70_sport_plus = true;
+  if (engine_running && diag_transmit) {
+    // Safety checks
+    if (steering_angle >= -45.0 && steering_angle <= 45.0) {                                                                          // Should not engage/disengage when the steering is loaded up.
+      if (mdrive_status && mdrive_svt[cas_key_number] == 0xF2                                                                         // MDrive + SVT Sport+
+          && !reverse_gear_status && real_speed > 6.0) {                                                                              // Should not engage at low speeds or when parking.
+        if (svt70_pwm_control_timer >= 3000) {
+          ptcan_write_msg(svt70_zero_pwm_buf);                                                                                        // This message expires automatically after 15s.
+          svt70_sport_plus = true;
+          svt70_pwm_control_timer = 0;
+        }
       } else if (svt70_sport_plus) {
-        ptcan_write_msg(svt70_pwm_release_control_buf);
-        svt70_sport_plus = false;
+        if (svt70_pwm_control_timer >= 200) {
+          ptcan_write_msg(svt70_pwm_release_control_buf);
+          svt70_sport_plus = false;
+          svt70_pwm_control_timer = 0;
+        }
       }
     }
   }

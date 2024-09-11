@@ -31,7 +31,7 @@ void configure_IO(void) {
     disable_pins[13] = 0;                                                                                                           // SCK
     disable_pins[FACEPLATE_EJECT_PIN] = 0;
     disable_pins[FACEPLATE_POWER_MUTE_PIN] = 0;
-    disable_pins[FACEPLATE_UART_PIN] = 0;
+    disable_pins[FACEPLATE_UART_PIN] = 0;                                                                                           // Faceplate TX -> Teensy RX.
   #endif
   disable_pins[0] = 0;                                                                                                              // CAN2
   disable_pins[1] = 0;
@@ -292,7 +292,7 @@ void check_teensy_cpu_clock(void) {                                             
 
 
 void disable_diag_transmit_jobs(void) {                                                                                             // Without this, other KWP jobs sent by Ediabas will receive strange reponse codes.
-  if (diag_transmit) {
+  if (diag_transmit && diag_timeout_active) {
     serial_log("Detected OBD port diagnosis request. Pausing module initiated KWP/UDS jobs.", 0);
     diag_transmit = false;
     #if F_NBTE

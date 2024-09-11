@@ -171,7 +171,7 @@ void evaluate_lc_display(void) {
         if (dsc_program_status == 0) {
           mdm_with_lc = true;
           serial_log("Launch Control request DSC ON -> MDM/DTC.", 2);
-          send_dsc_mode(1);
+          send_dsc_mode(4);
         }
         serial_log("Displayed Launch Control flag CC.", 2);
         #if CONTROL_SHIFTLIGHTS
@@ -184,7 +184,7 @@ void evaluate_lc_display(void) {
     }
   } else {
     if (lc_cc_active) {
-      if (mdm_with_lc && dsc_program_status == 1) {
+      if (mdm_with_lc && dsc_program_status == 4) {
         serial_log("Launch Control aborted. MDM/DTC -> DSC ON.", 2);
         send_dsc_mode(0);
         mdm_with_lc = false;
@@ -320,39 +320,6 @@ void evaluate_msa_button(void) {
           ihk_extra_buttons_cc_txq.push(&m);
         }
       #endif
-      #if MSA_RVC
-        if (pdc_bus_status == 0xA5) {
-          kcan_write_msg(camera_off_buf);
-          #if F_NBTE
-            kcan2_write_msg(camera_off_buf);
-          #endif
-          serial_log("Deactivated RVC with PDC ON.", 2);
-        } else if (pdc_bus_status == 0xA4) {
-          kcan_write_msg(pdc_off_camera_off_buf);
-          #if F_NBTE
-            kcan2_write_msg(pdc_off_camera_off_buf);
-          #endif
-          serial_log("Deactivated RVC.", 2);
-        } else if (pdc_bus_status == 0xA1) {
-          kcan_write_msg(camera_on_buf);
-          #if F_NBTE
-            kcan2_write_msg(camera_on_buf);
-          #endif
-          serial_log("Activated RVC with PDC displayed.", 2);
-        } else if (pdc_bus_status == 0x81) {
-          kcan_write_msg(pdc_on_camera_on_buf);
-          #if F_NBTE
-            kcan2_write_msg(pdc_on_camera_on_buf);
-          #endif
-          serial_log("Activated RVC from PDC ON, not displayed.", 2);
-        } else if (pdc_bus_status == 0x80) {
-          kcan_write_msg(pdc_off_camera_on_buf);
-          #if F_NBTE
-            kcan2_write_msg(pdc_off_camera_on_buf);
-          #endif
-          serial_log("Activated RVC from PDC OFF.", 2);
-        }
-      #endif
     }
     msa_button_pressed = true;
   } else {                                                                                                                          // Now receiving released (0xF4 or 0xF0) messages from IHKA.
@@ -372,46 +339,8 @@ void check_ihk_buttons_cc_queue(void) {
 }
 
 
-void evaluate_pdc_button(void) {
-  if (k_msg.buf[0] == 0xFD) {                                                                                                       // Button pressed.
-    if (!pdc_button_pressed) {
-      if (pdc_bus_status == 0xA4) {
-        pdc_with_rvc_requested = true;
-      }
-      pdc_button_pressed = true;
-    }
-  } else {                                                                                                                          // Now receiving released (0xFC or 0xF4) messages from IHKA.
-    pdc_button_pressed = false;
-  }
-}
-
-
 void evaluate_pdc_bus_status(void) {
   if (pdc_bus_status != k_msg.buf[2]) {
-    #if MSA_RVC
-      if (pdc_bus_status == 0xA4 && k_msg.buf[2] == 0x81) {
-        kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when navingating away from RVC only.
-        #if F_NBTE
-          kcan2_write_msg(pdc_off_camera_off_buf);
-        #endif
-      } else if (pdc_bus_status == 0xA4 && k_msg.buf[2] == 0xA1) {
-        kcan_write_msg(pdc_off_camera_off_buf);                                                                                     // Fix for PDC coming on when turning off RVC from iDrive UI.
-        #if F_NBTE
-          kcan2_write_msg(pdc_off_camera_off_buf);
-        #endif
-      }
-      if (pdc_with_rvc_requested && k_msg.buf[2] == 0x80) {
-        kcan_write_msg(pdc_on_camera_on_buf);
-        #if F_NBTE
-          kcan2_write_msg(pdc_on_camera_on_buf);
-        #endif
-        serial_log("Activated PDC with RVC ON.", 2);
-        pdc_with_rvc_requested = false;
-        #if F_VSW01 && F_VSW01_MANUAL
-          vsw_switch_input(1);
-        #endif
-      }
-    #endif
     pdc_bus_status = k_msg.buf[2];
     if (pdc_bus_status > 0x80) {
       serial_log("PDC ON.", 3);
@@ -449,7 +378,6 @@ void evaluate_f_pdc_function_request(void) {
         #endif
       } else if (f_pdc_request == 5) {                                                                                              // Camera ON.
         kcan_write_msg(camera_on_buf);
-        kcan2_write_msg(camera_on_buf);
         #if F_VSW01 && F_VSW01_MANUAL
           vsw_switch_input(1);
         #endif
@@ -665,149 +593,42 @@ void send_nbt_sport_displays_data(bool startup_animation) {
 
 void process_bn2000_cc_display(void) {
   #if CUSTOM_MONITORING_CC
-    bool custom_cc_inserted = false,
-         custom_cc_should_insert = (k_msg.buf[0] >> 4) == (k_msg.buf[0] & 0xF) ? true : false;                                      // To avoid duplication, this ensures that this is the last 0x336 in the chain.
-  #else
-    bool custom_cc_inserted = true, custom_cc_should_insert = false;
+    if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0 && k_msg.buf[2] == 0) {                                                              // Prevents clearing the list when turning ignition OFF and no CCs present.
+      k_msg.buf[1] = 0x46;
+      k_msg.buf[2] = 3;
+      kcan2_write_msg(k_msg);
+      return;
+    }
+
+    if ((k_msg.buf[0] >> 4) < 0xF) {                                                                                                // Do not inject if 42-45 (max) CCs already present.
+      if ((k_msg.buf[0] & 0xF) == 0) {                                                                                              // This is the first message in the sequence sent by the KOMBI. 
+        k_msg.buf[0] += 0x10;                                                                                                       // Increase total messages counter to insert one at the start of the sequence.
+        uint8_t custom_monitoring_cc[] = {k_msg.buf[0], 0x46, 3, 0xFE, 0xFF, 0xFE, 0xFF};
+        kcan2_write_msg(make_msg_buf(0x336, 7, custom_monitoring_cc));
+        k_msg.buf[0] += 1;                                                                                                          // Increment for the original first message.
+      } else {
+        k_msg.buf[0] = constrain(k_msg.buf[0] += 0x11, 0, 0xFF);                                                                    // Corrected counter for the remaining messages in the sequence.
+      }
+    }
+    
   #endif
 
-  if (k_msg.buf[1] == 0xA6 && k_msg.buf[2] == 2) {                                                                                  // Yellow, car lift error.
-    if (!custom_cc_inserted && custom_cc_should_insert) {                                                                           // If possible, insert the custom CC into these otherwise unusable positions.
-      k_msg.buf[1] = 0x46;
-      k_msg.buf[2] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[1] = 0xFE;
-      k_msg.buf[2] = 0xFF;
-    }
-  } else if (k_msg.buf[3] == 0xA6 && k_msg.buf[4] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[3] = 0x46;
-      k_msg.buf[4] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[3] = 0xFE;
-      k_msg.buf[4] = 0xFF;
-    }
-  } else if (k_msg.buf[5] == 0xA6 && k_msg.buf[6] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[5] = 0x46;
-      k_msg.buf[6] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[5] = 0xFE;
-      k_msg.buf[6] = 0xFF;
-    }
-  }
-
-  if (k_msg.buf[1] == 0xA0 && k_msg.buf[2] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[1] = 0x46;
-      k_msg.buf[2] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[1] = 0xFE;
-      k_msg.buf[2] = 0xFF;
-    }
-  } else if (k_msg.buf[3] == 0xA0 && k_msg.buf[4] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[3] = 0x46;
-      k_msg.buf[4] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[3] = 0xFE;
-      k_msg.buf[4] = 0xFF;
-    }
-  } else if (k_msg.buf[5] == 0xA0 && k_msg.buf[6] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[5] = 0x46;
-      k_msg.buf[6] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[5] = 0xFE;
-      k_msg.buf[6] = 0xFF;
-    }
-  }
-
-  if (k_msg.buf[1] == 0xA1 && k_msg.buf[2] == 2) {                                                                                  // DSC OFF ?
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[1] = 0x46;
-      k_msg.buf[2] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[1] = 0xFE;
-      k_msg.buf[2] = 0xFF;
-    }
-  } else if (k_msg.buf[3] == 0xA1 && k_msg.buf[4] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[3] = 0x46;
-      k_msg.buf[4] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[3] = 0xFE;
-      k_msg.buf[4] = 0xFF;
-    }
-  } else if (k_msg.buf[5] == 0xA1 && k_msg.buf[6] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[5] = 0x46;
-      k_msg.buf[6] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[5] = 0xFE;
-      k_msg.buf[6] = 0xFF;
-    }
-  }
-
-  if (k_msg.buf[1] == 0xA2 && k_msg.buf[2] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[1] = 0x46;
-      k_msg.buf[2] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[1] = 0xFE;
-      k_msg.buf[2] = 0xFF;
-    }
-  } else if (k_msg.buf[3] == 0xA2 && k_msg.buf[4] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[3] = 0x46;
-      k_msg.buf[4] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[3] = 0xFE;
-      k_msg.buf[4] = 0xFF;
-    }
-  } else if (k_msg.buf[5] == 0xA2 && k_msg.buf[6] == 2) {
-    if (!custom_cc_inserted && custom_cc_should_insert) {
-      k_msg.buf[5] = 0x46;
-      k_msg.buf[6] = 3;
-      custom_cc_inserted = true;
-    } else {
-      k_msg.buf[5] = 0xFE;
-      k_msg.buf[6] = 0xFF;
-    }
-  }
-
-  if (k_msg.buf[1] == 0x7E && k_msg.buf[2] == 1) {                                                                                  // CC 382 has no text description in NBTE, convert to 236.
-    k_msg.buf[1] = 0xEC;
-    k_msg.buf[2] = 0;
-  } else if (k_msg.buf[3] == 0x7E && k_msg.buf[4] == 1) {
-    k_msg.buf[3] = 0xEC;
-    k_msg.buf[4] = 0;
-  } else if (k_msg.buf[5] == 0x7E && k_msg.buf[6] == 1) {
-    k_msg.buf[5] = 0xEC;
-    k_msg.buf[6] = 0;
-  }
-
-  if (!custom_cc_inserted && custom_cc_should_insert) {                                                                             // Try to find a position in the list for the custom CC.
-    if (k_msg.buf[1] == 0 && k_msg.buf[2] == 0) {                                                                                   // This should exist when KOMBI sends "list clear": 00 00 00 FE FF FE FF.
-      k_msg.buf[1] = 0x46;
-      k_msg.buf[2] = 3;
-    } else if (k_msg.buf[3] == 0xFE && k_msg.buf[4] == 0xFF) {
-      k_msg.buf[3] = 0x46;
-      k_msg.buf[4] = 3;
-    } else if (k_msg.buf[5] == 0xFE && k_msg.buf[6] == 0xFF) {
-      k_msg.buf[5] = 0x46;
-      k_msg.buf[6] = 3;
+  for (int i = 1; i <= 5; i += 2) {
+    if (k_msg.buf[i] == 0xA6 && k_msg.buf[i + 1] == 2) {                                                                            // Yellow, car lift error.
+        k_msg.buf[i] = 0xFE;
+        k_msg.buf[i + 1] = 0xFF;
+    } else if (k_msg.buf[i] == 0xA0 && k_msg.buf[i + 1] == 2) {
+        k_msg.buf[i] = 0xFE;
+        k_msg.buf[i + 1] = 0xFF;
+    } else if (k_msg.buf[i] == 0xA1 && k_msg.buf[i + 1] == 2) {                                                                     // DSC OFF ?
+        k_msg.buf[i] = 0xFE;
+        k_msg.buf[i + 1] = 0xFF;
+    } else if (k_msg.buf[i] == 0xA2 && k_msg.buf[i + 1] == 2) {
+        k_msg.buf[i] = 0xFE;
+        k_msg.buf[i + 1] = 0xFF;
+    } else if (k_msg.buf[i] == 0x7E && k_msg.buf[i + 1] == 1) {                                                                     // CC 382 has no text description in NBTE, convert to 236.
+        k_msg.buf[i] = 0xEC;
+        k_msg.buf[i + 1] = 0;
     }
   }
 
@@ -835,8 +656,7 @@ void process_bn2000_cc_dialog(void) {
 
 
 void process_dme_cc(void) {
-  if ((k_msg.buf[1] == 0xE5 && k_msg.buf[2] == 0) 
-             || (k_msg.buf[1] == 0x13 && k_msg.buf[2] == 2)) {
+  if ((k_msg.buf[1] == 0xE5 && k_msg.buf[2] == 0) || (k_msg.buf[1] == 0x13 && k_msg.buf[2] == 2)) {
     if (k_msg.buf[3] == 0x39) {
       if (!low_battery_cc_active) {
         low_battery_cc_active = true;
@@ -875,7 +695,11 @@ void send_custom_info_cc(void) {
           }
         }
 
-        boost = constrain(boost, -MAX_TURBO_BOOST, MAX_TURBO_BOOST);
+        if (boost > MAX_TURBO_BOOST) {                                                                                              // Automatically rescale the max boost. May not always show overboost!
+          MAX_TURBO_BOOST = boost;
+        } else {
+          boost = constrain(boost, -MAX_TURBO_BOOST, MAX_TURBO_BOOST);
+        }
        
         uint8_t pressure_unit = 1;
         bitWrite(pressure_unit, 0, bitRead(pressure_unit_date_format[cas_key_number], 0));

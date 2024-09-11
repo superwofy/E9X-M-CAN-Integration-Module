@@ -95,7 +95,7 @@ void toggle_mdrive_message_active(void) {
     mdrive_status = true;
   }
 
-  f_driving_dynamics_timer = 1001;
+  f_driving_dynamics_timer = 500;
   svt70_pwm_control_timer = 3001;
   veh_mode_timer = 500;
 }
@@ -104,9 +104,9 @@ void toggle_mdrive_message_active(void) {
 void toggle_mdrive_dsc_mode(void) {
   if (mdrive_status) {
     if (mdrive_dsc[cas_key_number] == 7) {                                                                                          // DSC OFF requested.
-      send_dsc_mode(2);
-    } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M) requested.
       send_dsc_mode(1);
+    } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M) requested.
+      send_dsc_mode(4);
     } else if (mdrive_dsc[cas_key_number] == 0xB) {                                                                                 // DSC ON requested.
       send_dsc_mode(0);
     }
@@ -586,11 +586,11 @@ void release_immobilizer(void) {
   kcan_write_msg(key_cc_off_buf);
   if (terminal_r || nbt_active_after_terminal_r) {
     #if F_NBTE
-      send_cc_message("Immobilizer released.", true, 2000);
+      send_cc_message("Immobilizer released.", true, 3500);                                                                         // Timed roughly so it matches the start ready CC dismiss.
     #endif
     m = {start_cc_on_buf, time_now + 500};
     alarm_warnings_txq.push(&m);
-    m = {start_cc_off_buf, time_now + 1500};
+    m = {start_cc_off_buf, time_now + 2000};
     alarm_warnings_txq.push(&m);
     serial_log("Sent start ready CC.", 2);
   } else {
@@ -751,9 +751,9 @@ void send_f_driving_dynamics_switch_evo(void) {
   if (f_driving_dynamics_timer >= 1001) {
     uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};
 
-    if (dsc_program_status == 1) {
+    if (dsc_program_status == 4) {
       f_driving_dynamics[4] = 1;
-    } else if (dsc_program_status == 2) {
+    } else if (dsc_program_status == 1) {
       f_driving_dynamics[4] = 6;
     }
 
