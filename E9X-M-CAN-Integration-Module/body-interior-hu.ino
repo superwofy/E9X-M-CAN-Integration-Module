@@ -163,7 +163,7 @@ void check_idrive_alive_monitor(void) {
 }
 
 
-void initialize_asd(void) {
+void initialize_asd_mdrive(void) {
   if (!asd_initialized) {
     if (diag_transmit) {
       kcan_write_msg(mute_asd_buf);
@@ -287,14 +287,15 @@ void evaluate_faceplate_buttons(void) {
         if (faceplate_power_mute_pressed_timer >= 8000) {
           if (!faceplate_hu_reboot) {
             if (diag_transmit) {
-              serial_log("Faceplate power/mute button held. Rebooting HU.", 0);
+              serial_log("Faceplate power/mute button held. Rebooting HU and faceplate.", 0);
               unsigned long time_now = millis();
               m = {f_hu_nbt_reboot_buf, time_now};
-              serial_diag_kcan2_txq.push(&m);
+              faceplate_buttons_txq.push(&m);
               time_now += 200;
               m = {f_hu_nbt_reboot_buf, time_now};
-              serial_diag_kcan2_txq.push(&m);
+              faceplate_buttons_txq.push(&m);
               faceplate_hu_reboot = true;                                                                                           // Will ignore the next normal button release action (single press).
+              faceplate_reset();
             }
           }
         }
@@ -328,6 +329,12 @@ void check_faceplate_buttons_queue(void) {
     if (millis() >= delayed_tx.transmit_time) {
       kcan2_write_msg(delayed_tx.tx_msg);
       faceplate_buttons_txq.drop();
+      #if F_NBTE
+        if (delayed_tx.tx_msg.id == 0x6F1 && delayed_tx.tx_msg.buf[5] == 1) {
+          FACEPLATE_UART.begin(38400, SERIAL_8E1);
+          FACEPLATE_UART.clear();
+        }
+      #endif
     }
   }
 }
@@ -337,102 +344,133 @@ void evaluate_faceplate_uart(void) {
   #if F_NBTE
     uint8_t faceplate_status_message[7] = {0};
 
-    if (vehicle_awakened_timer >= 500) {
-      if (FACEPLATE_UART.available() == 7) {                                                                                        // Wait for the full message to come in. Cycle time 1s.
-        for (uint8_t i = 0; i < 7; i++) {
-          faceplate_status_message[i] = FACEPLATE_UART.read();
-        }
+    if (vehicle_awakened_timer >= 1000) {
+      if (FACEPLATE_UART.available() > 6) {                                                                                        // Wait for the full message to come in. Cycle time 1s.
 
-        if (faceplate_status_message[0] != 0x55) {                                                                                  // Faceplate is in some error state which should be ignored.
-          FACEPLATE_UART.clear();
-          return;
-        }
+        if (FACEPLATE_UART.read() == 0x55 && FACEPLATE_UART.read() == 0xAA) {
+          // Serial.print("Faceplate: ");
+          for (uint8_t i = 2; i < 7; i++) {
+            faceplate_status_message[i] = FACEPLATE_UART.read();
+            // Serial.print(faceplate_status_message[i], HEX); Serial.print(" ");
+          }
+          // Serial.println();
 
-        if (faceplate_status_message[2] == 0x80) {                                                                                  // Seeking right
-          kcan2_write_msg(faceplate_seek_right_buf);
-        } else if (faceplate_status_message[2] == 0x40) {                                                                           // Seeking left
-          kcan2_write_msg(faceplate_seek_left_buf);
-        } else {                                                                                                                    // Released
-          kcan2_write_msg(faceplate_a3_released_buf);
-        }
-
-        uint16_t faceplate_new_volume = (faceplate_status_message[6] << 8) | faceplate_status_message[4];
-        if (faceplate_new_volume != faceplate_volume) {
+          if (faceplate_status_message[2] == 0x80) {                                                                                // Seeking right
+            kcan2_write_msg(faceplate_seek_right_buf);
+          } else if (faceplate_status_message[2] == 0x40) {                                                                         // Seeking left
+            kcan2_write_msg(faceplate_seek_left_buf);
+          } else {                                                                                                                  // Released
+            kcan2_write_msg(faceplate_a3_released_buf);
+          }
+          uint16_t faceplate_new_volume = (faceplate_status_message[6] << 8) | faceplate_status_message[4];
+          if (faceplate_new_volume != faceplate_volume) {
             int16_t volume_difference = faceplate_new_volume - faceplate_volume;
 
             if (volume_difference > 0 && volume_difference <= 0x7FFF) {                                                             // Clockwise rotation
-                kcan2_write_msg(faceplate_volume_decrease_buf);
+              kcan2_write_msg(faceplate_volume_decrease_buf);
             } else if (volume_difference < 0 && volume_difference >= -0x7FFF) {                                                     // Counterclockwise rotation
-                kcan2_write_msg(faceplate_volume_increase_buf);
+              kcan2_write_msg(faceplate_volume_increase_buf);
             } else {                                                                                                                // Handle wraparound
-                if (volume_difference > 0) {
-                    kcan2_write_msg(faceplate_volume_decrease_buf);
-                } else {
-                    kcan2_write_msg(faceplate_volume_increase_buf);
-                }
+              if (volume_difference > 0) {
+                  kcan2_write_msg(faceplate_volume_decrease_buf);
+              } else {
+                  kcan2_write_msg(faceplate_volume_increase_buf);
+              }
             }
 
             faceplate_volume = faceplate_new_volume;
-        } else {
-            kcan2_write_msg(faceplate_f1_released_buf);
+          } else {
+              kcan2_write_msg(faceplate_f1_released_buf);
+          }
+
+          if (faceplate_status_message[3] == 0x80) {
+            if (faceplate_status_message[5] == 0x80) {
+              kcan2_write_msg(faceplate_button1_press_buf);
+            } else {
+              kcan2_write_msg(faceplate_button1_hover_buf);
+            }
+          } else if (faceplate_status_message[3] == 0x40) {
+            if (faceplate_status_message[5] == 0x40) {
+              kcan2_write_msg(faceplate_button2_press_buf);
+            } else {
+              kcan2_write_msg(faceplate_button2_hover_buf);
+            }
+          } else if (faceplate_status_message[3] == 0x20) {
+            if (faceplate_status_message[5] == 0x20) {
+              kcan2_write_msg(faceplate_button3_press_buf);
+            } else {
+              kcan2_write_msg(faceplate_button3_hover_buf);
+            }
+          } else if (faceplate_status_message[3] == 0x10) {
+            if (faceplate_status_message[5] == 0x10) {
+              kcan2_write_msg(faceplate_button4_press_buf);
+            } else {
+              kcan2_write_msg(faceplate_button4_hover_buf);
+            }
+          } else if (faceplate_status_message[3] == 8) {
+            if (faceplate_status_message[5] == 8) {
+              kcan2_write_msg(faceplate_button5_press_buf);
+            } else {
+              kcan2_write_msg(faceplate_button5_hover_buf);
+            }
+          } else if (faceplate_status_message[3] == 4) {
+            if (faceplate_status_message[5] == 4) {
+              kcan2_write_msg(faceplate_button6_press_buf);
+            } else {
+              kcan2_write_msg(faceplate_button6_hover_buf);
+            }
+          } else if (faceplate_status_message[3] == 2) {
+            if (faceplate_status_message[5] == 2) {
+              kcan2_write_msg(faceplate_button7_press_buf);
+            } else {
+              kcan2_write_msg(faceplate_button7_hover_buf);
+            }
+          } else if (faceplate_status_message[3] == 1) {
+            if (faceplate_status_message[5] == 1) {
+              kcan2_write_msg(faceplate_button8_press_buf);
+            } else {
+              kcan2_write_msg(faceplate_button8_hover_buf);
+            }
+          } else {
+            kcan2_write_msg(faceplate_a2_released_buf);
+          }
+        } else {                                                                                                                    // Faceplate is in some error state / message is out of sync.
+          return;
         }
 
-        if (faceplate_status_message[3] == 0x80) {
-          if (faceplate_status_message[5] == 0x80) {
-            kcan2_write_msg(faceplate_button1_press_buf);
-          } else {
-            kcan2_write_msg(faceplate_button1_hover_buf);
-          }
-        } else if (faceplate_status_message[3] == 0x40) {
-          if (faceplate_status_message[5] == 0x40) {
-            kcan2_write_msg(faceplate_button2_press_buf);
-          } else {
-            kcan2_write_msg(faceplate_button2_hover_buf);
-          }
-        } else if (faceplate_status_message[3] == 0x20) {
-          if (faceplate_status_message[5] == 0x20) {
-            kcan2_write_msg(faceplate_button3_press_buf);
-          } else {
-            kcan2_write_msg(faceplate_button3_hover_buf);
-          }
-        } else if (faceplate_status_message[3] == 0x10) {
-          if (faceplate_status_message[5] == 0x10) {
-            kcan2_write_msg(faceplate_button4_press_buf);
-          } else {
-            kcan2_write_msg(faceplate_button4_hover_buf);
-          }
-        } else if (faceplate_status_message[3] == 8) {
-          if (faceplate_status_message[5] == 8) {
-            kcan2_write_msg(faceplate_button5_press_buf);
-          } else {
-            kcan2_write_msg(faceplate_button5_hover_buf);
-          }
-        } else if (faceplate_status_message[3] == 4) {
-          if (faceplate_status_message[5] == 4) {
-            kcan2_write_msg(faceplate_button6_press_buf);
-          } else {
-            kcan2_write_msg(faceplate_button6_hover_buf);
-          }
-        } else if (faceplate_status_message[3] == 2) {
-          if (faceplate_status_message[5] == 2) {
-            kcan2_write_msg(faceplate_button7_press_buf);
-          } else {
-            kcan2_write_msg(faceplate_button7_hover_buf);
-          }
-        } else if (faceplate_status_message[3] == 1) {
-          if (faceplate_status_message[5] == 1) {
-            kcan2_write_msg(faceplate_button8_press_buf);
-          } else {
-            kcan2_write_msg(faceplate_button8_hover_buf);
-          }
-        } else {
-          kcan2_write_msg(faceplate_a2_released_buf);
-        }
+        faceplate_uart_watchdog_timer = 0;
+        faceplate_reset_counter = 0;
       }
     } else {
       FACEPLATE_UART.clear();                                                                                                       // This data is garbage. Clear the RX buffer.
     }
   #endif
+}
+
+
+void faceplate_reset(void) {                                                                                                        // The hardware reset pin on the faceplate could be used instead.
+  #if F_NBTE
+    if (diag_transmit) {
+      FACEPLATE_UART.clear();
+      FACEPLATE_UART.end(); 
+      kcan_write_msg(ihka_5v_off_buf);
+      unsigned long time_now = millis();
+      m = {ihka_5v_on_buf, time_now + 300};                                                                                         // By cutting off 5V the uC of the faceplate will be reset.
+      faceplate_buttons_txq.push(&m);
+    }
+  #endif
+}
+
+
+void check_faceplate_watchdog(void) {
+  if (faceplate_uart_watchdog_timer >= 30000) {
+    if (faceplate_reset_counter < 5) {
+      serial_log("Faceplate stopped responding. Attempting reset.", 0);
+      faceplate_reset();
+      faceplate_uart_watchdog_timer = 0;
+      faceplate_reset_counter++;
+    }
+  }
 }
 
 
@@ -742,8 +780,10 @@ void send_f_lcd_brightness(void) {
   uint8_t f_lcd_brightness[] = {k_msg.buf[0], 0x32, k_msg.buf[2], 0xFD};                                                            // Byte0 used for brightness (0 to 0xFE). Byte1 is fixed at 0x32.
   if (rls_time_of_day == 2) {
     f_lcd_brightness[3] = 0xFE;                                                                                                     // This makes the NBT switch to night mode.
+  } else if (rls_time_of_day == 1) {
+    f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x10, 0, 0xFE);                                                           // Increased slightly to bias CID brightness during dusk/twilight.
   } else {
-    f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x10, 0, 0xFE);                                                           // Increased to bias CID brightness during the day and at dusk only.
+    f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x1F, 0, 0xFE);                                                           // Increased more to bias CID brightness during the day.
   }
   kcan2_write_msg(make_msg_buf(0x393, 4, f_lcd_brightness));
 }

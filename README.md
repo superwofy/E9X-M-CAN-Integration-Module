@@ -43,6 +43,7 @@ Included are also tools to allow full manipulation of the program section in the
 **I use it to:**
 
 * Emulate K-CAN2 for NBT EVO support.
+	* Interface to the CIC faceplate UART.
 	* Donor VIN is obtained after every boot when Terminal R is ON. Disable if using own FSCs.
 	* Sport displays are populated with PT-CAN torque data from the DME.
 	* xDrive status data populated with pitch and roll obtained from the alarm siren (SINE).

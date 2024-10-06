@@ -1,7 +1,7 @@
 // Functions related to chassis (stability control, edc, steering etc.) go here.
 
 
-void send_dsc_mode(uint8_t mode) {
+uint8_t send_dsc_mode(uint8_t mode) {
   #if !MDSC_ZB
     if (!dsc_mode_change_disable) {
       unsigned long time_now = millis();
@@ -11,42 +11,63 @@ void send_dsc_mode(uint8_t mode) {
         m = {dsc_on_buf, time_now + 20};
         dsc_txq.push(&m);
         serial_log("Sending DSC ON.", 2);
-      } else if (mode == 4) {
-        m = {dsc_mdm_dtc_buf, time_now};
-        dsc_txq.push(&m);
-        m = {dsc_mdm_dtc_buf, time_now + 20};
-        dsc_txq.push(&m);
-        serial_log("Sending DTC/MDM.", 2);
+        return 1;
       } else {
-        m = {dsc_off_buf, time_now};
-        dsc_txq.push(&m);
-        m = {dsc_off_buf, time_now + 20};
-        dsc_txq.push(&m);
-        serial_log("Sending DSC OFF.", 2);
+        if (dsc_intervention != 4                                                                                                   // DSC intervention active
+            && dsc_intervention != 1) {                                                                                            // ABS intervention active
+          if (mode == 4) {
+            m = {dsc_mdm_dtc_buf, time_now};
+            dsc_txq.push(&m);
+            m = {dsc_mdm_dtc_buf, time_now + 20};
+            dsc_txq.push(&m);
+            serial_log("Sending DTC/MDM.", 2);
+          } else {
+            m = {dsc_off_buf, time_now};
+            dsc_txq.push(&m);
+            m = {dsc_off_buf, time_now + 20};
+            dsc_txq.push(&m);
+            serial_log("Sending DSC OFF.", 2);
+          }
+          return 1;
+        }
       }
       #if F_NBTE
         f_driving_dynamics_timer = 500;                                                                                             // Allow some delay to detect mode change through 0x19E.
       #endif
     }
+
+    return 0;
   #endif
 }
 
 
-// 0 - DSC ON
-// 1 - DSC OFF
-// 2 - DSC FAULT
-// 3 - reserved
-// 4 - DTC / MDM
-// 5 - ABS FAULT
-// 6 - UNDER VOLTAGE
-// 7 - SIGNAL INVALID
 void evaluate_dsc_status(void) {
+  // 0 - DSC ON
+  // 1 - DSC OFF
+  // 2 - DSC FAULT
+  // 3 - reserved
+  // 4 - DTC / MDM
+  // 5 - ABS FAULT
+  // 6 - UNDER VOLTAGE
+  // 7 - SIGNAL INVALID
   uint8_t new_mode = ((k_msg.buf[1] >> 2) & 7);                                                                                     // 3-bit ST_DSC.
+
   if (new_mode != dsc_program_status) {
     dsc_program_status = new_mode;
     sprintf(serial_debug_string, "New DSC mode: %d.", new_mode);
     serial_log(serial_debug_string, 2);
   }
+
+  // 0 - no regulation
+  // 1 - abs regulation
+  // 2 - ASR regulation
+  // 4 - DSC/TCS regulation
+  // 8 - hba regulation
+  // 0x10 - msr regulation
+  // 0x20 - EBV_REGULATION
+  // 0x40 - DYNO_ACTIVE
+  // 0xFF - signal invalid
+  dsc_intervention = k_msg.buf[0];
 }
 
 

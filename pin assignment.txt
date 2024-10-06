@@ -1,8 +1,11 @@
+** With the exception of bus wires, harness colors were chosen randomly.
+
+
 Black 12-pin connector (MQS 0.64):
 
-1  - Faceplate eject (D18)               black
+1  - Faceplate eject                     black
 2  - KCAN-L                              green
-3  - Faceplate power/mute (D19)          red
+3  - Faceplate power/mute                red
 4  - PTCAN-L                             red/black
 7  - 30G Power                           black/red
 8  - KCAN-H                              orange/green
@@ -15,19 +18,43 @@ Black 12-pin connector (MQS 0.64):
 
 White 18-pin connector (MQS 0.64):
 
-9  - Faceplate TX (D21)                  yellow
+9  - Faceplate TX                        yellow
 10 - KCAN2-L                             yellow/brown
 11 - KCAN2-H                             yellow/red
-13 - Exhaust flap solenoid (D17)         gray
+13 - Exhaust flap solenoid               gray
    -> Use flyback diode between +/-
    -> Disconnect DME X60001 pin 5
-14 - Steering heater switch (D5)         black
-15 - Front FOG button LED (D4)           blue/yellow
-16 - POWER console LED (D3)              black/white
-17 - POWER console switch (D2)           white/red
-18 - DSC console switch (D16)            white/brown
+14 - Steering heater switch              black
+15 - Front FOG button LED                blue/yellow
+16 - POWER console LED                   black/white
+17 - POWER console switch                white/red
+18 - DSC console switch                  white/brown
 
 
 
-** With the exception of bus wires, harness colors were chosen randomly.
+Teensy 4.0 pins:
 
+[Visible]
+   0,1 - CAN2 (PTCAN)
+   2 - POWER console switch
+   3 - POWER console LED
+   4 - Front FOG button LED
+   5 - Steering heater switch
+
+   9 - MCP2515 INT
+   10 - MCP2515 CS
+   11 - MCP2515 MOSI
+   12 - MCP2515 MISO
+   13 - MCP2515 SCK
+   14 - CAN3 (DCAN) STBY
+   15 - CAN2 (PTCAN) STBY
+   16 - DSC console switch
+   17 - Exhaust flap solenoid
+   18 - Faceplate eject
+   19 - Faceplate power/mute
+
+   21 - Faceplate TX
+   22,23 - CAN1 (KCAN)
+
+[Below PCB]
+   30,31 - CAN3 (DCAN)

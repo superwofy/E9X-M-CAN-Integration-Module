@@ -104,9 +104,13 @@ void toggle_mdrive_message_active(void) {
 void toggle_mdrive_dsc_mode(void) {
   if (mdrive_status) {
     if (mdrive_dsc[cas_key_number] == 7) {                                                                                          // DSC OFF requested.
-      send_dsc_mode(1);
+      if (!send_dsc_mode(1)) {
+        serial_log("MDrive: Failed to change DSC mode during stabilisation.", 2);
+      }
     } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M) requested.
-      send_dsc_mode(4);
+      if (!send_dsc_mode(4)) {
+        serial_log("MDrive: Failed to change DSC mode during stabilisation.", 2);
+      }
     } else if (mdrive_dsc[cas_key_number] == 0xB) {                                                                                 // DSC ON requested.
       send_dsc_mode(0);
     }
@@ -586,7 +590,7 @@ void release_immobilizer(void) {
   kcan_write_msg(key_cc_off_buf);
   if (terminal_r || nbt_active_after_terminal_r) {
     #if F_NBTE
-      send_cc_message("Immobilizer released.", true, 3500);                                                                         // Timed roughly so it matches the start ready CC dismiss.
+      send_cc_message("Immobilizer released. Engine start permitted.", true, 3500);                                                 // Timed roughly so it matches the start ready CC dismiss.
     #endif
     m = {start_cc_on_buf, time_now + 500};
     alarm_warnings_txq.push(&m);
@@ -622,7 +626,7 @@ void execute_alarm_after_stall(void) {
     m = {alarm_siren_on_buf, time_now + 500};                                                                                       // Make sure the alarm request is received.
     alarm_siren_txq.push(&m);
     for (uint8_t i = 1; i < 10; i++) {                                                                                              // Alarm test job times out after 30s. Make it blast for 5 min.
-      m = {alarm_siren_on_buf, time_now + 29900 * i};
+      m = {alarm_siren_on_buf, time_now + 31000 * i};                                                                               // Siren job must not be active for another to be ran.
       alarm_siren_txq.push(&m);
     }
     serial_log("Alarm siren and hazards ON.", 0);
@@ -716,33 +720,33 @@ void send_f_torque_1(void) {
 }
 
 
-void send_f_throttle(void) {
-  if (f_throttle_timer >= 40000) {
-    uint8_t f_throttle[] = {0, 0, 0, 0, 0, 0, 0, 0xC0};
+void send_f_throttle_pedal(void) {
+  if (f_throttle_pedal_timer >= 40000) {
+    uint8_t f_throttle_pedal[] = {0, 0, 0, 0, 0, 0, 0, 0xC0};
 
-    f_throttle[1] = 1 << 4 | f_throttle_alive_counter;                                                                            // Combine 1 (Normal operation) and ALIV_ANG_ACPD.
-    f_throttle_alive_counter == 0xE ? f_throttle_alive_counter = 0 
-                                  : f_throttle_alive_counter++;
+    f_throttle_pedal[1] = 1 << 4 | f_throttle_pedal_alive_counter;                                                                  // Combine 1 (Normal operation) and ALIV_ANG_ACPD.
+    f_throttle_pedal_alive_counter == 0xE ? f_throttle_pedal_alive_counter = 0 
+                                  : f_throttle_pedal_alive_counter++;
     
 
     uint16_t scaled_value = round(e_throttle_position / 0.025);
-    scaled_value = (scaled_value & 0x800) ? (scaled_value | 0xF000) : scaled_value;                                               // 12-bit boundary check.
+    scaled_value = (scaled_value & 0x800) ? (scaled_value | 0xF000) : scaled_value;                                                 // 12-bit boundary check.
 
-    f_throttle[2] = scaled_value & 0xF0;                                                                                          // AVL_ANG_ACPD LSB
-    f_throttle[3] = 0x10 | (scaled_value >> 8);                                                                                   // QU_AVL_ANG_ACPD = 1 | AVL_ANG_ACPD MSB
+    f_throttle_pedal[2] = scaled_value & 0xF0;                                                                                      // AVL_ANG_ACPD LSB
+    f_throttle_pedal[3] = 0x10 | (scaled_value >> 8);                                                                               // QU_AVL_ANG_ACPD = 1 | AVL_ANG_ACPD MSB
 
-    f_throttle[4] = scaled_value & 0xF0;                                                                                          // AVL_ANG_ACPD_VIRT LSB
-    f_throttle[5] = scaled_value >> 8;                                                                                            // AVL_ANG_ACPD_VIRT MSB
+    f_throttle_pedal[4] = scaled_value & 0xF0;                                                                                      // AVL_ANG_ACPD_VIRT LSB
+    f_throttle_pedal[5] = scaled_value >> 8;                                                                                        // AVL_ANG_ACPD_VIRT MSB
 
-    f_throttle_crc.restart();
+    f_throttle_pedal_crc.restart();
     for (uint8_t i = 1; i < 8; i++) {
-      f_throttle_crc.add(f_throttle[i]);
+      f_throttle_pedal_crc.add(f_throttle_pedal[i]);
     }
-    f_throttle[0] = f_throttle_crc.calc();
+    f_throttle_pedal[0] = f_throttle_pedal_crc.calc();
 
-    CAN_message_t f_throttle_buf = make_msg_buf(0xD9, 8, f_throttle);
-    kcan2_write_msg(f_throttle_buf);
-    f_throttle_timer = 0;
+    CAN_message_t f_throttle_pedal_buf = make_msg_buf(0xD9, 8, f_throttle_pedal);
+    kcan2_write_msg(f_throttle_pedal_buf);
+    f_throttle_pedal_timer = 0;
   }
 }
 
@@ -855,4 +859,10 @@ void evaluate_dme_boost_response(void) {
       dme_boost_requested = false;
     }
   }
+}
+
+
+void evaluate_alternator_status(void) {
+  uint8_t alternator_load = 0;
+  
 }

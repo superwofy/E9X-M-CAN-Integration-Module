@@ -35,6 +35,7 @@ uint8_t LOGLEVEL = 4;                                                           
 #define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine ON. Calibrated for M3 speedo with 335i tacho.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver at low temperatures.
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
+#define PTC_HEATER 1                                                                                                                // Convert alternator status from DME into the missing PWM "E_ZH" signal needed for the PTC auxiliary heater.
 #define MDSC_ZB 0                                                                                                                   // If the MK60E5 is flashed with a 1M or M3 file, MDM is toggled through MDrive status (0x399) only.
                                                                                                                                     // For DSC OFF, the switch must be wired to pin 41. Non-M DSC modules flashed to M3 ZB need a 12V pull-up.
 
@@ -206,7 +207,9 @@ float battery_voltage = 0;
 uint16_t faceplate_volume = 0;
 bool faceplate_eject_pressed = false, faceplate_power_mute_pressed = false, faceplate_hu_reboot = false;
 elapsedMillis faceplate_eject_pressed_timer = 0, faceplate_power_mute_pressed_timer = 0,
-              faceplate_power_mute_debounce_timer = 300, faceplate_eject_debounce_timer = 1000;
+              faceplate_power_mute_debounce_timer = 300, faceplate_eject_debounce_timer = 1000,
+              faceplate_uart_watchdog_timer = 0;
+uint8_t faceplate_reset_counter = 0;
 cppQueue faceplate_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          radon_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
@@ -227,6 +230,7 @@ uint8_t mdrive_dsc[4] = {0x13, 0x13, 0x13, 0xB}, mdrive_power[4] = {0x30, 0x30, 
 bool mdrive_status = false, mdrive_power_active = false, console_power_mode, restore_console_power_mode = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DSC OFF, 4 = DTC/MDM. 
+uint8_t dsc_intervention = 0;
 bool holding_dsc_off_console = false, dsc_mode_change_disable = false;
 elapsedMillis mdrive_message_timer = 0, veh_mode_timer = 0;
 uint8_t m_mfl_held_count = 0;
@@ -397,7 +401,7 @@ uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xF
         f_driving_dynamics_alive_counter = 0, f_steering_angle_alive_counter = 0, f_pdc_function_status_alive_counter = 0,
         f_ftm_status_alive_counter = 0, f_standstill_status_alive_counter = 0, f_mdrive_alive_counter = 0,
         f_xview_pitch_alive_counter = 0, f_road_incline_alive_counter = 0, f_steering_angle_effective_alive_counter = 0,
-        f_throttle_alive_counter = 0;
+        f_throttle_pedal_alive_counter = 0;
 uint8_t f_mdrive_settings[5] = {0};
 uint32_t f_distance_alive_counter = 0x2000;
 uint8_t f_lights_ckm_request = 0;
@@ -408,13 +412,13 @@ elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_time
               f_xview_pitch_timer = 1000, f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1000;
 elapsedMicros f_road_incline_timer = 100000, f_torque_1_timer = 100000, f_chassis_longitudinal_timer = 20000,                       // Higher precision for high sample rate messages.
               f_chassis_lateral_timer = 20000, f_chassis_yaw_timer = 20000, f_chassis_speed_timer = 20000,
-              f_chassis_steering_timer = 200000, f_chassis_steering_effective_timer = 20000, f_throttle_timer = 40000;
+              f_chassis_steering_timer = 200000, f_chassis_steering_effective_timer = 20000, f_throttle_pedal_timer = 40000;
 CAN_message_t sine_pitch_angle_request_a_buf, sine_pitch_angle_request_b_buf,
               sine_roll_angle_request_a_buf, sine_roll_angle_request_b_buf, nivi_button_pressed_buf,
               nivi_button_released_buf, f_hu_nbt_reboot_buf;
 CRC8 f_vehicle_status_crc(0x1D, 0, 0x64, false, false),                                                                             // SAE J1850 POLY, 0 init and XOR-OUT 0x64 for ARB-ID 0x3C.
      f_torque_1_crc(0x1D, 0, 0x6A, false, false),                                                                                   // SAE J1850 POLY, 0 init and XOR-OUT 0x6A for ARB-ID 0xA5.
-     f_throttle_crc(0x1D, 0, 0xD7, false, false),                                                                                   // SAE J1850 POLY, 0 init and XOR-OUT 0xD7 for ARB-ID 0xD9.
+     f_throttle_pedal_crc(0x1D, 0, 0xD7, false, false),                                                                             // SAE J1850 POLY, 0 init and XOR-OUT 0xD7 for ARB-ID 0xD9.
      f_terminal_status_crc(0x1D, 0, 0xB1, false, false),                                                                            // SAE J1850 POLY, 0 init and XOR-OUT 0xB1 for ARB-ID 0x12F.
      f_road_incline_crc(0x1D, 0, 0xCE, false, false),                                                                               // SAE J1850 POLY, 0 init and XOR-OUT 0xCE for ARB-ID 0x163.
      f_longitudinal_acceleration_crc(0x1D, 0, 0x5F, false, false),                                                                  // SAE J1850 POLY, 0 init and XOR-OUT 0x5F for ARB-ID 0x199.
@@ -474,10 +478,8 @@ uint8_t msa_fake_status_counter = 0;
 cppQueue ihk_extra_buttons_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool asd_initialized = false, asd_rad_on_initialized = false;
 CAN_message_t msa_fake_status_buf, mute_asd_buf, demute_asd_buf, radon_asd_buf,
-              clear_fs_uds_nbt_buf, clear_is_uds_nbt_buf, clear_fs_uds_zbe_buf, clear_is_uds_zbe_buf,
-              clear_fs_uds_tbx_buf, clear_is_uds_tbx_buf, clear_fs_uds_vsw_buf, clear_is_uds_vsw_buf,
-              clear_fs_uds_ampt_buf, clear_is_uds_ampt_buf, clear_fs_uds_vm_buf, clear_is_uds_vm_buf,
-              clear_hs_kwp_dme_buf, clear_fs_kwp_svt_buf, clear_is_kwp_svt_buf, ccc_zbe_wake_buf, jbe_reboot_buf;
+              clear_hs_kwp_dme_buf, ccc_zbe_wake_buf, jbe_reboot_buf,
+              ihka_5v_on_buf, ihka_5v_off_buf;
 extern float tempmonGetTemp(void);
 char serial_debug_string[512];
 char boot_debug_string[8192];
@@ -496,10 +498,10 @@ bool dme_boost_requested = false, trsvc_cc_gong = false;
 unsigned long cc_message_expires = millis();
 uint8_t ihka_auto_fan_speed = 5, ihka_auto_fan_state = 3, ihka_recirc_state = 0, ihka_auto_distr_state = 0;
 cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
-         serial_diag_dcan_txq(sizeof(delayed_can_tx_msg), 384, queue_FIFO),
-         serial_diag_kcan1_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO),  
-         serial_diag_kcan2_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO),
-         serial_diag_ptcan_txq(sizeof(delayed_can_tx_msg), 32, queue_FIFO);
+         serial_diag_dcan_txq(sizeof(delayed_can_tx_msg), 256, queue_FIFO),                                                         // Queues must fit error and shadow clear calls for all modules.
+         serial_diag_kcan1_txq(sizeof(delayed_can_tx_msg), 256, queue_FIFO),  
+         serial_diag_kcan2_txq(sizeof(delayed_can_tx_msg), 256, queue_FIFO),
+         serial_diag_ptcan_txq(sizeof(delayed_can_tx_msg), 256, queue_FIFO);
 CAN_message_t power_down_cmd_a_buf, power_down_cmd_b_buf, power_down_cmd_c_buf;
 bool diag_transmit = true, diag_timeout_active = true, power_down_requested = false;
 elapsedMillis debug_print_timer = 500, diag_deactivate_timer, serial_unlocked_timer = 0, slcan_timer = 0;

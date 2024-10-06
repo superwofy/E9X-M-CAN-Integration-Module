@@ -237,14 +237,16 @@ void print_current_state(Stream &status_serial) {
   }
   if (ignition) {
     if (dsc_program_status == 0) {
-      status_serial.println(" DSC: Fully ON");
+      status_serial.print(" DSC: Fully ON");
     } else if (dsc_program_status == 1) {
-      status_serial.println(" DSC: Fully OFF");
+      status_serial.print(" DSC: Fully OFF");
     } else if (dsc_program_status == 4) {
-      status_serial.println(" DSC: DTC/MDM mode");
+      status_serial.print(" DSC: DTC/MDM mode");
     } else {
-      status_serial.println(" DSC: Unknown/Error");
+      status_serial.print(" DSC: Unknown/Error");
     }
+    sprintf(serial_debug_string, ", Intervention: %d", dsc_intervention);
+    status_serial.println(serial_debug_string);
   } else {
     status_serial.println(" DSC: Asleep");
   }
@@ -494,7 +496,7 @@ void serial_log(const char message[], uint8_t level) {
 
 
 void reset_ignition_variables(void) {                                                                                               // Ignition OFF. Set variables to pre-ignition state.
-  dsc_program_status = 0;
+  dsc_program_status = dsc_intervention = 0;
   if (mdrive_status) {
     toggle_mdrive_message_active();
   }
@@ -645,6 +647,7 @@ void reset_sleep_variables(void) {
   #if F_NBTE
     FACEPLATE_UART.end();                                                                                                           // Close serial connection.
   #endif
+  faceplate_reset_counter = 0;
   idrive_run_timer = 0;
   driving_mode = 0;
   update_data_in_eeprom();

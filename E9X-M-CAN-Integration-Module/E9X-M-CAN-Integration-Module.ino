@@ -34,7 +34,6 @@ void loop() {
         slcan_timer = 0;
         serial_log("SLCAN interface connected.", 0);
       }
-      
       read_slcan_cmd();
     } else {
       if (slcan_connected) {
@@ -78,6 +77,7 @@ void loop() {
       evaluate_faceplate_buttons();
       evaluate_faceplate_uart();
       check_faceplate_buttons_queue();
+      check_faceplate_watchdog();
       #if CUSTOM_MONITORING_CC
         send_custom_info_cc();
       #endif
@@ -86,7 +86,7 @@ void loop() {
         send_nbt_vin_request();
       #endif
       send_f_standstill_status();
-      send_f_throttle();
+      send_f_throttle_pedal();
     #endif
     #if ASD89_RAD_ON
       check_radon_queue();
@@ -448,6 +448,10 @@ void process_kcan_message() {
 
     else if (k_msg.id == 0x1B4) {                                                                                                   // Monitor KOMBI status (indicated speed, handbrake). Cycle time 100ms (terminal R ON).
       evaluate_indicated_speed();
+    }
+
+    else if (k_msg.id == 0x1B6) {
+      evaluate_alternator_status();
     }
 
     #if REVERSE_BEEP || DOOR_VOLUME
@@ -889,7 +893,7 @@ void process_kcan2_message() {
   else if (k_msg.id == 0x34A) {                                                                                                     // GPS position, appears consistently regardless of Terminal status. Cycle time 1s.
     idrive_watchdog_timer = 0;
     #if ASD89_MDRIVE
-      initialize_asd();
+      initialize_asd_mdrive();
     #endif
     #if ASD89_RAD_ON
       initialize_asd_rad_on();
