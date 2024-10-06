@@ -2,7 +2,7 @@
 // KWP2000 message structure (8 bytes): {0x72, 6, 0x30, 3, 7, 0x1D, 0, 0x16};
 // [0] - Controller diagnostic address. e.g FRM (0x72), JBE (0).
 // [1] - ?. Sometimes represents the sequence of responses. I.e 0x10, 0x21, 0x22...
-// [2] - KWP2000 SID, e.g. InputOutputControlByLocalIdentifier (0x30).
+// [2] - KWP2000 SID, e.g. InputOutputControlByLocalIdentifier (0x30), StartRoutineByLocalIdentifier (0x31).
 // [3] - Control target, e.g PWM-port dim value (3)
 // [4] - Control type, e.g ShortTermAdjustment (7)
 // [5] - Job dependent
@@ -99,36 +99,8 @@ void cache_can_message_buffers(void) {                                          
     idrive_beep_sound_buf = make_msg_buf(0x6F1, 5, idrive_beep_sound);
   #endif
 
-  uint8_t clear_fs_uds_nbt[] = {0x63, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_uds_nbt[] = {0x63, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_fs_uds_zbe[] = {0x67, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_uds_zbe[] = {0x67, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_fs_uds_tbx[] = {0x35, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_uds_tbx[] = {0x35, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_fs_uds_vsw[] = {0x48, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_uds_vsw[] = {0x48, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_fs_uds_ampt[] = {0x37, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_uds_ampt[] = {0x37, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_fs_uds_vm[] = {0x4B, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0},
-          clear_is_uds_vm[] = {0x4B, 4, 0x31, 1, 0xF, 6, 0, 0},
-          clear_hs_kwp_dme[] = {0x12, 2, 0x31, 3, 0, 0, 0, 0},
-          clear_fs_kwp_svt[] = {0xE, 3, 0x14, 0xFF, 0xFF, 0, 0, 0},
-          clear_is_kwp_svt[] = {0xE, 3, 0x31, 6, 0, 0, 0, 0};
-  clear_fs_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_nbt);
-  clear_is_uds_nbt_buf = make_msg_buf(0x6F1, 8, clear_is_uds_nbt);
-  clear_fs_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_zbe);
-  clear_is_uds_zbe_buf = make_msg_buf(0x6F1, 8, clear_is_uds_zbe);
-  clear_fs_uds_tbx_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_tbx);
-  clear_is_uds_tbx_buf = make_msg_buf(0x6F1, 8, clear_is_uds_tbx);
-  clear_fs_uds_vsw_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_vsw);
-  clear_is_uds_vsw_buf = make_msg_buf(0x6F1, 8, clear_is_uds_vsw);
-  clear_fs_uds_ampt_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_ampt);
-  clear_is_uds_ampt_buf = make_msg_buf(0x6F1, 8, clear_is_uds_ampt);
-  clear_fs_uds_vm_buf = make_msg_buf(0x6F1, 8, clear_fs_uds_vm);
-  clear_is_uds_vm_buf = make_msg_buf(0x6F1, 8, clear_is_uds_vm);
+  uint8_t clear_hs_kwp_dme[] = {0x12, 2, 0x31, 3, 0, 0, 0, 0};
   clear_hs_kwp_dme_buf = make_msg_buf(0x6F1, 8, clear_hs_kwp_dme);
-  clear_fs_kwp_svt_buf = make_msg_buf(0x6F1, 8, clear_fs_kwp_svt);
-  clear_is_kwp_svt_buf = make_msg_buf(0x6F1, 8, clear_is_kwp_svt);
 
   uint8_t dme_boost_request_a[] = {0x12, 3, 0x30, 0x19, 1, 0, 0, 0},
           dme_boost_request_b[] = {0x12, 0x30, 0, 0, 0, 0, 0, 0},
@@ -196,8 +168,8 @@ void cache_can_message_buffers(void) {                                          
   faceplate_volume_decrease_buf = make_msg_buf(0xF1, 2, faceplate_volume_decrease);
   faceplate_volume_increase_buf = make_msg_buf(0xF1, 2, faceplate_volume_increase);
   
-  uint8_t edc_button_press[] = {0, 5, 0x30, 1, 7, 0x1A, 0, 0};
-  edc_button_press_buf = make_msg_buf(0x6F1, 8, edc_button_press);
+  // uint8_t edc_button_press[] = {0, 5, 0x30, 1, 7, 0x1A, 0, 0};
+  // edc_button_press_buf = make_msg_buf(0x6F1, 8, edc_button_press);
 
   uint8_t ftm_indicator_flash[] = {0x40, 0x50, 1, 0x69, 0xFF, 0xFF, 0xFF, 0xFF},
           ftm_indicator_off[] = {0x40, 0x50, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -466,11 +438,14 @@ void cache_can_message_buffers(void) {                                          
   power_down_cmd_b_buf = make_msg_buf(0x6F1, 8, power_down_cmd_b);
   power_down_cmd_c_buf = make_msg_buf(0x6F1, 8, power_down_cmd_c);
 
-  uint8_t f_hu_nbt_reboot[] = {0x63, 2, 0x11, 1, 0, 0, 0, 0};
+  uint8_t f_hu_nbt_reboot[] = {0x63, 2, 0x11, 1, 0, 0, 0, 0},
+          jbe_reboot[] = {0, 2, 0x11, 1, 0, 0, 0, 0},
+          ihka_5v_on[] = {0x78, 4, 0x30, 8, 7, 1},
+          ihka_5v_off[] = {0x78, 4, 0x30, 8, 7, 0};
   f_hu_nbt_reboot_buf = make_msg_buf(0x6F1, 8, f_hu_nbt_reboot);
-
-  uint8_t jbe_reboot[] = {0, 2, 0x11, 1, 0, 0, 0, 0};
   jbe_reboot_buf = make_msg_buf(0x6F1, 8, jbe_reboot);
+  ihka_5v_on_buf = make_msg_buf(0x6F1, 6, ihka_5v_on);
+  ihka_5v_off_buf = make_msg_buf(0x6F1, 6, ihka_5v_off);
 
   uint8_t svt70_zero_pwm[] = {0xE, 6, 0x2E, 0xF0, 0, 0, 0x64, 0x55},
           svt70_pwm_release_control[] = {0xE, 6, 0x2E, 0xF0, 0, 0, 0, 0};

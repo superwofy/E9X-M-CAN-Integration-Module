@@ -120,88 +120,55 @@ void serial_debug_interpreter(void) {
         if (diag_transmit) {
           serial_log("  Serial: Clearing error and shadow memories - please wait.", 0);
           unsigned long time_now = millis();
-          uint8_t clear_fs[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0};
+          uint8_t clear_fs_kwp[] = {0, 3, 0x14, 0xFF, 0xFF, 0, 0, 0};
+          uint8_t clear_fs_uds[] = {0, 4, 0x14, 0xFF, 0xFF, 0xFF, 0, 0};
           for (uint8_t i = 0; i < 0x8C; i++) {
-            #if F_NBTE
-              if (i == 0x63 || i == 0x67 || i == 0x35 || i == 0x48) {                                                               // NBT, ZBE, TBX, VSW.
-                continue;
-              }
-            #endif
-            #if SERVOTRONIC_SVT70
-              if (i == 0xE) {                                                                                                       // SVT error clear not forwarded over DCAN.
-                continue;
-              }
-            #endif
-            clear_fs[0] = i;
-            m = {make_msg_buf(0x6F1, 8, clear_fs), time_now};
+            clear_fs_kwp[0] = i;
+            m = {make_msg_buf(0x6F1, 8, clear_fs_kwp), time_now};
             serial_diag_dcan_txq.push(&m);
             time_now += 50;
+            #if F_NBTE                                                                                                              // This will handle any F-series modules on KCAN2 and MOST.
+              clear_fs_uds[0] = i;
+              m = {make_msg_buf(0x6F1, 8, clear_fs_uds), time_now};
+              serial_diag_kcan2_txq.push(&m);
+              time_now += 50;
+            #endif
           }
-          time_now += 50;
-          uint8_t clear_is[] = {0, 3, 0x31, 6, 0, 0, 0, 0};
+          uint8_t clear_is_kwp[] = {0, 3, 0x31, 6, 0, 0, 0, 0};
+          uint8_t clear_is_uds[] = {0, 4, 0x31, 1, 0xF, 6, 0, 0};
           for (uint8_t i = 0; i < 0x8C; i++) {
-            #if F_NBTE
-              if (i == 0x63 || i == 0x67 || i == 0x35 || i == 0x48) {
-                continue;
-              }
-            #endif
-            #if SERVOTRONIC_SVT70
-              if (i == 0xE) {
-                continue;
-              }
-            #endif
-            clear_is[0] = i;
-            m = {make_msg_buf(0x6F1, 8, clear_is), time_now};
+            clear_is_kwp[0] = i;
+            m = {make_msg_buf(0x6F1, 8, clear_is_kwp), time_now};
             serial_diag_dcan_txq.push(&m);
             time_now += 50;
+            #if F_NBTE
+              clear_is_uds[0] = i;
+              m = {make_msg_buf(0x6F1, 8, clear_is_uds), time_now};
+              serial_diag_kcan2_txq.push(&m);
+              time_now += 50;
+            #endif
           }
-          time_now += 50;
           m = {clear_hs_kwp_dme_buf, time_now};
           serial_diag_dcan_txq.push(&m);
+          time_now += 50;
           #if F_VSW01
+            clear_fs_uds[0] = 0x48;
+            m = {make_msg_buf(0x6F1, 8, clear_fs_uds), time_now};
+            serial_diag_kcan1_txq.push(&m);
             time_now += 50;
-            m = {clear_fs_uds_vsw_buf, time_now};
-            serial_diag_dcan_txq.push(&m);
+            clear_is_uds[0] = 0x48;
+            m = {make_msg_buf(0x6F1, 8, clear_is_uds), time_now};
+            serial_diag_kcan1_txq.push(&m);
             time_now += 50;
-            m = {clear_is_uds_vsw_buf, time_now};
-            serial_diag_dcan_txq.push(&m);
           #endif
-          #if SERVOTRONIC_SVT70
-            time_now += 50;
-            m = {clear_fs_kwp_svt_buf, time_now};
+          #if SERVOTRONIC_SVT70                                                                                                       // SVT error clear not forwarded over DCAN.
+            clear_fs_kwp[0] = 0xE;
+            m = {make_msg_buf(0x6F1, 8, clear_fs_kwp), time_now};
             serial_diag_ptcan_txq .push(&m);
             time_now += 50;
-            m = {clear_is_kwp_svt_buf, time_now};
+            clear_is_kwp[0] = 0xE;
+            m = {make_msg_buf(0x6F1, 8, clear_is_kwp), time_now};
             serial_diag_ptcan_txq.push(&m);
-          #endif
-          #if F_NBTE
-            time_now = millis();
-            m = {clear_fs_uds_nbt_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_is_uds_nbt_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_fs_uds_zbe_buf, time_now};                                                                                   // Send the clear command to KCAN2 in case there's a ZBE retrofitted there.
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_fs_uds_tbx_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_is_uds_tbx_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_fs_uds_ampt_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_is_uds_ampt_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_fs_uds_vm_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
-            time_now += 50;
-            m = {clear_is_uds_vm_buf, time_now};
-            serial_diag_kcan2_txq.push(&m);
           #endif
           clearing_dtcs = true;
         } else {
@@ -517,6 +484,7 @@ void serial_debug_interpreter(void) {
         m = {f_hu_nbt_reboot_buf, time_now};
         serial_diag_kcan2_txq.push(&m);
         serial_log("  Serial: Sending HU reboot job.", 0);
+        faceplate_reset();
       } else {
         obd_timeout_warning();
       }

@@ -487,7 +487,9 @@ void check_console_buttons(void) {
         if (dsc_off_button_debounce_timer >= dsc_debounce_time_ms) {
           if (dsc_program_status != 1 && !dsc_mode_change_disable) {                                                                // If the button is held after DSC OFF, no more messages are sent until release.
             serial_log("Console: DSC OFF requested.", 2);
-            send_dsc_mode(1);
+            if (!send_dsc_mode(1)) {
+              serial_log("Console: Failed to change DSC mode during stabilisation.", 2);
+            }
           }
           dsc_off_button_debounce_timer = 0;
         }

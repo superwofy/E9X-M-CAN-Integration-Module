@@ -1,0 +1,10 @@
+JOB: steuern_5v_ausgang
+ARGS: ein
+
+78 04 30 08 07 01
+
+
+JOB: steuern_5v_ausgang
+ARGS: aus
+
+78 04 30 08 07 00
