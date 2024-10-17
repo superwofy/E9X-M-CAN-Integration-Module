@@ -221,7 +221,7 @@ void print_current_state(Stream &status_serial) {
           " Coolant temperature: %d °C, Oil temperature %d °C\r\n"
           " Indicated speed: %.1f %s, Real speed: %.1f KPH",
           vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF",
-          engine_running ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
+          engine_running == 1 ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
           engine_coolant_temperature - 48, engine_oil_temperature - 48,
           indicated_speed, speed_mph ? "MPH" : "KPH", real_speed);
   status_serial.println(serial_debug_string);
@@ -453,7 +453,7 @@ void print_current_state(Stream &status_serial) {
   if (loop_calc > max_loop_timer) {
     max_loop_timer = loop_calc;
   }
-  if (max_loop_timer > 1000) {
+  if (max_loop_timer >= 1000) {
     sprintf(serial_debug_string, " Max loop execution time: %.2f ms", max_loop_timer / 1000.0);
   } else {
     sprintf(serial_debug_string, " Max loop execution time: %ld μs", max_loop_timer);
@@ -500,7 +500,6 @@ void reset_ignition_variables(void) {                                           
   if (mdrive_status) {
     toggle_mdrive_message_active();
   }
-  execute_engine_off_actions();
   RPM = 0;
   ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;

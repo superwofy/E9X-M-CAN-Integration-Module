@@ -42,32 +42,34 @@ uint8_t send_dsc_mode(uint8_t mode) {
 
 
 void evaluate_dsc_status(void) {
-  // 0 - DSC ON
-  // 1 - DSC OFF
-  // 2 - DSC FAULT
-  // 3 - reserved
-  // 4 - DTC / MDM
-  // 5 - ABS FAULT
-  // 6 - UNDER VOLTAGE
-  // 7 - SIGNAL INVALID
-  uint8_t new_mode = ((k_msg.buf[1] >> 2) & 7);                                                                                     // 3-bit ST_DSC.
+  if (ignition) {
+    // 0 - DSC ON
+    // 1 - DSC OFF
+    // 2 - DSC FAULT
+    // 3 - reserved
+    // 4 - DTC / MDM
+    // 5 - ABS FAULT
+    // 6 - UNDER VOLTAGE
+    // 7 - SIGNAL INVALID
+    uint8_t new_mode = ((k_msg.buf[1] >> 2) & 7);                                                                                   // 3-bit ST_DSC.
 
-  if (new_mode != dsc_program_status) {
-    dsc_program_status = new_mode;
-    sprintf(serial_debug_string, "New DSC mode: %d.", new_mode);
-    serial_log(serial_debug_string, 2);
+    if (new_mode != dsc_program_status) {
+      dsc_program_status = new_mode;
+      sprintf(serial_debug_string, "New DSC mode: %d.", new_mode);
+      serial_log(serial_debug_string, 2);
+    }
+
+    // 0 - no regulation
+    // 1 - abs regulation
+    // 2 - ASR regulation
+    // 4 - DSC/TCS regulation
+    // 8 - hba regulation
+    // 0x10 - msr regulation
+    // 0x20 - EBV_REGULATION
+    // 0x40 - DYNO_ACTIVE
+    // 0xFF - signal invalid
+    dsc_intervention = k_msg.buf[0];
   }
-
-  // 0 - no regulation
-  // 1 - abs regulation
-  // 2 - ASR regulation
-  // 4 - DSC/TCS regulation
-  // 8 - hba regulation
-  // 0x10 - msr regulation
-  // 0x20 - EBV_REGULATION
-  // 0x40 - DYNO_ACTIVE
-  // 0xFF - signal invalid
-  dsc_intervention = k_msg.buf[0];
 }
 
 
@@ -157,23 +159,25 @@ void evaluate_vehicle_moving(void) {
 
 
 void evaluate_indicated_speed(void) {
-  indicated_speed = ((k_msg.buf[1] & 0xF) << 8 | k_msg.buf[0]) * 0.1;                                                               // KM/h
+  if (ignition) {
+    indicated_speed = ((k_msg.buf[1] & 0xF) << 8 | k_msg.buf[0]) * 0.1;                                                             // KM/h
 
-  if (speed_mph) {
-    indicated_speed = indicated_speed / 1.609;
-  }
-
-  #if HDC
-    if (hdc_active) {
-      if (indicated_speed > hdc_deactivate_speed) {
-        serial_log("HDC deactivated due to high vehicle speed.", 2);
-        hdc_active = false;
-        kcan_write_msg(hdc_cc_deactivated_on_buf);
-        m = {hdc_cc_deactivated_off_buf, millis() + 2000};
-        ihk_extra_buttons_cc_txq.push(&m);
-      }
+    if (speed_mph) {
+      indicated_speed = indicated_speed / 1.609;
     }
-  #endif
+
+    #if HDC
+      if (hdc_active) {
+        if (indicated_speed > hdc_deactivate_speed) {
+          serial_log("HDC deactivated due to high vehicle speed.", 2);
+          hdc_active = false;
+          kcan_write_msg(hdc_cc_deactivated_on_buf);
+          m = {hdc_cc_deactivated_off_buf, millis() + 2000};
+          ihk_extra_buttons_cc_txq.push(&m);
+        }
+      }
+    #endif
+  }
 }
 
 
@@ -563,33 +567,35 @@ void evaluate_hdc_button(void) {
 
 
 void evaluate_cruise_control_status(void) {
-  if (k_msg.buf[5] == 0x58 || 
-      (k_msg.buf[5] == 0x5A || k_msg.buf[5] == 0x5B || k_msg.buf[5] == 0x5C || k_msg.buf[5] == 0x5D)) {                             // Status is different based on ACC distance setting.
-    if (!cruise_control_status) {
-      cruise_control_status = true;
-      if (hdc_requested) {
-        kcan_write_msg(hdc_cc_activated_on_buf);
-        hdc_active = true;
-        hdc_requested = false;
-        serial_log("HDC cruise control activated.", 2);
-      } else {
-        serial_log("Normal cruise control activated.", 2);
-      }
-    }
-  } else {
-    if (cruise_control_status) {
-      cruise_control_status = false;
-      if (hdc_active) {
-        serial_log("HDC cruise control deactivated by user.", 2);
-        kcan_write_msg(hdc_cc_activated_off_buf);
-        hdc_active = hdc_requested = false;
-      } else {
-        serial_log("Normal cruise control deactivated.", 2);
+  if (ignition) {
+    if (k_msg.buf[5] == 0x58 || 
+        (k_msg.buf[5] == 0x5A || k_msg.buf[5] == 0x5B || k_msg.buf[5] == 0x5C || k_msg.buf[5] == 0x5D)) {                           // Status is different based on ACC distance setting.
+      if (!cruise_control_status) {
+        cruise_control_status = true;
+        if (hdc_requested) {
+          kcan_write_msg(hdc_cc_activated_on_buf);
+          hdc_active = true;
+          hdc_requested = false;
+          serial_log("HDC cruise control activated.", 2);
+        } else {
+          serial_log("Normal cruise control activated.", 2);
+        }
       }
     } else {
-      if (hdc_requested) {
-        hdc_active = hdc_requested = cruise_control_status = false;
-        serial_log("Cruise control did not activate when HDC was requested.", 2);
+      if (cruise_control_status) {
+        cruise_control_status = false;
+        if (hdc_active) {
+          serial_log("HDC cruise control deactivated by user.", 2);
+          kcan_write_msg(hdc_cc_activated_off_buf);
+          hdc_active = hdc_requested = false;
+        } else {
+          serial_log("Normal cruise control deactivated.", 2);
+        }
+      } else {
+        if (hdc_requested) {
+          hdc_active = hdc_requested = cruise_control_status = false;
+          serial_log("Cruise control did not activate when HDC was requested.", 2);
+        }
       }
     }
   }
@@ -645,7 +651,7 @@ void send_servotronic_message(void) {
 
 
 void send_servotronic_sport_plus(void) {
-  if (engine_running && diag_transmit) {
+  if (engine_running == 1 && diag_transmit) {
     // Safety checks
     if (steering_angle >= -45.0 && steering_angle <= 45.0) {                                                                          // Should not engage/disengage when the steering is loaded up.
       if (mdrive_status && mdrive_svt[cas_key_number] == 0xF2                                                                         // MDrive + SVT Sport+

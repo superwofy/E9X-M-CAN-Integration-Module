@@ -1,0 +1,6 @@
+JOB: STEUERN_SIGNAL_HK_REVERSIEREN
+
+ID: 6F1 Buffer: 41 03 31 FD 00
+
+
+6 beeps, 1-2, 1-2, 1-2 i.e 3x unlock double beeps

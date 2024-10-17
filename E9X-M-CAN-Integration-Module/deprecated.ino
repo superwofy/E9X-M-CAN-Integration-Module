@@ -2,26 +2,28 @@
 
 
 void update_mdrive_message_settings_cic(void) {
-  if (k_msg.buf[4] == 0xEC || k_msg.buf[4] == 0xF4 || k_msg.buf[4] == 0xE4) {                                                       // Reset requested.
-    reset_mdrive_settings();
-  } else if ((k_msg.buf[4] == 0xE0 || k_msg.buf[4] == 0xE1)) {                                                                      // Ignore E0/E1 (Invalid).
-  } else {
-    //Decode settings
-    mdrive_dsc[cas_key_number] = k_msg.buf[0];                                                                                      // 3 unchanged, 7 OFF, 0x13 MDM, 0xB ON.
-    mdrive_power[cas_key_number] = k_msg.buf[1];                                                                                    // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
-    mdrive_edc[cas_key_number] = k_msg.buf[2];                                                                                      // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
-    mdrive_svt[cas_key_number] = k_msg.buf[4];                                                                                      // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
+  if (ignition) {
+    if (k_msg.buf[4] == 0xEC || k_msg.buf[4] == 0xF4 || k_msg.buf[4] == 0xE4) {                                                     // Reset requested.
+      reset_mdrive_settings();
+    } else if ((k_msg.buf[4] == 0xE0 || k_msg.buf[4] == 0xE1)) {                                                                    // Ignore E0/E1 (Invalid).
+    } else {
+      //Decode settings
+      mdrive_dsc[cas_key_number] = k_msg.buf[0];                                                                                    // 3 unchanged, 7 OFF, 0x13 MDM, 0xB ON.
+      mdrive_power[cas_key_number] = k_msg.buf[1];                                                                                  // 0 unchanged, 0x10 normal, 0x20 sport, 0x30 sport+.
+      mdrive_edc[cas_key_number] = k_msg.buf[2];                                                                                    // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
+      mdrive_svt[cas_key_number] = k_msg.buf[4];                                                                                    // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
 
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
-          mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
-      serial_log(serial_debug_string, 3);
-    #endif
-    
-    update_mdrive_can_message();
-    execute_mdrive_settings_changed_actions();
+      #if DEBUG_MODE
+        sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
+            mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
+        serial_log(serial_debug_string, 3);
+      #endif
+      
+      update_mdrive_can_message();
+      execute_mdrive_settings_changed_actions();
+    }
+    send_mdrive_message();
   }
-  send_mdrive_message();
 }
 
 
@@ -125,4 +127,23 @@ void send_initial_volume_cic(void) {
       initial_volume_set = true;
     }
   }
+}
+
+
+void send_dme_power_ckm(void) {
+  if (!frm_consumer_shutdown) {
+    ptcan_write_msg(make_msg_buf(0x3A9, 2, dme_ckm[cas_key_number]));                                                               // This is sent by the DME to populate the M Key iDrive section
+    serial_log("Sent DME POWER CKM.", 3);
+  }
+}
+
+
+void update_dme_power_ckm(void) {
+  dme_ckm[cas_key_number][0] = k_msg.buf[0];
+  #if DEBUG_MODE
+    sprintf(serial_debug_string, "Received new POWER CKM setting: %s for key number %d", 
+            k_msg.buf[0] == 0xF1 ? "Normal" : "Sport", cas_key_number);
+    serial_log(serial_debug_string, 3);
+  #endif
+  send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }

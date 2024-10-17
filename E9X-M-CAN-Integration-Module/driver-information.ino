@@ -207,7 +207,7 @@ void deactivate_lc_display(void) {
 }
 
 
-void send_svt_kcan_cc_notification(void) {
+void send_svt_kcan_cc_notification(void) {                                                                                          // Since the JBE doesn't forward Servotronic errors from SVT70, we have to do it.
   if (pt_msg.buf[1] == 0x49 && pt_msg.buf[2] == 0) {                                                                                // Change from CC-ID 73 (EPS Inoperative) to CC-ID 70 (Servotronic).
     pt_msg.buf[1] = 0x46;
   }
@@ -268,44 +268,45 @@ void evaluate_reverse_beep(void) {
 
 
 void evaluate_indicate_ftm_status(void) {
-  if (ignition) {
-    if (k_msg.buf[0] == 3 && !ftm_indicator_status) {
-      kcan_write_msg(ftm_indicator_flash_buf);
-      ftm_indicator_status = true;
-      serial_log("Activated FTM indicator.", 2);
-    } else if (k_msg.buf[0] == 0 && ftm_indicator_status) {
-      kcan_write_msg(ftm_indicator_off_buf);
-      ftm_indicator_status = false;
-      serial_log("Deactivated FTM indicator.", 2);
+  #if FTM_INDICATOR
+    if (ignition) {
+      if (k_msg.buf[0] == 3 && !ftm_indicator_status) {
+        kcan_write_msg(ftm_indicator_flash_buf);
+        ftm_indicator_status = true;
+        serial_log("Activated FTM indicator.", 2);
+      } else if (k_msg.buf[0] == 0 && ftm_indicator_status) {
+        kcan_write_msg(ftm_indicator_off_buf);
+        ftm_indicator_status = false;
+        serial_log("Deactivated FTM indicator.", 2);
+      }
     }
-  }
-}
+  #endif
 
+  #if F_NBTE
+    uint8_t f_ftm_status[] = {0, 0, 0, 0, 0};
+    f_ftm_status[1] = 0xF << 4 | f_ftm_status_alive_counter;
+    f_ftm_status_alive_counter == 0xE ? f_ftm_status_alive_counter = 0 
+                                      : f_ftm_status_alive_counter++;
 
-void send_f_evo_ftm_status(void) {
-  uint8_t f_ftm_status[] = {0, 0, 0, 0, 0};
-  f_ftm_status[1] = 0xF << 4 | f_ftm_status_alive_counter;
-  f_ftm_status_alive_counter == 0xE ? f_ftm_status_alive_counter = 0 
-                                    : f_ftm_status_alive_counter++;
+    if (k_msg.buf[0] == 0) {
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
+    } else if (k_msg.buf[0] == 1) {
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;
+    } else if (k_msg.buf[0] == 3) {
+      f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
+    } else {
+      f_ftm_status[2] = 0xA1;
+      f_ftm_status[3] = 0x30;
+    }
 
-  if (k_msg.buf[0] == 0) {
-    f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xA0;
-  } else if (k_msg.buf[0] == 1) {
-    f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0x60;
-  } else if (k_msg.buf[0] == 3) {
-    f_ftm_status[2] = f_ftm_status[3] = f_ftm_status[4] = 0xE8;
-  } else {
-    f_ftm_status[2] = 0xA1;
-    f_ftm_status[3] = 0x30;
-  }
-
-  f_ftm_status_crc.restart();
-  for (uint8_t i = 1; i < 5; i++) {
-    f_ftm_status_crc.add(f_ftm_status[i]);
-  }
-  f_ftm_status[0] = f_ftm_status_crc.calc();
-  CAN_message_t f_ftm_status_buf = make_msg_buf(0x369, 5, f_ftm_status);
-  kcan2_write_msg(f_ftm_status_buf);
+    f_ftm_status_crc.restart();
+    for (uint8_t i = 1; i < 5; i++) {
+      f_ftm_status_crc.add(f_ftm_status[i]);
+    }
+    f_ftm_status[0] = f_ftm_status_crc.calc();
+    CAN_message_t f_ftm_status_buf = make_msg_buf(0x369, 5, f_ftm_status);
+    kcan2_write_msg(f_ftm_status_buf);
+  #endif
 }
 
 
@@ -313,7 +314,7 @@ void evaluate_msa_button(void) {
   if (k_msg.buf[0] == 0xF5 || k_msg.buf[0] == 0xF1) {                                                                               // Button pressed.
     if (!msa_button_pressed) {
       #if FAKE_MSA
-        if (engine_running) {
+        if (engine_running == 1) {
           kcan_write_msg(msa_deactivated_cc_on_buf);
           serial_log("Sent MSA OFF CC.", 2);
           m = {msa_deactivated_cc_off_buf, millis() + 3000};
@@ -360,27 +361,29 @@ void evaluate_pdc_bus_status(void) {
 
 
 void evaluate_f_pdc_function_request(void) {
-  if (k_msg.buf[0] >> 4 == 1) {                                                                                                     // Navigated away from reversing screen.
-    kcan_write_msg(camera_inactive_buf);
-    kcan2_write_msg(camera_inactive_buf);
-    #if F_VSW01 && F_VSW01_MANUAL
-      vsw_switch_input(4);
-    #endif
-    f_pdc_request = k_msg.buf[0];
-  } else {
-    if (f_pdc_request != k_msg.buf[1]) {                                                                                            // PDC only, camera OFF.
-      f_pdc_request = k_msg.buf[1];
-      if (f_pdc_request == 1) {
-        kcan_write_msg(camera_off_buf);
-        kcan2_write_msg(camera_off_buf);
-        #if F_VSW01 && F_VSW01_MANUAL
-          vsw_switch_input(4);
-        #endif
-      } else if (f_pdc_request == 5) {                                                                                              // Camera ON.
-        kcan_write_msg(camera_on_buf);
-        #if F_VSW01 && F_VSW01_MANUAL
-          vsw_switch_input(1);
-        #endif
+  if (ignition) {
+    if (k_msg.buf[0] >> 4 == 1) {                                                                                                   // Navigated away from reversing screen.
+      kcan_write_msg(camera_inactive_buf);
+      kcan2_write_msg(camera_inactive_buf);
+      #if F_VSW01 && F_VSW01_MANUAL
+        vsw_switch_input(4);
+      #endif
+      f_pdc_request = k_msg.buf[0];
+    } else {
+      if (f_pdc_request != k_msg.buf[1]) {                                                                                          // PDC only, camera OFF.
+        f_pdc_request = k_msg.buf[1];
+        if (f_pdc_request == 1) {
+          kcan_write_msg(camera_off_buf);
+          kcan2_write_msg(camera_off_buf);
+          #if F_VSW01 && F_VSW01_MANUAL
+            vsw_switch_input(4);
+          #endif
+        } else if (f_pdc_request == 5) {                                                                                            // Camera ON.
+          kcan_write_msg(camera_on_buf);
+          #if F_VSW01 && F_VSW01_MANUAL
+            vsw_switch_input(1);
+          #endif
+        }
       }
     }
   }
@@ -529,65 +532,63 @@ void send_f_pdc_function_status(bool disable) {
 
 
 void send_nbt_sport_displays_data(bool startup_animation) {
-  #if F_NBTE
-    if (terminal_r) {
-      uint8_t nbt_sport_data[] = {0, 0, 0, 0xFF};
-      float max_power = 0, max_torque = 0, power_factor = 1, torque_factor = 1;                                                     // kW and Nm
-      if (power_unit[cas_key_number] == 1) {
-        nbt_sport_data[1] = MAX_POWER_SCALE_KW << 4;
-        max_power = (1 + MAX_POWER_SCALE_KW) * 80;
-      } else if (power_unit[cas_key_number] == 2) {
-        nbt_sport_data[1] = MAX_POWER_SCALE_HP << 4;
-        max_power = (1 + MAX_POWER_SCALE_HP) * 80;
-        power_factor = 1.341;
-      }
-      if (torque_unit[cas_key_number] == 1) {
-        nbt_sport_data[1] |= MAX_TORQUE_SCALE_NM;
-        max_torque = (1 + MAX_TORQUE_SCALE_NM) * 80;
-      } else if (torque_unit[cas_key_number] == 2) {
-        nbt_sport_data[1] |= MAX_TORQUE_SCALE_LBFT;
-        max_torque = (1 + MAX_TORQUE_SCALE_LBFT) * 80;
-        torque_factor = 0.7376;
-      } else if (torque_unit[cas_key_number] == 3) {
-        nbt_sport_data[1] |= MAX_TORQUE_SCALE_KGM;
-        max_torque = (1 + MAX_TORQUE_SCALE_KGM) * 80;
-        torque_factor = 0.1;
-      }
+  if (terminal_r) {
+    uint8_t nbt_sport_data[] = {0, 0, 0, 0xFF};
+    float max_power = 0, max_torque = 0, power_factor = 1, torque_factor = 1;                                                       // kW and Nm
+    if (power_unit[cas_key_number] == 1) {
+      nbt_sport_data[1] = MAX_POWER_SCALE_KW << 4;
+      max_power = (1 + MAX_POWER_SCALE_KW) * 80;
+    } else if (power_unit[cas_key_number] == 2) {
+      nbt_sport_data[1] = MAX_POWER_SCALE_HP << 4;
+      max_power = (1 + MAX_POWER_SCALE_HP) * 80;
+      power_factor = 1.341;
+    }
+    if (torque_unit[cas_key_number] == 1) {
+      nbt_sport_data[1] |= MAX_TORQUE_SCALE_NM;
+      max_torque = (1 + MAX_TORQUE_SCALE_NM) * 80;
+    } else if (torque_unit[cas_key_number] == 2) {
+      nbt_sport_data[1] |= MAX_TORQUE_SCALE_LBFT;
+      max_torque = (1 + MAX_TORQUE_SCALE_LBFT) * 80;
+      torque_factor = 0.7376;
+    } else if (torque_unit[cas_key_number] == 3) {
+      nbt_sport_data[1] |= MAX_TORQUE_SCALE_KGM;
+      max_torque = (1 + MAX_TORQUE_SCALE_KGM) * 80;
+      torque_factor = 0.1;
+    }
 
-      if (startup_animation) {
-        nbt_sport_data[0] = nbt_sport_data[2] = 0x64;                                                                               // Set to 100% on startup to match needle sweep.
-        ignore_sports_data_counter = 10;
-      } else {
-        if (ignore_sports_data_counter == 0) {
-          if (engine_running) {
-            uint16_t raw_value = (k_msg.buf[2] << 4) | (k_msg.buf[1] >> 4);                                                         // 12-bit EXX torque (TORQ_AVL - torque actual-value at the clutch).
-            int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
-            engine_torque_nm = signed_value * 0.5;                                                                                  // Signed and scaled Nm value.
-            engine_torque = signed_value * 0.5 * torque_factor;
+    if (startup_animation) {
+      nbt_sport_data[0] = nbt_sport_data[2] = 0x64;                                                                                 // Set to 100% on startup to match needle sweep.
+      ignore_sports_data_counter = 10;
+    } else {
+      if (ignore_sports_data_counter == 0) {
+        if (engine_running == 1) {
+          uint16_t raw_value = (k_msg.buf[2] << 4) | (k_msg.buf[1] >> 4);                                                           // 12-bit EXX torque (TORQ_AVL - torque actual-value at the clutch).
+          int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
+          engine_torque_nm = signed_value * 0.5;                                                                                    // Signed and scaled Nm value.
+          engine_torque = signed_value * 0.5 * torque_factor;
 
-            if (engine_torque > max_torque) { engine_torque = max_torque; }                                                         // Ensure we don't exceed the scale.
-            if (engine_torque > 10) {                                                                                               // This value can be negative. When coasting? Add a minimum to prevent idle twitching.
-              uint8_t torque_percentage = round((engine_torque / max_torque) * 100);
-              nbt_sport_data[0] = torque_percentage;
+          if (engine_torque > max_torque) { engine_torque = max_torque; }                                                           // Ensure we don't exceed the scale.
+          if (engine_torque > 10) {                                                                                                 // This value can be negative. When coasting? Add a minimum to prevent idle twitching.
+            uint8_t torque_percentage = round((engine_torque / max_torque) * 100);
+            nbt_sport_data[0] = torque_percentage;
 
-              float calculated_power = ((engine_torque * (RPM / 4)) / 9548) * power_factor;
-              if (calculated_power > max_power) { calculated_power = max_power; }
-              if (calculated_power > 0) {
-                uint8_t power_percentage = round((calculated_power / max_power) * 100);
-                nbt_sport_data[2] = power_percentage;
-              }
+            float calculated_power = ((engine_torque * (RPM / 4)) / 9548) * power_factor;
+            if (calculated_power > max_power) { calculated_power = max_power; }
+            if (calculated_power > 0) {
+              uint8_t power_percentage = round((calculated_power / max_power) * 100);
+              nbt_sport_data[2] = power_percentage;
             }
           }
-        } else {
-          nbt_sport_data[0] = nbt_sport_data[2] = 0x64;
-          ignore_sports_data_counter--;
         }
+      } else {
+        nbt_sport_data[0] = nbt_sport_data[2] = 0x64;
+        ignore_sports_data_counter--;
       }
-
-      CAN_message_t nbt_sport_data_buf = make_msg_buf(0x253, 4, nbt_sport_data);
-      kcan2_write_msg(nbt_sport_data_buf);
     }
-  #endif
+
+    CAN_message_t nbt_sport_data_buf = make_msg_buf(0x253, 4, nbt_sport_data);
+    kcan2_write_msg(nbt_sport_data_buf);
+  }
 }
 
 
@@ -674,7 +675,7 @@ void process_dme_cc(void) {
 
 void send_custom_info_cc(void) {
   unsigned long custom_cc_interval = 500;
-  if (engine_running) {
+  if (engine_running == 1) {
     custom_cc_interval = 300;
   }
   if (custom_info_cc_timer >= custom_cc_interval) {
@@ -707,7 +708,7 @@ void send_custom_info_cc(void) {
         int coolant_temp = temperature_unit == 1 ? (engine_coolant_temperature - 48) 
                                                  : (int)round(((engine_coolant_temperature - 48) * 1.8) + 32);
 
-        if (engine_running) {
+        if (engine_running == 1) {
           if (mdrive_status) {
             // Create the boost animation string
             char boost_bar_string[] = "____________________";
@@ -831,7 +832,7 @@ void send_custom_info_cc(void) {
 
 void evaluate_trsvc_cc(void) {
   if (k_msg.buf[0] == 0x40) {
-    if ((k_msg.buf[3] & 0b11) == 1) {                                                                                                 // ST_CC_MESS_STD - Set.
+    if ((k_msg.buf[3] & 0b11) == 1) {                                                                                               // ST_CC_MESS_STD - Set.
       if (!trsvc_cc_gong) {
         play_cc_gong(1);
         trsvc_cc_gong = true;
