@@ -196,7 +196,7 @@ void serial_debug_interpreter(void) {
     }
     #if LAUNCH_CONTROL_INDICATOR
     else if (cmd == "lc_display_on"){
-      if (engine_running) {
+      if (engine_running == 1) {
         serial_log("  Serial: Launch Control Display activated.", 0);
         kcan_write_msg(lc_cc_on_buf);
       } else {
@@ -389,7 +389,7 @@ void serial_debug_interpreter(void) {
     else if (cmd == "test_trip_stall_alarm") {
       if (diag_transmit) {
         if (ignition) {
-          if (!engine_running) {
+          if (engine_running == 0) {
             Serial.print("  Serial: ");
             activate_immobilizer();
             Serial.print("  Serial: ");

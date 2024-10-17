@@ -167,10 +167,17 @@ extern "C" uint32_t set_arm_clock(uint32_t frequency);
 FlexCAN_T4<CAN1, RX_SIZE_1024, TX_SIZE_128> KCAN;
 FlexCAN_T4<CAN2, RX_SIZE_512, TX_SIZE_128> PTCAN;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_64> DCAN;
+
+void (*kcan_handlers[0x800])(void) = {NULL};
+uint8_t kcan_to_kcan2_forward_filter_list[0x800];                                                                                   // 1 - allowed, 0 - blocked.
+void (*ptcan_handlers[0x800])(void) = {NULL};
+void (*kcan2_handlers[0x800])(void) = {NULL};
+uint8_t kcan2_to_kcan_forward_filter_list[0x800];
+
 #if F_NBTE
   MCP_CAN KCAN2(SPI_CS_PIN);
-  #define FACEPLATE_UART Serial5
 #endif
+#define FACEPLATE_UART Serial5
 WDT_T4<WDT1> wdt;
 CRC16 teensy_eeprom_crc(0x1021, 0, 0, false, false);                                                                                // XMODEM
 
@@ -189,9 +196,10 @@ unsigned char k2rxBuf[8], k2len;
 elapsedMillis eeprom_update_timer = 0;
 delayed_can_tx_msg delayed_tx, m;
 bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = false, vehicle_moving = false,
-     terminal_50 = false, engine_running = false, clutch_pressed = false, frm_consumer_shutdown = false, gong_active = false,
+     terminal_50 = false, clutch_pressed = false, frm_consumer_shutdown = false, gong_active = false,
      clearing_dtcs = false, donor_vin_initialized = false, receiving_donor_vin = false, requested_donor_vin = false,
      low_battery_cc_active = false;
+uint8_t engine_running = 0;                                                                                                         // 3 - signal invalid, 2 - engine starting, 1 - engine running, 0 - engine stopped.
 uint16_t terminal30g_followup_time = 0;
 CAN_message_t nbt_vin_request_buf, dme_request_consumers_off_buf;
 CAN_message_t faceplate_a1_released_buf, faceplate_a2_released_buf, faceplate_a3_released_buf, faceplate_f1_released_buf,
@@ -201,7 +209,7 @@ CAN_message_t faceplate_button1_hover_buf, faceplate_button1_press_buf, faceplat
               faceplate_button3_hover_buf, faceplate_button3_press_buf, faceplate_button4_hover_buf, faceplate_button4_press_buf,
               faceplate_button5_hover_buf, faceplate_button5_press_buf, faceplate_button6_hover_buf, faceplate_button6_press_buf,
               faceplate_button7_hover_buf, faceplate_button7_press_buf, faceplate_button8_hover_buf, faceplate_button8_press_buf;
-elapsedMillis nbt_vin_request_timer = 3000, engine_runtime = 0, vehicle_awake_timer = 0, vehicle_awakened_timer = 0;
+elapsedMillis nbt_vin_request_timer = 3000, engine_run_timer = 0, vehicle_awake_timer = 0, vehicle_awakened_timer = 0;
 uint8_t DONOR_VIN[7] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 float battery_voltage = 0;
 uint16_t faceplate_volume = 0;
@@ -353,7 +361,8 @@ CAN_message_t dr_seat_move_back_buf;
 uint8_t last_lock_status_can = 0;
 bool unfold_with_door_open = false;
 CAN_message_t flash_hazards_single_buf, flash_hazards_double_buf, flash_hazards_single_long_buf,
-              flash_hazards_angel_eyes_buf, flash_hazards_angel_eyes_xenons_buf, stop_flashing_lights_buf;
+              flash_hazards_angel_eyes_buf, flash_hazards_angel_eyes_xenons_buf, stop_flashing_lights_buf,
+              alarm_beep_6x_buf;
 uint8_t car_locked_indicator_counter = 0;
 cppQueue hazards_flash_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t visual_signal_ckm[4] = {0, 0, 0, 0};
@@ -402,7 +411,7 @@ uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xF
         f_ftm_status_alive_counter = 0, f_standstill_status_alive_counter = 0, f_mdrive_alive_counter = 0,
         f_xview_pitch_alive_counter = 0, f_road_incline_alive_counter = 0, f_steering_angle_effective_alive_counter = 0,
         f_throttle_pedal_alive_counter = 0;
-uint8_t f_mdrive_settings[5] = {0};
+uint8_t f_mdrive_settings[] = {0, 0, 0, 0, 0};
 uint32_t f_distance_alive_counter = 0x2000;
 uint8_t f_lights_ckm_request = 0;
 CAN_message_t f_lights_ckm_delayed_msg;
@@ -482,7 +491,7 @@ CAN_message_t msa_fake_status_buf, mute_asd_buf, demute_asd_buf, radon_asd_buf,
               ihka_5v_on_buf, ihka_5v_off_buf;
 extern float tempmonGetTemp(void);
 char serial_debug_string[512];
-char boot_debug_string[8192];
+char boot_debug_string[16384];
 unsigned long max_loop_timer = 0, loop_timer = 0;
 uint32_t kcan_error_counter = 0, kcan2_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;

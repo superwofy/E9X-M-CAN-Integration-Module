@@ -43,7 +43,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
       f_terminal_status[1] = 0xB << 4;
       f_terminal_status[2] |= 0xD;
     } else if (ignition) {
-      if (vehicle_moving && engine_running) {
+      if (vehicle_moving && engine_running == 1) {
         f_terminal_status[1] = 8 << 4;
       } else if (engine_idling) {
         f_terminal_status[1] = 7 << 4;                                                                                              // VSM_STM_STATE_ENG_IDLE
@@ -137,7 +137,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
   if (terminal_50 && !terminal_50_) {
     f_terminal_status[1] = 9 << 4;                                                                                                  // Impending start of engine.
     f_terminal_status[2] |= 0xC;
-    serial_log("Terminal 50 ON - engine starting.", 2);
+    serial_log("Terminal 50 ON", 2);
   } else if (!terminal_50 && terminal_50) {
     f_terminal_status[2] |= 0xC;
     serial_log("Terminal 50 OFF.", 2);
@@ -306,7 +306,7 @@ void evaluate_passenger_seat_status(void) {
         //This will be ignored if already ON and cycling ignition. Press message will be ignored by IHK anyway.
         if (!passenger_sent_seat_heating_request) {
           if (bitRead(passenger_seat_status, 0) && bitRead(passenger_seat_status, 3)) {                                             // Occupied and belted.
-            if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {                           // Execute heating requests here so we don't have to wait 15s for the next 0x22A.
+            if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {                          // Execute heating requests here so we don't have to wait 15s for the next 0x22A.
               send_seat_heating_request_pas(false);
             } else if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_MEDIUM) {
               send_seat_heating_request_pas(true);
@@ -357,7 +357,7 @@ void evaluate_steering_heating_request(void) {
   // The temperature may also have dropped below the threshold while the driver already enabled the heater.
   // There is no way to track the steering heater via CAN.
 
-  if (engine_runtime >= AUTO_HEATING_START_DELAY && engine_runtime <= 10000) {                                                               
+  if (engine_run_timer >= AUTO_HEATING_START_DELAY && engine_run_timer <= 10000) {                                                               
     if (!sent_steering_heating_request) {
       if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {
         digitalWrite(STEERING_HEATER_SWITCH_PIN, HIGH);
@@ -563,71 +563,75 @@ void evaluate_comfort_exit(void) {
 
 
 void store_rvc_settings_idrive(void) {
-  if (k_msg.buf[0] == 0xE6) {                                                                                                       // Camera OFF.
-    rvc_settings[0] = 0xE5;                                                                                                         // Store Camera ON, Tow view OFF instead.
-  } else {
-    rvc_settings[0] = k_msg.buf[0];
-  }
+  if (ignition) {
+    if (k_msg.buf[0] == 0xE6) {                                                                                                     // Camera OFF.
+      rvc_settings[0] = 0xE5;                                                                                                       // Store Camera ON, Tow view OFF instead.
+    } else {
+      rvc_settings[0] = k_msg.buf[0];
+    }
 
-  for (uint8_t i = 1; i < 4; i++) {
-    rvc_settings[i] = k_msg.buf[i];
-  }
+    for (uint8_t i = 1; i < 4; i++) {
+      rvc_settings[i] = k_msg.buf[i];
+    }
 
-  if (!rvc_tow_view_by_driver && !rvc_tow_view_by_module && bitRead(k_msg.buf[0], 3) && pdc_bus_status == 0xA5) {                   // If the driver changed this setting, do not interfere during this cycle.
-    rvc_tow_view_by_driver = true;
-    serial_log("Driver changed RVC tow view manually.", 3);
+    if (!rvc_tow_view_by_driver && !rvc_tow_view_by_module && bitRead(k_msg.buf[0], 3) && pdc_bus_status == 0xA5) {                 // If the driver changed this setting, do not interfere during this cycle.
+      rvc_tow_view_by_driver = true;
+      serial_log("Driver changed RVC tow view manually.", 3);
+    }
   }
 }
 
 
 void store_rvc_settings_trsvc(void) {
-  rvc_settings[1] = k_msg.buf[1];                                                                                                   // These values are the same as sent by iDrive or TRSVC.
-  rvc_settings[2] = k_msg.buf[2];
-  if (k_msg.buf[3] == 1) {                                                                                                          // Parking lines OFF, Obstacle marking OFF, Tow view OFF.
-    rvc_settings[3] = 0xE0;
-  } else if (k_msg.buf[3] == 9) {                                                                                                   // Parking lines OFF, Obstacle marking ON, Tow view OFF.
-    rvc_settings[3] = 0xE1;
-  } else if (k_msg.buf[3] == 0x39) {                                                                                                // Parking lines ON, Obstacle marking ON, Tow view OFF.
-    rvc_settings[3] = 0xE7;
+  if (ignition) {
+    rvc_settings[1] = k_msg.buf[1];                                                                                                 // These values are the same as sent by iDrive or TRSVC.
+    rvc_settings[2] = k_msg.buf[2];
+    if (k_msg.buf[3] == 1) {                                                                                                        // Parking lines OFF, Obstacle marking OFF, Tow view OFF.
+      rvc_settings[3] = 0xE0;
+    } else if (k_msg.buf[3] == 9) {                                                                                                 // Parking lines OFF, Obstacle marking ON, Tow view OFF.
+      rvc_settings[3] = 0xE1;
+    } else if (k_msg.buf[3] == 0x39) {                                                                                              // Parking lines ON, Obstacle marking ON, Tow view OFF.
+      rvc_settings[3] = 0xE7;
+    }
   }
 }
 
 
 void evaluate_indicator_stalk(void) {
-  if (ignition) {
-    if (k_msg.buf[0] == 1 || k_msg.buf[0] == 4) {
-      szl_full_indicator = false;
-    } else if (k_msg.buf[0] == 2 || k_msg.buf[0] == 8) {
-      if (!szl_full_indicator) {
-        szl_full_indicator = true;
-        serial_log("Indicator stalk pushed fully.", 3);
-        undim_mirrors_with_indicators();
+  #if MIRROR_UNDIM
+    if (ignition) {
+      if (k_msg.buf[0] == 1 || k_msg.buf[0] == 4) {
+        szl_full_indicator = false;
+      } else if (k_msg.buf[0] == 2 || k_msg.buf[0] == 8) {
+        if (!szl_full_indicator) {
+          szl_full_indicator = true;
+          serial_log("Indicator stalk pushed fully.", 3);
+          undim_mirrors_with_indicators();
+        }
       }
     }
-  }
-}
-
-
-void evaluate_high_beam_stalk(void) {
-  if (terminal_r) {
-    if (k_msg.buf[0] == 0x10) {                                                                                                     // Stalk pushed away.
-      indicator_stalk_pushed_message_counter++;
-      if (indicator_stalk_pushed_message_counter >= 45) {                                                                           // About 5 seconds.
-        if (hba_status == 0xD) {
-          kcan_write_msg(idrive_bn2000_hba_on_buf);
-          kcan2_write_msg(idrive_horn_sound_buf);
-          send_cc_message("High beam assistant ON.", true, 3000);
-        } else {
-          kcan_write_msg(idrive_bn2000_hba_off_buf);
-          kcan2_write_msg(idrive_horn_sound_buf);
-          send_cc_message("High beam assistant OFF.", true, 3000);
+  #endif
+  #if F_NBTE
+    if (terminal_r) {
+      if (k_msg.buf[0] == 0x10) {                                                                                                   // Stalk pushed away.
+        indicator_stalk_pushed_message_counter++;
+        if (indicator_stalk_pushed_message_counter >= 45) {                                                                         // About 5 seconds.
+          if (hba_status == 0xD) {
+            kcan_write_msg(idrive_bn2000_hba_on_buf);
+            kcan2_write_msg(idrive_horn_sound_buf);
+            send_cc_message("High beam assistant ON.", true, 3000);
+          } else {
+            kcan_write_msg(idrive_bn2000_hba_off_buf);
+            kcan2_write_msg(idrive_horn_sound_buf);
+            send_cc_message("High beam assistant OFF.", true, 3000);
+          }
+          indicator_stalk_pushed_message_counter = 0;
         }
+      } else {
         indicator_stalk_pushed_message_counter = 0;
       }
-    } else {
-      indicator_stalk_pushed_message_counter = 0;
     }
-  }
+  #endif
 }
 
 
@@ -768,8 +772,10 @@ void evaluate_wiper_stalk_status(void) {
 
 
 void send_climate_popup_acknowledge(void) {
-  uint8_t climate_popup_acknowledge[] = {k_msg.buf[0], (uint8_t)((k_msg.buf[1] + 1) % 256)};
-  kcan_write_msg(make_msg_buf(0x339, 2, climate_popup_acknowledge));                                                                // This reply is required to allow cycling through AUTO blower modes.
+  if (ignition) {
+    uint8_t climate_popup_acknowledge[] = {k_msg.buf[0], (uint8_t)((k_msg.buf[1] + 1) % 256)};
+    kcan_write_msg(make_msg_buf(0x339, 2, climate_popup_acknowledge));                                                              // This reply is required to allow cycling through AUTO blower modes.
+  }
 }
 
 
@@ -794,54 +800,58 @@ void evaluate_ihka_auto_ckm(void) {
 
 
 void evaluate_ihka_auto_state(void) {
-  uint8_t new_fan_state = k_msg.buf[6] >> 4, 
-          new_distr_state = k_msg.buf[4] >> 4;
+  if (ignition) {
+    uint8_t new_fan_state = k_msg.buf[6] >> 4, 
+            new_distr_state = k_msg.buf[4] >> 4;
 
-  if ((ihka_auto_fan_state != new_fan_state) || (ihka_auto_distr_state != new_distr_state)) {
-    String climate_message = "";
+    if ((ihka_auto_fan_state != new_fan_state) || (ihka_auto_distr_state != new_distr_state)) {
+      String climate_message = "";
 
-    if (new_distr_state == 2) {
-      climate_message += "Air distribution AUTO";
-    } else {
-      climate_message += "Air distribution manual";
-    }
-
-    if (new_fan_state == 7) {
-      if (ihka_auto_fan_speed == 6) {
-        climate_message += ", fan speed AUTO Low.";
-      } else if (ihka_auto_fan_speed == 5) {
-        climate_message += ", fan speed AUTO Mid.";
-      } else if (ihka_auto_fan_speed == 9) {
-        climate_message += ", fan speed AUTO High.";
+      if (new_distr_state == 2) {
+        climate_message += "Air distribution AUTO";
+      } else {
+        climate_message += "Air distribution manual";
       }
-    } else {
-      climate_message += ", fan speed manual.";
-    }
 
-    serial_log(climate_message.c_str(), 3);
-    send_cc_message(climate_message.c_str(), true, 2000);
-    ihka_auto_fan_state = new_fan_state;
-    ihka_auto_distr_state = new_distr_state;
+      if (new_fan_state == 7) {
+        if (ihka_auto_fan_speed == 6) {
+          climate_message += ", fan speed AUTO Low.";
+        } else if (ihka_auto_fan_speed == 5) {
+          climate_message += ", fan speed AUTO Mid.";
+        } else if (ihka_auto_fan_speed == 9) {
+          climate_message += ", fan speed AUTO High.";
+        }
+      } else {
+        climate_message += ", fan speed manual.";
+      }
+
+      serial_log(climate_message.c_str(), 3);
+      send_cc_message(climate_message.c_str(), true, 2000);
+      ihka_auto_fan_state = new_fan_state;
+      ihka_auto_distr_state = new_distr_state;
+    }
   }
 }
 
 
 void evaluate_ihka_recirculation(void) {
-  uint8_t new_state = 0;
-  bitWrite(new_state, 0, bitRead(k_msg.buf[0], 4));
-  bitWrite(new_state, 1, bitRead(k_msg.buf[0], 5));
-  if (ihka_recirc_state != new_state) {
-    if (new_state == 0) {
-      serial_log("IHKA recirculation OFF.", 3);
-      send_cc_message("Air recirculation: OFF.", true, 4000);
-    } else if (new_state == 1) {
-      serial_log("IHKA recirculation AUTO.", 3);
-      send_cc_message("Air recirculation: AUTO.", true, 4000);
-    } else if (new_state == 2) {
-      serial_log("IHKA recirculation ON.", 3);
-      send_cc_message("Air recirculation: ON.", true, 4000);
+  if (ignition) {
+    uint8_t new_state = 0;
+    bitWrite(new_state, 0, bitRead(k_msg.buf[0], 4));
+    bitWrite(new_state, 1, bitRead(k_msg.buf[0], 5));
+    if (ihka_recirc_state != new_state) {
+      if (new_state == 0) {
+        serial_log("IHKA recirculation OFF.", 3);
+        send_cc_message("Air recirculation: OFF.", true, 4000);
+      } else if (new_state == 1) {
+        serial_log("IHKA recirculation AUTO.", 3);
+        send_cc_message("Air recirculation: AUTO.", true, 4000);
+      } else if (new_state == 2) {
+        serial_log("IHKA recirculation ON.", 3);
+        send_cc_message("Air recirculation: ON.", true, 4000);
+      }
+      ihka_recirc_state = new_state;
     }
-    ihka_recirc_state = new_state;
   }
 }
 

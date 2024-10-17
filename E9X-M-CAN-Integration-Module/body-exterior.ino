@@ -16,18 +16,35 @@ void evaluate_drl_status(void) {
 }
 
 
-void evaluate_drl_ckm(void) {
-  if (k_msg.buf[2] == 0xFE) {
-    if (!drl_ckm[cas_key_number]) {
-      serial_log("DRL CKM ON.", 2);
-      drl_ckm[cas_key_number] = true;
+void evaluate_lights_ckm(void) {
+  #if DIM_DRL
+    if (k_msg.buf[2] == 0xFE) {
+      if (!drl_ckm[cas_key_number]) {
+        serial_log("DRL CKM ON.", 2);
+        drl_ckm[cas_key_number] = true;
+      }
+    } else {
+      if (drl_ckm[cas_key_number]) {
+        serial_log("DRL CKM OFF.", 2);
+        drl_ckm[cas_key_number] = false;
+      }
     }
-  } else {
-    if (drl_ckm[cas_key_number]) {
-      serial_log("DRL CKM OFF.", 2);
-      drl_ckm[cas_key_number] = false;
+  #endif
+
+  #if F_NBTE
+    if (f_lights_ckm_request != 0) {
+      k_msg.buf[2] = f_lights_ckm_request;
+      f_lights_ckm_request = 0;
+    } else if (idrive_run_timer <= 15000) {
+      if (drl_ckm[cas_key_number]) {
+        k_msg.buf[2] = 0xF6;                                                                                                          // DRL ON, home lights setting can be changed.
+      } else {
+        k_msg.buf[2] = 0xF4;
+      }
+      f_lights_ckm_delayed_msg = k_msg;                                                                                               // Save this message for after iDrive boots.
     }
-  }
+    kcan2_write_msg(k_msg);
+  #endif
 }
 
 
@@ -61,73 +78,75 @@ void check_drl_queue(void) {
 
 
 void evaluate_indicator_status_dim(void) {
-  if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                                // Off or Hazards
-    #if DIM_DRL
-      if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
-        unsigned long time_now = millis();
-        if (right_dimmed) {
-          m = {right_drl_bright_buf, time_now + 100};
-          dim_drl_txq.push(&m);
-          right_dimmed = false;
-          serial_log("Restored right DRL brightness.", 2);
-        } else if (left_dimmed) {
-          m = {left_drl_bright_buf, time_now + 100};
-          dim_drl_txq.push(&m);
-          left_dimmed = false;
-          serial_log("Restored left DRL brightness.", 2);
+  if (ignition) {
+    if(k_msg.buf[0] == 0x80 || k_msg.buf[0] == 0xB1) {                                                                              // Off or Hazards
+      #if DIM_DRL
+        if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
+          unsigned long time_now = millis();
+          if (right_dimmed) {
+            m = {right_drl_bright_buf, time_now + 100};
+            dim_drl_txq.push(&m);
+            right_dimmed = false;
+            serial_log("Restored right DRL brightness.", 2);
+          } else if (left_dimmed) {
+            m = {left_drl_bright_buf, time_now + 100};
+            dim_drl_txq.push(&m);
+            left_dimmed = false;
+            serial_log("Restored left DRL brightness.", 2);
+          }
         }
+      #endif
+      if (k_msg.buf[0] == 0xB1) {
+        hazards_on = true;
+      } else {
+        hazards_on = false;
       }
-    #endif
-    if (k_msg.buf[0] == 0xB1) {
-      hazards_on = true;
-    } else {
-      hazards_on = false;
+      indicators_on = false;
+    } else if (k_msg.buf[0] == 0x91) {                                                                                              // Left indicator
+      #if DIM_DRL
+        if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
+          unsigned long time_now = millis();
+          if (right_dimmed) {
+            m = {right_drl_bright_buf, time_now + 100};
+            dim_drl_txq.push(&m);
+            right_dimmed = false;
+            serial_log("Restored right DRL brightness.", 2);
+          }
+          m = {left_drl_dim_buf, time_now + 100};
+          dim_drl_txq.push(&m);
+          if (!left_dimmed) {
+            serial_log("Dimmed left DRL.", 2);
+          }
+          left_dimmed = true;
+        }
+      #endif
+      indicators_on = true;
+      #if MIRROR_UNDIM
+        undim_mirrors_with_indicators();
+      #endif
+    } else if (k_msg.buf[0] == 0xA1) {                                                                                              // Right indicator
+      #if DIM_DRL
+        if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
+          unsigned long time_now = millis();
+          if (left_dimmed) {
+            m = {left_drl_bright_buf, time_now + 100};
+            dim_drl_txq.push(&m);
+            left_dimmed = false;
+            serial_log("Restored left DRL brightness.", 2);
+          }
+          m = {right_drl_dim_buf, time_now + 100};
+          dim_drl_txq.push(&m);
+          if (!right_dimmed) {
+            serial_log("Dimmed right DRL.", 2);
+          }
+          right_dimmed = true;
+        }
+      #endif
+      indicators_on = true;
+      #if MIRROR_UNDIM
+        undim_mirrors_with_indicators();
+      #endif
     }
-    indicators_on = false;
-  } else if (k_msg.buf[0] == 0x91) {                                                                                                // Left indicator
-    #if DIM_DRL
-      if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
-        unsigned long time_now = millis();
-        if (right_dimmed) {
-          m = {right_drl_bright_buf, time_now + 100};
-          dim_drl_txq.push(&m);
-          right_dimmed = false;
-          serial_log("Restored right DRL brightness.", 2);
-        }
-        m = {left_drl_dim_buf, time_now + 100};
-        dim_drl_txq.push(&m);
-        if (!left_dimmed) {
-          serial_log("Dimmed left DRL.", 2);
-        }
-        left_dimmed = true;
-      }
-    #endif
-    indicators_on = true;
-    #if MIRROR_UNDIM
-      undim_mirrors_with_indicators();
-    #endif
-  } else if (k_msg.buf[0] == 0xA1) {                                                                                                // Right indicator
-    #if DIM_DRL
-      if (drl_ckm[cas_key_number] && drl_status && diag_transmit) {
-        unsigned long time_now = millis();
-        if (left_dimmed) {
-          m = {left_drl_bright_buf, time_now + 100};
-          dim_drl_txq.push(&m);
-          left_dimmed = false;
-          serial_log("Restored left DRL brightness.", 2);
-        }
-        m = {right_drl_dim_buf, time_now + 100};
-        dim_drl_txq.push(&m);
-        if (!right_dimmed) {
-          serial_log("Dimmed right DRL.", 2);
-        }
-        right_dimmed = true;
-      }
-    #endif
-    indicators_on = true;
-    #if MIRROR_UNDIM
-      undim_mirrors_with_indicators();
-    #endif
   }
 }
 
@@ -136,7 +155,7 @@ void undim_mirrors_with_indicators(void) {
   // Makes it easier to see cyclists at night in the city when turning...
   if (szl_full_indicator) {
     if (rls_time_of_day == 2 && frm_undim_timer >= 10000) {
-      if (engine_running && indicated_speed <= 30.0) {
+      if (engine_running == 1 && indicated_speed <= 30.0) {
         kcan_write_msg(frm_mirror_undim_buf);
         frm_undim_timer = 0;
         serial_log("Undimmed exterior mirrors with indicator.", 2);
@@ -147,7 +166,7 @@ void undim_mirrors_with_indicators(void) {
 
 
 void indicate_trunk_opened(uint16_t boot_delay) {
-  if (visual_signal_ckm[cas_key_number] && !engine_running && !hazards_on) {
+  if (visual_signal_ckm[cas_key_number] && engine_running == 0 && !hazards_on) {
     serial_log("Trunk remote button pressed. Flashing hazards 2x.", 2);
     unsigned long time_now = millis();
     m = {flash_hazards_double_buf, boot_delay + time_now + 100};
@@ -758,7 +777,7 @@ void evaluate_rls_light_status(void) {
 }
 
 
-void request_vehicle_pitch_angle(void) {
+void request_vehicle_pitch_roll_angle(void) {
   #if IMMOBILIZER_SEQ
   if (sine_pitch_angle_request_timer >= 500 && immobilizer_released) {
   #else
@@ -770,11 +789,23 @@ void request_vehicle_pitch_angle(void) {
       sine_pitch_angle_requested = true;
     }
   }
+
+  #if IMMOBILIZER_SEQ
+  if (sine_roll_angle_request_timer >= 800 && immobilizer_released) {
+  #else
+  if (sine_roll_angle_request_timer >= 800) {
+  #endif
+    if (diag_transmit) {
+      kcan_write_msg(sine_roll_angle_request_a_buf);
+      sine_roll_angle_request_timer = 0;
+      sine_roll_angle_requested = true;
+    }
+  }
 }
 
 
-void evaluate_vehicle_pitch_angle(void) {                                                                                           // Check with sine_65.prg JOB status_inclination_y_axis.
-  if (sine_pitch_angle_requested) {
+void evaluate_vehicle_pitch_roll_angles(void) {
+  if (sine_pitch_angle_requested) {                                                                                                 // Check with sine_65.prg JOB status_inclination_y_axis.
     if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10 && k_msg.buf[4] == 5) {
       sine_pitch_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
       sine_pitch_angle = constrain(sine_pitch_angle, -64.0, 64.0);                                                                  // Boundary check since F message has resolution -64..64.
@@ -791,26 +822,7 @@ void evaluate_vehicle_pitch_angle(void) {                                       
     }
     sine_pitch_angle_requested = false;
   }
-}
-
-
-void request_vehicle_roll_angle(void) {
-  #if IMMOBILIZER_SEQ
-  if (sine_roll_angle_request_timer >= 800 && immobilizer_released) {
-  #else
-  if (sine_roll_angle_request_timer >= 800) {
-  #endif
-    if (diag_transmit) {
-      kcan_write_msg(sine_roll_angle_request_a_buf);
-      sine_roll_angle_request_timer = 0;
-      sine_roll_angle_requested = true;
-    }
-  }
-}
-
-
-void evaluate_vehicle_roll_angle(void) {                                                                                            // Check with sine_65.prg JOB status_inclination_x_axis.
-  if (sine_roll_angle_requested) {
+  if (sine_roll_angle_requested) {                                                                                                  // Check with sine_65.prg JOB status_inclination_x_axis.
     if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10 && k_msg.buf[4] == 4) {
       sine_roll_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
       sine_roll_angle = constrain(sine_roll_angle, -64.0, 64.0);                                                                    // Boundary check since F message has resolution -64..64.
@@ -898,7 +910,7 @@ void indicate_car_locked(uint16_t boot_delay) {
   if (car_locked_indicator_counter < 10) {                                                                                          // Limit excessive activation of this (10 max).
     if (visual_signal_ckm[cas_key_number] && !hazards_on) {
       if (!bitRead(last_trunk_status, 0)) {                                                                                         // Check that the trunk is shut.
-        serial_log("Car locked indicator triggered. Flashing 3x.", 2);
+        serial_log("Car locked indicator triggered. Flashing.", 2);
         hazards_flash_txq.flush();                                                                                                  // Cancel pending flashes.
         kcan_write_msg(stop_flashing_lights_buf);
         if (!alarm_active) {
@@ -907,11 +919,20 @@ void indicate_car_locked(uint16_t boot_delay) {
         unsigned long time_now = millis();
         if (car_locked_indicator_counter > 1) {                                                                                     // Should make the car easier to find at night. On the 3rd activation.
           m = {flash_hazards_angel_eyes_xenons_buf, boot_delay + time_now + 50};
+          if (car_locked_indicator_counter > 2) {
+            if (diag_transmit) {
+              kcan_write_msg(alarm_beep_6x_buf);
+            }
+          }
         } else {
           m = {flash_hazards_angel_eyes_buf, boot_delay + time_now + 50};
         }
         hazards_flash_txq.push(&m);
-        m = {stop_flashing_lights_buf, boot_delay + time_now + 1900};                                                               // Enough delay for 3x flashes.
+        if (car_locked_indicator_counter > 2) {
+          m = {stop_flashing_lights_buf, boot_delay + time_now + 3500};
+        } else {
+          m = {stop_flashing_lights_buf, boot_delay + time_now + 1900};                                                             // Enough delay for 3x flashes.
+        }
         hazards_flash_txq.push(&m);
         car_locked_indicator_counter++;
       }
@@ -999,24 +1020,6 @@ void check_wiper_queue(void) {
       }
     }
   }
-}
-
-
-void fix_f_lights_ckm(void) {
-  #if F_NBTE
-    if (f_lights_ckm_request != 0) {
-      k_msg.buf[2] = f_lights_ckm_request;
-      f_lights_ckm_request = 0;
-    } else if (idrive_run_timer <= 15000) {
-      if (drl_ckm[cas_key_number]) {
-        k_msg.buf[2] = 0xF6;                                                                                                        // DRL ON, home lights setting can be changed.
-      } else {
-        k_msg.buf[2] = 0xF4;
-      }
-      f_lights_ckm_delayed_msg = k_msg;                                                                                             // Save this message for after iDrive boots.
-    }
-    kcan2_write_msg(k_msg);
-  #endif
 }
 
 

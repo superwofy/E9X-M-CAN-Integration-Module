@@ -73,12 +73,13 @@ Included are also tools to allow full manipulation of the program section in the
 * Fold/Un-fold mirrors when locking/unlocking.
 * Un-dim electrochromic exterior mirrors when indicating at night.
 * Move driver's seat back when exiting car.
-* Indicate that the windows and sunroof are fully closed by remote (flash hazards 1x).
+* Indicate that the windows and sunroof are fully closed by remote (flash hazards 1x - long).
 * Indicate when the trunk is opened by remote (flash hazards 2x).
 	* Visual signal for locking/unlocking must be ON.
 * Indicate when the car is locked and the lock button is pressed (flash hazards + angel eyes 3x).
 	* Car must be locked for at least 10s and Visual signal for locking/unlocking must be ON.
 	* After 3 activations, xenons flash as well.
+	* After 4 activations, xenons flash and alarm beeps.
 * Force sleep mode (KL30G OFF) by holding remote lock button for 20s - for testing.
 * Immobilize the engine with a fuel pump cut-off until the M button is pressed X times.
 	* If engine is started without releasing this immobilizer, alarm will sound once engine stalls.

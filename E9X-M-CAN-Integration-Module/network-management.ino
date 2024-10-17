@@ -197,13 +197,15 @@ void cache_can_message_buffers(void) {                                          
           flash_hazards_single_long[] = {0, 0xF3},
           flash_hazards_angel_eyes[] = {5, 0},
           flash_hazards_angel_eyes_xenons[] = {7, 0},
-          stop_flashing_lights[] = {0, 0};
+          stop_flashing_lights[] = {0, 0},
+          alarm_beep_6x[] = {0x41, 3, 0x31, 0xFD, 0};
   flash_hazards_single_buf = make_msg_buf(0x2B4, 2, flash_hazards_single);                                                          // Minimum time between flash messages is 1.3s.
   flash_hazards_double_buf = make_msg_buf(0x2B4, 2, flash_hazards_double);
   flash_hazards_single_long_buf = make_msg_buf(0x2B4, 2, flash_hazards_single_long);
   flash_hazards_angel_eyes_buf = make_msg_buf(0x2B4, 2, flash_hazards_angel_eyes);
   flash_hazards_angel_eyes_xenons_buf = make_msg_buf(0x2B4, 2, flash_hazards_angel_eyes_xenons);
   stop_flashing_lights_buf = make_msg_buf(0x2B4, 2, stop_flashing_lights);
+  alarm_beep_6x_buf = make_msg_buf(0x6F1, 5, alarm_beep_6x);
 
   uint8_t alarm_siren_on[] = {0x41, 3, 0x31, 4, 2, 0, 0, 0},
           alarm_siren_return_control[] = {0x41, 3, 0x31, 4, 3, 0, 0, 0},
@@ -462,6 +464,237 @@ CAN_message_t make_msg_buf(uint16_t txID, uint8_t txLen, uint8_t* txBuf) {
       tx_msg.buf[i] = txBuf[i];
   }
   return tx_msg;
+}
+
+
+void initialize_can_handlers(void) {
+  // If only one function (without arguments) is called to handle the message, it is called directly.
+  // Otherwise, a wrapper is called instead.
+
+  kcan_handlers[0xAA] = process_kcan_AA;                                                                                            // 0xAA: (rpm/throttle pos) and torq_dvch - torque request, driver. Cycle time 100ms (KCAN).
+  #if F_NBTE
+    kcan_handlers[0xA8] = process_kcan_A8;                                                                                          // 0xA8: Crankshaft torque. Cycle time 100ms (KCAN).
+  #endif
+  kcan_handlers[0xEA] = evaluate_drivers_door_lock_status;
+  kcan_handlers[0x130] = evaluate_terminal_clutch_keyno_status;                                                                     // 0x130: Terminal state, clutch status and key number. Cycle time 100ms.
+  #if HDC
+    kcan_handlers[0x193] = evaluate_cruise_control_status;                                                                          // 0x193: State of cruise control from KOMBI. Sent when changed.
+    kcan_handlers[0x31A] = evaluate_hdc_button;                                                                                     // 0x31A: HDC button status from IHKA. Sent when changed.
+  #endif
+  #if FAKE_MSA
+    kcan_handlers[0x195] = evaluate_msa_button;                                                                                     // 0x195: MSA button press from IHKA. Sent when changed.
+  #endif
+  kcan_handlers[0x19E] = evaluate_dsc_status;
+  #if F_NBTE
+    kcan_handlers[0x1A6] = send_f_distance_messages;                                                                                // 0x1A6: Distance message from DSC. Cycle time 100ms.
+  #else
+    kcan_handlers[0x1AA] = send_dme_power_ckm;                                                                                      // Time POWER CKM message with iDrive ErgoCommander (0x1AA). Sent at boot and Terminal R cycling.
+  #endif
+  kcan_handlers[0x1B4] = evaluate_indicated_speed;                                                                                  // 0x1B4: KOMBI status (indicated speed, handbrake). Cycle time 100ms (terminal R ON).
+  kcan_handlers[0x1B6] = evaluate_alternator_status;
+  #if F_NBTE_CCC_ZBE
+    kcan_handlers[0x1B8] = convert_zbe1_message;                                                                                    // Convert old CCC controller data (0x1B8) for NBT.
+  #endif
+  #if REVERSE_BEEP || DOOR_VOLUME
+    kcan_handlers[0x1C6] = evaluate_pdc_warning;                                                                                    // 0x1C6: PDC acoustic warning.
+  #endif
+  kcan_handlers[0x1D0] = evaluate_engine_data;                                                                                      // 0x1D0: Engine temperatures and ambient pressure.
+  kcan_handlers[0x1D6] = evaluate_mfl_button_press;                                                                                 // 0x1D6: MFL (Multi Function Steering Wheel) buttons. Cycle time 1s (idle), 100ms (pressed).
+  #if MIRROR_UNDIM || F_NBTE
+    kcan_handlers[0x1EE] = evaluate_indicator_stalk;                                                                                // 0x1EE: Indicator stalk status from FRM (KCAN only). Read-only, can't be changed.
+  #endif
+  kcan_handlers[0x1F6] = evaluate_indicator_status_dim;                                                                             // 0x1F6: Indicator status. Cycle time 1s. Sent when changed.
+  kcan_handlers[0x202] = send_f_interior_ambient_light_brightness;                                                                  // 0x202: Interior ambient light brightness status sent by KOMBI.
+  kcan_handlers[0x205] = evaluate_cc_gong_status;
+  #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
+    kcan_handlers[0x21A] = process_kcan_21A;                                                                                        // 0x21A: Light status sent by the FRM. Cycle time 5s (idle). Sent when changed.
+  #endif
+  #if AUTO_SEAT_HEATING_PASS
+    kcan_handlers[0x22A] = evaluate_seat_heating_status;                                                                            // 0x22A: Passenger's seat heating status. Cycle time 10s (idle), 150ms (change).
+  #endif
+  #if AUTO_SEAT_HEATING
+    kcan_handlers[0x232] = evaluate_seat_heating_status;                                                                            // 0x232: Driver's seat heating status. Cycle time 10s (idle), 150ms (change).
+  #endif
+  kcan_handlers[0x23A] = process_kcan_23A;                                                                                          // 0x23A: Remote fob function status. Sent 3x when changed.
+  #if F_NBTE
+    kcan_handlers[0x23D] = send_climate_popup_acknowledge;
+    kcan_handlers[0x242] = evaluate_ihka_recirculation;
+    kcan_handlers[0x2E6] = evaluate_ihka_auto_state;                                                                                // 0x2E6: Air distribution status message.
+  #endif
+  #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
+    kcan_handlers[0x2A6] = evaluate_wiper_stalk_status;                                                                             // 0x2A6: Wiper stalk status from SZL. Cycle time 1s (idle).
+  #endif
+  #if F_NBTE
+    kcan_handlers[0x2C0] = send_f_lcd_brightness;                                                                                   // 0x2C0: Kombi LCD brightness. Cycle time 10s.
+  #endif
+  kcan_handlers[0x2CA] = evaluate_ambient_temperature;                                                                              // 0x2CA: Ambient temperature. Cycle time 1s.
+  kcan_handlers[0x2F7] = process_kcan_2F7;                                                                                          // 0x2F7: Units from KOMBI. Sent 3x on Terminal R. Sent when changed.
+  #if AUTO_SEAT_HEATING_PASS
+    kcan_handlers[0x2FA] = evaluate_passenger_seat_status;                                                                          // 0x2FA: Passenger's seat occupancy and belt status. Cycle time 5s.
+  #endif
+  #if DOOR_VOLUME || AUTO_MIRROR_FOLD || IMMOBILIZER_SEQ || HOOD_OPEN_GONG
+    kcan_handlers[0x2FC] = evaluate_door_status;                                                                                    // 0x2FC: Door, hood status sent by CAS. Cycle time 5s. Sent when changed.
+  #endif
+  #if F_VSW01
+    kcan_handlers[0x2FD] = evaluate_vsw_status;                                                                                     // 0x2FD: VSW actual position status.
+  #endif
+  #if F_NBTE || F_NIVI || MIRROR_UNDIM || FRONT_FOG_CORNER
+    kcan_handlers[0x314] = evaluate_rls_light_status;                                                                               // 0x314: RLS light status. Cycle time 3s. Sent when changed.
+  #endif
+  #if FTM_INDICATOR || F_NBTE
+    kcan_handlers[0x31D] = evaluate_indicate_ftm_status;                                                                            // FTM status broadcast by DSC. Cycle time 5s (idle). Sent when changed.
+  #endif
+  kcan_handlers[0x32E] = evaluate_interior_temperature;
+  #if CONTROL_SHIFTLIGHTS
+    kcan_handlers[0x332] = evaluate_update_shiftlight_sync;                                                                         // 0x332: Variable redline broadcast from DME. Cycle time 1s.
+  #endif
+  kcan_handlers[0x336] = process_bn2000_cc_display;
+  kcan_handlers[0x338] = process_bn2000_cc_dialog;
+  #if !F_NBTE
+    kcan_handlers[0x34A] = process_kcan_34A;
+  #endif
+  #if PDC_AUTO_OFF
+    kcan_handlers[0x34F] = evaluate_handbrake_status;                                                                               // 0x34F: Handbrake handle status sent by JBE. Sent when changed.
+  #endif
+  #if F_NBTE
+    kcan_handlers[0x35C] = evaluate_speed_warning_status;                                                                           // Fix: EVO does not support settings less than 15kph.
+  #endif
+  #if AUTO_TOW_VIEW_RVC
+    kcan_handlers[0x36D] = evaluate_pdc_distance;                                                                                   // 0x36D: Distance status sent by PDC. Sent when active.
+    #if !F_NBTE
+      kcan_handlers[0x38F] = store_rvc_settings_idrive;                                                                             // 0x38F: Camera settings request from iDrive. Sent when activating camera and when changed.
+    #endif
+    kcan_handlers[0x39B] = store_rvc_settings_trsvc;                                                                                // 0x39B: Camera settings/acknowledge from TRSVC. Sent when activating ignition and when changed.
+  #endif
+  #if !F_NBTE
+    kcan_handlers[0x3A8] = update_dme_power_ckm;                                                                                    // 0x3A8: POWER M Key (CKM) setting from iDrive. Sent when changed.
+  #endif
+  #if PDC_AUTO_OFF || AUTO_TOW_VIEW_RVC || F_NBTE
+    kcan_handlers[0x3AF] = process_kcan_3AF;                                                                                        // 0x3AF: PDC bus status. Cycle time 2s (idle). Sent when changed.
+  #endif
+  kcan_handlers[0x3B0] = process_kcan_3B0;                                                                                          // 0x3B0: Reverse gear status. Cycle time 1s (idle).
+  #if F_NBTE
+    kcan_handlers[0x3B3] = evaluate_consumer_control;
+  #endif
+  kcan_handlers[0x3B4] = evaluate_battery_voltage;                                                                                  // 0x3B4: Battery voltage from DME. Cycle time 5s (idle), sent when ignition ON/OFF.
+  kcan_handlers[0x3B6] = evaluate_front_windows_position;                                                                           // 0x3B6: Driver's power window status.
+  kcan_handlers[0x3B8] = evaluate_front_windows_position;                                                                           // 0x3B8: Front passenger's power window status.
+  kcan_handlers[0x3BA] = evaluate_sunroof_position;
+  kcan_handlers[0x3BD] = evaluate_frm_consumer_shutdown;                                                                            // 0x3BD: Consumer shutdown message from FRM. Cycle time 5s (idle). Sent when changed.
+  kcan_handlers[0x3BE] = evaluate_terminal_followup;                                                                                // 0x3BE: Terminal follow-up time from CAS. Cycle time 10s depending on bus activity.
+  #if !F_NBTE
+    kcan_handlers[0x3CA] = update_mdrive_message_settings_cic;                                                                      // 0x3CA: MDrive settings from iDrive (BN2000). Sent when changed.
+  #endif
+  kcan_handlers[0x3D7] = evaluate_door_lock_ckm;                                                                                    // 0x3D7: CKM setting status for door locks. Sent when changed.
+  #if COMFORT_EXIT
+    kcan_handlers[0x3DB] = evaluate_dr_seat_ckm;                                                                                    // 0x3DB: CKM setting for driver's seat. Sent when changed.
+  #endif
+  #if DIM_DRL || F_NBTE
+    kcan_handlers[0x3DD] = evaluate_lights_ckm;                                                                                     // 0x3DD: CKM setting for lights. Sent when changed.
+  #endif
+  #if F_NBTE
+    kcan_handlers[0x3DF] = evaluate_ihka_auto_ckm;                                                                                  // 0x3DF: CKM setting for AUTO blower speed.
+  #endif
+  kcan_handlers[0x3F1] = evaluate_hba_ckm;                                                                                          // 0x3F1: CKM setting for High beam assistant.
+  #if F_NIVI || F_NBTE
+    kcan_handlers[0x586] = evaluate_trsvc_cc;
+    kcan_handlers[0x650] = evaluate_vehicle_pitch_roll_angles;                                                                      // 0x650: SINE diagnostic responses. SINE is at address 0x50.
+  #endif
+  kcan_handlers[0x592] = process_dme_cc;
+  #if DEBUG_MODE
+    kcan_handlers[0x640] = evaluate_power_down_response;                                                                            // 0x640: CAS diagnostic responses. Sent when requested.
+  #endif
+  #if F_VSW01
+    kcan_handlers[0x648] = process_kcan_648;                                                                                        // 0x648: VSW diagnostic responses. Sent when requested.
+  #endif
+  #if DOOR_VOLUME && !F_NBTE
+    kcan_handlers[0x663] = evaluate_audio_volume_cic;                                                                               // 0x663: iDrive diagnostic response. Sent when requested.
+  #endif
+  #if AUTO_MIRROR_FOLD || FRONT_FOG_CORNER
+    kcan_handlers[0x672] = process_kcan_672;                                                                                        // 0x672: FRM diagnostic responses. Sent when requested.
+  #endif
+
+  #if F_NBTE
+    memset(kcan_to_kcan2_forward_filter_list,
+           1, sizeof(kcan_to_kcan2_forward_filter_list));
+    kcan_to_kcan2_forward_filter_list[0xAA] = 0;                                                                                    // BN2000 engine status and torques.
+    kcan_to_kcan2_forward_filter_list[0xA8] = 0;
+    kcan_to_kcan2_forward_filter_list[0xC4] = 0;                                                                                    // BN2000 steering angle.
+    kcan_to_kcan2_forward_filter_list[0xC8] = 0;
+    kcan_to_kcan2_forward_filter_list[0x1A0] = 0;                                                                                   // BN2000 Speed / BN2010 Gearbox check-control.
+    kcan_to_kcan2_forward_filter_list[0x1B6] = 0;                                                                                   // BN2000 Engine heat flow. Unknown in BN2010. It causes NBT EVO to block phone calls.
+    kcan_to_kcan2_forward_filter_list[0x1D6] = 0;                                                                                   // MFL buttons for next/previous are swappend for NBT EVO.
+    kcan_to_kcan2_forward_filter_list[0x2C0] = 0;                                                                                   // BN2000 LCD brightness.
+    kcan_to_kcan2_forward_filter_list[0x2F3] = 0;                                                                                   // BN2000 gear shift instruction / BN2010 gyro.
+    kcan_to_kcan2_forward_filter_list[0x2F7] = 0;                                                                                   // KOMBI units. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x317] = 0;                                                                                   // BN2000 PDC button.
+    kcan_to_kcan2_forward_filter_list[0x31D] = 0;                                                                                   // BN2000 FTM status.
+    kcan_to_kcan2_forward_filter_list[0x35C] = 0;                                                                                   // Speed warning setting. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x3DD] = 0;                                                                                   // Lights CKM. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x336] = 0;                                                                                   // CC list display. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x338] = 0;                                                                                   // CC dialog display. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x399] = 0;                                                                                   // BN2000 MDrive / BN2010 Status energy voltage.
+    kcan_to_kcan2_forward_filter_list[0x3B3] = 0;                                                                                   // DME consumer control. Requires further processing.
+    for (int i = 0x480; i < 0x580; i++) {                                                                                           // BN2000 OSEK NM (incompatible).
+      kcan_to_kcan2_forward_filter_list[i] = 0;
+    }
+    for (int j = 0x580; j < 0x5E0; j++) {                                                                                           // BN2000 CCs except KOMBI response.
+      kcan_to_kcan2_forward_filter_list[j] = 0;
+    }
+    for (int k = 0x5E1; k < 0x6F0; k++) {                                                                                           // More BN2000 CCs and KWP/UDS diagnosis responses from various modules.
+      kcan_to_kcan2_forward_filter_list[k] = 0;
+    }
+  #endif
+
+  #if FRONT_FOG_CORNER || F_NIVI || F_NBTE
+    ptcan_handlers[0xC4] = process_ptcan_C4;
+  #endif
+  ptcan_handlers[0x1A0] = process_ptcan_1A0;
+  #if HDC
+    ptcan_handlers[0x194] = evaluate_cruise_stalk_message;
+  #endif
+  #if SERVOTRONIC_SVT70
+    ptcan_handlers[0x58E] = send_svt_kcan_cc_notification;
+    ptcan_handlers[0x60E] = process_ptcan_60E;                                                                                      // Forward Diagnostic responses from SVT module (0x60E) to DCAN.
+  #endif
+  #if CUSTOM_MONITORING_CC
+    ptcan_handlers[0x612] = evaluate_dme_boost_response;
+  #endif
+  #if F_NIVI
+    ptcan_handlers[0x657] = process_ptcan_657;                                                                                      // Forward Diagnostic responses from NVE module (0x657) to DCAN
+  #endif
+
+  #if F_NBTE
+    #if F_NBTE_CCC_ZBE
+      kcan2_handlers[0x273] = send_zbe_acknowledge;                                                                                 // NBT tried to initialize a controller.
+    #endif
+    kcan2_handlers[0x291] = evaluate_idrive_units;
+    kcan2_handlers[0x2B8] = evaluate_speed_warning_setting;
+    kcan2_handlers[0x31A] = evaluate_f_pdc_function_request;
+    kcan2_handlers[0x34A] = process_kcan2_34A;                                                                                      // 0x34A: GPS position, appears consistently regardless of Terminal status. Cycle time 1s.
+    #if AUTO_TOW_VIEW_RVC
+      kcan2_handlers[0x38F] = store_rvc_settings_idrive;
+    #endif
+    kcan2_handlers[0x39E] = evaluate_idrive_zero_time;                                                                              // 0x39E: New date/time from NBT.
+    kcan2_handlers[0x3DC] = evaluate_idrive_lights_settings;
+    kcan2_handlers[0x42F] = update_mdrive_message_settings_nbt;                                                                     // 0x42F: MDrive settings from iDrive (BN2010).
+    kcan2_handlers[0x635] = process_kcan2_635;                                                                                      // 0x635: TBX diagnostic response.
+    kcan2_handlers[0x663] = process_kcan2_663;                                                                                      // 0x663: iDrive diagnostic response.
+
+    memset(kcan2_to_kcan_forward_filter_list,
+           1, sizeof(kcan2_to_kcan_forward_filter_list));
+    kcan2_to_kcan_forward_filter_list[0xBF] = 0;                                                                                    // Skip touchpad data message. This message is only for BN2010.
+    kcan2_to_kcan_forward_filter_list[0x2B8] = 0;
+    kcan2_to_kcan_forward_filter_list[0x317] = 0;                                                                                   // This message is used for the ZBE instead of PDC activation. Causes sporadinc PDC activation. Ignore.
+    kcan2_to_kcan_forward_filter_list[0x31A] = 0;
+    kcan2_to_kcan_forward_filter_list[0x39E] = 0;
+    kcan2_to_kcan_forward_filter_list[0x3DC] = 0;
+    kcan2_to_kcan_forward_filter_list[0x42F] = 0;
+    kcan2_to_kcan_forward_filter_list[0x635] = 0;
+    for (int i = 0x6F1; i < 0x800; i++) {                                                                                           // Irrelevant data. Also stop HU from injecting diagnostic messages to other networks.
+      kcan2_to_kcan_forward_filter_list[i] = 0;
+    }
+  #endif
 }
 
 

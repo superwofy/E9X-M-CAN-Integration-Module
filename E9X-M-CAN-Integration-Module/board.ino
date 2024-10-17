@@ -19,7 +19,8 @@ void configure_IO(void) {
     digitalWrite(STEERING_HEATER_SWITCH_PIN, LOW);
   #endif
 
-  uint8_t disable_pins[40] = {1};                                                                                                   // Disable unused pins to save a tiny bit of current.
+  uint8_t disable_pins[40]; 
+  memset(disable_pins, 1, sizeof(disable_pins));                                                                                    // Disable unused pins to save a tiny bit of current.
   #if F_NBTE
     pinMode(MCP2515_INT_PIN, INPUT_PULLUP);
     pinMode(FACEPLATE_EJECT_PIN, INPUT_PULLUP);
@@ -54,7 +55,7 @@ void configure_IO(void) {
 
   for (uint i = 0; i < 40; i++) {
     if (disable_pins[i]) {
-      pinMode(disable_pins[i], INPUT_DISABLE);
+      pinMode(i, INPUT_DISABLE);
     }
   }
 
@@ -102,7 +103,6 @@ void configure_flexcan(void) {
   PTCAN.enableFIFO();
   PTCAN.setMaxMB(16);
   PTCAN.setRFFN(RFFN_16);
-
   PTCAN.FLEXCAN_EnterFreezeMode();
 
   #if FRONT_FOG_CORNER || F_NIVI || F_NBTE
@@ -121,7 +121,7 @@ void configure_flexcan(void) {
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x60E, STD);                                              // Diagnostic responses from SVT module to forward.
     filter_position_counter++;
   #endif
-  #if F_NBTE && CUSTOM_MONITORING_CC
+  #if CUSTOM_MONITORING_CC
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x612, STD);                                              // Diagnostic responses from DME.
     filter_position_counter++;
   #endif
@@ -141,27 +141,25 @@ void configure_flexcan(void) {
     sprintf(serial_debug_string, "PTCAN initialized with %d filter(s).", filter_position_counter);
   }
   serial_log(serial_debug_string, 2);
-  filter_position_counter = filter_set_ok_counter = 0;
 
 
   // DCAN
   DCAN.begin();
   DCAN.setBaudRate(500000);                                                                                                         // 500k
   DCAN.enableFIFO();
-
   DCAN.FLEXCAN_EnterFreezeMode();
-  filter_set_ok_counter += DCAN.setFIFOFilter(0, 0x6F1, STD);                                                                       // Diagnostic queries from OBD tool to forward.
+  
+  if (!DCAN.setFIFOFilter(0, 0x6F1, STD)) {                                                                                         // Diagnostic queries from OBD tool to forward.
+    serial_log("DCAN filter initialization failure.", 2);
+  } else {
+    serial_log("DCAN filter initialized.", 2);
+  }
+   
   DCAN.setFIFOFilter(REJECT_ALL, 1);
   DCAN.FLEXCAN_ExitFreezeMode();
   dcan_mode = 1;
   
   pinMode(DCAN_STBY_PIN, OUTPUT);
-  if (1 != filter_set_ok_counter) {
-    serial_log("DCAN filter initialization failure.", 2);
-  } else {
-    serial_log("DCAN filter initialized.", 2);
-  }
-
   serial_log("FlexCAN module ready.", 2);
 }
 
