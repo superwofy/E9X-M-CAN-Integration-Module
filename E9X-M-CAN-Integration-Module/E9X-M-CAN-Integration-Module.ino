@@ -134,6 +134,9 @@ void loop() {
         #if HDC
           check_hdc_queue();
         #endif
+        #if FAKE_MSA
+          send_msa_status();
+        #endif
       #endif
       #if PDC_AUTO_OFF
         check_pdc_button_queue();
@@ -174,6 +177,13 @@ void loop() {
     if (!digitalRead(MCP2515_INT_PIN)) {
       KCAN2.readMsgBuf(&k2rxId, &k2len, k2rxBuf);
       k_msg = make_msg_buf(k2rxId, k2len, k2rxBuf);
+      #if defined(USB_TRIPLE_SERIAL)
+        if (millis() >= 2000 && SerialUSB2.dtr()) {
+          if (slcan_bus == 2) {
+            xfer_can2tty(k_msg);
+          }
+        }
+      #endif
       process_kcan2_message();
     }
   #endif
@@ -185,6 +195,13 @@ void loop() {
 
   if (KCAN.read(k_msg)) {
     check_vehicle_awake();                                                                                                          // Wake-up whenever there's any activity on KCAN.
+    #if defined(USB_TRIPLE_SERIAL)
+      if (millis() >= 2000 && SerialUSB2.dtr()) {
+        if (slcan_bus == 1) {
+          xfer_can2tty(k_msg);
+        }
+      }
+      #endif
     process_kcan_message();
   }
 
@@ -349,15 +366,7 @@ void process_ptcan_657(void) {
   K-CAN processing
 ***********************************************************************************************************************************************************************************************************************************************/
 
-void process_kcan_message() {
-  #if defined(USB_TRIPLE_SERIAL)
-    if (millis() >= 2000 && SerialUSB2.dtr()) {
-      if (slcan_bus == 1) {
-        xfer_can2tty(k_msg);
-      }
-    }
-  #endif
-
+void process_kcan_message(void) {
   #if F_NBTE
     if (kcan_to_kcan2_forward_filter_list[k_msg.id]){
       kcan2_write_msg(k_msg);                                                                                                       // Write filtered messages from the car to the NBT.
@@ -497,15 +506,6 @@ void process_kcan_672(void) {
   K-CAN2 processing - Relevant messages sent by NBT to be used by this module follow
 ***********************************************************************************************************************************************************************************************************************************************/
 void process_kcan2_message() {
-
-  #if defined(USB_TRIPLE_SERIAL)
-    if (millis() >= 2000 && SerialUSB2.dtr()) {
-      if (slcan_bus == 2) {
-        xfer_can2tty(k_msg);
-      }
-    }
-  #endif
-
   if (kcan2_handlers[k_msg.id] != NULL) {
     kcan2_handlers[k_msg.id]();                                                                                                     // Use the pre-cached function call for this message ID.
   }

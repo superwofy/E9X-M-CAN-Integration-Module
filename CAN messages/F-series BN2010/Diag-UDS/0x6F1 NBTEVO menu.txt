@@ -12,6 +12,9 @@ ARGS: ARG;MENU;STR;1784;0;0;0
 
 Example ARGs:
 
-1784;0;0;0 - M Setup
+1784;0;0;0 - MDrive / M Setup
+1833 - xDrive status (X_VIEW aktiv)
+1003 - Sport displays
+50083 - Detailed Vehicle Info (AAIdrive)
 
 Get from AAIdrive Android app -> Car Information -> hmi.graphicalContext -> visibleContext

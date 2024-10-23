@@ -196,7 +196,7 @@ void serial_debug_interpreter(void) {
     }
     #if LAUNCH_CONTROL_INDICATOR
     else if (cmd == "lc_display_on"){
-      if (engine_running == 1) {
+      if (engine_running == 2) {
         serial_log("  Serial: Launch Control Display activated.", 0);
         kcan_write_msg(lc_cc_on_buf);
       } else {
@@ -744,31 +744,32 @@ void evaluate_slcancmd(char *buf) {                                             
       break;
     case 't':                                                                                                                       // Send std frame.
       if (slcan_enabled) {
-        CAN_message_t outMsg;
-        outMsg.id = (hex_to_int(buf[1]) << 8) | (hex_to_int(buf[2]) << 4) | hex_to_int(buf[3]);                                     // Parse the 7-bit ID (3 hex characters).
-        if (outMsg.id == 0x380) {
-          SerialUSB2.write('\a');                                                                                                   // Do not allow this message as it can cause the HU to lock.
+        k_msg.id = (hex_to_int(buf[1]) << 8) | (hex_to_int(buf[2]) << 4) | hex_to_int(buf[3]);                                      // Parse the 7-bit ID (3 hex characters).
+        
+        if (k_msg.id == 0x380                                                                                                       // VIN: Do not allow this message as it can cause the HU to lock.
+            || k_msg.id == 0x330) {                                                                                                 // Odometer: Do not allow this message as it can corrupt mileage.
+          SerialUSB2.write('\a');
           break;
         }
-        outMsg.len = hex_to_int(buf[4]);                                                                                            // Parse the length (1 hex character).
-        for (uint8_t i = 0; i < outMsg.len; i++) {
-          outMsg.buf[i] = (hex_to_int(buf[5 + (i * 2)]) << 4) | hex_to_int(buf[6 + (i * 2)]);                                       // Parse the CAN data bytes (each 2 hex characters).
+        k_msg.len = hex_to_int(buf[4]);                                                                                             // Parse the length (1 hex character).
+        for (uint8_t i = 0; i < k_msg.len; i++) {
+          k_msg.buf[i] = (hex_to_int(buf[5 + (i * 2)]) << 4) | hex_to_int(buf[6 + (i * 2)]);                                        // Parse the CAN data bytes (each 2 hex characters).
         }
 
         // Since messages from entertainment modules on KCAN2 should be sent to KCAN for the rest of the car and vice-versa,
         // the two busses are essentially stitched together. SLCAN traffic from SavvyCAN will follow the same.
         if (slcan_bus == 1) {
-          kcan_write_msg(outMsg);
-
-          k_msg = outMsg;                                                                                                           // React to this KCAN message.
-          process_kcan_message();                                                                                                   // Corrected replication to KCAN2 will take place here too.
+          KCAN.write(k_msg);                                                                                                        // Write directly to the bus.
+          process_kcan_message();                                                                                                   // React to this KCAN message. Filtered replication to KCAN2 will take place too.
         }
         #if F_NBTE
           else if (slcan_bus == 2) {
-            kcan2_write_msg(outMsg);
-
-            k_msg = outMsg;                                                                                                         // React to this KCAN2 message.
-            process_kcan2_message();                                                                                                // Corrected replication to KCAN will take place here too.
+            byte send_buf[k_msg.len];
+            for (uint8_t i = 0; i < k_msg.len; i++) {
+              send_buf[i] = k_msg.buf[i];
+            }
+            KCAN2.sendMsgBuf(k_msg.id, 0, k_msg.len, send_buf);                                                                     // Write directly to the bus.
+            process_kcan2_message();                                                                                                // React to this KCAN2 message. Filtered replication to KCAN will take place too.
           }
         #endif
 

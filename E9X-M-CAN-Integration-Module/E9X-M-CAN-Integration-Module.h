@@ -22,10 +22,7 @@ uint8_t LOGLEVEL = 4;                                                           
 #define COMFORT_EXIT 1                                                                                                              // Move driver's seat back when exiting car.
 #define IMMOBILIZER_SEQ 1                                                                                                           // Disable EKP until the M button is pressed X times. Sound the alarm if engine ON without disabling immobilizer.
 #define FRONT_FOG_LED_INDICATOR 1                                                                                                   // Turn ON an external LED when front fogs are ON. M3 clusters lack an indicator.
-#define FRONT_FOG_CORNER 1                                                                                                          // Turn ON/OFF corresponding fog light when turning.
-#if FRONT_FOG_CORNER
-  #define FRONT_FOG_CORNER_AHL_SYNC 1                                                                                               // Sync fog corner lights with AHL status if equipped.
-#endif
+#define FRONT_FOG_CORNER 1                                                                                                          // Turn ON/OFF corresponding fog light when turning with Adaptive Headlights.
 #define DIM_DRL 1                                                                                                                   // Dims DLR ON the side that the indicator is ON.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
@@ -199,7 +196,7 @@ bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = fa
      terminal_50 = false, clutch_pressed = false, frm_consumer_shutdown = false, gong_active = false,
      clearing_dtcs = false, donor_vin_initialized = false, receiving_donor_vin = false, requested_donor_vin = false,
      low_battery_cc_active = false;
-uint8_t engine_running = 0;                                                                                                         // 3 - signal invalid, 2 - engine starting, 1 - engine running, 0 - engine stopped.
+uint8_t engine_running = 0;                                                                                                         // 3 - signal invalid, 2 - engine running, 1 - engine starting, 0 - engine stopped.
 uint16_t terminal30g_followup_time = 0;
 CAN_message_t nbt_vin_request_buf, dme_request_consumers_off_buf;
 CAN_message_t faceplate_a1_released_buf, faceplate_a2_released_buf, faceplate_a3_released_buf, faceplate_f1_released_buf,
@@ -211,7 +208,7 @@ CAN_message_t faceplate_button1_hover_buf, faceplate_button1_press_buf, faceplat
               faceplate_button7_hover_buf, faceplate_button7_press_buf, faceplate_button8_hover_buf, faceplate_button8_press_buf;
 elapsedMillis nbt_vin_request_timer = 3000, engine_run_timer = 0, vehicle_awake_timer = 0, vehicle_awakened_timer = 0;
 uint8_t DONOR_VIN[7] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-float battery_voltage = 0;
+float battery_voltage = 12.0;
 uint16_t faceplate_volume = 0;
 bool faceplate_eject_pressed = false, faceplate_power_mute_pressed = false, faceplate_hu_reboot = false;
 elapsedMillis faceplate_eject_pressed_timer = 0, faceplate_power_mute_pressed_timer = 0,
@@ -223,7 +220,7 @@ cppQueue faceplate_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint16_t RPM = 0;
-uint8_t e_throttle_position = 0;
+float e_throttle_position = 0;
 float engine_torque = 0, engine_torque_nm = 0;
 bool engine_idling = false;                                                                                                         // Not idling.
 bool handbrake_status = true;
@@ -310,7 +307,7 @@ elapsedMillis front_fog_corner_timer = 1500;
 bool dipped_beam_status = false, left_fog_on = false, right_fog_on = false;
 bool ahl_active = false, flc_active = false, frm_ahl_flc_status_requested = false;
 CAN_message_t frm_ahl_flc_status_request_buf;
-float steering_angle = 0;
+float steering_angle = 0, steering_angle_speed = 0;
 CAN_message_t front_left_fog_on_a_buf, front_left_fog_on_b_buf, front_left_fog_on_c_buf, front_left_fog_on_d_buf,
               front_left_fog_on_a_softer_buf, front_left_fog_on_b_softer_buf, front_left_fog_on_c_softer_buf,
               front_left_fog_on_d_softer_buf, front_left_fog_on_e_softer_buf, front_left_fog_on_f_softer_buf,
@@ -355,6 +352,7 @@ CAN_message_t frm_mirror_status_request_a_buf, frm_mirror_status_request_b_buf,
 bool szl_full_indicator = false;
 cppQueue mirror_fold_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 elapsedMillis frm_undim_timer = 10000;
+uint8_t fzd_ec_dimming = 0;
 uint8_t auto_seat_ckm[4] = {0, 0, 0, 0};
 bool comfort_exit_ready = false;
 CAN_message_t dr_seat_move_back_buf;
@@ -378,7 +376,7 @@ cppQueue alarm_led_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          alarm_warnings_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          ekp_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
          alarm_siren_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
-bool alarm_after_engine_stall = false, alarm_active = false, alarm_led_disable_on_lock = false;
+bool alarm_after_engine_stall = false, alarm_active = false, alarm_led_disable_on_lock = false, eml_light = false;
 elapsedMillis alarm_led_message_timer = 100000;
 CAN_message_t alarm_led_on_buf, alarm_led_return_control_buf, alarm_siren_on_buf, alarm_siren_return_control_buf;
 bool reverse_beep_sent = false, pdc_too_close = false;
@@ -395,13 +393,9 @@ bool sine_pitch_angle_requested = false, sine_roll_angle_requested = false;
 uint16_t xview_pitch_angle = 0x5000;                                                                                                // 0 degrees
 uint8_t xview_grade_percentage = 0x64;                                                                                              // 0%
 uint16_t f_vehicle_pitch_angle = 0x2500, f_vehicle_roll_angle = 0x2500;                                                             // 1280 * 0.05 - 64 = 0 degrees, 2 - Valid.
-float e_longitudinal_acceleration = 0, e_longitudinal_acceleration_error = 0;
+float e_longitudinal_acceleration = 0, e_lateral_acceleration = 0, e_yaw_rate = 0;
 uint16_t longitudinal_acceleration = 0x7EF4, lateral_acceleration = 0x7EF4;                                                         // 32500 * 0.002 - 65 = 0 m/s^2.
-uint8_t f_longitudinal_acceleration_alive_counter = 0;
-float e_lateral_acceleration = 0, e_lateral_acceleration_error = 0;
-const double ema_alpha = 0.7;
-uint8_t f_lateral_acceleration_alive_counter = 0;
-float e_yaw_rate = 0, e_yaw_error = 0;
+uint8_t f_longitudinal_acceleration_alive_counter = 0, f_lateral_acceleration_alive_counter = 0;
 uint16_t f_yaw_rate = 0x8000;                                                                                                       // 32768 * 0.005 - 163.84 = 0 degrees/sec.
 uint8_t f_yaw_alive_counter = 0;
 float real_speed = 0;
@@ -411,17 +405,19 @@ uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xF
         f_ftm_status_alive_counter = 0, f_standstill_status_alive_counter = 0, f_mdrive_alive_counter = 0,
         f_xview_pitch_alive_counter = 0, f_road_incline_alive_counter = 0, f_steering_angle_effective_alive_counter = 0,
         f_throttle_pedal_alive_counter = 0;
-uint8_t f_mdrive_settings[] = {0, 0, 0, 0, 0};
+uint8_t f_mdrive_settings[] = {0, 0, 0, 0, 0}, f_driving_dynamics_ignore = 3;
 uint32_t f_distance_alive_counter = 0x2000;
 uint8_t f_lights_ckm_request = 0;
 CAN_message_t f_lights_ckm_delayed_msg;
-uint16_t f_converted_steering_angle = 0;
-elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_timer = 500, 
+uint16_t f_converted_steering_angle = 0, f_front_axle_wheel_angle = 0;
+elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_timer = 500,
               f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000,
-              f_xview_pitch_timer = 1000, f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1000;
-elapsedMicros f_road_incline_timer = 100000, f_torque_1_timer = 100000, f_chassis_longitudinal_timer = 20000,                       // Higher precision for high sample rate messages.
-              f_chassis_lateral_timer = 20000, f_chassis_yaw_timer = 20000, f_chassis_speed_timer = 20000,
-              f_chassis_steering_timer = 200000, f_chassis_steering_effective_timer = 20000, f_throttle_pedal_timer = 40000;
+              f_xview_pitch_timer = 1000, f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1000,
+              f_road_incline_timer_ptcan = 100, f_road_incline_timer_kcan2 = 200, f_torque_1_timer = 20,
+              f_chassis_lateral_timer_ptcan = 20, f_chassis_lateral_timer_kcan2 = 200,
+              f_chassis_longitudinal_timer_kcan2 = 200, f_chassis_longitudinal_timer_ptcan = 20,
+              f_chassis_yaw_timer = 20, f_chassis_speed_timer = 20,
+              f_chassis_steering_timer = 200, f_chassis_steering_effective_timer = 20, f_throttle_pedal_timer = 20;
 CAN_message_t sine_pitch_angle_request_a_buf, sine_pitch_angle_request_b_buf,
               sine_roll_angle_request_a_buf, sine_roll_angle_request_b_buf, nivi_button_pressed_buf,
               nivi_button_released_buf, f_hu_nbt_reboot_buf;
@@ -482,16 +478,15 @@ CAN_message_t camera_off_buf, camera_on_buf, camera_inactive_buf, pdc_off_camera
 cppQueue pdc_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t f_pdc_request = 1, rvc_settings[] = {0xE5, 0x4B, 0x2D, 0xE1};                                                               // Camera OFF, Brightness 50%, Contrast 50%, Parking lines OFF, Obstacle marking ON, Tow view OFF.
 bool rvc_tow_view_by_module = false, rvc_tow_view_by_driver = false, msa_button_pressed = false;
-elapsedMillis rvc_action_timer = 500;
-uint8_t msa_fake_status_counter = 0;
+elapsedMillis rvc_action_timer = 500, msa_fake_status_timer = 0;
 cppQueue ihk_extra_buttons_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool asd_initialized = false, asd_rad_on_initialized = false;
 CAN_message_t msa_fake_status_buf, mute_asd_buf, demute_asd_buf, radon_asd_buf,
               clear_hs_kwp_dme_buf, ccc_zbe_wake_buf, jbe_reboot_buf,
               ihka_5v_on_buf, ihka_5v_off_buf;
 extern float tempmonGetTemp(void);
-char serial_debug_string[512];
-char boot_debug_string[16384];
+char serial_debug_string[128];
+char boot_debug_string[16384];                                                                                                      // Can store a minimum of 127 messages that are 128 bytes long.
 unsigned long max_loop_timer = 0, loop_timer = 0;
 uint32_t kcan_error_counter = 0, kcan2_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;

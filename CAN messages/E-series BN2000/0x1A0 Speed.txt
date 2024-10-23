@@ -1,3 +1,6 @@
+// In the case of acceleration and yaw values, they are error corrected by the DSC module once the engine is started and the vehicle moves a bit.
+
+
  Indicated speed: 00 Moving: No
 1A0 Buffer: 00 80 00 B0 00 FF 8F 00
  Indicated speed: 00 Moving: No

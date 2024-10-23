@@ -699,6 +699,7 @@ void send_cc_message(const char input[], bool dialog, unsigned long new_timeout)
   }
   
   kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text_end));
+  custom_info_cc_timer = 3000;
 }
 
 
@@ -774,7 +775,9 @@ void evaluate_speed_warning_setting(void) {
 
 
 void send_f_lcd_brightness(void) {
-  uint8_t f_lcd_brightness[] = {k_msg.buf[0], 0x32, k_msg.buf[2], 0xFD};                                                            // Byte0 used for brightness (0 to 0xFE). Byte1 is fixed at 0x32.
+  uint8_t f_lcd_brightness[] = {(uint8_t)constrain(k_msg.buf[0], 0, 0xFE),                                                          // Byte0 used for brightness (0 to 0xFE). Byte1 is fixed at 0x32.
+                                 0x32, k_msg.buf[2], 0xFD};                                                                         // Byte1 damping and delay. Set to 0xF2 for fast change.
+
   if (rls_time_of_day == 2) {
     f_lcd_brightness[3] = 0xFE;                                                                                                     // This makes the NBT switch to night mode.
   } else if (rls_time_of_day == 1) {

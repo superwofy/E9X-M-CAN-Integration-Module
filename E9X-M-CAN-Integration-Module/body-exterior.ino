@@ -155,13 +155,18 @@ void undim_mirrors_with_indicators(void) {
   // Makes it easier to see cyclists at night in the city when turning...
   if (szl_full_indicator) {
     if (rls_time_of_day == 2 && frm_undim_timer >= 10000) {
-      if (engine_running == 1 && indicated_speed <= 30.0) {
+      if (engine_running == 2 && indicated_speed <= 30.0 && fzd_ec_dimming >= 0x32) {
         kcan_write_msg(frm_mirror_undim_buf);
         frm_undim_timer = 0;
         serial_log("Undimmed exterior mirrors with indicator.", 2);
       }
     }
   }
+}
+
+
+void evaluate_electrochromic_dimming(void) {
+  fzd_ec_dimming = k_msg.buf[0];                                                                                                    // Maxes out at around 0x64
 }
 
 
@@ -538,13 +543,11 @@ void evaluate_dipped_beam_status(void) {
    if (!dipped_beam_status) {
       dipped_beam_status = true;
       serial_log("Dipped beam ON.", 2);
-      #if FRONT_FOG_CORNER_AHL_SYNC
-        frm_ahl_flc_status_requested = true;
-        kcan_write_msg(frm_ahl_flc_status_request_buf);
-        unsigned long time_now = millis();
-        m = {frm_ahl_flc_status_request_buf, time_now + 5000};                                                                      // Send a delayed message as this job can return 0 right after startup.
-        fog_corner_right_txq.push(&m);
-      #endif
+      frm_ahl_flc_status_requested = true;
+      kcan_write_msg(frm_ahl_flc_status_request_buf);
+      unsigned long time_now = millis();
+      m = {frm_ahl_flc_status_request_buf, time_now + 5000};                                                                        // Send a delayed message as this job can return 0 right after startup.
+      fog_corner_right_txq.push(&m);
     }
   } else {
     if (dipped_beam_status) {
@@ -563,12 +566,7 @@ void evaluate_dipped_beam_status(void) {
 
 void evaluate_corner_fog_activation(void) {
   if (front_fog_corner_timer >= 1500 && ignition) {
-    #if FRONT_FOG_CORNER_AHL_SYNC
-    if (!front_fog_status && dipped_beam_status && rls_time_of_day > 0 && ahl_active && diag_transmit) {
-    #else
-    if (!front_fog_status && dipped_beam_status && rls_time_of_day > 0 && flc_active && diag_transmit) {
-    #endif
-      
+    if (!front_fog_status && dipped_beam_status && rls_time_of_day == 2 && ahl_active && diag_transmit) {     
       float ANGLE, HYSTERESIS;
       if (indicators_on) {
         ANGLE = FOG_CORNER_STEERTING_ANGLE_INDICATORS;
@@ -772,7 +770,10 @@ void evaluate_ambient_temperature(void) {
 
 
 void evaluate_rls_light_status(void) {
-  rls_time_of_day = k_msg.buf[1];
+  rls_time_of_day = k_msg.buf[1] & 0xF;
+  if (rls_time_of_day == 8) {                                                                                                       // Either invalid or sensor blinded?
+    rls_time_of_day = 2;
+  }
   rls_brightness = k_msg.buf[0];
 }
 
@@ -814,8 +815,12 @@ void evaluate_vehicle_pitch_roll_angles(void) {
         xview_grade_percentage = 0x64 + round(100 * tan(0.0174532925 * abs(sine_pitch_angle)));                                     // Max is 0xFE - 154%.
         xview_pitch_angle = (0x500 + (int)round( -sine_pitch_angle ) * 0x14) << 4;
       #endif
-      
-      f_vehicle_pitch_angle = 0x2000 + round((sine_pitch_angle + 64) / 0.05);                                                       // Make leading 4 bits signal valid (QU_AVL_LOGR_RW).
+
+      f_vehicle_pitch_angle = 0x2000;                                                                                               // Make leading 4 bits signal valid (QU_AVL_LOGR_RW).
+      if (vehicle_awakened_timer <= 5000) {                                                                                         // Force the status to initialization after the car just woke.
+        f_vehicle_pitch_angle = 0x8000;
+      }
+      f_vehicle_pitch_angle = 0x2000 + round((sine_pitch_angle + 64) / 0.05);
       if (diag_transmit) {
         kcan_write_msg(sine_pitch_angle_request_b_buf);                                                                             // Send this to complete the transaction.
       }
@@ -826,6 +831,11 @@ void evaluate_vehicle_pitch_roll_angles(void) {
     if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x10 && k_msg.buf[4] == 4) {
       sine_roll_angle = ((int16_t)(k_msg.buf[5] << 8 | k_msg.buf[6])) * 0.001;
       sine_roll_angle = constrain(sine_roll_angle, -64.0, 64.0);                                                                    // Boundary check since F message has resolution -64..64.
+
+      f_vehicle_roll_angle = 0x2000;
+      if (vehicle_awakened_timer <= 5000) {                                                                                         // Force the status to initialization after the car just woke.
+        f_vehicle_roll_angle = 0x8000;
+      }
       f_vehicle_roll_angle = 0x2000 + round((sine_roll_angle + 64) / 0.05);
       if (diag_transmit) {
         kcan_write_msg(sine_roll_angle_request_b_buf);                                                                              // Send this to complete the transaction.

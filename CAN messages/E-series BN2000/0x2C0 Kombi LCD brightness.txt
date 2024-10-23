@@ -12,3 +12,6 @@
 00:01:07.681 ->  KCAN:  ID: 2C0 Buffer: F4 0 FE 
 00:01:13.789 ->  KCAN:  ID: 2C0 Buffer: F4 E0 5 
 00:01:19.418 ->  KCAN:  ID: 2C0 Buffer: 3F 0 3				// Screen dims back
+
+
+Cycle time 10s (idle).

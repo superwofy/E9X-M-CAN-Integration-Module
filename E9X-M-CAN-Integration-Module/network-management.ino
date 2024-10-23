@@ -469,7 +469,7 @@ CAN_message_t make_msg_buf(uint16_t txID, uint8_t txLen, uint8_t* txBuf) {
 
 void initialize_can_handlers(void) {
   // If only one function (without arguments) is called to handle the message, it is called directly.
-  // Otherwise, a wrapper is called instead.
+  // Otherwise, a wrapper (process_*) is called instead.
 
   kcan_handlers[0xAA] = process_kcan_AA;                                                                                            // 0xAA: (rpm/throttle pos) and torq_dvch - torque request, driver. Cycle time 100ms (KCAN).
   #if F_NBTE
@@ -484,13 +484,13 @@ void initialize_can_handlers(void) {
   #if FAKE_MSA
     kcan_handlers[0x195] = evaluate_msa_button;                                                                                     // 0x195: MSA button press from IHKA. Sent when changed.
   #endif
-  kcan_handlers[0x19E] = evaluate_dsc_status;
+  kcan_handlers[0x19E] = evaluate_dsc_status;                                                                                       // 0x19E: DSC status (KCAN only). Cycle time 200ms.
   #if F_NBTE
     kcan_handlers[0x1A6] = send_f_distance_messages;                                                                                // 0x1A6: Distance message from DSC. Cycle time 100ms.
   #else
     kcan_handlers[0x1AA] = send_dme_power_ckm;                                                                                      // Time POWER CKM message with iDrive ErgoCommander (0x1AA). Sent at boot and Terminal R cycling.
   #endif
-  kcan_handlers[0x1B4] = evaluate_indicated_speed;                                                                                  // 0x1B4: KOMBI status (indicated speed, handbrake). Cycle time 100ms (terminal R ON).
+  kcan_handlers[0x1B4] = evaluate_kombi_status_message;                                                                             // 0x1B4: KOMBI status (indicated speed, handbrake). Cycle time 100ms (terminal R ON).
   kcan_handlers[0x1B6] = evaluate_alternator_status;
   #if F_NBTE_CCC_ZBE
     kcan_handlers[0x1B8] = convert_zbe1_message;                                                                                    // Convert old CCC controller data (0x1B8) for NBT.
@@ -520,6 +520,9 @@ void initialize_can_handlers(void) {
     kcan_handlers[0x23D] = send_climate_popup_acknowledge;
     kcan_handlers[0x242] = evaluate_ihka_recirculation;
     kcan_handlers[0x2E6] = evaluate_ihka_auto_state;                                                                                // 0x2E6: Air distribution status message.
+  #endif
+  #if MIRROR_UNDIM
+    kcan_handlers[0x286] = evaluate_electrochromic_dimming;                                                                         // 0x286: Dim signal from FZD. Cycle time 500 ms (idle). Sent when changed.
   #endif
   #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
     kcan_handlers[0x2A6] = evaluate_wiper_stalk_status;                                                                             // 0x2A6: Wiper stalk status from SZL. Cycle time 1s (idle).
@@ -617,18 +620,28 @@ void initialize_can_handlers(void) {
   #if F_NBTE
     memset(kcan_to_kcan2_forward_filter_list,
            1, sizeof(kcan_to_kcan2_forward_filter_list));
-    kcan_to_kcan2_forward_filter_list[0xAA] = 0;                                                                                    // BN2000 engine status and torques.
-    kcan_to_kcan2_forward_filter_list[0xA8] = 0;
-    kcan_to_kcan2_forward_filter_list[0xC4] = 0;                                                                                    // BN2000 steering angle.
-    kcan_to_kcan2_forward_filter_list[0xC8] = 0;
+    kcan_to_kcan2_forward_filter_list[0xA9] = 0;                                                                                    // BN2000 only, TORQUE_2.
+    kcan_to_kcan2_forward_filter_list[0xAA] = 0;                                                                                    // BN2000 only, engine status and torques.
+    kcan_to_kcan2_forward_filter_list[0xA8] = 0;                                                                                    // BN2000 only, TORQUE_1 KCAN.
+    kcan_to_kcan2_forward_filter_list[0xC4] = 0;                                                                                    // BN2000 only, steering angle.
+    kcan_to_kcan2_forward_filter_list[0xC8] = 0;                                                                                    // BN2000 only, SZL angle.
+    kcan_to_kcan2_forward_filter_list[0xCE] = 0;                                                                                    // BN2000 only, wheel speeds.
+    kcan_to_kcan2_forward_filter_list[0x130] = 0;                                                                                   // BN2000 terminal status. Rarely used by some PL6 modules (old ZBE and other KCAN modules?).
+    kcan_to_kcan2_forward_filter_list[0x195] = 0;                                                                                   // BN2000 only, MSA button.
+    kcan_to_kcan2_forward_filter_list[0x19E] = 0;                                                                                   // BN2000 Status DSC / BN2010 control subnetworks.
     kcan_to_kcan2_forward_filter_list[0x1A0] = 0;                                                                                   // BN2000 Speed / BN2010 Gearbox check-control.
-    kcan_to_kcan2_forward_filter_list[0x1B6] = 0;                                                                                   // BN2000 Engine heat flow. Unknown in BN2010. It causes NBT EVO to block phone calls.
+    kcan_to_kcan2_forward_filter_list[0x1B4] = 0;                                                                                   // BN2000 only, KOMBI status.
+    kcan_to_kcan2_forward_filter_list[0x1B6] = 0;                                                                                   // BN2000 Engine electrical current flow. Unknown in BN2010. It causes NBT EVO to block phone calls.
+    kcan_to_kcan2_forward_filter_list[0x1D0] = 0;                                                                                   // BN2000 only, engine data.
     kcan_to_kcan2_forward_filter_list[0x1D6] = 0;                                                                                   // MFL buttons for next/previous are swappend for NBT EVO.
-    kcan_to_kcan2_forward_filter_list[0x2C0] = 0;                                                                                   // BN2000 LCD brightness.
+    kcan_to_kcan2_forward_filter_list[0x2B2] = 0;                                                                                   // BN2000 only, wheel brake pressures.
+    kcan_to_kcan2_forward_filter_list[0x2C0] = 0;                                                                                   // BN2000 only, LCD brightness.
     kcan_to_kcan2_forward_filter_list[0x2F3] = 0;                                                                                   // BN2000 gear shift instruction / BN2010 gyro.
     kcan_to_kcan2_forward_filter_list[0x2F7] = 0;                                                                                   // KOMBI units. Requires further processing.
-    kcan_to_kcan2_forward_filter_list[0x317] = 0;                                                                                   // BN2000 PDC button.
-    kcan_to_kcan2_forward_filter_list[0x31D] = 0;                                                                                   // BN2000 FTM status.
+    kcan_to_kcan2_forward_filter_list[0x317] = 0;                                                                                   // BN2000 only, PDC button.
+    kcan_to_kcan2_forward_filter_list[0x31D] = 0;                                                                                   // BN2000 only, FTM status.
+    kcan_to_kcan2_forward_filter_list[0x326] = 0;                                                                                   // BN2000 only, EDC status.
+    kcan_to_kcan2_forward_filter_list[0x332] = 0;                                                                                   // BN2000 only, variable redline.
     kcan_to_kcan2_forward_filter_list[0x35C] = 0;                                                                                   // Speed warning setting. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x3DD] = 0;                                                                                   // Lights CKM. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x336] = 0;                                                                                   // CC list display. Requires further processing.
@@ -683,14 +696,14 @@ void initialize_can_handlers(void) {
 
     memset(kcan2_to_kcan_forward_filter_list,
            1, sizeof(kcan2_to_kcan_forward_filter_list));
-    kcan2_to_kcan_forward_filter_list[0xBF] = 0;                                                                                    // Skip touchpad data message. This message is only for BN2010.
-    kcan2_to_kcan_forward_filter_list[0x2B8] = 0;
-    kcan2_to_kcan_forward_filter_list[0x317] = 0;                                                                                   // This message is used for the ZBE instead of PDC activation. Causes sporadinc PDC activation. Ignore.
-    kcan2_to_kcan_forward_filter_list[0x31A] = 0;
-    kcan2_to_kcan_forward_filter_list[0x39E] = 0;
-    kcan2_to_kcan_forward_filter_list[0x3DC] = 0;
-    kcan2_to_kcan_forward_filter_list[0x42F] = 0;
-    kcan2_to_kcan_forward_filter_list[0x635] = 0;
+    kcan2_to_kcan_forward_filter_list[0xBF] = 0;                                                                                    // BN2010 touchpad data message.
+    kcan2_to_kcan_forward_filter_list[0x2B8] = 0;                                                                                   // Speed warning setting. Modified some bytes to fit BN2000 format.
+    kcan2_to_kcan_forward_filter_list[0x317] = 0;                                                                                   // This message is used for the BN2010 ZBE instead of PDC activation. Causes sporadic PDC activation.
+    kcan2_to_kcan_forward_filter_list[0x31A] = 0;                                                                                   // PDC bus status request. Converted to 0x3AE.
+    kcan2_to_kcan_forward_filter_list[0x39E] = 0;                                                                                   // Time/date, checked for zero before forwarding.
+    kcan2_to_kcan_forward_filter_list[0x3DC] = 0;                                                                                   // Light CKM setting. Converted to use 0x5E2. Stored last byte to correct 0x3DD.
+    kcan2_to_kcan_forward_filter_list[0x42F] = 0;                                                                                   // BN2010 MDrive settings.
+    kcan2_to_kcan_forward_filter_list[0x635] = 0;                                                                                   // BN2010 TBX network management.
     for (int i = 0x6F1; i < 0x800; i++) {                                                                                           // Irrelevant data. Also stop HU from injecting diagnostic messages to other networks.
       kcan2_to_kcan_forward_filter_list[i] = 0;
     }
@@ -741,6 +754,9 @@ void kcan_write_msg(const CAN_message_t &msg) {
 
 
 void kcan2_write_msg(const CAN_message_t &msg) {
+
+  // if ( msg.id == 0x12F || msg.id == 0x130 || msg.id == 0x560) {} else { return; }                                                  // Testing with minimal busload
+
   #if F_NBTE
     if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 300 || msg.id == 0x12F || msg.id == 0x130)) {                        // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
       byte send_buf[msg.len];

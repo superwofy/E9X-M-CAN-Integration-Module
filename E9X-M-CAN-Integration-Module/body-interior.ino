@@ -16,7 +16,7 @@ void check_vehicle_awake(void) {
 
 
 void evaluate_terminal_clutch_keyno_status(void) {
-  uint8_t f_terminal_status[] = {0, 0, 0x80, 0xFF, 0, 0, 0x3F, 0xFF};                                                               // Byte2: ST_KL. Spec says it should be 0xF but all traces have 0x8...
+  uint8_t f_terminal_status[] = {0, 0, 0x80, 0xFF, 0, 1, 0x3F, 0xFF};                                                               // Byte2: ST_KL. Spec says it should be 0xF but all traces have 0x8...
   bool terminal_r_ = terminal_r, ignition_ = ignition, terminal_50_ = terminal_50;
 
   // These must be checked since error states such as 2 or 3 can be set. E.g when PGS is being reset (Byte0 = 0x27).
@@ -38,29 +38,32 @@ void evaluate_terminal_clutch_keyno_status(void) {
     }
   }
 
-  #if F_VSW01 || F_NIVI || F_NBTE                                                                                                   // Translate 0x130 to 0x12F for F-series modules.
+  #if F_VSW01 || F_NIVI || F_NBTE                                                                                                   // Translate 0x130 to 0x12F for F-series modules. 6MC2DL0B pg. 1316.
     if (terminal_50) {
-      f_terminal_status[1] = 0xB << 4;
-      f_terminal_status[2] |= 0xD;
+      f_terminal_status[1] = 0xB << 4;                                                                                              // VSM_STM_STATE_ENG_START
+      f_terminal_status[2] = 0x8D;                                                                                                  // KL50_ON
     } else if (ignition) {
-      if (vehicle_moving && engine_running == 1) {
-        f_terminal_status[1] = 8 << 4;
-      } else if (engine_idling) {
-        f_terminal_status[1] = 7 << 4;                                                                                              // VSM_STM_STATE_ENG_IDLE
+      if (engine_running == 2) {
+        if (vehicle_moving) {
+          f_terminal_status[1] = 8 << 4;                                                                                            // VSM_STM_STATE_DRIVE
+        } else {
+          f_terminal_status[1] = 7 << 4;                                                                                            // VSM_STM_STATE_ENG_IDLE
+        }
+        f_terminal_status[5] = 5;                                                                                                   // ST_STCD_PENG: Starting condition of traction fulfilled, CTR_ENG_STOP: Default
       } else {
-        f_terminal_status[1] = 5 << 4;
+        f_terminal_status[1] = 5 << 4;                                                                                              // VSM_STM_STATE_IGNITION
       }
-      f_terminal_status[2] |= 0xA;
+      f_terminal_status[2] = 0x8A;                                                                                                  // KL15_ON
     } else if (terminal_r) {
       f_terminal_status[1] = 2 << 4;
-      f_terminal_status[2] |= 8;
-    } else {                                                                                                                        // 30B/30G?
+      f_terminal_status[2] = 0x88;                                                                                                  // KLR_ON
+    } else {
       if (doors_alarmed) {
-        f_terminal_status[1] = 1 << 4;                                                                                              // Driver not present.
+        f_terminal_status[1] = 1 << 4;                                                                                              // Driver not present. VSM_STM_STATE_STANDBY
       } else {
-        f_terminal_status[1] = 2 << 4;
+        f_terminal_status[1] = 2 << 4;                                                                                              // VSM_STM_STATE_BASICOP
       }
-      f_terminal_status[2] |= 6;
+      f_terminal_status[2] = 0x86;                                                                                                  // KL30B_ON / 30G for BN2000
     }
 
     f_terminal_status[1] = f_terminal_status[1] | f_terminal_status_alive_counter;                                                  // Combine ST_VEH_CON and ALIV_COU_KL
@@ -68,49 +71,39 @@ void evaluate_terminal_clutch_keyno_status(void) {
     f_terminal_status[4] = (0xF << 4) | key_valid ? 3 : 1;                                                                          // Set ST_KL_KEY_VLD
   #endif
 
-  #if FAKE_MSA
-    if (ignition) {
-      if (msa_fake_status_counter == 5){
-        kcan_write_msg(msa_fake_status_buf);                                                                                        // Send this message every 500ms to keep the IHKA module happy.
-        msa_fake_status_counter = 0;
-      }
-      msa_fake_status_counter++;
-    }
-  #endif
-
   if (terminal_r && !terminal_r_) {                                                                                                 // Terminal R changed from OFF to ON.
     serial_log("Terminal R ON.", 2);
+    comfort_exit_ready = false;
+    f_terminal_status[2] = 0x87;
+    nbt_bus_sleep = false;
+    activate_optional_transceivers();                                                                                               // Re-activate transceivers with Terminal R in case the FRM message was missed.
+    car_locked_indicator_counter = 0;
+    custom_info_cc_timer = 3000;
     #if FRM_AHL_MODE
       kcan_write_msg(frm_ckm_ahl_komfort_buf);                                                                                      // Make sure we're in comfort mode on startup.
     #endif
-    comfort_exit_ready = false;
     #if F_NBTE_CCC_ZBE
       kcan_write_msg(ccc_zbe_wake_buf);                                                                                             // ZBE1 will now transmit data on 0x1B8.
     #endif
     #if F_NBTE
       send_nbt_sport_displays_data(false);                                                                                          // Initialize the sport display scale.
     #endif
-    f_terminal_status[2] |= 7;
-    nbt_bus_sleep = false;
-    activate_optional_transceivers();                                                                                               // Re-activate transceivers with Terminal R in case the FRM message was missed.
-    car_locked_indicator_counter = 0;
   } else if (!terminal_r && terminal_r_) {
     serial_log("Terminal R OFF.", 2);
     comfort_exit_ready = true;
     intermittent_wipe_active = false;
-    f_terminal_status[2] |= 7;
+    f_terminal_status[2] = 0x87;
     nbt_bus_sleep = true;                                                                                                           // Will allow the network to sleep unless the driver presses the faceplate button.
     nbt_bus_sleep_ready_timer = 0;
+    custom_info_cc_timer = 3000;
   }
 
   if (ignition && !ignition_) {                                                                                                     // Ignition changed from OFF to ON.
     scale_cpu_speed();
     serial_log("Ignition ON.", 2);
-
     #if F_NBTE
       send_nbt_sport_displays_data(false);
     #endif
-
     #if DIM_DRL                                                                                                                     // These resets are required if quickly (less than 15s) switching igniton 
       if (((millis() - last_drl_action_timer) < 15000)) {
         // RESET - TODO
@@ -123,24 +116,26 @@ void evaluate_terminal_clutch_keyno_status(void) {
         last_fog_action_timer = 0;
       }
     #endif
-    f_terminal_status[2] |= 9;
+    f_terminal_status[2] = 0x89;                                                                                                    // KL15_change
     nbt_bus_sleep = false;
-    nbt_network_management_next_neighbour = 0x64;                                                                                   // PDC.
+    nbt_network_management_next_neighbour = 0x64;                                                                                   // PDC controller.
     nbt_network_management_timer = 3000;
+    custom_info_cc_timer = 3000;
   } else if (!ignition && ignition_) {
     reset_ignition_variables();
     scale_cpu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
     serial_log("Ignition OFF.", 2);
-    f_terminal_status[2] |= 9;
+    f_terminal_status[2] = 0x89;                                                                                                    // KL15_change
+    custom_info_cc_timer = 3000;
   }
 
   if (terminal_50 && !terminal_50_) {
-    f_terminal_status[1] = 9 << 4;                                                                                                  // Impending start of engine.
-    f_terminal_status[2] |= 0xC;
-    serial_log("Terminal 50 ON", 2);
+    f_terminal_status[1] = 9 << 4;                                                                                                  // Impending start of engine (VSM_STM_STATE_ENG_START_PRE).
+    f_terminal_status[2] = 0x8C;                                                                                                    // KL50_change
+    serial_log("Terminal 50 (starter) ON", 2);
   } else if (!terminal_50 && terminal_50) {
-    f_terminal_status[2] |= 0xC;
-    serial_log("Terminal 50 OFF.", 2);
+    f_terminal_status[2] = 0x8C;                                                                                                    // KL50_change
+    serial_log("Terminal 50 (starter) OFF.", 2);
   }
 
   #if F_VSW01 || F_NIVI || F_NBTE
@@ -379,7 +374,7 @@ void evaluate_steering_heating_request(void) {
 }
 
 
-void send_f_energy_condition(void) {
+void send_f_energy_condition(void) {                                                                                                // 6MC2DL0B pg. 1532.
   if (f_energy_condition_timer >= 5000) {
     uint8_t f_energy_condition[] = {0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};                                                // Energy good.
 

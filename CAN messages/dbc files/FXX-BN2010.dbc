@@ -1,0 +1,433 @@
+VERSION ""
+
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_: 
+BU_: ICMQL DSC_SAS CAS_FEM_BDC DME_DDE KOMBI FRM_BDC JBBF_FEM_BDC 
+BO_ 2147484063 VYAW_VEH: 6 ICMQL
+   SG_ VYAW_VEH : 16|16@1+ (0.005,-163.84) [-163.84|163.84] "deg/s" Vector__XXX
+   SG_ QU_VYAW_VEH : 44|4@1+ (1,0) [0|16] "" Vector__XXX
+
+BO_ 2147484057 Vehicle_Longitudinal_Acceleration: 6 ICMQL
+   SG_ ACLNX_COG : 16|16@1+ (0.002,-65) [-65|65] "m/s^2" Vector__XXX
+   SG_ QU_ACLNX_COG : 44|4@1+ (1,0) [0|16] "" Vector__XXX
+
+BO_ 2147484403 Display_Forecast_2: 8 DSC_SAS
+   SG_ ACLNX_COG : 32|16@1+ (0.002,-65) [-65|65] "m/s^2" Vector__XXX
+   SG_ VYAW_VEH : 16|16@1+ (0.005,-163.84) [-163.84|163.84] "deg/s" Vector__XXX
+   SG_ ACLNY_COG : 48|16@1+ (0.002,-65) [-65|65] "m/s^2" Vector__XXX
+   SG_ AVL_STEA_FTAX_WHL : 0|16@1+ (0.00274658,-90) [-90|90] "deg" Vector__XXX
+
+BO_ 2147484058 Vehicle_Lateral_Acceleration: 6 ICMQL
+   SG_ ACLNY_COG : 16|16@1+ (0.002,-65) [-65|65] "m/s^2" Vector__XXX
+   SG_ QU_ACLNY_COG : 44|4@1+ (1,0) [0|16] "" Vector__XXX
+
+BO_ 2147484417 STEA_FTAX_WHL: 8 DSC_SAS
+   SG_ AVL_STEAV_FTAX_PNI : 16|16@1+ (0.04395,-1440.11) [-1440.11|1440.11] "deg" Vector__XXX
+   SG_ Steering_angle_speed : 32|16@1+ (0.04395,-1440.11) [-1440.11|1440.11] "deg/s" Vector__XXX
+   SG_ QU_AVL_STEA_FTAX_PNI : 52|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ QU_Steering_angle_speed : 48|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484418 STEA_FTAX_EFFV: 8 DSC_SAS
+   SG_ AVL_STEA_FTAX_WHL : 16|16@1+ (0.00274658,-90) [-90|90] "deg" Vector__XXX
+   SG_ QU_AVL_STEA_FTAX_WHL : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484065 V_VEH: 5 ICMQL
+   SG_ V_VEH_COG : 16|16@1+ (0.015625,0) [0|350] "km/h" Vector__XXX
+   SG_ QU_V_VEH_COG : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DVCO_VEH : 36|3@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147483951 KLEMMEN: 8 CAS_FEM_BDC
+   SG_ ST_VEH_CON : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_KL : 16|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_KL_KEY_VLD : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_ENG_STOP : 40|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_STCD_PENG : 42|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_OP_MSA : 44|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_SSP : 46|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RQ_DRVG_RDI : 54|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484003 TLT_RW: 8 ICMQL
+   SG_ AVL_LOGR_RW : 16|12@1+ (0.05,-64) [-64|64] "deg" Vector__XXX
+   SG_ AVL_TRGR_RW : 32|12@1+ (0.05,-64) [-64|64] "deg" Vector__XXX
+   SG_ QU_AVL_LOGR_RW : 28|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ QU_AVL_TRGR_RW : 44|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484243 SPT_ANZ: 8 DME_DDE
+   SG_ Torque : 0|8@1+ (1,0) [0|100] "%" Vector__XXX
+   SG_ Power : 16|8@1+ (1,0) [0|100] "%" Vector__XXX
+   SG_ Torque_Scale : 8|4@1+ (80,80) [0|1] "kgf/nm/lbft" Vector__XXX
+   SG_ Power_Scale : 12|4@1+ (80,80) [0|1] "kW/bhp" Vector__XXX
+
+BO_ 2147484725 MEASMT_EOI: 4 DME_DDE
+   SG_ FLLV_EOI_REL : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484665 DT_PT_2: 8 DME_DDE
+   SG_ ST_ECU_DT_PT_2 : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_DRV_VEH : 16|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_ENG_RUN_DRV : 24|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_SW_CLT_DRV : 26|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_ILK_STRT_DRV : 28|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_IDLG_ENG_DRV : 30|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TEMP_ENG_DRV : 32|8@1+ (1,-48) [-48|148] "*C" Vector__XXX
+   SG_ TEMP_EOI_DRV : 40|8@1+ (1,-48) [-48|170] "*C" Vector__XXX
+   SG_ ST_GRSEL_DRV : 48|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RLS_ENGSTA : 52|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RDUC_DOCTR_RPM_DRV_2 : 54|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RPM_ENG_MAX_ALW : 56|8@1+ (50,0) [0|12700] "rpm" Vector__XXX
+
+BO_ 2147484576 FZZSTD: 8 JBBF_FEM_BDC
+   SG_ ST_ENERG_FZM : 16|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_ILK_ERRM_FZM : 56|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484563 LCD_BRIG_CLCTR: 4 KOMBI
+   SG_ DSTN_LCD_LUM : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DAY_NIGHT : 24|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DMPNG_LCD_LUM : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147483865 ANG_ACPD: 8 DME_DDE
+   SG_ ST_ECU_ANG_ACPD : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ AVL_ANG_ACPD : 16|12@1+ (0.025,0) [0|100] "%" Vector__XXX
+   SG_ QU_AVL_ANG_ACPD : 28|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ AVL_ANG_ACPD_VIRT : 32|12@1+ (0.025,0) [0|100] "%" Vector__XXX
+   SG_ GRAD_AVL_ANG_ACPD : 44|12@1+ (4,-8188) [-8187|8188] "%/s" Vector__XXX
+   SG_ ST_INTF_DRASY : 56|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ECO_ANG_ACPD : 60|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147483813 TORQ_CRSH_1: 8 DME_DDE
+   SG_ ST_SAIL_DRV_2 : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ AVL_TORQ_CRSH : 16|12@1+ (1,-2048) [-1023.5|1023.5] "Nm" Vector__XXX
+   SG_ AVL_TORQ_CRSH_DMEE : 28|12@1+ (1,-2048) [-1023.5|1023.5] "Nm" Vector__XXX
+   SG_ AVL_RPM_ENG_CRSH : 40|16@1+ (0.25,0) [0|12000] "rpm" Vector__XXX
+   SG_ QU_AVL_RPM_ENG_CRSH : 56|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484545 ELKTR_M_OEL_MESS: 2 DME_DDE
+   SG_ FLLV_EOI : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RECM_RFLV_EOI : 8|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147483891 DISP_RPM_PT: 8 DME_DDE
+   SG_ DISP_RPM_ENG_CRSH : 12|12@1+ (10,0) [0|12000] "rpm" Vector__XXX
+   SG_ DISP_TARG_DRV : 24|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DISP_GSI_DRV : 28|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DISP_AVL_PWR_REL_RECUP_IGR : 32|4@1+ (10,0) [0|1] "%" Vector__XXX
+
+BO_ 2147484667 DT_PT_1: 6 DME_DDE
+   SG_ AIP_ENG_DRV : 0|8@1+ (2,598) [600|1106] "hPA" Vector__XXX
+   SG_ TAR_RPM_IDLG_DRV : 8|8@1+ (5,0) [0|1270] "rpm" Vector__XXX
+   SG_ ST_SW_WAUP_DRV : 16|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RDUC_DOCTR_RPM_DRV : 18|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RQ_SHPA_GRB_REGE_PAFI : 20|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ SLCTN_BUS_COMM_ENG_GRB : 22|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RQ_STASS_ENGMG : 24|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_SLCK_DRV : 28|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_RTIR_DRV : 30|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_INFS_DRV : 32|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RQ_SHPA_GRB_CHGBLC : 34|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_CAT_HT : 36|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TAR_RPM_IDLG_DRV_EXT : 40|8@1+ (10,0) [0|2540] "rpm" Vector__XXX
+
+BO_ 2147484592 STAT_GANG_RUECKWAERTS: 2 FRM_BDC
+   SG_ ST_GR_BAC : 0|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484583 SU_SW_DRDY: 8 ICMQL
+   SG_ drivetrain : 16|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ suspension : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ icm_state : 24|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ icm_mode : 26|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ stability : 28|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ FDS : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484495 STAT_CT_HABR: 2 JBBF_FEM_BDC
+   SG_ STAT_CT_HABR : 0|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484581 SLRDI_GLB_FZM: 5 DME_DDE
+   SG_ DSTN_SLRDI_GLB : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_SLRDI_GLB : 8|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_FSL : 10|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_SLP_BUS : 12|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484497 DT_BAT: 5 DME_DDE
+   SG_ AVL_CON_BT : 0|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_CHG_BT : 2|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_BT_WNG : 4|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_CEDT : 6|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ QUAL_CON_BT_CAPE_AVL : 8|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ QUAL_CON_BT_CHGCOND : 10|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_LSS_WTR : 12|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_EXHDCHG : 14|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CON_BT_CAPE_AVL : 16|8@1+ (1,0) [0|150] "%" Vector__XXX
+   SG_ CON_BT_CHGCOND : 24|8@1+ (1,0) [0|150] "%" Vector__XXX
+   SG_ QUAN_ALT_BT : 32|4@1+ (1,0) [0|14] "" Vector__XXX
+
+BO_ 2147484595 POWERMGMT_CTR_COS: 7 DME_DDE
+   SG_ SLCTN_SPCOS : 4|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_SPCOS : 8|8@1+ (0.5,0) [0|100] "%" Vector__XXX
+   SG_ CTR_PWR_COS_1 : 16|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_2 : 17|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_3 : 18|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_4 : 19|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_5 : 20|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_6 : 21|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_7 : 22|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_8 : 23|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_9 : 24|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_10 : 25|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_11 : 26|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_12 : 27|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_13 : 28|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_14 : 29|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_15 : 30|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWR_COS_16 : 31|1@0+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_CBR : 32|8@1+ (1,0) [0|1] "" Vector__XXX
+
+CM_ BO_ 2147484063 "Vehicle_Yaw_Rate";
+CM_ SG_ 2147484063 VYAW_VEH "Vehicle_Yaw_Rate";
+CM_ SG_ 2147484063 QU_VYAW_VEH "Qualifier_Vehicle_Yaw_Rate";
+CM_ SG_ 2147484057 ACLNX_COG "Longitudinal_acceleration_center_of_gravity";
+CM_ SG_ 2147484057 QU_ACLNX_COG "Qualifier_Longitudinal_acceleration_center_of_gravity";
+CM_ SG_ 2147484403 ACLNX_COG "Longitudinal_acceleration_center_of_gravity";
+CM_ SG_ 2147484403 VYAW_VEH "Vehicle_Yaw_Rate";
+CM_ SG_ 2147484403 ACLNY_COG "Lateral_acceleration_center_of_gravity";
+CM_ SG_ 2147484403 AVL_STEA_FTAX_WHL "Actual_steering_angle_front_axle_wheel";
+CM_ SG_ 2147484058 ACLNY_COG "Lateral_acceleration_center_of_gravity";
+CM_ SG_ 2147484058 QU_ACLNY_COG "Qualifier_Lateral_acceleration_center_of_gravity";
+CM_ BO_ 2147484417 "Actual_Steering_Angle_Driver";
+CM_ SG_ 2147484417 AVL_STEAV_FTAX_PNI "Actual_steering_angle_front_axle_pinion";
+CM_ SG_ 2147484417 Steering_angle_speed "Steering_angle_change_speed";
+CM_ SG_ 2147484417 QU_AVL_STEA_FTAX_PNI "Qualifier_Actual_steering_angle_front_axle_pinion";
+CM_ SG_ 2147484417 QU_Steering_angle_speed "Qualifier_Steering_angle_speed";
+CM_ BO_ 2147484418 "Effective_Steering_Angle";
+CM_ SG_ 2147484418 AVL_STEA_FTAX_WHL "Actual_steering_angle_front_axle_wheel";
+CM_ SG_ 2147484418 QU_AVL_STEA_FTAX_WHL "Qualifier_Actual_steering_angle_front_axle_wheel";
+CM_ BO_ 2147484065 "Vehicle_Speed";
+CM_ SG_ 2147484065 V_VEH_COG "Speed_Vehicle_Center_of_Gravity";
+CM_ SG_ 2147484065 QU_V_VEH_COG "Qualifier_Speed_Vehicle_Center_of_Gravity";
+CM_ SG_ 2147484065 DVCO_VEH "Driving_status_-_direction";
+CM_ BO_ 2147483951 "Terminal_Status";
+CM_ SG_ 2147483951 ST_VEH_CON "Status_Vehicle_Condition";
+CM_ SG_ 2147483951 ST_KL "Status_Terminals";
+CM_ SG_ 2147483951 ST_KL_KEY_VLD "Status_Terminal_Key_Valid";
+CM_ SG_ 2147483951 CTR_ENG_STOP "Engine_stop_control";
+CM_ SG_ 2147483951 ST_STCD_PENG "Status_of_starting_condition_of_traction";
+CM_ SG_ 2147483951 ST_OP_MSA "Status_Operation_MSA";
+CM_ SG_ 2147483951 ST_SSP "Status_Start_Stop_Button";
+CM_ SG_ 2147483951 RQ_DRVG_RDI "Driving_readiness_requirement";
+CM_ BO_ 2147484003 "Road_incline";
+CM_ SG_ 2147484003 AVL_LOGR_RW "Roadway_longitudinal_inclination";
+CM_ SG_ 2147484003 AVL_TRGR_RW "Roadway_lateral_inclination";
+CM_ SG_ 2147484003 QU_AVL_LOGR_RW "Qualifier_Roadway_longitudinal_inclination";
+CM_ SG_ 2147484003 QU_AVL_TRGR_RW "Qualifier_Roadway_lateral_inclination";
+CM_ BO_ 2147484243 "Sports_Displays";
+CM_ SG_ 2147484243 Torque "Engine_torque_percentage";
+CM_ SG_ 2147484243 Power "Engine_power_percentage";
+CM_ SG_ 2147484243 Torque_Scale "Max_Torque";
+CM_ SG_ 2147484243 Power_Scale "Max_Power";
+CM_ BO_ 2147484725 "Engine_oil_measurement";
+CM_ SG_ 2147484725 FLLV_EOI_REL "Relative_engine_oil_level";
+CM_ BO_ 2147484665 "Drivetrain_data_2";
+CM_ SG_ 2147484665 ST_ECU_DT_PT_2 "Status_Controller_Data_Drivetrain_2";
+CM_ SG_ 2147484665 ST_DRV_VEH "Status_Vehicle_Drive";
+CM_ SG_ 2147484665 ST_ENG_RUN_DRV "Status_Engine_Running";
+CM_ SG_ 2147484665 ST_SW_CLT_DRV "Status_clutch_switch";
+CM_ SG_ 2147484665 ST_ILK_STRT_DRV "Status_Starter_Drive_Lock";
+CM_ SG_ 2147484665 ST_IDLG_ENG_DRV "Status_engine_idle";
+CM_ SG_ 2147484665 TEMP_ENG_DRV "Coolant_Temperature";
+CM_ SG_ 2147484665 TEMP_EOI_DRV "Oil_Temperature";
+CM_ SG_ 2147484665 ST_GRSEL_DRV "Status_Gear";
+CM_ SG_ 2147484665 RLS_ENGSTA "engine_start_release";
+CM_ SG_ 2147484665 RDUC_DOCTR_RPM_DRV_2 "Reduction_of_speed_regulation_drive_2";
+CM_ SG_ 2147484665 RPM_ENG_MAX_ALW "Maximum_Engine_Speed_Allowed";
+CM_ BO_ 2147484576 "Status_Vehicle_Energy_Condition";
+CM_ SG_ 2147484576 ST_ILK_ERRM_FZM "Status_Lock_Error_Memory_FZM";
+CM_ BO_ 2147484563 "LCD_brightness_control";
+CM_ SG_ 2147484563 DSTN_LCD_LUM "Target_LCD_luminance";
+CM_ SG_ 2147484563 DMPNG_LCD_LUM "attenuation_LCD_luminance";
+CM_ BO_ 2147483865 "Accelerator_pedal_angle";
+CM_ SG_ 2147483865 ST_ECU_ANG_ACPD "Status_control_unit_of_Accelerator_Pedal_Angle";
+CM_ SG_ 2147483865 AVL_ANG_ACPD "Actual_angle_accelerator_pedal";
+CM_ SG_ 2147483865 QU_AVL_ANG_ACPD "Qualifier_Actual_angle_accelerator_pedal";
+CM_ SG_ 2147483865 AVL_ANG_ACPD_VIRT "Virtual_angle_accelerator_pedal";
+CM_ SG_ 2147483865 GRAD_AVL_ANG_ACPD "Gradient_angle_accelerator_pedal";
+CM_ SG_ 2147483865 ST_INTF_DRASY "Status_Interface_Driver_Assistance_System";
+CM_ SG_ 2147483865 ECO_ANG_ACPD "ECO_angle_accelerator_pedal";
+CM_ BO_ 2147483813 "Torque_Crankshaft_1";
+CM_ SG_ 2147483813 AVL_TORQ_CRSH "Actual_torque_crankshaft";
+CM_ SG_ 2147483813 AVL_TORQ_CRSH_DMEE "Actual_torque_crankshaft_DME_EGS";
+CM_ SG_ 2147483813 AVL_RPM_ENG_CRSH "Actual_crankshaft_speed";
+CM_ SG_ 2147483813 QU_AVL_RPM_ENG_CRSH "Qualifier_Actual_Speed_Engine_Crankshaft";
+CM_ BO_ 2147484545 "Electronic engine oil dipstick";
+CM_ SG_ 2147484545 FLLV_EOI "engine_oil_level";
+CM_ SG_ 2147484545 RECM_RFLV_EOI "Required_refill_amount_of_engine_oil";
+CM_ BO_ 2147483891 "Drivetrain speed display";
+CM_ SG_ 2147483891 DISP_RPM_ENG_CRSH "Engine_Crankshaft_Speed_Display";
+CM_ SG_ 2147483891 DISP_TARG_DRV "Target_gear_drive_display";
+CM_ SG_ 2147483891 DISP_GSI_DRV "Display_Shift_Indication_Drive";
+CM_ SG_ 2147483891 DISP_AVL_PWR_REL_RECUP_IGR "Display_Actual_Power_Relative_Recuperation_IGR";
+CM_ BO_ 2147484667 "Drivetrain_data_1";
+CM_ SG_ 2147484667 AIP_ENG_DRV "Engine_Air_Pressure";
+CM_ SG_ 2147484667 TAR_RPM_IDLG_DRV "Target_idle_speed";
+CM_ SG_ 2147484667 ST_SW_WAUP_DRV "Status_warmup_switch";
+CM_ SG_ 2147484667 RDUC_DOCTR_RPM_DRV "Reduction_of_speed_regulation_drive";
+CM_ SG_ 2147484667 RQ_SHPA_GRB_REGE_PAFI "Requirement_Shift_Points_Adjust_Gearbox_for_Regeneration_Particle_Filter";
+CM_ SG_ 2147484667 SLCTN_BUS_COMM_ENG_GRB "Selection_Bus_Communication_Engine_Transmission";
+CM_ SG_ 2147484667 RQ_STASS_ENGMG "Request_start_assistance_engine_control";
+CM_ SG_ 2147484667 CTR_SLCK_DRV "Control_Shiftlock";
+CM_ SG_ 2147484667 ST_RTIR_DRV "Status_rotational_irregularity";
+CM_ SG_ 2147484667 ST_INFS_DRV "Drive_overrun_cut-off_status";
+CM_ SG_ 2147484667 RQ_SHPA_GRB_CHGBLC "Request_to_adjust_shift_points_gearbox_load_balance";
+CM_ SG_ 2147484667 ST_CAT_HT "Status_catalytic_heating";
+CM_ SG_ 2147484667 TAR_RPM_IDLG_DRV_EXT "Idle_Target_Speed_extended";
+CM_ BO_ 2147484592 "Status Reverse Gear";
+CM_ SG_ 2147484592 ST_GR_BAC "Status_Reverse_Gear";
+CM_ BO_ 2147484583 "Configuration of the driving dynamics switch";
+CM_ SG_ 2147484583 FDS "Drive_mode_trigger_popup";
+CM_ BO_ 2147484495 "Status Handbrake Contact";
+CM_ SG_ 2147484495 STAT_CT_HABR "Status_of_the_handbrake_contact";
+CM_ BO_ 2147484581 "Sleep Readiness Global";
+CM_ SG_ 2147484581 DSTN_SLRDI_GLB "Target_Sleep_Readiness_Global";
+CM_ SG_ 2147484581 CTR_SLRDI_GLB "Control_Sleep_Readiness_Global";
+CM_ SG_ 2147484581 CTR_FSL "Control_of_forced_sleep";
+CM_ SG_ 2147484581 CTR_SLP_BUS "Control_of_Bus_Sleep";
+CM_ BO_ 2147484497 "Battery data";
+CM_ SG_ 2147484497 AVL_CON_BT "Actual_condition_battery";
+CM_ SG_ 2147484497 ST_CHG_BT "Status_Battery_Charge";
+CM_ SG_ 2147484497 ST_BT_WNG "Status_Battery_Wrong";
+CM_ SG_ 2147484497 ST_CEDT "Status_Cell_Defect";
+CM_ SG_ 2147484497 QUAL_CON_BT_CAPE_AVL "Quality_Condition_Battery_Capacity_Actual";
+CM_ SG_ 2147484497 QUAL_CON_BT_CHGCOND "Quality_Condition_Battery_Charge_Status";
+CM_ SG_ 2147484497 ST_LSS_WTR "Status_Loss_Water";
+CM_ SG_ 2147484497 ST_EXHDCHG "Status_Deep_Discharge";
+CM_ SG_ 2147484497 CON_BT_CAPE_AVL "Condition_Battery_Capacity_Actual";
+CM_ SG_ 2147484497 CON_BT_CHGCOND "state_battery_charge_level";
+CM_ SG_ 2147484497 QUAN_ALT_BT "Number_of_battery_replacements";
+CM_ BO_ 2147484595 "Power management consumer control";
+CM_ SG_ 2147484595 SLCTN_SPCOS "selection_of_special_consumers";
+CM_ SG_ 2147484595 CTR_PWR_SPCOS "Control_Power_Special_Consumers";
+CM_ SG_ 2147484595 CTR_PWR_COS_1 "Control_Power_Consumer";
+CM_ SG_ 2147484595 CTR_CBR "Control_current_branches";
+BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
+BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_DEF_ "GenMsgBackgroundColor" "#ffffff";
+BA_DEF_DEF_ "GenMsgForegroundColor" "#000000";
+BA_DEF_DEF_ "matchingcriteria" 0;
+BA_DEF_DEF_ "filterlabeling" 1;
+VAL_ 2147484063 QU_VYAW_VEH 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility" 9 "Signal_value_is_valid_and_secured,_condition/status_temporary" 2 "Signal_value_is_valid" 10 "Signal_value_is_valid,_condition/status_temporary" 3 "Signal_quality_or_monitoring_limited" 11 "Signal_quality_or_monitoring_limited,_condition/status_temporary" 4 "Reserved" 12 "Replacement_value:_Adjustment_value_is_set_in_the_useful_signal,_condition/status_temporary" 6 "Signal_value_is_invalid" 14 "Signal_value_is_invalid,_condition/status_temporary" 7 "Reserved" 15 "Signal_invalid";
+VAL_ 2147484057 QU_ACLNX_COG 8 "initialization" 1 "Signal_value_is_valid_and_secured_and_plausible,_condition/status_permanent" 9 "Signal_value_is_valid_and_secured,_condition/status_temporary" 2 "Signal_value_is_valid,_condition/status_permanent._Electrical_and_model_monitoring_OK." 10 "Signal_value_is_valid,_condition/status_temporary._Electrical_and_model_monitoring_OK." 3 "Signal_value_is_not_trustworthy,_condition/status_permanent._No_model_monitoring,_as_input_variables_for_monitoring_are_missing_(e.g._drive_torque),_electrical_monitoring_OK" 11 "Signal_value_is_not_trustworthy,_condition/status_temporary._No_model_monitoring_because_input_variables_for_monitoring_are_missing_(e.g._drive_torque),_electrical_monitoring_i." 4 "Substitute_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_condition/status_temporary._Replacement_value_from_electrical_monitoring_or_model_monitoring_shows_error,_therefore_replacement_value_from_model_is_sent" 6 "Signal_value_is_invalid,_condition/status_permanent._Electrical_monitoring_or_model_monitoring_indicates_error,_no_replacement_value_available" 14 "Signal_value_is_invalid,_condition/status_temporary._Electrical_monitoring_or_model_monitoring_indicates_error,_no_replacement_value_available" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147484058 QU_ACLNY_COG 11 "initialization" 1 "Signal_value_is_valid_and_secured_and_plausible,_condition/status_permanent" 9 "Signal_value_is_valid_and_secured,_condition/status_temporary" 2 "Signal_value_is_valid,_condition/status_permanent._Electrical_and_model_monitoring_OK." 10 "Signal_value_is_valid,_condition/status_temporary._Electrical_and_model_monitoring_OK." 3 "Signal_value_is_not_trustworthy,_condition/status_permanent._No_model_monitoring,_as_input_variables_for_monitoring_are_missing_(e.g._drive_torque),_electrical_monitoring_OK" 11 "Signal_value_is_not_trustworthy,_condition/status_temporary._No_model_monitoring_because_input_variables_for_monitoring_are_missing_(e.g._drive_torque),_electrical_monitoring_i." 4 "Substitute_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_condition/status_temporary._Replacement_value_from_electrical_monitoring_or_model_monitoring_shows_error,_therefore_replacement_value_from_model_is_sent" 6 "Signal_value_is_invalid,_condition/status_permanent._Electrical_monitoring_or_model_monitoring_indicates_error,_no_replacement_value_available" 14 "Signal_value_is_invalid,_condition/status_temporary._Electrical_monitoring_or_model_monitoring_indicates_error,_no_replacement_value_available" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147484417 QU_AVL_STEA_FTAX_PNI 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Replacement_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147484417 QU_Steering_angle_speed 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Replacement_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147484418 QU_AVL_STEA_FTAX_WHL 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Replacement_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147484065 QU_V_VEH_COG 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_plausible" 10 "Signal_value_is_valid,_condition/status_temporary" 11 "Signal_value_is_not_trustworthy,_condition/status_temporary" 14 "Signal_value_is_invalid,_condition/status_temporary" 15 "Signal_invalid";
+VAL_ 2147484065 DVCO_VEH 0 "Vehicle_is_stationary" 1 "Vehicle_is_moving_forward" 2 "Vehicle_is_moving_backwards" 3 "Vehicle_is_moving_-_no_direction" 4 "Vehicle_is_stationary,_vehicle_detected_on_single-axle_roller_test_stand" 5 "Vehicle_is_stationary,_two-axle_roller_operation_set" 15 "signal_invalid";
+VAL_ 2147483951 ST_VEH_CON 0 "VSM_STM_STATE_INIT" 1 "VSM_STM_STATE_STANDBY" 2 "VSM_STM_STATE_BASICOP" 3 "VSM_STM_STATE_BASICOP_ROLL" 4 "VSM_STM_STATE_15OFF_DRIVE" 5 "VSM_STM_STATE_IGNITION" 6 "VSM_STM_STATE_IGNITION_ROLL" 7 "VSM_STM_STATE_ENG_IDLE" 8 "VSM_STM_STATE_DRIVE" 9 "VSM_STM_STATE_ENG_START_PRE" 10 "VSM_STM_STATE_ENG_START_PRE_ROLL" 11 "VSM_STM_STATE_ENG_START" 12 "VSM_STM_STATE_ENG_START_ROLL" 13 "VSM_STM_STATE_WASH" 14 "VSM_STM_STATE_ERROR" 15 "Signal_Invalid";
+VAL_ 2147483951 ST_KL 0 "Init" 1 "Reserve" 2 "KL30" 3 "KL30F_change" 4 "KL30F_on" 5 "KL30B_change" 6 "KL30B_on" 7 "KLR_change" 8 "KLR_on" 9 "KL15_change" 10 "KL15_on" 11 "KL50_delay" 12 "KL50_change" 13 "KL50_on" 14 "Error" 15 "Signal_Invalid";
+VAL_ 2147483951 ST_KL_KEY_VLD 0 "Init_value" 1 "Key_invalid" 2 "Key_search_active" 3 "Key_valid_recognized_in_AR" 4 "Key_valid_recognized_in_IR" 5 "Key_in_10_s_-_run-on" 6 "Key_valid_for_MFS" 14 "Error" 15 "Signal_Invalid";
+VAL_ 2147483951 CTR_ENG_STOP 0 "Init" 1 "Default" 2 "Engine_off" 3 "Signal_Invalid";
+VAL_ 2147483951 ST_STCD_PENG 0 "Starting_condition_of_traction_not_fulfilled" 1 "Starting_condition_of_traction_fulfilled" 2 "Starting_condition_of_traction_implausibly_fulfilled" 3 "Signal_invalid";
+VAL_ 2147483951 ST_OP_MSA 0 "MSA_active_-_LED_in_the_MSA_button_does_not_light_up_(initial_state)" 1 "MSA_deactivated_-_LED_in_the_MSA_button_lights_up" 2 "MSA_status_implausible_-_error_case_MSA_button_pressed_for_longer_than_60_seconds,_KS_on_the_button_likely_and_MSA_function_is_deactivated:_LED_in_the_MSA_button_does_not_light_up_(This_error_state_is_removed_after_60_seconds_if_KS_is_no_longer_given)" 3 "Signal_invalid";
+VAL_ 2147483951 ST_SSP 0 "no_button_Hall_sensor_detected" 1 "one_button_Hall_sensor_detected" 2 "two_button_Hall_sensors_detected" 3 "signal_invalid";
+VAL_ 2147483951 RQ_DRVG_RDI 0 "No_requirement" 1 "Prepare_to_drive" 3 "Signal_invalid";
+VAL_ 2147484003 QU_AVL_LOGR_RW 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Replacement_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147484003 QU_AVL_TRGR_RW 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Replacement_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147484725 FLLV_EOI_REL 0 "Below_Minimum_add_1L_immediately" 1 "Minimum_add_1L" 2 "Halfway_between_min_and_middle" 3 "Middle" 4 "Halfway_between_middle_and_max" 5 "Max" 6 "Max" 7 "Overfilled";
+VAL_ 2147484665 ST_ECU_DT_PT_2 0 "Initialization_state" 1 "Normal_operation_state" 2 "Normal_operation_state/overvoltage_sensed" 3 "Normal_operation_state/undervoltage_sensed" 4 "Diagnostics_state" 5 "Diagnostics_state/overvoltage_sensed" 6 "Diagnostics_state/undervoltage_sensed" 7 "Powerdown_state" 8 "PowerSave_state" 9 "Not_available_state" 10 "Reset_state" 15 "Signal_invalid";
+VAL_ 2147484665 ST_DRV_VEH 128 "Initialization" 0 "Combustion_engine_is_stopped_due_to_driver_request._Combustion_engine_cannot_be_started_via_MSA._MSA_is_currently_not_available." 8 "Combustion_engine_is_stopped_due_to_MSA_request._Engine_can_be_started_via_MSA,_additional_requirement_for_MSA_start_with_manual_gearbox_is_neutral." 4 "Start_announcement_of_combustion_engine_due_to_driver_request._Coding_is_not_used." 12 "Start_announcement_of_combustion_engine_due_to_MSA_request" 1 "Combustion_engine_starts_due_to_driver_request._DME_detects_rotating_engine_and_final_start_speed_not_yet_reached." 9 "Combustion_engine_starts_due_to_MSA_request._Can_also_be_caused_by_towing_the_vehicle." 2 "Combustion_engine_is_running._Set_VM_is_running_from_final_start_speed." 6 "Stop_announcement_of_combustion_engine_by_driver_request._Coding_is_not_used." 14 "Stop_announcement_of_combustion_engine_by_MSA_request._Stop_command_by_driver_request_is_present_and_crankshaft_is_still_turning." 18 "Combustion_engine_is_coasting_due_to_driver_request._Stop_command_by_MSA_request_is_present_and_crankshaft_is_still_turning." 26 "Combustion_engine_is_coasting_due_to_MSA_request_Stop_command_by_MSA_request_is_present_and_crankshaft_is_still_turning._No_stop_command_from_driver." 30 "Combustion_engine_is_coasting_with_start_announcement_by_MSA_request." 255 "signal_invalid";
+VAL_ 2147484665 ST_ENG_RUN_DRV 0 "Engine_off" 1 "Engine_starting" 2 "Engine_running" 3 "Signal_invalid";
+VAL_ 2147484665 ST_SW_CLT_DRV 0 "clutch_not_actuated" 1 "clutch_actuated" 3 "signal_invalid/clutch_not_present";
+VAL_ 2147484665 ST_ILK_STRT_DRV 0 "no_engine_start" 1 "allow_engine_start_-_transmission_in_N" 2 "allow_engine_start/stop_-_transmission_in_P" 3 "signal_invalid";
+VAL_ 2147484665 ST_IDLG_ENG_DRV 0 "Combustion_engine_idling" 1 "Combustion_engine_not_idling" 3 "Signal_invalid";
+VAL_ 2147484665 ST_GRSEL_DRV 0 "Reserved" 1 "N" 2 "R" 3 "P" 4 "Reserved" 5 "1" 6 "2" 7 "3" 8 "4" 9 "5" 10 "6" 11 "7" 12 "8" 15 "Signal_invalid";
+VAL_ 2147484665 RLS_ENGSTA 0 "no_engine_start" 1 "delay_engine_start" 2 "allow_engine_start" 3 "signal_invalid";
+VAL_ 2147484665 RDUC_DOCTR_RPM_DRV_2 0 "OK" 1 "small_reduction_in_the_cut-off_speed" 2 "large_reduction_in_the_cut-off_speed" 3 "signal_invalid";
+VAL_ 2147484576 ST_ENERG_FZM 0 "ENSTATE_GOOD" 1 "ENSTATE_OK" 2 "ENSTATE_SHORTAGE" 3 "ENSTATE_SEVERE_SHORTAGE" 15 "Signal_invalid";
+VAL_ 2147484576 ST_ILK_ERRM_FZM 0 "Error_memory_unlocked_-_entry_of_errors_without_restrictions" 1 "Error_memory_lock_-_network_error_area_is_to_be_locked" 2 "Reserved" 3 "Signal_invalid";
+VAL_ 2147484563 DSTN_LCD_LUM 255 "Signal_invalid";
+VAL_ 2147484563 DAY_NIGHT 1 "Daytime" 2 "Night";
+VAL_ 2147483865 ST_ECU_ANG_ACPD 0 "Initialization_state" 1 "Normal_operation_state" 15 "Signal_invalid";
+VAL_ 2147483865 QU_AVL_ANG_ACPD 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Substitute_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Substitute_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147483865 ST_INTF_DRASY 0 "No_accelerator_pedal_(driver)_request,_no_FAS_request" 1 "Accelerator_pedal_(driver)_request,_no_FAS_request" 2 "No_accelerator_pedal_(driver)_request,_FAS_request" 3 "Accelerator_pedal_(driver)_request_greater_than_FAS_request" 7 "Accelerator_pedal_(driver)_request_less_than_FAS_request" 8 "Initialization" 15 "Signal_invalid";
+VAL_ 2147483865 ECO_ANG_ACPD 0 "Load_requirement_in_the_efficient_range,_no_exit_from_ECO_mode" 1 "Load_requirement_too_high,_ECO_mode_is_exited" 2 "Signal_invalid";
+VAL_ 2147483813 QU_AVL_RPM_ENG_CRSH 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Substitute_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Substitute_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
+VAL_ 2147484545 FLLV_EOI 12 "Below_MIN" 25 "MIN" 38 "Between_MIN_and_OK" 53 "OK" 69 "Between_OK_and_MAX" 85 "MAX" 95 "Overfilled" 120 "No_measurement_possible" 121 "Measurement_in_progress" 122 "Oil_level_check_OK" 123 "Measurement_OK" 124 "Ignition_OFF,_no_measurement_possible" 125 "Engine_oil_level_OK,_precise_measurement_in_progress." 126 "Engine_oil_level_OK" 127 "Measurement_in_progress" 128 "Precise_measurement_in_progress._Measurement_duration:_1min" 255 "Signal_invalid";
+VAL_ 2147484545 RECM_RFLV_EOI 0 "everything_OK" 1 "overfilled" 2 "refill_1.0_L" 4 "service" 15 "signal_invalid";
+VAL_ 2147483891 DISP_TARG_DRV 0 "Display_off" 1 "1" 2 "2" 3 "3" 4 "4" 5 "5" 6 "6" 7 "7" 8 "8" 15 "Signal_invalid";
+VAL_ 2147483891 DISP_GSI_DRV 0 "Display_off" 1 "Downshift_indication" 2 "Upshift_indication" 3 "Signal_invalid";
+VAL_ 2147484667 ST_SW_WAUP_DRV 0 "Engine_warming_up" 1 "Engine_warmed_up" 2 "Engine_overheating" 3 "Signal_invalid";
+VAL_ 2147484667 RDUC_DOCTR_RPM_DRV 0 "OK" 1 "Lowering_the_speed_limit" 3 "Signal_invalid";
+VAL_ 2147484667 RQ_SHPA_GRB_REGE_PAFI 0 "no_switching_point_adjustment_required" 1 "switching_point_adjustment_required" 3 "signal_invalid";
+VAL_ 2147484667 SLCTN_BUS_COMM_ENG_GRB 0 "A-CAN_init_value,_primary_communication_path" 1 "FA-CAN" 3 "Signal_invalid";
+VAL_ 2147484667 RQ_STASS_ENGMG 0 "No_start-up_assistance_required" 1 "Emergency_start-up_assistance_required" 2 "Normal_start-up_assistance_required" 15 "Signal_invalid";
+VAL_ 2147484667 CTR_SLCK_DRV 0 "not_allowed" 1 "no_shiftlock_request" 2 "shiftlock_request" 3 "signal_invalid";
+VAL_ 2147484667 ST_RTIR_DRV 0 "OK" 1 "Rotational_irregularity_due_to_injector_failure" 2 "Rotational_irregularity_without_injector_failure" 3 "Signal_invalid";
+VAL_ 2147484667 ST_INFS_DRV 0 "no_influence" 1 "overrun_cut-off_active" 2 "non-adjustable_range" 3 "signal_invalid";
+VAL_ 2147484667 RQ_SHPA_GRB_CHGBLC 0 "No_shift_point_adjustment_required" 1 "Shift_point_adjustment_required" 3 "Signal_invalid";
+VAL_ 2147484667 ST_CAT_HT 0 "Cat_heating_not_active" 1 "Cat_heating_active" 3 "Signal_invalid";
+VAL_ 2147484592 ST_GR_BAC 1 "not_in_reverse_gear" 2 "reverse_gear" 3 "signal_invalid";
+VAL_ 2147484583 drivetrain 0 "Base" 4 "Traction" 2 "Comfort" 9 "Sport" 10 "Eco_1" 11 "Sport+" 13 "Race" 15 "Signal_invalid";
+VAL_ 2147484583 suspension 0 "Vertical_dynamics_basis_VDC_basis_ARS_basis" 8 "Vertical_dynamics_comfort_VDC_sport_ARS_basis" 5 "Vertical_Dynamics_Sport_VDC_Comfort_ARS_Sport" 15 "Signal_invalid";
+VAL_ 2147484583 icm_state 0 "Integrated_chassis_management_controller_on" 3 "Integrated_chassis_management_controller_off";
+VAL_ 2147484583 icm_mode 0 "Integrated_chassis_management_basis" 1 "Integrated_chassis_management_sport";
+VAL_ 2147484583 stability 8 "Initialization" 0 "Driving_dynamics_stabilization_DSC_on" 1 "Driving_dynamics_stabilization_DTC" 4 "Driving_dynamics_stabilization_DSC_off" 15 "Signal_invalid";
+VAL_ 2147484583 FDS 1 "Traction" 2 "Comfort" 4 "Sport" 5 "Sport+" 6 "DSC_OFF_Race" 7 "ECO_Pro" 8 "ECO_Pro+" 9 "Comfort+" 3 "Comfort";
+VAL_ 2147484495 STAT_CT_HABR 0 "Not_coded" 1 "Handbrake_released" 2 "Handbrake_applied" 3 "Signal_invalid";
+VAL_ 2147484581 DSTN_SLRDI_GLB 225 "Broadcast_all_slaves" 255 "signal_invalid";
+VAL_ 2147484581 CTR_SLRDI_GLB 1 "AWAKE_IND" 2 "SLEEP_ACK" 3 "Signal_invalid";
+VAL_ 2147484581 CTR_FSL 1 "SLEEP_COOPERATIVE" 2 "SLEEP_FORCE" 3 "Signal_invalid";
+VAL_ 2147484581 CTR_SLP_BUS 1 "COLLECTIVE_INDICATION" 2 "PARTIAL_INDICATION" 3 "Signal_invalid";
+VAL_ 2147484497 AVL_CON_BT 0 "Battery_OK" 1 "Check_battery" 2 "Battery_not_OK_(replace)" 3 "Signal_invalid";
+VAL_ 2147484497 ST_CHG_BT 0 "Battery_not_charging" 1 "Battery_charging" 3 "Signal_invalid";
+VAL_ 2147484497 ST_BT_WNG 0 "Valid_battery_installed" 1 "Invalid_battery_installed" 3 "Signal_invalid";
+VAL_ 2147484497 ST_CEDT 0 "No_cell_defect" 1 "Cell_defect_detected" 3 "Signal_invalid";
+VAL_ 2147484497 QUAL_CON_BT_CAPE_AVL 0 "Actual_capacity_not_reliably_determined" 1 "Actual_capacity_reliably_determined" 3 "Signal_invalid";
+VAL_ 2147484497 QUAL_CON_BT_CHGCOND 0 "Charge_status_not_reliably_determined" 1 "Charge_status_reliably_determined" 3 "Signal_invalid";
+VAL_ 2147484497 ST_LSS_WTR 0 "Water_loss_OK" 1 "Water_loss_NOT_OK" 3 "Signal_invalid";
+VAL_ 2147484497 ST_EXHDCHG 0 "Battery_was_not_deeply_discharged" 1 "Battery_was_deeply_discharged" 3 "Signal_invalid";
+VAL_ 2147484595 SLCTN_SPCOS 0 "No_special_consumer" 1 "PTC_auxiliary_heater" 15 "Signal_invalid";
+VAL_ 2147484595 CTR_PWR_COS_1 0 "OFF" 1 "Rear window cycled";
+VAL_ 2147484595 CTR_PWR_COS_2 0 "OFF" 1 "Steering wheel heating cycled, PTC rear 25%";
+VAL_ 2147484595 CTR_PWR_COS_3 0 "OFF" 1 "Front seat heating level 2, rear seat heating level 1";
+VAL_ 2147484595 CTR_PWR_COS_4 0 "OFF" 1 "Front seat heating 50%, PTC third row of seats 50%";
+VAL_ 2147484595 CTR_PWR_COS_5 0 "OFF" 1 "Active seat OFF";
+VAL_ 2147484595 CTR_PWR_COS_6 0 "OFF" 1 "Rear seat heating level 2, PTC rear 75%, windscreen heating 75%";
+VAL_ 2147484595 CTR_PWR_COS_7 0 "OFF" 1 "Mirror heating OFF, PTC rear OFF";
+VAL_ 2147484595 CTR_PWR_COS_8 0 "OFF" 1 "PTC rear 50%, windscreen heating 50%, neck warmer OFF";
+VAL_ 2147484595 CTR_PWR_COS_9 0 "OFF" 1 "Rear window OFF";
+VAL_ 2147484595 CTR_PWR_COS_10 0 "OFF" 1 "Front seat heating OFF, rear seat heating OFF";
+VAL_ 2147484595 CTR_PWR_COS_11 0 "OFF" 1 "Steering wheel heating OFF, PTC third row of seats or fan 0%, windscreen heating 25%";
+VAL_ 2147484595 CTR_PWR_COS_12 0 "OFF" 1 "Seat climate OFF, windscreen heating OFF";
+VAL_ 2147484595 CTR_PWR_COS_13 0 "OFF" 1 "Heating fan 75%";
+VAL_ 2147484595 CTR_PWR_COS_14 0 "OFF" 1 "Heating fan 50%";
+VAL_ 2147484595 CTR_PWR_COS_15 0 "OFF" 1 "Heating fan 25%";
+VAL_ 2147484595 CTR_PWR_COS_16 0 "OFF" 1 "Signal invalid";
+VAL_ 2147484595 CTR_CBR 0 "No_control" 1 "Control" 255 "Signal_invalid";

@@ -30,7 +30,6 @@ To NBT:
 0x3DD: Light CKM status.                                                        Modified value sent to NBT to match 0x3DC.
 0x3F9: Powertrain data 2.                                                       Translated from BN2000 0xAA, 0x130, 0x332 and 0x3B0.
 0x42E: MDrive status.                                                           Translated from BN2000 0x399.
-0x435: Oil level measurement.                                                   Translated from BN2000 0x381.
 0x510: ZGW network management.                                                  Timed with BN2000 0xC0.
 0x560: Kombi network management.                                                Timed with BN2000 0x4E0.
 0x6F1: Clear errors KWP job translated to UDS for NBT_HU and ZBE.

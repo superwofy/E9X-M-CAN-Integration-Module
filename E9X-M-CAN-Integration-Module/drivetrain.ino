@@ -64,7 +64,6 @@ void toggle_mdrive_message_active(void) {
     mdrive_status = true;
   }
 
-  f_driving_dynamics_timer = 500;
   svt70_pwm_control_timer = 3001;
   veh_mode_timer = 500;
 }
@@ -466,7 +465,7 @@ void check_immobilizer_status(void) {
       if (!vehicle_moving || (indicated_speed <= immobilizer_max_speed)) {                                                          // Make sure we don't cut this OFF while the car is in (quick) motion!!!
         if (immobilizer_timer >= immobilizer_send_interval) {
           if (terminal_r) {
-            if (engine_running == 1 && engine_run_timer >= 2000) {                                                                  // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
+            if (engine_running == 2 && engine_run_timer >= 2000) {                                                                  // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
               ptcan_write_msg(ekp_pwm_off_buf);
               serial_log("EKP is disabled.", 0);
             }
@@ -611,43 +610,42 @@ void execute_alarm_after_stall(void) {
 
 void send_f_powertrain_2_status(void) {
   if (f_data_powertrain_2_timer >= 1000) {
-    uint8_t f_data_powertrain_2[] = {0, 0, 0, 0, 0, 0, 0, 0x8C};                                                                    // Byte7 max rpm: 50 * 140(0x8C) = 7000.
+    uint8_t f_data_powertrain_2[] = {0, 0, 0x80, 0, 0, 0, 0, 0x8C};                                                                 // 6MC2DL0B pg. 1384. Byte7 max rpm: 50 * 140(0x8C) = 7000.
 
     f_data_powertrain_2[1] = 1 << 4 | f_data_powertrain_2_alive_counter;                                                            // Combine ST_ECU_DT_PT_2 (0001 - State of normal operation) and ALIV_DT_PT_2.
     f_data_powertrain_2_alive_counter == 0xE ? f_data_powertrain_2_alive_counter = 0 
                                              : f_data_powertrain_2_alive_counter++;
-                                             
-    if (engine_running == 1) {
-      f_data_powertrain_2[2] = 0x82;                                                                                                // Engine running.
-      if (engine_idling) {
-        f_data_powertrain_2[3] = 0;
-      } else {
+
+    if (engine_running == 2) {
+      f_data_powertrain_2[2] |= 2;                                                                                                  // Engine running.
+      if (!engine_idling) {
         f_data_powertrain_2[3] = 1 << 6;                                                                                            // Not idling.
       }
+      f_data_powertrain_2[3] |= 2;
+    } else if (engine_running == 1) {
+      f_data_powertrain_2[3] = 1 << 6;                                                                                              // Not idling.
+      f_data_powertrain_2[3] |= 1;                                                                                                  // Engine starting.
     } else {
-      f_data_powertrain_2[2] = 0x80;                                                                                                // Engine OFF.
       f_data_powertrain_2[3] = 1 << 6;                                                                                              // Not idling.
     }
 
-    f_data_powertrain_2[3] |= 1 << 4;                                                                                               // Engine start allowed.
     if (clutch_pressed) {
       f_data_powertrain_2[3] |= 1 << 2;
     }
-    if (engine_running == 1) {
-      f_data_powertrain_2[3] |= 1;
-    }
+
+    f_data_powertrain_2[3] |= 3 << 4;                                                                                               // On manual cars, this signal (ST_ILK_STRT_DRV) is set to invalid.
 
     f_data_powertrain_2[4] = engine_coolant_temperature;                                                                            // Engine coolant temperature (C): value - 48.
     f_data_powertrain_2[5] = engine_oil_temperature;                                                                                // Engine oil temperature (C): value - 48.
 
-    f_data_powertrain_2[6] = 0x2F;                                                                                                  // Engine start allowed, unused (6MT).
+    f_data_powertrain_2[6] = 0x2F;                                                                                                  // Engine start allowed. Other signals unused on 6MT (0xF).
 
     f_data_powertrain_2_crc.restart();
     for (uint8_t i = 1; i < 8; i++) {
       f_data_powertrain_2_crc.add(f_data_powertrain_2[i]);
     }
     f_data_powertrain_2[0] = f_data_powertrain_2_crc.calc();
-    
+
     CAN_message_t f_data_powertrain_2_buf = make_msg_buf(0x3F9, 8, f_data_powertrain_2);
     #if F_NIVI
       ptcan_write_msg(f_data_powertrain_2_buf);
@@ -660,9 +658,12 @@ void send_f_powertrain_2_status(void) {
 }
 
 
-void send_f_torque_1(void) {
-  if (f_torque_1_timer >= 100400) {
+void send_f_torque_1(void) {                                                                                                        // 6MC2DL0B pg. 1393.
+  if (f_torque_1_timer >= 100) {                                                                                                    // Original BN2010 cycle time is 20ms for KCAN2 and PTCAN.
     uint8_t f_torque_1[] = {0, 0, 0, 0, 0, 0, 0, 0xF2};                                                                             // Byte7 QU_AVL_RPM_ENG_CRSH hardcoded to 2 - Signal valid.
+    if (vehicle_awakened_timer <= 5000) {                                                                                           // Force the status to initialization after the car just woke.
+      f_torque_1[7] = 0xF8;
+    }
 
     f_torque_1[1] = 0xF << 4 | f_torque_1_alive_counter;                                                                            // Combine FREI (0xF - unused) and ALIV_TORQ_CRSH_1.
     f_torque_1_alive_counter == 0xE ? f_torque_1_alive_counter = 0 
@@ -672,7 +673,8 @@ void send_f_torque_1(void) {
  
     // Engine torque
     f_torque_1[2] = raw_torque & 0xFF;                                                                                              // LE encoded.
-    f_torque_1[3] = (raw_torque >> 8);
+    f_torque_1[3] = (raw_torque & 0xFF) << 4 | (raw_torque >> 8);
+    f_torque_1[4] = (raw_torque >> 8);
 
     // Engine RPM (raw, not scaled by 0.25)
     f_torque_1[5] = RPM & 0xFF;                                                                                                     // Transmit in LE.
@@ -691,23 +693,31 @@ void send_f_torque_1(void) {
 }
 
 
-void send_f_throttle_pedal(void) {
-  if (f_throttle_pedal_timer >= 40000) {
-    uint8_t f_throttle_pedal[] = {0, 0, 0, 0, 0, 0, 0, 0xC0};
+void send_f_throttle_pedal(void) {                                                                                                  // 6MC2DL0B pg. 1379.
+  if (f_throttle_pedal_timer >= 50) {                                                                                               // Original BN2010 cycle time is 20ms for KCAN2 and PTCAN.
+    uint8_t f_throttle_pedal[] = {0, 0, 0, 0x10, 0, 0xF0, 0x7F, 0xC0};                                                              // Byte3 QU_AVL_ANG_ACPD = 1
+    if (vehicle_awakened_timer <= 5000) {                                                                                           // Force the status to initialization after the car just woke.
+      f_throttle_pedal[3] = 0x80;
+    }
 
     f_throttle_pedal[1] = 1 << 4 | f_throttle_pedal_alive_counter;                                                                  // Combine 1 (Normal operation) and ALIV_ANG_ACPD.
     f_throttle_pedal_alive_counter == 0xE ? f_throttle_pedal_alive_counter = 0 
                                   : f_throttle_pedal_alive_counter++;
     
 
-    uint16_t scaled_value = round(e_throttle_position / 0.025);
-    scaled_value = (scaled_value & 0x800) ? (scaled_value | 0xF000) : scaled_value;                                                 // 12-bit boundary check.
+    uint16_t scaled_value = (e_throttle_position / 99.22) * 100;                                                                    // Max value reported by DME is 99.22%.
+    scaled_value = constrain(round(scaled_value / 0.025), 0, 0xFFE);                                                                // 12-bit boundary check. 0xFFF - signal invalid.
 
-    f_throttle_pedal[2] = scaled_value & 0xF0;                                                                                      // AVL_ANG_ACPD LSB
-    f_throttle_pedal[3] = 0x10 | (scaled_value >> 8);                                                                               // QU_AVL_ANG_ACPD = 1 | AVL_ANG_ACPD MSB
+    f_throttle_pedal[2] = scaled_value & 0xFF;                                                                                      // AVL_ANG_ACPD LSB
+    f_throttle_pedal[3] = f_throttle_pedal[3] | (scaled_value >> 8);                                                                // QU_AVL_ANG_ACPD | AVL_ANG_ACPD MSB
 
-    f_throttle_pedal[4] = scaled_value & 0xF0;                                                                                      // AVL_ANG_ACPD_VIRT LSB
-    f_throttle_pedal[5] = scaled_value >> 8;                                                                                        // AVL_ANG_ACPD_VIRT MSB
+    // AVL_ANG_ACPD_VIRT probably represents the DME internally scaled throttle. Assuming linear here...
+    f_throttle_pedal[4] = scaled_value & 0xFF;                                                                                      // AVL_ANG_ACPD_VIRT LSB
+    f_throttle_pedal[5] = f_throttle_pedal[5] | scaled_value >> 8;                                                                  // AVL_ANG_ACPD_VIRT MSB
+
+    if (scaled_value > 0) {
+      f_throttle_pedal[7] = 0xC1;                                                                                                   // Accelerator_pedal_(driver)_request,_no_FAS_request
+    }
 
     f_throttle_pedal_crc.restart();
     for (uint8_t i = 1; i < 8; i++) {
@@ -723,14 +733,45 @@ void send_f_throttle_pedal(void) {
 
 
 void send_f_driving_dynamics_switch_evo(void) {
-  if (f_driving_dynamics_timer >= 1001) {
-    uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 0, 0, 0, 0, 0xC0};
+  if (f_driving_dynamics_timer >= 1000) {
+    uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 2, 0, 0xF3, 0xFF, 0xFF};
 
-    if (dsc_program_status == 4) {
-      f_driving_dynamics[4] = 1;
-    } else if (dsc_program_status == 1) {
-      f_driving_dynamics[4] = 6;
+    if (mdrive_status) {
+      if (console_power_mode || mdrive_power_active) {
+        if (mdrive_power[cas_key_number] == 0x20) {
+          f_driving_dynamics[2] = 9;                                                                                                // Drivetrain Sport
+        } else if (mdrive_power[cas_key_number] == 0x30) {
+          f_driving_dynamics[2] = 0xB;                                                                                              // Drivetrain Sport+
+        }
+      }
+    } else if (console_power_mode) {
+      f_driving_dynamics[2] = 9;
     }
+
+    if (dsc_program_status == 1) {
+      f_driving_dynamics[3] = 0x47;                                                                                                 // DSC OFF, ICM OFF, ICM mode sport.
+    }
+
+    if (f_driving_dynamics_ignore < 3) {                                                                                            // Briefly show the DSC OFF popup but preserve FDS for other modules.
+      f_driving_dynamics[4] = 0xF6;                                                                                                 // DSC OFF
+      f_driving_dynamics_ignore++;
+    } else {
+      if (mdrive_status) {
+        if (console_power_mode || mdrive_power_active) {
+          if (mdrive_power[cas_key_number] == 0x20) {
+            f_driving_dynamics[4] = 4;                                                                                              // FDS Sport
+          } else if (mdrive_power[cas_key_number] == 0x30) {
+            f_driving_dynamics[4] = 5;                                                                                              // FDS Sport+
+          }
+        }
+      } else if (console_power_mode) {
+        f_driving_dynamics[4] = 4;
+      }
+    }
+
+    // This (TRACTION) does not match MDM. F8X does not have a popup for MDM. Only 35up/CLAR cars do.
+    //   f_driving_dynamics[3] = 0x10;                                                                                                // DTC, ICM ON, ICM basis.
+    //   f_driving_dynamics[4] = 0xF1;                                                                                                // TRACTION
 
     CAN_message_t f_driving_dynamics_buf = make_msg_buf(0x3A7, 7, f_driving_dynamics);
     kcan2_write_msg(f_driving_dynamics_buf);
@@ -740,7 +781,7 @@ void send_f_driving_dynamics_switch_evo(void) {
 
 
 void control_exhaust_flap_user(void) {
-  if (engine_running == 1) {
+  if (engine_running == 2) {
     if (exhaust_flap_sport) {                                                                                                       // Flap always open in sport mode.
       if (exhaust_flap_action_timer >= 500) {
         if (!exhaust_flap_open) {
@@ -768,7 +809,7 @@ void control_exhaust_flap_user(void) {
 
 
 void control_exhaust_flap_rpm(void) {
-  if (engine_running == 1) {
+  if (engine_running == 2) {
     if (!exhaust_flap_sport) {
       if (exhaust_flap_action_timer >= exhaust_flap_action_interval) {                                                              // Avoid vacuum drain, oscillation and apply startup delay.
         if (RPM >= EXHAUST_FLAP_QUIET_RPM) {                                                                                        // Open at defined rpm setpoint.
@@ -801,13 +842,13 @@ void evaluate_engine_data(void) {
   ambient_pressure = (k_msg.buf[3] * 2) + 598;
 
   uint8_t engine_running_ = 0;
-  bitWrite(engine_running_, 0, bitRead(k_msg.buf[2], 5));
-  bitWrite(engine_running_, 1, bitRead(k_msg.buf[2], 4));
+  bitWrite(engine_running_, 0, bitRead(k_msg.buf[2], 4));
+  bitWrite(engine_running_, 1, bitRead(k_msg.buf[2], 5));
 
   if (engine_running_ == 3) { engine_running_ = 0; }                                                                                // Treat invalid status as Engine OFF.
 
   if (engine_running_ != engine_running) {
-    if (engine_running_ == 1) {
+    if (engine_running_ == 2) {
       engine_run_timer = 0;
       #if CONTROL_SHIFTLIGHTS
         shiftlight_startup_animation();                                                                                             // Show off shift light segments during engine startup.
@@ -820,7 +861,8 @@ void evaluate_engine_data(void) {
       #if IMMOBILIZER_SEQ
         enable_alarm_after_stall();
       #endif
-    } else if (engine_running_ == 2) {
+      custom_info_cc_timer = 3000;
+    } else if (engine_running_ == 1) {
       serial_log("Engine cranking.", 2);
     } else {                                                                                                                        // Engine stalled or was stopped. Stopped = 0 rpm.
       serial_log("Engine stopped.", 2);
@@ -836,7 +878,7 @@ void evaluate_engine_data(void) {
 
 void send_dme_boost_request(void) {
   unsigned long boost_request_interval = 1000;
-  if (engine_running == 1) {
+  if (engine_running == 2) {
     boost_request_interval = 200;
   }
   if (boost_request_timer >= boost_request_interval) {

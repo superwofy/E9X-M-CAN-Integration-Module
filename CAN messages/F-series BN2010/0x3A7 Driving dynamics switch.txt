@@ -3,8 +3,6 @@
 
 // Signal SU_SW_DRDY. Starts at bit 16 with length 16 bits.
 
-1000 ---- ---- ---- 	Initialization
-
 0--- ---- ---- 0000 	Drive base
 0--- ---- ---- 0100 	Drive Traction
 0--- ---- ---- 0010 	Drive Comfort 
@@ -22,6 +20,7 @@
 0--- 00-- ---- ---- 	Integrated chassis management basis
 0--- 01-- ---- ---- 	Integrated chassis management sport
 
+1000 ---- ---- ---- 	Initialization
 0000 ---- ---- ---- 	Driving dynamics stabilization DSC on
 0001 ---- ---- ---- 	Driving dynamics stabilization DTC
 0100 ---- ---- ---- 	Driving dynamics stabilization DSC off

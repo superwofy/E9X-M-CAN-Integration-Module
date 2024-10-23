@@ -310,11 +310,19 @@ void evaluate_indicate_ftm_status(void) {
 }
 
 
+void send_msa_status(void) {
+  if (msa_fake_status_timer >= 500){
+    kcan_write_msg(msa_fake_status_buf);                                                                                            // Send this message every 500ms to keep the IHKA module happy.
+    msa_fake_status_timer = 0;
+  }
+}
+
+
 void evaluate_msa_button(void) {
   if (k_msg.buf[0] == 0xF5 || k_msg.buf[0] == 0xF1) {                                                                               // Button pressed.
     if (!msa_button_pressed) {
       #if FAKE_MSA
-        if (engine_running == 1) {
+        if (engine_running == 2) {
           kcan_write_msg(msa_deactivated_cc_on_buf);
           serial_log("Sent MSA OFF CC.", 2);
           m = {msa_deactivated_cc_off_buf, millis() + 3000};
@@ -561,7 +569,7 @@ void send_nbt_sport_displays_data(bool startup_animation) {
       ignore_sports_data_counter = 10;
     } else {
       if (ignore_sports_data_counter == 0) {
-        if (engine_running == 1) {
+        if (engine_running == 2) {
           uint16_t raw_value = (k_msg.buf[2] << 4) | (k_msg.buf[1] >> 4);                                                           // 12-bit EXX torque (TORQ_AVL - torque actual-value at the clutch).
           int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
           engine_torque_nm = signed_value * 0.5;                                                                                    // Signed and scaled Nm value.
@@ -674,9 +682,13 @@ void process_dme_cc(void) {
 
 
 void send_custom_info_cc(void) {
-  unsigned long custom_cc_interval = 500;
-  if (engine_running == 1) {
-    custom_cc_interval = 300;
+  unsigned long custom_cc_interval = 3000;
+  if (ignition) {
+    if (engine_running == 2) {
+      custom_cc_interval = 300;
+    } else {
+      custom_cc_interval = 1000;
+    }
   }
   if (custom_info_cc_timer >= custom_cc_interval) {
     if (millis() >= cc_message_expires) {
@@ -708,7 +720,7 @@ void send_custom_info_cc(void) {
         int coolant_temp = temperature_unit == 1 ? (engine_coolant_temperature - 48) 
                                                  : (int)round(((engine_coolant_temperature - 48) * 1.8) + 32);
 
-        if (engine_running == 1) {
+        if (engine_running == 2) {
           if (mdrive_status) {
             // Create the boost animation string
             char boost_bar_string[] = "____________________";
@@ -824,8 +836,8 @@ void send_custom_info_cc(void) {
         }
         send_cc_message(info_cc_string, false, 0);
       }
+      custom_info_cc_timer = 0;
     }
-    custom_info_cc_timer = 0;
   }
 }
 

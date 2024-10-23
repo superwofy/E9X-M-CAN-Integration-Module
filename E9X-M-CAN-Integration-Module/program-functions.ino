@@ -217,11 +217,12 @@ void print_current_state(Stream &status_serial) {
   sprintf(serial_debug_string, "\r\n ================================ Operation ===============================\r\n"
           " Vehicle PTCAN: %s\r\n"
           " Terminal R: %s, Ignition: %s\r\n"
-          " Engine: %s, RPM: %d, Torque: %.1f Nm, idling: %s\r\n"
+          " Engine: %s, RPM: %d, Torque: %.1f Nm, idling: %s, EML: %s\r\n"
           " Coolant temperature: %d °C, Oil temperature %d °C\r\n"
           " Indicated speed: %.1f %s, Real speed: %.1f KPH",
           vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF",
-          engine_running == 1 ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
+          engine_running == 2 ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
+          eml_light ? "ON" : "OFF",
           engine_coolant_temperature - 48, engine_oil_temperature - 48,
           indicated_speed, speed_mph ? "MPH" : "KPH", real_speed);
   status_serial.println(serial_debug_string);
@@ -273,9 +274,8 @@ void print_current_state(Stream &status_serial) {
             sine_roll_angle, (f_vehicle_roll_angle - 0x2000) * 0.05 - 64.0);
     #endif
     #if F_NBTE
-      sprintf(serial_debug_string, " Yaw rate FXX-Converted: %.2f degrees/s\r\n"
-          " Yaw rate error: %.2f degrees/s",
-          f_yaw_rate * 0.005 - 163.84, e_yaw_error);
+      sprintf(serial_debug_string, " Yaw rate FXX-Converted: %.2f degrees/s\r\n",
+          f_yaw_rate * 0.005 - 163.84);
     #endif
     status_serial.println(serial_debug_string);
   }
@@ -354,10 +354,8 @@ void print_current_state(Stream &status_serial) {
   status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " Reverse gear: %s", reverse_gear_status ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
-  #if PDC_AUTO_OFF
-    sprintf(serial_debug_string, " Handbrake: %s", handbrake_status ? "ON" : "OFF");
-    status_serial.println(serial_debug_string);
-  #endif
+  sprintf(serial_debug_string, " Handbrake: %s", handbrake_status ? "ON" : "OFF");
+  status_serial.println(serial_debug_string);
   sprintf(serial_debug_string, " PDC: %s", pdc_bus_status > 0x80 ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
   if (ambient_temperature_real != -255.0) {
@@ -410,10 +408,8 @@ void print_current_state(Stream &status_serial) {
    #if FRONT_FOG_CORNER
     sprintf(serial_debug_string, " Dipped beam: %s", dipped_beam_status ? "ON" : "OFF");
     status_serial.println(serial_debug_string);
-    #if FRONT_FOG_CORNER_AHL_SYNC
-      sprintf(serial_debug_string, " AHL: %s", ahl_active ? "ON" : "OFF");
-      status_serial.println(serial_debug_string);
-    #endif
+    sprintf(serial_debug_string, " AHL: %s", ahl_active ? "ON" : "OFF");
+    status_serial.println(serial_debug_string);
   #endif
   sprintf(serial_debug_string, " HBA: %s", hba_status == 0xE ? "ON" : "OFF");
   status_serial.println(serial_debug_string);
@@ -475,21 +471,25 @@ void print_current_state(Stream &status_serial) {
 
 void serial_log(const char message[], uint8_t level) {
   #if DEBUG_MODE
-    if (!clearing_dtcs) {
-      if (level <= LOGLEVEL) {
-        Serial.println(message);
-      }
-    }
     if (millis() <= 10000) {                                                                                                        // Store early messages that won't be on the Serial monitor.
       char buffer[128];
       if (micros() < 1000) {
-        sprintf(buffer, " %ld μs: %s\r\n", micros(), message);
+        snprintf(buffer, sizeof(buffer), " %ld μs: %s\r\n", micros(), message);
       } else if (millis() < 100) {
-        sprintf(buffer, " %.2f ms: %s\r\n", micros() / 1000.0, message);
+        snprintf(buffer, sizeof(buffer), " %.2f ms: %s\r\n", micros() / 1000.0, message);
       } else {
-        sprintf(buffer, " %ld ms: %s\r\n", millis(), message);
+        snprintf(buffer, sizeof(buffer), " %ld ms: %s\r\n", millis(), message);
       }
-      strcat(boot_debug_string, buffer);
+      if (strlen(boot_debug_string) + strlen(buffer) < sizeof(boot_debug_string)) {
+        strcat(boot_debug_string, buffer);
+      }
+    }
+    if (!clearing_dtcs) {
+      if (level <= LOGLEVEL) {
+        if (Serial.dtr()) {
+          Serial.println(message);
+        }
+      }
     }
   #endif
 }
@@ -501,6 +501,7 @@ void reset_ignition_variables(void) {                                           
     toggle_mdrive_message_active();
   }
   RPM = 0;
+  eml_light = 0;
   ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
   mdrive_settings_requested = false;
@@ -510,6 +511,7 @@ void reset_ignition_variables(void) {                                           
   edc_mismatch_check_counter = 0;
   dsc_txq.flush();
   dsc_mode_change_disable = false;
+  f_driving_dynamics_ignore = 3;
   seat_heating_dr_txq.flush();
   seat_heating_pas_txq.flush();
   reverse_beep_sent = pdc_too_close = false;
@@ -519,6 +521,7 @@ void reset_ignition_variables(void) {                                           
   hdc_txq.flush();
   pdc_buttons_txq.flush();
   exhaust_flap_sport = false;
+  fzd_ec_dimming = 0;
   #if !QUIET_START
     actuate_exhaust_solenoid(LOW);
   #endif
@@ -569,7 +572,6 @@ void reset_ignition_variables(void) {                                           
   #endif
   cruise_control_status = hdc_button_pressed = hdc_requested = hdc_active = false;
   msa_button_pressed = false;
-  msa_fake_status_counter = 0;
   pdc_bus_status = 0x80;
   rvc_tow_view_by_module = rvc_tow_view_by_driver = false;
   dme_boost_requested = false;

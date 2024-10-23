@@ -147,3 +147,86 @@ void update_dme_power_ckm(void) {
   #endif
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
+
+
+// void send_f_oil_level(void) {                                                                                                       // Used with OELSTAND_OENS. 266.0.4 - 6MC2DL0B pg. 1453.
+//   if (f_oil_level_timer >= 501) {
+//     uint8_t f_oil_level[4] = {0, 0xF0, 4, 0xC0};
+//     switch(e_oil_level) {
+//       case 0xC: {                                                                                                                   // Below MIN
+//         f_oil_level[1] = 0;
+//         break;
+//       }
+//       case 0x19: {                                                                                                                  // MIN
+//         f_oil_level[1] = 0x10;
+//         break;
+//       }
+//       case 0x26: {                                                                                                                  // Between MIN and OK
+//         f_oil_level[1] = 0x20;
+//         break;
+//       }
+//       case 0x35: {                                                                                                                  // OK
+//         f_oil_level[1] = 0x30;
+//         break;
+//       }
+//       case 0x45: {                                                                                                                  // Between OK and MAX
+//         f_oil_level[1] = 0x40;
+//         break;
+//       }
+//       case 0x55: {                                                                                                                  // State MAX
+//         f_oil_level[1] = 0x50;
+//         break;
+//       }
+//       case 0x5F: {                                                                                                                  // Overfilled
+//         f_oil_level[1] = 0x70;
+//         break;
+//       }
+//       case 0x78: {                                                                                                                  // No measurement possible
+//         f_oil_level[2] = 0x40;
+//         break;
+//       }
+//       case 0x79: {                                                                                                                  // Measurement in progress
+//         break;
+//       }
+//       case 0x7A: {                                                                                                                  // Oil Level Check OK (Oil level sufficient to start engine).
+//         f_oil_level[1] = 0x50;
+//         break;
+//       }
+//       case 0x7B: {                                                                                                                  // Measurement OK
+//         f_oil_level[1] = 0x50;
+//         break;
+//       }
+//       case 0x7C: {                                                                                                                  // Ignition OFF, no measurement possible
+//         f_oil_level[0] = 0xFF;
+//         f_oil_level[2] = 0xFF;
+//         break;
+//       }
+//       case 0x7D: {                                                                                                                  // Engine oil level OK, precise measurement in progress.
+//         break;
+//       }
+//       case 0x7E: {                                                                                                                  // Engine oil level OK
+//         f_oil_level[1] = 0x50;
+//         break;
+//       }
+//       case 0x7F: {                                                                                                                  // Measurement in progress
+//         break;
+//       }
+//       case 0x80: {                                                                                                                  // Accurate measurement in progress. Measuring time: 1min
+//         break;
+//       }
+//       case 0xFF: {                                                                                                                  // signal invalid
+//         f_oil_level[2] = 0x40;
+//         break;
+//       }
+//     }
+//     kcan2_write_msg(make_msg_buf(0x435, 4, f_oil_level));
+//     f_oil_level_timer = 0;
+//   }
+//   if (ignition) {
+//     if (f_oil_level_measuring_timer >= 60000) {                                                                                     // Periodically and when cycling ignition, re-set the level.
+//       kcan2_write_msg(f_oil_level_measuring_buf);
+//       f_oil_level_measuring_timer = 0;
+//       f_oil_level_timer = 501;
+//     }
+//   }
+// }
