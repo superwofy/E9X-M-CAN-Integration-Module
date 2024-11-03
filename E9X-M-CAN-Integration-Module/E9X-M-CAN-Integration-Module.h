@@ -92,6 +92,8 @@ const unsigned long OBD_DETECT_TIMEOUT = 120000;                                
   #endif
 #endif
 
+const int HU_ENT_MODE_TIMEOUT = 60000;                                                                                              // Amount of time within which the HU can be re-activated after Terminal R OFF.
+
 uint8_t MAX_TORQUE_SCALE_NM = 6;                                                                                                    // Used to scale the NBT sport displays. Torque = (x + 1) * 80. I.e. (6 + 1) * 80 = 560.
 uint8_t MAX_TORQUE_SCALE_LBFT = 5;                                                                                                  // 480
 uint8_t MAX_TORQUE_SCALE_KGM = 0;                                                                                                   // 80
@@ -198,7 +200,8 @@ bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = fa
      low_battery_cc_active = false;
 uint8_t engine_running = 0;                                                                                                         // 3 - signal invalid, 2 - engine running, 1 - engine starting, 0 - engine stopped.
 uint16_t terminal30g_followup_time = 0;
-CAN_message_t nbt_vin_request_buf, dme_request_consumers_off_buf;
+bool kl30g_cutoff_imminent = false;
+CAN_message_t nbt_vin_request_buf, dme_request_consumers_off_buf, fzm_wake_buf, fzm_sleep_buf;
 CAN_message_t faceplate_a1_released_buf, faceplate_a2_released_buf, faceplate_a3_released_buf, faceplate_f1_released_buf,
               faceplate_power_mute_buf, faceplate_eject_buf, faceplate_seek_left_buf, faceplate_seek_right_buf,
               faceplate_volume_decrease_buf, faceplate_volume_increase_buf;
@@ -225,10 +228,9 @@ float engine_torque = 0, engine_torque_nm = 0;
 bool engine_idling = false;                                                                                                         // Not idling.
 bool handbrake_status = true;
 elapsedMillis handbrake_status_debounce_timer = 300;
-uint8_t dme_ckm[4][2] = {{0xF1, 0xFF}, {0xF1, 0xFF}, {0xF1, 0xFF}, {0xF1, 0xFF}},
-        edc_mismatch_check_counter = 0;
-CAN_message_t edc_button_press_buf;
-uint8_t cas_key_number = 3;                                                                                                         // 0 = Key 1, 1 = Key 2...
+uint8_t dme_ckm[4][2] = {{0xF1, 0xFF}, {0xF1, 0xFF}, {0xF1, 0xFF}, {0xF1, 0xFF}};
+uint8_t edc_mode = 8,                                                                                                               // 8 - Comfort, 9 - Sport, 0xB - Sport+.                                                                                                               
+        cas_key_number = 3;                                                                                                         // 0 = Key 1, 1 = Key 2...
 bool key_guest_profile = false;
 uint8_t mdrive_dsc[4] = {0x13, 0x13, 0x13, 0xB}, mdrive_power[4] = {0x30, 0x30, 0x30, 0x10},                                        // Defaults for when EEPROM is not initialized.
         mdrive_edc[4] = {0x2A, 0x2A, 0x2A, 0x21}, mdrive_svt[4] = {0xF1, 0xF1, 0xF1, 0xE9};
@@ -253,19 +255,20 @@ CAN_message_t idrive_mdrive_settings_menu_cic_a_buf, idrive_mdrive_settings_menu
               set_warning_15kph_on_buf, set_warning_15kph_off_buf;
 uint8_t hba_status = 0;
 bool mdrive_settings_requested = false;
-bool requested_hu_off_t1 = false, requested_hu_off_t2 = false,
-     nbt_network_management_initialized = false, nbt_bus_sleep = false, nbt_active_after_terminal_r = false;
+bool requested_hu_off_t1 = false, requested_hu_off_t2 = false, hu_ent_mode = false,
+     hu_bn2000_nm_initialized = false, hu_bn2000_bus_sleep_active = false;
 
 // Since E9X cars are quite similar, we can predict the neighbours without having to observe the network.
 // All E92s have PDC which means when ignition is ON the nearest neighbour to 0x4E2 (CCC) is 0x4E4.
 // With ignition OFF, it must be the Driver's seat module. Unless there's a ZBE1 installed.
 #if F_NBTE_CCC_ZBE
-  uint8_t nbt_network_management_next_neighbour = 0x67;                                                                             // ZBE1.
+  uint8_t hu_bn2000_nm_next_neighbour = 0x67;                                                                                       // ZBE1.
 #else 
-  uint8_t nbt_network_management_next_neighbour = 0x6D;                                                                             // Driver's seat module.
+  uint8_t hu_bn2000_nm_next_neighbour = 0x6D;                                                                                       // Driver's seat module.
 #endif
 
-elapsedMillis nbt_bus_sleep_ready_timer = 0, nbt_network_management_timer = 1000;                                                   // Start NM registration 2s from now.
+elapsedMillis hu_bn2000_bus_sleep_ready_timer = 0, hu_bn2000_nm_timer = 1000;                                                       // Start NM registration 2s from now.
+
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms,
               dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
@@ -394,7 +397,7 @@ uint16_t xview_pitch_angle = 0x5000;                                            
 uint8_t xview_grade_percentage = 0x64;                                                                                              // 0%
 uint16_t f_vehicle_pitch_angle = 0x2500, f_vehicle_roll_angle = 0x2500;                                                             // 1280 * 0.05 - 64 = 0 degrees, 2 - Valid.
 float e_longitudinal_acceleration = 0, e_lateral_acceleration = 0, e_yaw_rate = 0;
-uint16_t longitudinal_acceleration = 0x7EF4, lateral_acceleration = 0x7EF4;                                                         // 32500 * 0.002 - 65 = 0 m/s^2.
+uint16_t f_longitudinal_acceleration = 0x7EF4, f_lateral_acceleration = 0x7EF4;                                                     // 32500 * 0.002 - 65 = 0 m/s^2.
 uint8_t f_longitudinal_acceleration_alive_counter = 0, f_lateral_acceleration_alive_counter = 0;
 uint16_t f_yaw_rate = 0x8000;                                                                                                       // 32768 * 0.005 - 163.84 = 0 degrees/sec.
 uint8_t f_yaw_alive_counter = 0;
@@ -430,7 +433,7 @@ CRC8 f_vehicle_status_crc(0x1D, 0, 0x64, false, false),                         
      f_lateral_acceleration_crc(0x1D, 0, 0xE5, false, false),                                                                       // SAE J1850 POLY, 0 init and XOR-OUT 0xE5 for ARB-ID 0x19A.
      f_yaw_rate_msg_crc(0x1D, 0, 1, false, false),                                                                                  // SAE J1850 POLY, 0 init and XOR-OUT 1 for ARB-ID 0x19F.
      f_speed_crc(0x1D, 0, 0xF, false, false),                                                                                       // SAE J1850 POLY, 0 init and XOR-OUT 0xF for ARB-ID 0x1A1.
-     f_standstill_status_crc(0x1D, 0, 0x8F, false, false),                                                                          // SAE J1850 POLY, 0 init and XOR-OUT 0x8F for ARB-ID 0x2DC.     
+     f_standstill_status_crc(0x1D, 0, 0x8F, false, false),                                                                          // SAE J1850 POLY, 0 init and XOR-OUT 0x8F for ARB-ID 0x2DC.
      f_steering_angle_crc(0x1D, 0, 0xD1, false, false),                                                                             // SAE J1850 POLY, 0 init and XOR-OUT 0xD1 for ARB-ID 0x301.
      f_steering_angle_effective_crc(0x1D, 0, 0x3A, false, false),                                                                   // SAE J1850 POLY, 0 init and XOR-OUT 0x3A for ARB-ID 0x302.
      f_ftm_status_crc(0x1D, 0, 0x63, false, false),                                                                                 // SAE J1850 POLY, 0 init and XOR-OUT 0x63 for ARB-ID 0x369.
@@ -485,8 +488,8 @@ CAN_message_t msa_fake_status_buf, mute_asd_buf, demute_asd_buf, radon_asd_buf,
               clear_hs_kwp_dme_buf, ccc_zbe_wake_buf, jbe_reboot_buf,
               ihka_5v_on_buf, ihka_5v_off_buf;
 extern float tempmonGetTemp(void);
-char serial_debug_string[128];
-char boot_debug_string[16384];                                                                                                      // Can store a minimum of 127 messages that are 128 bytes long.
+char serial_debug_string[512];
+char boot_debug_string[16384];                                                                                                      // Can store a minimum of 64 messages that are 256 bytes long (unlikely).
 unsigned long max_loop_timer = 0, loop_timer = 0;
 uint32_t kcan_error_counter = 0, kcan2_error_counter = 0, ptcan_error_counter = 0, dcan_error_counter = 0;
 bool serial_commands_unlocked = false;
@@ -511,3 +514,5 @@ bool diag_transmit = true, diag_timeout_active = true, power_down_requested = fa
 elapsedMillis debug_print_timer = 500, diag_deactivate_timer, serial_unlocked_timer = 0, slcan_timer = 0;
 bool debug_print_connected = false, slcan_connected = false, slcan_enabled = true, timestamp = true;
 uint8_t slcan_bus = 1;                                                                                                              // KCAN.
+bool date_time_valid = false;
+uint16_t t_hours = 0, t_minutes = 0, t_seconds = 0, d_day = 1, d_month = 1, d_year = 2024;

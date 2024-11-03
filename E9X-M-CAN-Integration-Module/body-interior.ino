@@ -7,6 +7,14 @@ void check_vehicle_awake(void) {
     vehicle_awake = true;
     serial_log("Vehicle Awake.", 0);
     vehicle_awakened_timer = 0;
+    kl30g_cutoff_imminent = false;
+    requested_hu_off_t2 = false;
+    hu_bn2000_nm_timer = 1000;
+
+    // Keep this fairly low - it delays the FRM 30G reset.
+    hu_bn2000_bus_sleep_ready_timer = HU_ENT_MODE_TIMEOUT / 2;
+
+    activate_optional_transceivers();
     #if F_NBTE
       FACEPLATE_UART.begin(38400, SERIAL_8E1);
     #endif
@@ -75,7 +83,8 @@ void evaluate_terminal_clutch_keyno_status(void) {
     serial_log("Terminal R ON.", 2);
     comfort_exit_ready = false;
     f_terminal_status[2] = 0x87;
-    nbt_bus_sleep = false;
+    requested_hu_off_t2 = false;
+    kl30g_cutoff_imminent = false;
     activate_optional_transceivers();                                                                                               // Re-activate transceivers with Terminal R in case the FRM message was missed.
     car_locked_indicator_counter = 0;
     custom_info_cc_timer = 3000;
@@ -93,8 +102,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     comfort_exit_ready = true;
     intermittent_wipe_active = false;
     f_terminal_status[2] = 0x87;
-    nbt_bus_sleep = true;                                                                                                           // Will allow the network to sleep unless the driver presses the faceplate button.
-    nbt_bus_sleep_ready_timer = 0;
+    hu_bn2000_bus_sleep_ready_timer = 0;                                                                                            // Will allow the network to sleep unless the driver presses the faceplate button before timeout.
     custom_info_cc_timer = 3000;
   }
 
@@ -117,9 +125,8 @@ void evaluate_terminal_clutch_keyno_status(void) {
       }
     #endif
     f_terminal_status[2] = 0x89;                                                                                                    // KL15_change
-    nbt_bus_sleep = false;
-    nbt_network_management_next_neighbour = 0x64;                                                                                   // PDC controller.
-    nbt_network_management_timer = 3000;
+    hu_bn2000_nm_next_neighbour = 0x64;                                                                                             // PDC controller.
+    hu_bn2000_nm_timer = 3000;
     custom_info_cc_timer = 3000;
   } else if (!ignition && ignition_) {
     reset_ignition_variables();
@@ -178,14 +185,15 @@ void evaluate_terminal_clutch_keyno_status(void) {
 
 
 void evaluate_frm_consumer_shutdown(void) {
-  // The FRM sends this request after the vehicle has been sleeping for a predefined time.
-  // This can be observed when the car wakes up and turns off the interior lights. It then goes to deep sleep.
+  // The FRM sends this request after the vehicle has been sleeping for a predefined time (NACHLAUF_KLEMME_VA).
+  // This can be observed when the car wakes up and turns off the interior lights. It then goes to deep sleep except:
     // A special case is when the iDrive is still awake after pressing the power/mute button and its NM is keeping the car awake.
     // In that context, the consumers OFF message is sent
   // OR
   // If the car is locked, FC is sent immediately.
   // OR
   // If the car is half-woken with the remote trunk button or lock button while locked, FC is sent immediately.
+
   if (k_msg.buf[0] == 0xFC) {
     if (!frm_consumer_shutdown) {
       frm_consumer_shutdown = true;
@@ -196,6 +204,11 @@ void evaluate_frm_consumer_shutdown(void) {
         serial_log("FRM requested optional consumers OFF.", 2);
       }
     }
+    #if F_NBTE
+      if (!ignition) {
+        kcan2_write_msg(fzm_sleep_buf);                                                                                             // Indicate sleep readiness to KCAN2 modules.
+      }
+    #endif
   } else if (k_msg.buf[0] == 0xFD) {
     if (frm_consumer_shutdown) {
       frm_consumer_shutdown = false;
@@ -204,44 +217,56 @@ void evaluate_frm_consumer_shutdown(void) {
       #if F_VSW01 && F_VSW01_MANUAL
         vsw_switch_input(4);
       #endif
+      requested_hu_off_t2 = false;
     }
-  }
+    #if F_NBTE
+      if (!ignition) {                                                                                                              // 3A5 is only sent with KL15_OFF.
+        if (!hu_bn2000_bus_sleep_active) {
+          kcan2_write_msg(fzm_wake_buf);                                                                                            // Without 3A5 wake AMPT goes to sleep almost immediately after KLR_OFF.
+        } else {
+          kcan2_write_msg(fzm_sleep_buf);                                                                                           // If BN2000(OSEK) HU NM set to sleep, indicate sleep readiness to KCAN2 modules.
+        }
+      }
+    #endif
+  } 
 }
 
 
 void evaluate_seat_heating_status(void) {
-  if (k_msg.id == 0x232) {
-    driver_seat_heating_status = !k_msg.buf[0] ? false : true;
-    if (!driver_seat_heating_status) {                                                                                              // Check if seat heating is already ON.
-      if (!driver_sent_seat_heating_request) { 
-        if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {
-          send_seat_heating_request_driver(false);
-        } else if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_MEDIUM) {
-          send_seat_heating_request_driver(true);
-        }
-      }
-    } else {
-      driver_sent_seat_heating_request = true;                                                                                      // Seat heating already ON. No need to request anymore.
-    }
-  } 
-  #if AUTO_SEAT_HEATING_PASS
-  else {                                                                                                                            // Passenger's seat heating status message is only sent with ignition ON.
-    passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
-    if (!passenger_seat_heating_status) {
-      if (!passenger_sent_seat_heating_request) {
-        if (passenger_seat_status == 9) {                                                                                           // Occupied and belted.
+  if (terminal_r) {
+    if (k_msg.id == 0x232) {
+      driver_seat_heating_status = !k_msg.buf[0] ? false : true;
+      if (!driver_seat_heating_status) {                                                                                            // Check if seat heating is already ON.
+        if (!driver_sent_seat_heating_request) { 
           if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {
-            send_seat_heating_request_pas(false);
+            send_seat_heating_request_driver(false);
           } else if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_MEDIUM) {
-            send_seat_heating_request_pas(true);
+            send_seat_heating_request_driver(true);
           }
         }
+      } else {
+        driver_sent_seat_heating_request = true;                                                                                    // Seat heating already ON. No need to request anymore.
       }
-    } else {
-      passenger_sent_seat_heating_request = true;
+    } 
+    #if AUTO_SEAT_HEATING_PASS
+    else {                                                                                                                          // Passenger's seat heating status message is only sent with ignition ON.
+      passenger_seat_heating_status = !k_msg.buf[0] ? false : true;
+      if (!passenger_seat_heating_status) {
+        if (!passenger_sent_seat_heating_request) {
+          if (passenger_seat_status == 9) {                                                                                         // Occupied and belted.
+            if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_HIGH) {
+              send_seat_heating_request_pas(false);
+            } else if (max(ambient_temperature_real, interior_temperature) <= AUTO_SEAT_HEATING_THRESHOLD_MEDIUM) {
+              send_seat_heating_request_pas(true);
+            }
+          }
+        }
+      } else {
+        passenger_sent_seat_heating_request = true;
+      }
     }
+    #endif
   }
-  #endif
 }
 
 
@@ -640,9 +665,8 @@ void evaluate_power_down_response(void) {
       } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x23) {
         kcan_write_msg(power_down_cmd_c_buf);
       } else if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 3 && k_msg.buf[2] == 0x71 && k_msg.buf[3] == 5) {
-        serial_log("Power-down command sent successfully. Car will kill KL30G and assume deep sleep in ~15s.", 0);
+        serial_log("Power-down command sent successfully. Car will kill KL30G and assume deep sleep in <15s.", 0);
         power_down_requested = false;
-        deactivate_optional_transceivers();
       } else {
         power_down_requested = false;
         serial_log("Power-down command aborted due to error.", 0);
@@ -859,15 +883,30 @@ void evaluate_temperature_unit(void) {
 
 void evaluate_terminal_followup(void) {
   if (!terminal_r) {
-    if (!(k_msg.buf[0] == 0xFE && k_msg.buf[0] == 0xFF)) {
+    if (!(k_msg.buf[0] == 0xFE && k_msg.buf[1] == 0xFF)) {
 
       terminal30g_followup_time = ((k_msg.buf[1] & 0xF) << 8) | k_msg.buf[0];
+      if (terminal30g_followup_time > 0) {
+        kl30g_cutoff_imminent = false;
+      }
+
+      #if DEBUG_MODE
+        if (kl30g_cutoff_imminent) {
+          serial_log("30G relay will be cut very shortly!.", 2);
+        } else {
+          sprintf(serial_debug_string, "30G relay will be cut off in %d seconds.", terminal30g_followup_time * 10 + 10);
+          serial_log(serial_debug_string, 2);
+        }
+      #endif
 
       if (terminal30g_followup_time <= 0x37 && terminal30g_followup_time > 0x1E) {                                                  // 9.5 minutes.
         // With CIC, the CID is switched off occasionally at 600s and 280s remaining.
         // If the power button is pressed, operation continues until 30G is OFF and the CIC is *forcefully* killed.
+
+        // NBT will display a warning about sleep depending on the setting of SLEEPDELAY_CLAMP30B_MIN.
+        // I.e it will appear at max_terminal30g_followup_time - SLEEPDELAY_CLAMP30B_MIN. E.g 0x5A (900s) - 0x1E (300s) = 600s
         #if F_NBTE
-          if (!requested_hu_off_t1 && kcan2_mode == MCP_NORMAL) {
+          if (kcan2_mode == MCP_NORMAL && !requested_hu_off_t1 && hu_ent_mode) {
             serial_log("Sent HU OFF at timer1.", 2);
             kcan2_write_msg(dme_request_consumers_off_buf);
             requested_hu_off_t1 = true;
@@ -877,22 +916,21 @@ void evaluate_terminal_followup(void) {
         #if F_NBTE
           send_cc_message("iDrive switching off in 30s to save battery!", true, 5000);
         #endif
-      } else if (terminal30g_followup_time <= 5) {
+      } else if (terminal30g_followup_time <= 5 && terminal30g_followup_time > 0) {
         #if F_NBTE
           if (kcan2_mode == MCP_NORMAL) {
-            serial_log("30G cutoff imminent (<60s) Sent HU OFF at timer2.", 2);
-            kcan2_write_msg(dme_request_consumers_off_buf);                                                                         // Allow the HU to shut down more gracefully. User requests to wake up will be ignored.
-            requested_hu_off_t2 = true;
+            if (!requested_hu_off_t2) {
+              serial_log("30G cutoff imminent (<60s) Sent HU OFF at timer2.", 2);
+              requested_hu_off_t2 = true;                                                                                           // Allow the HU to shut down more gracefully. User requests to wake up will be ignored.
+            }
           }
         #endif
       } else if (terminal30g_followup_time == 0) {
-        serial_log("Received critical 30G timer message. Deep sleep in less than 20s.", 2);
-        update_data_in_eeprom();
-      } else {
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "30G relay will be cut off in %d seconds.", terminal30g_followup_time * 10);
-          serial_log(serial_debug_string, 2);
-        #endif
+        if (!kl30g_cutoff_imminent) {
+          serial_log("Received critical 30G timer message. Deep sleep in less than 20s.", 2);
+          update_data_in_eeprom();
+          kl30g_cutoff_imminent = true;
+        }
       }
     }
   }
@@ -901,4 +939,19 @@ void evaluate_terminal_followup(void) {
 
 void evaluate_interior_temperature(void) {
   interior_temperature = (k_msg.buf[3] / 6.0);
+}
+
+
+void evaluate_date_time(void) {
+  if (k_msg.buf[0] != 0xFD && k_msg.buf[7] != 0xFC) {                                                                              // Invalid time / not set.
+    date_time_valid = true;
+  } else {
+    date_time_valid = false;
+  }
+  t_hours = k_msg.buf[0];
+  t_minutes = k_msg.buf[1];
+  t_seconds = k_msg.buf[2];
+  d_day = k_msg.buf[3];
+  d_month = k_msg.buf[4] >> 4;
+  d_year = (k_msg.buf[6] << 8) | k_msg.buf[5];
 }

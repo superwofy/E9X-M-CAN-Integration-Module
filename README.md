@@ -49,13 +49,14 @@ Included are also tools to allow full manipulation of the program section in the
 	* xDrive status data populated with pitch and roll obtained from the alarm siren (SINE).
 	* A BN2000 -> BN2010 message translation overview can be found here: [nbt-messages](CAN%20messages/Message%20translation%20for%20NBT.txt)
 	* Control RAD_ON through the ASD module (pin 7).
-	* Relay information through custom CC dialogs.
-	* Display some rudimentary gauges through custom CC list:
+	* Relay information through custom CC dialogs (Climate, DSC, errors etc.).
+	* Display some rudimentary gauges through a persistent notification in the CC list:
 		* Terminal R: Coolant temperature and Battery voltage.
 		* Ignition: Coolant temperature, Battery voltage and Intake Air Temperature.
 		* Engine running: Coolant temperature, Battery voltage, Intake Air Temperature and Turbo pressure.
 		* Engine running+MDrive: Intake Air Temperature, Turbo pressure and Turbo bar gauge.
 	* Control high beam assistant persistently by pushing away and holding the indicator stalk for 5s.
+	* Implement ENT_MODE and associated power saving.
 * Control MDrive settings from iDrive.
 	* Control DME throttle map with the M button.
 	* Control DTC/DSC OFF with the M button.

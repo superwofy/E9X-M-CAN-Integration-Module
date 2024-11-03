@@ -827,11 +827,11 @@ void send_custom_info_cc(void) {
                   battery_voltage
           );
         } else {
-          snprintf(info_cc_string, 46, "WT: %d°%c   BAT: %.2fV   30G-OFF: <%ds",
+          snprintf(info_cc_string, 46, "WT: %d°%c   BAT: %.2fV   SLEEP: <%ds",
                   coolant_temp,
                   temperature_unit == 1 ? 'C' : 'F',
                   battery_voltage,
-                  terminal30g_followup_time > 0 ? terminal30g_followup_time * 10 : 10                                               // From timer set to 0, the KL30G relay will be killed in about 18s. See trace timestamp: 1814669398.
+                  terminal30g_followup_time > 0 ? terminal30g_followup_time * 10 + 10 : 10                                               // From timer set to 0, the KL30G relay will be killed in about 18s. See trace timestamp: 1814669398.
           );
         }
         send_cc_message(info_cc_string, false, 0);

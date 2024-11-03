@@ -219,12 +219,16 @@ void print_current_state(Stream &status_serial) {
           " Terminal R: %s, Ignition: %s\r\n"
           " Engine: %s, RPM: %d, Torque: %.1f Nm, idling: %s, EML: %s\r\n"
           " Coolant temperature: %d °C, Oil temperature %d °C\r\n"
-          " Indicated speed: %.1f %s, Real speed: %.1f KPH",
+          " Indicated speed: %.1f %s, Real speed: %.1f KPH\r\n"
+          " Car time: %s%d:%s%d:%s%d %s%d/%s%d/%d  %s",
           vehicle_awake ? "ON" : "OFF", terminal_r ? "ON" : "OFF", ignition ? "ON" : "OFF",
           engine_running == 2 ? "ON" : "OFF", RPM / 4, engine_torque, engine_idling ? "YES" : "NO",
           eml_light ? "ON" : "OFF",
           engine_coolant_temperature - 48, engine_oil_temperature - 48,
-          indicated_speed, speed_mph ? "MPH" : "KPH", real_speed);
+          indicated_speed, speed_mph ? "MPH" : "KPH", real_speed,
+          t_hours > 9 ? "" : "0", t_hours, t_minutes > 9 ? "" : "0", t_minutes, t_seconds > 9 ? "" : "0", t_seconds,
+          d_day > 9 ? "" : "0", d_day, d_month > 9 ? "" : "0", d_month, d_year,
+          date_time_valid ? "SET" : "UNSET");
   status_serial.println(serial_debug_string);
   #if HDC
     sprintf(serial_debug_string, " Cruise Control: %s", cruise_control_status ? "ON" : "OFF");
@@ -282,8 +286,8 @@ void print_current_state(Stream &status_serial) {
   #if F_NIVI || F_NBTE
     sprintf(serial_debug_string, " Longitudinal acceleration: %.2f g, FXX-Converted: %.2f m/s^2\r\n"
             " Lateral acceleration: %.2f g, FXX-Converted: %.2f m/s^2",          
-            e_longitudinal_acceleration * 0.10197162129779283, longitudinal_acceleration * 0.002 - 65.0,
-            e_lateral_acceleration * 0.10197162129779283, lateral_acceleration * 0.002 - 65.0);
+            e_longitudinal_acceleration * 0.10197162129779283, f_longitudinal_acceleration * 0.002 - 65.0,
+            e_lateral_acceleration * 0.10197162129779283, f_lateral_acceleration * 0.002 - 65.0);
     status_serial.println(serial_debug_string);
   #endif
   #if F_NBTE || F_NIVI || MIRROR_UNDIM
@@ -298,7 +302,7 @@ void print_current_state(Stream &status_serial) {
             key_valid ? "YES" : "NO");
     status_serial.println(serial_debug_string);
   #endif
-  sprintf(serial_debug_string, " ================================= MDrive =================================\r\n"
+  sprintf(serial_debug_string, " ================================== MDrive ==================================\r\n"
           " Active: %s", mdrive_status ? "YES" : "NO");
   status_serial.println(serial_debug_string);
   status_serial.print(" Settings: DSC-");
@@ -471,8 +475,8 @@ void print_current_state(Stream &status_serial) {
 
 void serial_log(const char message[], uint8_t level) {
   #if DEBUG_MODE
-    if (millis() <= 10000) {                                                                                                        // Store early messages that won't be on the Serial monitor.
-      char buffer[128];
+    if (millis() <= 10000 && !Serial.dtr()) {                                                                                       // Store early messages that won't be on the Serial monitor.
+      char buffer[256];
       if (micros() < 1000) {
         snprintf(buffer, sizeof(buffer), " %ld μs: %s\r\n", micros(), message);
       } else if (millis() < 100) {
@@ -508,7 +512,6 @@ void reset_ignition_variables(void) {                                           
   m_mfl_held_count = 0;
   uif_read = false;
   console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                           // When cycling ignition, restore this to its CKM value.
-  edc_mismatch_check_counter = 0;
   dsc_txq.flush();
   dsc_mode_change_disable = false;
   f_driving_dynamics_ignore = 3;
@@ -587,8 +590,8 @@ void reset_ignition_variables(void) {                                           
       vsw_switch_input(4);
     #endif
   #endif
-  nbt_network_management_next_neighbour = 0x6D;                                                                                     // Driver's seat module.
-  nbt_network_management_timer = 3000;
+  hu_bn2000_nm_next_neighbour = 0x6D;                                                                                               // Driver's seat module.
+  hu_bn2000_nm_timer = 3000;
 }
 
 
@@ -637,9 +640,9 @@ void reset_sleep_variables(void) {
   faceplate_volume = 0;
   gong_active = false;
   faceplate_eject_pressed = faceplate_power_mute_pressed = faceplate_hu_reboot = false;
-  requested_hu_off_t1 = requested_hu_off_t2 = nbt_network_management_initialized = false;
-  nbt_bus_sleep = nbt_active_after_terminal_r = false;
-  nbt_network_management_next_neighbour = 0x6D;                                                                                     // Driver's seat module.
+  requested_hu_off_t1 = requested_hu_off_t2 = hu_bn2000_nm_initialized = false;
+  hu_ent_mode = false;
+  hu_bn2000_nm_next_neighbour = 0x6D;                                                                                               // Driver's seat module.
   comfort_exit_ready = false;                                                                                                       // Do not execute comfort exit if car fell asleep.
   faceplate_buttons_txq.flush();
   radon_txq.flush();
@@ -657,7 +660,8 @@ void reset_sleep_variables(void) {
   ptcan_resend_txq.flush();
   dcan_resend_txq.flush();
   diag_transmit = diag_timeout_active = true;
-  nbt_network_management_timer = 3000;
+  hu_bn2000_nm_timer = 3000;
   low_battery_cc_active = false;
   frm_consumer_shutdown = true;                                                                                                     // When going to sleep the FRM may not set this if the car wasn't awake long enough.
+  kl30g_cutoff_imminent = false;
 }

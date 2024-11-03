@@ -20,6 +20,8 @@ COMMUNICATION_PARKMASTER                                                // PDC n
     gen2
 SLEEPDELAY_CLAMP30B_MIN                                                 // Sleep after 5 min
     1E
+SLEEPDELAY_TIMERVALUE                                                   // 180s - reduced to match SLEEPDELAY_CLAMP30B_MIN
+    UNK_PARAM_0
 ECO_CSC_KOMBI
     nicht_aktiv
 ID5_COLOR_SET
@@ -52,6 +54,10 @@ CAM_ECU                                                                 // VSW o
     wert_1
 TV
     wert_1
+DIMMUNGSVARIANTE                                                        // old style brightness adjustment
+    alte_dimmung
+DIM_VARIANT
+    old
 BASIS_KOMBI_MMI_LIST
     aktiv
 GATEWAYTABLE

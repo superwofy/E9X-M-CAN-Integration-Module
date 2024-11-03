@@ -191,11 +191,11 @@ void deactivate_optional_transceivers(void) {
   }
   #if F_NBTE
     if (kcan2_mode == MCP_NORMAL) {
+      kcan2_write_msg(fzm_sleep_buf);                                                                                               // Make sure KCAN2 modules know sleep is incoming.
+      kcan2_write_msg(dme_request_consumers_off_buf);
       kcan2_mode = MCP_SLEEP;
       KCAN2.setMode(kcan2_mode);
       serial_log("Deactivated K-CAN2 transceiver.", 0);
-      nbt_bus_sleep = true;
-      nbt_bus_sleep_ready_timer = 50000;
     }
   #endif
 }

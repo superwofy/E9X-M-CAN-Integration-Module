@@ -32,7 +32,7 @@ NS_ :
     SG_MUL_VAL_
 
 BS_: 
-BU_: ICMQL DSC_SAS CAS_FEM_BDC DME_DDE KOMBI FRM_BDC JBBF_FEM_BDC 
+BU_: ICMQL DSC_SAS CAS_FEM_BDC DME_DDE KOMBI FRM_BDC JBBF_FEM_BDC BDC ZGW HU VSW EMF 
 BO_ 2147484063 VYAW_VEH: 6 ICMQL
    SG_ VYAW_VEH : 16|16@1+ (0.005,-163.84) [-163.84|163.84] "deg/s" Vector__XXX
    SG_ QU_VYAW_VEH : 44|4@1+ (1,0) [0|16] "" Vector__XXX
@@ -160,16 +160,17 @@ BO_ 2147484592 STAT_GANG_RUECKWAERTS: 2 FRM_BDC
 
 BO_ 2147484583 SU_SW_DRDY: 8 ICMQL
    SG_ drivetrain : 16|4@1+ (1,0) [0|1] "" Vector__XXX
-   SG_ suspension : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ VDC : 20|2@1+ (1,0) [0|1] "" Vector__XXX
    SG_ icm_state : 24|2@1+ (1,0) [0|1] "" Vector__XXX
    SG_ icm_mode : 26|2@1+ (1,0) [0|1] "" Vector__XXX
    SG_ stability : 28|4@1+ (1,0) [0|1] "" Vector__XXX
    SG_ FDS : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ARS : 22|2@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484495 STAT_CT_HABR: 2 JBBF_FEM_BDC
    SG_ STAT_CT_HABR : 0|2@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484581 SLRDI_GLB_FZM: 5 DME_DDE
+BO_ 2147484581 SLRDI_GLB_FZM: 5 ZGW
    SG_ DSTN_SLRDI_GLB : 0|8@1+ (1,0) [0|1] "" Vector__XXX
    SG_ CTR_SLRDI_GLB : 8|2@1+ (1,0) [0|1] "" Vector__XXX
    SG_ CTR_FSL : 10|2@1+ (1,0) [0|1] "" Vector__XXX
@@ -208,6 +209,43 @@ BO_ 2147484595 POWERMGMT_CTR_COS: 7 DME_DDE
    SG_ CTR_PWR_COS_15 : 30|1@0+ (1,0) [0|1] "" Vector__XXX
    SG_ CTR_PWR_COS_16 : 31|1@0+ (1,0) [0|1] "" Vector__XXX
    SG_ CTR_CBR : 32|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RQ_PCOS : 40|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PCOS : 42|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_ENERG_PWMG : 48|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTR_PWRU_COS : 44|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484298 OP_PUBU_NIVI: 2 BDC
+   SG_ OP_PUBU_NIVI : 0|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484411 RQ_VSW: 8 HU
+   SG_ RQ_VSW : 0|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484413 ST_VSW: 8 VSW
+   SG_ ST_VSWSig39 : 0|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484719 SET_MDRIVE: 5 HU
+   SG_ DSC : 0|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ Engine : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ Suspension : 16|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ Steering : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484718 ST_MDRV: 8 DME_DDE
+   SG_ DSC : 8|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ Engine : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484397 ST_VHSS: 3 DSC_SAS
+   SG_ ST_VEHSS : 16|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VEHSS_1 : 16|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VEHSS_2 : 17|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VEHSS_3 : 18|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VEHSS_4 : 20|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484380 ST_VEHSS_PBRK: 3 EMF
+   SG_ ST_VEHSS_PBRK : 16|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VEHSS_PBRK_1 : 16|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VEHSS_PBRK_2 : 17|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VEHSS_PBRK_3 : 18|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VEHSS_PBRK_4 : 20|1@1+ (1,0) [0|1] "" Vector__XXX
 
 CM_ BO_ 2147484063 "Vehicle_Yaw_Rate";
 CM_ SG_ 2147484063 VYAW_VEH "Vehicle_Yaw_Rate";
@@ -334,6 +372,18 @@ CM_ SG_ 2147484595 SLCTN_SPCOS "selection_of_special_consumers";
 CM_ SG_ 2147484595 CTR_PWR_SPCOS "Control_Power_Special_Consumers";
 CM_ SG_ 2147484595 CTR_PWR_COS_1 "Control_Power_Consumer";
 CM_ SG_ 2147484595 CTR_CBR "Control_current_branches";
+CM_ SG_ 2147484595 RQ_PCOS "requirement_of_stationary_consumers";
+CM_ SG_ 2147484595 CTR_PCOS "requirement_of_stationary_consumers";
+CM_ SG_ 2147484595 ST_ENERG_PWMG "Status_Energy_Powermanagement";
+CM_ BO_ 2147484298 "Status Night-Vision Button";
+CM_ BO_ 2147484411 "VSW switch request";
+CM_ BO_ 2147484413 "Status VSW position";
+CM_ BO_ 2147484719 "MDrive settings";
+CM_ BO_ 2147484718 "Status MDrive";
+CM_ BO_ 2147484397 "Vehicle standstill status";
+CM_ SG_ 2147484397 ST_VEHSS "Status_Vehicle_Standstill";
+CM_ BO_ 2147484380 "Vehicle standstill status parking brake";
+CM_ SG_ 2147484380 ST_VEHSS_PBRK "Status_Vehicle_Standstill_parking_brake";
 BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
 BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
 BA_DEF_ BO_ "matchingcriteria" INT 0 0;
@@ -395,11 +445,12 @@ VAL_ 2147484667 RQ_SHPA_GRB_CHGBLC 0 "No_shift_point_adjustment_required" 1 "Shi
 VAL_ 2147484667 ST_CAT_HT 0 "Cat_heating_not_active" 1 "Cat_heating_active" 3 "Signal_invalid";
 VAL_ 2147484592 ST_GR_BAC 1 "not_in_reverse_gear" 2 "reverse_gear" 3 "signal_invalid";
 VAL_ 2147484583 drivetrain 0 "Base" 4 "Traction" 2 "Comfort" 9 "Sport" 10 "Eco_1" 11 "Sport+" 13 "Race" 15 "Signal_invalid";
-VAL_ 2147484583 suspension 0 "Vertical_dynamics_basis_VDC_basis_ARS_basis" 8 "Vertical_dynamics_comfort_VDC_sport_ARS_basis" 5 "Vertical_Dynamics_Sport_VDC_Comfort_ARS_Sport" 15 "Signal_invalid";
+VAL_ 2147484583 VDC 0 "Vertical_dynamics_basis" 2 "Vertical_dynamics_comfort" 1 "Vertical_Dynamics_Sport";
 VAL_ 2147484583 icm_state 0 "Integrated_chassis_management_controller_on" 3 "Integrated_chassis_management_controller_off";
 VAL_ 2147484583 icm_mode 0 "Integrated_chassis_management_basis" 1 "Integrated_chassis_management_sport";
 VAL_ 2147484583 stability 8 "Initialization" 0 "Driving_dynamics_stabilization_DSC_on" 1 "Driving_dynamics_stabilization_DTC" 4 "Driving_dynamics_stabilization_DSC_off" 15 "Signal_invalid";
 VAL_ 2147484583 FDS 1 "Traction" 2 "Comfort" 4 "Sport" 5 "Sport+" 6 "DSC_OFF_Race" 7 "ECO_Pro" 8 "ECO_Pro+" 9 "Comfort+" 3 "Comfort";
+VAL_ 2147484583 ARS 0 "Basis" 1 "Sport";
 VAL_ 2147484495 STAT_CT_HABR 0 "Not_coded" 1 "Handbrake_released" 2 "Handbrake_applied" 3 "Signal_invalid";
 VAL_ 2147484581 DSTN_SLRDI_GLB 225 "Broadcast_all_slaves" 255 "signal_invalid";
 VAL_ 2147484581 CTR_SLRDI_GLB 1 "AWAKE_IND" 2 "SLEEP_ACK" 3 "Signal_invalid";
@@ -431,3 +482,25 @@ VAL_ 2147484595 CTR_PWR_COS_14 0 "OFF" 1 "Heating fan 50%";
 VAL_ 2147484595 CTR_PWR_COS_15 0 "OFF" 1 "Heating fan 25%";
 VAL_ 2147484595 CTR_PWR_COS_16 0 "OFF" 1 "Signal invalid";
 VAL_ 2147484595 CTR_CBR 0 "No_control" 1 "Control" 255 "Signal_invalid";
+VAL_ 2147484595 RQ_PCOS 0 "No_action" 1 "Stationary_consumers_must_identify_themselves" 2 "Unused" 3 "Signal_invalid";
+VAL_ 2147484595 CTR_PCOS 0 "No_action" 1 "Special_stationary_consumers_may_switch_on" 2 "stationary_consumers_must_switch_off" 3 "Signal_invalid";
+VAL_ 2147484595 ST_ENERG_PWMG 1 "Switching_off_terminal_30_F." 2 "No_stationary_consumers_permitted." 4 "unused" 8 "Battery_charge_level_100%" 15 "Signal_invalid";
+VAL_ 2147484595 CTR_PWRU_COS 15 "Signal_invalid";
+VAL_ 2147484298 OP_PUBU_NIVI 0 "Button_released" 1 "Button_pressed";
+VAL_ 2147484411 RQ_VSW 0 "Off" 1 "Input_3" 3 "Input_1" 4 "Input_4";
+VAL_ 2147484719 DSC 1 "OFF" 2 "ON" 3 "MDM" 0 "Unset";
+VAL_ 2147484719 Engine 1 "Efficient" 2 "Sport" 3 "Sport+" 0 "Unset";
+VAL_ 2147484719 Suspension 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset";
+VAL_ 2147484719 Steering 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset";
+VAL_ 2147484718 DSC 1 "OFF" 2 "ON" 3 "MDM";
+VAL_ 2147484718 Engine 1 "Efficient" 2 "Sport" 3 "Sport+";
+VAL_ 2147484397 ST_VEHSS 128 "Initialization" 255 "Signal_invalid";
+VAL_ 2147484397 ST_VEHSS_1 1 "Vehicle_mechanically_secured";
+VAL_ 2147484397 ST_VEHSS_2 1 "Vehicle_secured_by_drivetrain";
+VAL_ 2147484397 ST_VEHSS_3 1 "Vehicle_held_hydraulically";
+VAL_ 2147484397 ST_VEHSS_4 0 "Auto-H_function_not_active" 1 "Auto-H_function_active";
+VAL_ 2147484380 ST_VEHSS_PBRK 128 "Initialization" 255 "Signal_invalid";
+VAL_ 2147484380 ST_VEHSS_PBRK_1 1 "Vehicle_mechanically_secured";
+VAL_ 2147484380 ST_VEHSS_PBRK_2 1 "Vehicle_secured_by_drivetrain";
+VAL_ 2147484380 ST_VEHSS_PBRK_3 1 "Vehicle_held_hydraulically";
+VAL_ 2147484380 ST_VEHSS_PBRK_4 0 "Auto-H_function_not_active" 1 "Auto-H_function_active";

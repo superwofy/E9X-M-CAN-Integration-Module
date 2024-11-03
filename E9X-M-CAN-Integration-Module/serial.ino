@@ -809,13 +809,13 @@ void evaluate_slcancmd(char *buf) {                                             
         case '3':                                                                                                                   // 100k
           slcan_bus = 1;
           SerialUSB2.write('\r');
-          serial_log("SLCAN interface connected to KCAN (100k).", 0);
+          serial_log("SLCAN bus set to KCAN (100k).", 0);
           break;
         #if F_NBTE
         case '6':                                                                                                                   // 500k
           slcan_bus = 2;
           SerialUSB2.write('\r');
-          serial_log("SLCAN interface connected to KCAN2 (500k).", 0);
+          serial_log("SLCAN bus set to KCAN2 (500k).", 0);
           break;
         #endif
         default:

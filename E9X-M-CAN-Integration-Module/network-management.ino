@@ -104,10 +104,15 @@ void cache_can_message_buffers(void) {                                          
 
   uint8_t dme_boost_request_a[] = {0x12, 3, 0x30, 0x19, 1, 0, 0, 0},
           dme_boost_request_b[] = {0x12, 0x30, 0, 0, 0, 0, 0, 0},
-          dme_request_consumers_off[] = {0xF, 0, 0, 0, 0, 8, 0xF2};			                                                            // CTR_PCOS - 2, ST_ENERG_PWMG - 2.
+          dme_request_consumers_off[] = {0x1F, 0, 0xFF, 0x7F, 0, 8, 0xF2};			                                                    // CTR_PCOS - 2, ST_ENERG_PWMG - 2.
   dme_boost_request_a_buf = make_msg_buf(0x6F1, 8, dme_boost_request_a);
   dme_boost_request_b_buf = make_msg_buf(0x6F1, 8, dme_boost_request_b);
   dme_request_consumers_off_buf = make_msg_buf(0x3B3, 7, dme_request_consumers_off);
+
+  uint8_t fzm_wake[] = {0xE1, 0xD5, 0xFF, 0xFF, 0xFF},
+          fzm_sleep[] = {0xE1, 0xD6, 0xFF, 0xFF, 0xFF};
+  fzm_wake_buf = make_msg_buf(0x3A5, 5, fzm_wake);                                                                                  // 6MC2DL0B pg. 1531.
+  fzm_sleep_buf = make_msg_buf(0x3A5, 5, fzm_sleep);
 
   uint8_t ccc_zbe_wake[] = {0xFE, 3, 0, 0, 0, 0, 0, 0};
   ccc_zbe_wake_buf = make_msg_buf(0x1AA, 8, ccc_zbe_wake);
@@ -167,9 +172,6 @@ void cache_can_message_buffers(void) {                                          
   faceplate_f1_released_buf = make_msg_buf(0xF1, 2, faceplate_f1_released);
   faceplate_volume_decrease_buf = make_msg_buf(0xF1, 2, faceplate_volume_decrease);
   faceplate_volume_increase_buf = make_msg_buf(0xF1, 2, faceplate_volume_increase);
-  
-  // uint8_t edc_button_press[] = {0, 5, 0x30, 1, 7, 0x1A, 0, 0};
-  // edc_button_press_buf = make_msg_buf(0x6F1, 8, edc_button_press);
 
   uint8_t ftm_indicator_flash[] = {0x40, 0x50, 1, 0x69, 0xFF, 0xFF, 0xFF, 0xFF},
           ftm_indicator_off[] = {0x40, 0x50, 1, 0, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -522,7 +524,7 @@ void initialize_can_handlers(void) {
     kcan_handlers[0x2E6] = evaluate_ihka_auto_state;                                                                                // 0x2E6: Air distribution status message.
   #endif
   #if MIRROR_UNDIM
-    kcan_handlers[0x286] = evaluate_electrochromic_dimming;                                                                         // 0x286: Dim signal from FZD. Cycle time 500 ms (idle). Sent when changed.
+    kcan_handlers[0x286] = evaluate_electrochromic_dimming;                                                                         // 0x286: Dim signal from FZD. Cycle time 500ms (idle). Sent when changed.
   #endif
   #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
     kcan_handlers[0x2A6] = evaluate_wiper_stalk_status;                                                                             // 0x2A6: Wiper stalk status from SZL. Cycle time 1s (idle).
@@ -532,6 +534,7 @@ void initialize_can_handlers(void) {
   #endif
   kcan_handlers[0x2CA] = evaluate_ambient_temperature;                                                                              // 0x2CA: Ambient temperature. Cycle time 1s.
   kcan_handlers[0x2F7] = process_kcan_2F7;                                                                                          // 0x2F7: Units from KOMBI. Sent 3x on Terminal R. Sent when changed.
+  kcan_handlers[0x2F8] = evaluate_date_time;
   #if AUTO_SEAT_HEATING_PASS
     kcan_handlers[0x2FA] = evaluate_passenger_seat_status;                                                                          // 0x2FA: Passenger's seat occupancy and belt status. Cycle time 5s.
   #endif
@@ -547,6 +550,7 @@ void initialize_can_handlers(void) {
   #if FTM_INDICATOR || F_NBTE
     kcan_handlers[0x31D] = evaluate_indicate_ftm_status;                                                                            // FTM status broadcast by DSC. Cycle time 5s (idle). Sent when changed.
   #endif
+  kcan_handlers[0x326] = evaluate_edc_mode;                                                                                         // 0x326: EDC damper mode. Cycle tyme 200ms (idle).
   kcan_handlers[0x32E] = evaluate_interior_temperature;
   #if CONTROL_SHIFTLIGHTS
     kcan_handlers[0x332] = evaluate_update_shiftlight_sync;                                                                         // 0x332: Variable redline broadcast from DME. Cycle time 1s.
@@ -637,12 +641,14 @@ void initialize_can_handlers(void) {
     kcan_to_kcan2_forward_filter_list[0x2B2] = 0;                                                                                   // BN2000 only, wheel brake pressures.
     kcan_to_kcan2_forward_filter_list[0x2C0] = 0;                                                                                   // BN2000 only, LCD brightness.
     kcan_to_kcan2_forward_filter_list[0x2F3] = 0;                                                                                   // BN2000 gear shift instruction / BN2010 gyro.
+    kcan_to_kcan2_forward_filter_list[0x2F4] = 0;                                                                                   // BN2000 A/C control / BN2010 ZGW high speed sync.
     kcan_to_kcan2_forward_filter_list[0x2F7] = 0;                                                                                   // KOMBI units. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x317] = 0;                                                                                   // BN2000 only, PDC button.
     kcan_to_kcan2_forward_filter_list[0x31D] = 0;                                                                                   // BN2000 only, FTM status.
     kcan_to_kcan2_forward_filter_list[0x326] = 0;                                                                                   // BN2000 only, EDC status.
     kcan_to_kcan2_forward_filter_list[0x332] = 0;                                                                                   // BN2000 only, variable redline.
     kcan_to_kcan2_forward_filter_list[0x35C] = 0;                                                                                   // Speed warning setting. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x3B3] = 0;                                                                                   // Power management consumer control. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x3DD] = 0;                                                                                   // Lights CKM. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x336] = 0;                                                                                   // CC list display. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x338] = 0;                                                                                   // CC dialog display. Requires further processing.
@@ -757,8 +763,12 @@ void kcan2_write_msg(const CAN_message_t &msg) {
 
   // if ( msg.id == 0x12F || msg.id == 0x130 || msg.id == 0x560) {} else { return; }                                                  // Testing with minimal busload
 
+  if (kl30g_cutoff_imminent) {                                                                                                      // KL30G is about to be cut. Stop sending KCAN2 messages so modules power OFF gracefully.
+    return;                                                                                                                         // Since 3B3 was sent with ST_ENERG_PWMG=2, modules are probably OFF and transmission would fail.
+  }
+
   #if F_NBTE
-    if (kcan2_mode == MCP_NORMAL && (vehicle_awakened_timer >= 300 || msg.id == 0x12F || msg.id == 0x130)) {                        // Prevent writing to the bus when sleeping or waking up (except for 12F and 130).
+    if (kcan2_mode == MCP_NORMAL) {
       byte send_buf[msg.len];
    
       #if F_NBTE_VIN_PATCH
@@ -778,12 +788,14 @@ void kcan2_write_msg(const CAN_message_t &msg) {
       }
 
       if (CAN_OK != KCAN2.sendMsgBuf(msg.id, 0, msg.len, send_buf)) {
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "KCAN2 write failed for ID: %lX.", msg.id);
-          serial_log(serial_debug_string, 1);
-          can_debug_print_buffer(msg);
-        #endif
-        kcan2_error_counter++;
+        if (vehicle_awakened_timer >= 500) {                                                                                        // There are some errors writing just after boot. Ignore.
+          #if DEBUG_MODE
+            sprintf(serial_debug_string, "KCAN2 write failed for ID: %lX.", msg.id);
+            serial_log(serial_debug_string, 1);
+            can_debug_print_buffer(msg);
+          #endif
+          kcan2_error_counter++;
+        }
       }
 
       #if defined(USB_TRIPLE_SERIAL)
@@ -919,26 +931,43 @@ void can_debug_print_buffer(const CAN_message_t &msg) {
 
 
 void convert_f_nbt_network_management(void) {
-  uint8_t nbt_nm[] = {0x62, 0x42, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t hu_nm[] = {0x62, 0x42, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-  if (!nbt_network_management_initialized) {
-    nbt_nm[1] = 1;
+  if (!hu_bn2000_nm_initialized) {
+    hu_nm[1] = 1;
   } else {
-    nbt_nm[0] = nbt_network_management_next_neighbour;
-    if (nbt_bus_sleep) {
-      if (nbt_bus_sleep_ready_timer >= 50000) {                                                                                     // Give the driver time to reactivate the HU otherwise the car would kill KCAN activity immediately.
-        nbt_nm[1] = 0x52;                                                                                                           // This timeout is also triggered when the FRM wakes the KCAN before deep sleep!
+    hu_nm[0] = hu_bn2000_nm_next_neighbour;
+    if (!terminal_r && !hu_ent_mode) {
+      if (hu_bn2000_bus_sleep_ready_timer >= HU_ENT_MODE_TIMEOUT) {                                                                 // Give the driver time to reactivate the HU otherwise the car would kill KCAN activity immediately.
+        hu_nm[1] = 0x52;                                                                                                            // This timeout is also triggered when the FRM wakes the KCAN before deep sleep!
+        if (!hu_bn2000_bus_sleep_active) {
+          hu_bn2000_bus_sleep_active = true;
+          serial_log("HU ENT_MODE timed out, allowing KCAN sleep.", 2);
+        }
+      } else {
+        hu_bn2000_bus_sleep_active = false;
       }
+    } else {
+      hu_bn2000_bus_sleep_active = false;
     }
   }
 
-  kcan_write_msg(make_msg_buf(0x4E2, 8, nbt_nm));
+  CAN_message_t hu_nm_buf = make_msg_buf(0x4E2, 8, hu_nm);
+  kcan_write_msg(hu_nm_buf);
+
+  #if defined(USB_TRIPLE_SERIAL)
+    if (millis() >= 2000 && SerialUSB2.dtr()) {
+      if (slcan_bus == 2) {
+        xfer_can2tty(hu_nm_buf);                                                                                                    // For diagnostics, transmit this message to SLCAN.
+      }
+    }
+  #endif
 }
 
 
 void send_f_kombi_network_management(void) {
   #if F_VSW01
-    if (terminal_r) {                                                                                                               // If not Terminal R, allow the VSW to sleep.
+    if (terminal_r) {                                                                                                               // If not Terminal R, allow the VSW to sleep. The last position it was in remains.
       kcan_write_msg(f_kombi_network_management_buf);
     }
   #endif

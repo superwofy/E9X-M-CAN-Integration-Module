@@ -59,6 +59,9 @@ void evaluate_dsc_status(void) {
         f_driving_dynamics_ignore = 0;
         kcan2_write_msg(cc_single_gong_buf);
       } else {
+        if (new_mode == 4) {
+          send_cc_message("MDrive: M Dynamic Mode activated.", true, 3000);
+        }
         f_driving_dynamics_ignore = 3;
       }
       f_driving_dynamics_timer = 1000;
@@ -143,22 +146,24 @@ void evaluate_reverse_gear_status(void) {
 
 
 void evaluate_vehicle_moving(void) {
-  e_vehicle_direction = (pt_msg.buf[1] >> 4) & 0b0111;                                                                              // ST_VEH_DVCO is the last three bits of the first halfof byte1.
+  e_vehicle_direction = (pt_msg.buf[1] >> 4) & 0b111;                                                                               // ST_VEH_DVCO
 
   if (e_vehicle_direction == 0 || e_vehicle_direction == 7) {                                                                       // 7 - Signal invalid.
     if (vehicle_moving) {
-      vehicle_moving = false;
       serial_log("Vehicle stationary.", 2);
     }
-  } else if (!vehicle_moving) {
+    vehicle_moving = false;
+  } else {
+    if (!vehicle_moving) {
+      serial_log("Vehicle moving.", 2);
+      #if INTERMITTENT_WIPERS
+        if (intermittent_wipe_active) {
+          intermittent_wipe_timer = intermittent_intervals[intermittent_setting];                                                   // Wipe immediately once car is moving.
+          serial_log("Intermittent wiping sped up.", 2);
+        }
+      #endif
+    }
     vehicle_moving = true;
-    serial_log("Vehicle moving.", 2);
-    #if INTERMITTENT_WIPERS
-      if (intermittent_wipe_active) {
-        intermittent_wipe_timer = intermittent_intervals[intermittent_setting];                                                     // Wipe immediately once car is moving.
-        serial_log("Intermittent wiping sped up.", 2);
-      }
-    #endif
   }
 }
 
@@ -259,9 +264,9 @@ void send_f_road_incline(void) {
 
 void send_f_longitudinal_acceleration(void) {
   if (f_chassis_longitudinal_timer_ptcan >= 20 && ignition) {
-    uint8_t f_longitudinal_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                         // Similar to 55.0.2 6MC2DL0B pg. 1559. Byte5 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
+    uint8_t f_longitudinal_acceleration_can[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                     // Similar to 55.0.2 6MC2DL0B pg. 1559. Byte5 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
     if (vehicle_awakened_timer <= 10000) {                                                                                          // Force the status to initialization after the car just woke.
-      f_longitudinal_acceleration[5] = 0x8F;
+      f_longitudinal_acceleration_can[5] = 0x8F;
     }
 
     if (vehicle_moving) {
@@ -269,25 +274,25 @@ void send_f_longitudinal_acceleration(void) {
       int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
       e_longitudinal_acceleration = signed_value * 0.025;                                                                           // Value in m/s^2.
 
-      longitudinal_acceleration = round((e_longitudinal_acceleration + 65) / 0.002);
+      f_longitudinal_acceleration = round((e_longitudinal_acceleration + 65) / 0.002);
     } else {
-      longitudinal_acceleration = 0x7EF4;
+      f_longitudinal_acceleration = 0x7EF4;
     }
 
-    f_longitudinal_acceleration[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
+    f_longitudinal_acceleration_can[1] = 0xF << 4 | f_longitudinal_acceleration_alive_counter;
     f_longitudinal_acceleration_alive_counter == 0xE ? f_longitudinal_acceleration_alive_counter = 0 
                                                      : f_longitudinal_acceleration_alive_counter++;
-    f_longitudinal_acceleration[2] = longitudinal_acceleration & 0xFF;                                                              // Convert and transmit in LE.
-    f_longitudinal_acceleration[3] = longitudinal_acceleration >> 8;
+    f_longitudinal_acceleration_can[2] = f_longitudinal_acceleration & 0xFF;                                                        // Convert and transmit in LE.
+    f_longitudinal_acceleration_can[3] = f_longitudinal_acceleration >> 8;
     
     f_longitudinal_acceleration_crc.restart();
     for (uint8_t i = 1; i < 6; i++) {
-      f_longitudinal_acceleration_crc.add(f_longitudinal_acceleration[i]);
+      f_longitudinal_acceleration_crc.add(f_longitudinal_acceleration_can[i]);
     }
-    f_longitudinal_acceleration[0] = f_longitudinal_acceleration_crc.calc();
+    f_longitudinal_acceleration_can[0] = f_longitudinal_acceleration_crc.calc();
     
     #if F_NIVI
-      CAN_message_t f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration);
+      CAN_message_t f_longitudinal_acceleration_buf = make_msg_buf(0x199, 6, f_longitudinal_acceleration_can);
       ptcan_write_msg(f_longitudinal_acceleration_buf);
     #endif
     f_chassis_longitudinal_timer_ptcan = 0;
@@ -297,34 +302,34 @@ void send_f_longitudinal_acceleration(void) {
 
 void send_f_lateral_acceleration(void) {
   // if (f_chassis_lateral_timer_ptcan >= 20 && ignition) {
-  //   uint8_t f_lateral_acceleration[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                              // Similar to 55.0.2. Byte5 fixed 0x2F - Signal value is valid QU_ACLNY_COG.
-    // if (vehicle_awakened_timer <= 10000) {                                                                                          // Force the status to initialization after the car just woke.
-    //   f_lateral_acceleration[5] = 0x8F;
-    // }
+  //   uint8_t f_lateral_acceleration_can[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                          // Similar to 55.0.2. Byte5 fixed 0x2F - Signal value is valid QU_ACLNY_COG.
+  //   if (vehicle_awakened_timer <= 10000) {                                                                                          // Force the status to initialization after the car just woke.
+  //     f_lateral_acceleration_can[5] = 0x8F;
+  //   }
     
     if (vehicle_moving) {
       uint16_t raw_value = (pt_msg.buf[4] << 4 | ((pt_msg.buf[3] >> 4) & 0x0F));                                                    // Combine byte 4 with the first half of byte 3 to form 12-bit signed integer.
       int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
       e_lateral_acceleration = signed_value * 0.025;                                                                                // Value in m/s^2.
 
-      lateral_acceleration = round((e_lateral_acceleration + 65) / 0.002);
+      f_lateral_acceleration = round((e_lateral_acceleration + 65) / 0.002);
     } else {
-      lateral_acceleration = 0x7EF4;
+      f_lateral_acceleration = 0x7EF4;
     }
 
-    // f_lateral_acceleration[1] = 0xF << 4 | f_lateral_acceleration_alive_counter;
-    // f_lateral_acceleration_alive_counter == 0xE ? f_lateral_acceleration_alive_counter = 0 
-    //                                             : f_lateral_acceleration_alive_counter++;
-    // f_lateral_acceleration[2] = lateral_acceleration & 0xFF;                                                                        // Convert and transmit in LE.
-    // f_lateral_acceleration[3] = lateral_acceleration >> 8;
+  //   f_lateral_acceleration_can[1] = 0xF << 4 | f_lateral_acceleration_alive_counter;
+  //   f_lateral_acceleration_alive_counter == 0xE ? f_lateral_acceleration_alive_counter = 0 
+  //                                               : f_lateral_acceleration_alive_counter++;
+  //   f_lateral_acceleration_can[2] = f_lateral_acceleration & 0xFF;                                                                  // Convert and transmit in LE.
+  //   f_lateral_acceleration_can[3] = f_lateral_acceleration >> 8;
 
   //   f_lateral_acceleration_crc.restart();
   //   for (uint8_t i = 1; i < 6; i++) {
-  //     f_lateral_acceleration_crc.add(f_lateral_acceleration[i]);
+  //     f_lateral_acceleration_crc.add(f_lateral_acceleration_can[i]);
   //   }
-  //   f_lateral_acceleration[0] = f_lateral_acceleration_crc.calc();
+  //   f_lateral_acceleration_can[0] = f_lateral_acceleration_crc.calc();
     
-  //   CAN_message_t f_lateral_acceleration_buf = make_msg_buf(0x19A, 6, f_lateral_acceleration);
+  //   CAN_message_t f_lateral_acceleration_buf = make_msg_buf(0x19A, 6, f_lateral_acceleration_can);
   //   #if F_NIVI
   //     ptcan_write_msg(f_lateral_acceleration_buf);
   //   #endif
@@ -352,10 +357,10 @@ void send_f_yaw_rate_chassis(void) {
       f_extra_chassis_display[1] = f_front_axle_wheel_angle >> 8;
       f_extra_chassis_display[2] = f_yaw_rate & 0xFF;                                                                               // Convert and transmit in LE. Identical to 0x19F.
       f_extra_chassis_display[3] = f_yaw_rate >> 8;
-      f_extra_chassis_display[4] = longitudinal_acceleration & 0xFF;                                                                // Identical to 0x199 and 0x19A.
-      f_extra_chassis_display[5] = longitudinal_acceleration >> 8;
-      f_extra_chassis_display[6] = lateral_acceleration & 0xFF;
-      f_extra_chassis_display[7] = lateral_acceleration >> 8;
+      f_extra_chassis_display[4] = f_longitudinal_acceleration & 0xFF;                                                              // Identical to 0x199 and 0x19A.
+      f_extra_chassis_display[5] = f_longitudinal_acceleration >> 8;
+      f_extra_chassis_display[6] = f_lateral_acceleration & 0xFF;
+      f_extra_chassis_display[7] = f_lateral_acceleration >> 8;
       
       kcan2_write_msg(make_msg_buf(0x2F3, 8, f_extra_chassis_display));
     #endif
@@ -439,15 +444,18 @@ void send_f_speed_status(void) {
 
 void send_f_standstill_status(void) {
   if (f_standstill_status_timer >= 1000) {
-    uint8_t f_standstill_status[] = {0, 0, 0};
+    uint8_t f_standstill_status[] = {0, 0, 0};                                                                                      // 263.1.4 6MC2DL0B pg. 1316.
     f_standstill_status[1] = 0xF << 4 | f_standstill_status_alive_counter;
     f_standstill_status_alive_counter == 0xE ? f_standstill_status_alive_counter = 0 
                                           : f_standstill_status_alive_counter++;
-
-    if (vehicle_moving) {
-      f_standstill_status[2] = 0;
+    if (vehicle_awakened_timer <= 5000) {                                                                                           // Force the status to initialization after the car just woke.
+      f_standstill_status[2] = 0x80;
     } else {
-      f_standstill_status[2] = 2;
+      if (!vehicle_moving) {
+        if (handbrake_status) {
+          f_standstill_status[2] = 1;
+        }
+      }
     }
 
     f_standstill_status_crc.restart();
@@ -718,4 +726,9 @@ void send_f_distance_messages(void) {
 
   // Counter increases by 0xA until it overflows 0x2FFF, then restarts.
   f_distance_alive_counter == 0x2FF5 ? f_distance_alive_counter = 0x2000 : f_distance_alive_counter += 0xA;  
+}
+
+
+void evaluate_edc_mode(void) {
+  edc_mode = k_msg.buf[0] & 0xF;
 }

@@ -558,7 +558,7 @@ void release_immobilizer(void) {
   m = {alarm_led_return_control_buf, time_now + 800};
   alarm_led_txq.push(&m);
   kcan_write_msg(key_cc_off_buf);
-  if (terminal_r || nbt_active_after_terminal_r) {
+  if (terminal_r || hu_ent_mode) {
     #if F_NBTE
       send_cc_message("Immobilizer released. Engine start permitted.", true, 3500);                                                 // Timed roughly so it matches the start ready CC dismiss.
     #endif
@@ -734,18 +734,22 @@ void send_f_throttle_pedal(void) {                                              
 
 void send_f_driving_dynamics_switch_evo(void) {
   if (f_driving_dynamics_timer >= 1000) {
-    uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 2, 0, 0xF3, 0xFF, 0xFF};
+    uint8_t f_driving_dynamics[] = {0xFF, 0xFF, 8, 0, 0xF3, 0xFF, 0xFF};
+
+    if (edc_mode == 9 || edc_mode == 0xB) {
+      f_driving_dynamics[2] = 0x10;                                                                                                 // VDC Sport
+    }
 
     if (mdrive_status) {
       if (console_power_mode || mdrive_power_active) {
         if (mdrive_power[cas_key_number] == 0x20) {
-          f_driving_dynamics[2] = 9;                                                                                                // Drivetrain Sport
+          f_driving_dynamics[2] |= 9;                                                                                               // Drivetrain Sport
         } else if (mdrive_power[cas_key_number] == 0x30) {
-          f_driving_dynamics[2] = 0xB;                                                                                              // Drivetrain Sport+
+          f_driving_dynamics[2] |= 0xB;                                                                                             // Drivetrain Sport+
         }
       }
     } else if (console_power_mode) {
-      f_driving_dynamics[2] = 9;
+      f_driving_dynamics[2] |= 9;
     }
 
     if (dsc_program_status == 1) {

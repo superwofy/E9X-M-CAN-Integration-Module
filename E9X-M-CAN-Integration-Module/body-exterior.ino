@@ -344,8 +344,7 @@ void evaluate_remote_button(void) {
               comfort_exit_ready = false;
             #endif
             #if F_NBTE
-              nbt_bus_sleep = true;                                                                                                 // Car locked, allow network to sleep.
-              nbt_bus_sleep_ready_timer = 50000;
+              hu_bn2000_bus_sleep_ready_timer = HU_ENT_MODE_TIMEOUT;                                                                // Car locked, allow KCAN network to sleep.
             #endif
           }
           

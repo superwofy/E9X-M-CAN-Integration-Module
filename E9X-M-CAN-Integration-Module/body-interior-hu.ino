@@ -10,7 +10,7 @@ void send_zbe_acknowledge(void) {                                               
 
 
 void send_volume_request_door(void) {
-  if (terminal_r || nbt_active_after_terminal_r) {
+  if (terminal_r || hu_ent_mode) {
     if (diag_transmit) {
       if (!idrive_txq.isEmpty()) {                                                                                                  // If there are pending volume change actions we need to wait for them to complete.                                                                                           
         m = {vol_request_buf, millis() + 900};
@@ -138,7 +138,7 @@ void check_idrive_alive_monitor(void) {
   #if F_NBTE
     if (kcan2_mode == MCP_NORMAL) {                                                                                                 // No reason to check the alive timer if KCAN2 is in standby.
   #endif
-      if (idrive_watchdog_timer >= 2500) {                                                                                          // This message should be received every 1-2s.
+      if (idrive_watchdog_timer >= 3000) {                                                                                          // This message should be received every 1-2s.
         if (!idrive_died) {
           idrive_died = true;
           serial_log("iDrive alive monitor timed out.", 2);
@@ -176,7 +176,7 @@ void initialize_asd_mdrive(void) {
 
 void initialize_asd_rad_on(void) {
   if (!asd_rad_on_initialized) {
-    if (diag_transmit && !frm_consumer_shutdown) {                                                                                  // This should not run during the 30G reset wake operation.
+    if (diag_transmit && !frm_consumer_shutdown && (terminal_r || hu_ent_mode)) {                                                   // This should not run during the 30G reset wake operation.
       unsigned long time_now = millis();
       m = {radon_asd_buf, time_now};
       radon_txq.push(&m);
@@ -267,7 +267,8 @@ void evaluate_faceplate_buttons(void) {
     }
   } else {
     if (faceplate_eject_pressed) {
-      if (faceplate_eject_pressed_timer >= 20 && !requested_hu_off_t2) {                                                            // These inputs are very noisy. Make sure they're actually pressed.
+      if (faceplate_eject_pressed_timer >= 20                                                                                       // These inputs are very noisy. Make sure they're actually pressed.
+          && !requested_hu_off_t2 && !hu_bn2000_bus_sleep_active) {                                                                 // Faceplate inputs should be ignored if the HU is to sleep.
         unsigned long time_now = millis();
         m = {faceplate_eject_buf, time_now};
         faceplate_buttons_txq.push(&m);
@@ -281,7 +282,7 @@ void evaluate_faceplate_buttons(void) {
     }
   }
   
-  if (!requested_hu_off_t2) {                                                                                                       // 30G is about to be shut OFF. HU must now sleep without interruption.
+  if (!requested_hu_off_t2 && !hu_bn2000_bus_sleep_active) {                                                                        // 30G is about to be shut OFF. HU must now sleep without interruption.
     if (!digitalRead(FACEPLATE_POWER_MUTE_PIN)) {
       if (!faceplate_power_mute_pressed) {
         if (faceplate_power_mute_debounce_timer >= 150) {
@@ -293,7 +294,8 @@ void evaluate_faceplate_buttons(void) {
           if (!faceplate_hu_reboot) {
             if (diag_transmit) {
               serial_log("Faceplate power/mute button held. Rebooting HU and faceplate.", 0);
-              unsigned long time_now = millis();
+              send_cc_message("iDrive will reboot. Release button.", true, 3000);
+              unsigned long time_now = millis() + 2000;
               m = {f_hu_nbt_reboot_buf, time_now};
               faceplate_buttons_txq.push(&m);
               time_now += 200;
@@ -462,14 +464,20 @@ void faceplate_reset(void) {                                                    
 
 
 void check_faceplate_watchdog(void) {
-  if (faceplate_uart_watchdog_timer >= 30000) {
-    if (faceplate_reset_counter < 5) {
-      serial_log("Faceplate stopped responding. Attempting reset.", 0);
-      faceplate_reset();
+  #if F_NBTE
+    if (!kl30g_cutoff_imminent && kcan2_mode == MCP_NORMAL && vehicle_awakened_timer >= 5000) {
+      if (faceplate_uart_watchdog_timer >= 30000) {
+        if (faceplate_reset_counter < 5) {
+          serial_log("Faceplate stopped responding. Attempting reset.", 0);
+          faceplate_reset();
+          faceplate_uart_watchdog_timer = 0;
+          faceplate_reset_counter++;
+        }
+      }
+    } else {
       faceplate_uart_watchdog_timer = 0;
-      faceplate_reset_counter++;
     }
-  }
+  #endif
 }
 
 
@@ -742,11 +750,22 @@ void evaluate_idrive_lights_settings(void) {                                    
 
 
 void evaluate_consumer_control(void) {
-  // NOTE: if this message is not sent to the HU it cannot be woken with the faceplate power button after Tetminal R OFF!
-  if (!requested_hu_off_t2) {
-    kcan2_write_msg(k_msg);
-  } else {                                                                                                                          // With 30G cutoff imminent, ensure that only OFF messages are sent.
-    kcan2_write_msg(dme_request_consumers_off_buf);
+  // NOTE: if 0x3B3 is not sent to the HU it cannot be woken with the faceplate power button after Terminal R OFF!
+
+  // BN2000 0x3B3 is missing ST_ENERG_PWMG and CTR_PWRU_COS is always 0xF.
+  uint8_t f_consumer_control[] = {k_msg.buf[0], k_msg.buf[1], k_msg.buf[2], 
+                                  k_msg.buf[3], k_msg.buf[4], k_msg.buf[5],
+                                  0xF8};
+  if (!requested_hu_off_t2 && !hu_bn2000_bus_sleep_active) {
+    kcan2_write_msg(make_msg_buf(0x3B3, 7, f_consumer_control));
+  } else {
+    // With 30G cutoff happening soon, ensure that only OFF messages are sent.
+    // OR
+    // If BN2000(OSEK) HU NM set to sleep, request KCAN2 consumers to go OFF.
+    
+    f_consumer_control[5] = 8;                                                                                                      // CTR_PCOS - 2 - stationary_consumers_must_switch_off.
+    f_consumer_control[6] = 0xF2;                                                                                                   // ST_ENERG_PWMG - 2 - No_stationary_consumers_permitted.
+    kcan2_write_msg(make_msg_buf(0x3B3, 7, f_consumer_control));
   }
 }
 

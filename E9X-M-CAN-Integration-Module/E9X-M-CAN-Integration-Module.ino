@@ -45,6 +45,7 @@ void loop() {
   #endif
 
   if (vehicle_awake) {
+    check_can_resend_queues();
     #if EXHAUST_FLAP_CONTROL
       control_exhaust_flap_user();
     #endif
@@ -86,14 +87,12 @@ void loop() {
       #if F_NBTE_VIN_PATCH
         send_nbt_vin_request();
       #endif
-      send_f_standstill_status();
-      send_f_throttle_pedal();
+      // send_f_standstill_status();                                                                                                  // Used by EGS?
     #endif
     #if ASD89_RAD_ON
       check_radon_queue();
     #endif
     check_hazards_queue();
-    check_can_resend_queues();
 
     if (terminal_r) {
       check_teensy_cpu_clock();                                                                                                     // Dynamically scale clock with temperature to extend lifetime.
@@ -102,6 +101,9 @@ void loop() {
       #endif
       #if F_NIVI || F_NBTE
         send_f_brightness_status();
+      #endif
+      #if F_NBTE
+        send_f_throttle_pedal();
       #endif
       if (eeprom_update_timer >= 60000) {                                                                                           // Periodically update EEPROM.
         update_data_in_eeprom();
@@ -224,7 +226,7 @@ void loop() {
     
     if (DCAN.read(d_msg)) {
       // Per filter(s), only 6F1 will be received by the DCAN transceiver.
-      if (clearing_dtcs) {}                                                                                                       // Ignore 6F1s while this module is clearing DTCs.
+      if (clearing_dtcs) {}                                                                                                         // Ignore 6F1s while this module is clearing DTCs.
 
       // MHD monitoring exceptions:
       // else if (d_msg.buf[0] == 0x12){
@@ -237,48 +239,48 @@ void loop() {
       // End MHD exceptions.
 
       #if SERVOTRONIC_SVT70
-      else if (d_msg.buf[0] == 0xEF && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x1A                                                  // UIF read or ISTA/D module identification.
+      else if (d_msg.buf[0] == 0xEF && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x1A                                                   // UIF read or ISTA/D module identification.
                 && (d_msg.buf[3] == 0x80 || d_msg.buf[3] == 0x86)) {
         serial_log("UIF being read. Skipping SVT.", 0);
         uif_read = true;
       }
 
-      else if (d_msg.buf[0] == 0xE) {                                                                                             // SVT_70 address is 0xE.
+      else if (d_msg.buf[0] == 0xE) {                                                                                               // SVT_70 address is 0xE.
         if (uif_read) {
           if (d_msg.buf[1] == 0x30) {
             // Ignore this KWP continue message as the JBE forwards it anyway.
             uif_read = false;
           }
         } else {
-          ptcan_write_msg(d_msg);                                                                                                 // Forward Diagnostic requests to the SVT module from DCAN to PTCAN.
-          disable_diag_transmit_jobs();                                                                                           // Deactivate other 6F1 jobs now that the SVT is being diagnosed.
+          ptcan_write_msg(d_msg);                                                                                                   // Forward Diagnostic requests to the SVT module from DCAN to PTCAN.
+          disable_diag_transmit_jobs();                                                                                             // Deactivate other 6F1 jobs now that the SVT is being diagnosed.
         }
       } 
       #endif
 
       #if F_VSW01
-      else if (d_msg.buf[0] == 0x48) {                                                                                            // F_VSW01 address is 0x48
+      else if (d_msg.buf[0] == 0x48) {                                                                                              // F_VSW01 address is 0x48
         kcan_write_msg(d_msg);
-        disable_diag_transmit_jobs();                                                                                             // Deactivate other 6F1 jobs now that the VSW is being diagnosed.
+        disable_diag_transmit_jobs();                                                                                               // Deactivate other 6F1 jobs now that the VSW is being diagnosed.
       }
       #endif
 
       #if F_NBTE
-      else if (d_msg.buf[0] == 0x35) {                                                                                            // TBX address is 0x35.
+      else if (d_msg.buf[0] == 0x35) {                                                                                              // TBX address is 0x35.
         kcan2_write_msg(d_msg);
         disable_diag_transmit_jobs();
       }
       #endif
 
       #if F_NIVI
-      else if (d_msg.buf[0] == 0x57) {                                                                                            // NIVI address is 0x57.
+      else if (d_msg.buf[0] == 0x57) {                                                                                              // NIVI address is 0x57.
         ptcan_write_msg(d_msg);
         disable_diag_transmit_jobs();
       }
       #endif
 
       else {
-        disable_diag_transmit_jobs();                                                                                             // Implement a check so as to not interfere with other DCAN jobs sent to the car by an OBD tool.    
+        disable_diag_transmit_jobs();                                                                                               // Implement a check so as to not interfere with other DCAN jobs sent to the car by an OBD tool.    
       }
       diag_deactivate_timer = 0;
     }
@@ -376,22 +378,26 @@ void process_kcan_message(void) {
   if (k_msg.id >= 0x480 && k_msg.id <= 0x4FF) {                                                                                     // BN2000 OSEK NM IDs (not all).
     #if F_VSW01 || F_NIVI || F_NBTE
       if (k_msg.id == 0x4E0) {                                                                                                      // KOMBI network management. Sent when KOMBI is ON, cycle time 500ms.
-        send_f_kombi_network_management();
+        if (!kl30g_cutoff_imminent) {
+          send_f_kombi_network_management();
+        }
       }
       #if F_NBTE
         else if (k_msg.id == 0x480) {                                                                                               // JBE NM message. Cycle time 1s. This is slower than BN2010's 640ms but less than timeout (2s).
-          kcan2_write_msg(f_zgw_network_management_buf);
+          if (!kl30g_cutoff_imminent) {
+            kcan2_write_msg(f_zgw_network_management_buf);
+          }
         }
 
         if (kcan2_mode == MCP_NORMAL) {                                                                                             // Only participate in NM if the KNCA2 bus is active.
           if (k_msg.buf[0] == 0x62) {                                                                                               // HU is registered and its previous neighbour (between 0x480 and 0x4E1 inclusive) requested NM status.
-            nbt_network_management_initialized = true;
+            hu_bn2000_nm_initialized = true;
             convert_f_nbt_network_management();
-            nbt_network_management_timer = 0;
-          } else if (nbt_network_management_timer >= 3000) {                                                                        // Registration/timeout handled here. Timeout will occur when nodes appear/disappear.
-            nbt_network_management_initialized = false;                                                                             // If PDC or the driver's seat module are missing this system will fail!
+            hu_bn2000_nm_timer = 0;
+          } else if (hu_bn2000_nm_timer >= 3000) {                                                                                  // Registration/timeout handled here. Timeout will occur when nodes appear/disappear.
+            hu_bn2000_nm_initialized = false;                                                                                       // If PDC or the driver's seat module are missing this system will fail!
             convert_f_nbt_network_management();
-            nbt_network_management_timer = 2500;                                                                                    // Retry in 500ms.
+            hu_bn2000_nm_timer = 2500;                                                                                              // Retry in 500ms.
           }
         }
       #endif
@@ -462,7 +468,7 @@ void process_kcan_34A(void) {
     send_initial_volume_cic();
   #endif
   #if ASD89_MDRIVE
-    initialize_asd();
+    initialize_asd_mdrive();
   #endif
 }
 
@@ -505,6 +511,7 @@ void process_kcan_672(void) {
 /***********************************************************************************************************************************************************************************************************************************************
   K-CAN2 processing - Relevant messages sent by NBT to be used by this module follow
 ***********************************************************************************************************************************************************************************************************************************************/
+
 void process_kcan2_message() {
   if (kcan2_handlers[k_msg.id] != NULL) {
     kcan2_handlers[k_msg.id]();                                                                                                     // Use the pre-cached function call for this message ID.
@@ -518,20 +525,18 @@ void process_kcan2_message() {
     if (k_msg.id == 0x5E3) {
       if (k_msg.buf[0] == 0x26 && k_msg.buf[1] == 0x88) {
         if (k_msg.buf[3] == 1) {                                                                                                    // The HU was activated using the faceplate power button.
-          nbt_bus_sleep = false;
-          nbt_bus_sleep_ready_timer = 0;
-          nbt_active_after_terminal_r = true;
+          if (!hu_ent_mode) {
+            serial_log("HU now running in ENT_MODE.", 3);
+            hu_ent_mode = true;
+          }
         } else if (k_msg.buf[3] == 0) {
-          nbt_bus_sleep = true;
-          nbt_bus_sleep_ready_timer = 0;
-          nbt_active_after_terminal_r = false;
+          if (hu_ent_mode) {
+            serial_log("HU no longer in ENT_MODE.", 3);
+            hu_bn2000_bus_sleep_ready_timer = 0;                                                                                    // Exiting ENT_MODE should reset this timer.
+            hu_ent_mode = false;
+          }
         }
       }
-    }
-
-    if (idrive_watchdog_timer >= 15000 && idrive_died) {                                                                            // HU must have crashed/became unresponsive. Allow the car to kill KCAN.
-      nbt_bus_sleep = true;
-      nbt_bus_sleep_ready_timer = 50000;
     }
   }
 }
