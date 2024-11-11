@@ -289,16 +289,14 @@ void evaluate_key_number_remote(void) {
   if (cas_key_number_can != cas_key_number) {
     if (cas_key_number_can > 2) {
       if (cas_key_number != 3) {
-        serial_log("Received invalid / Guest key personalisation number.", 1);
+        serial_log("Received invalid / Guest key personalisation number.", 2);
         cas_key_number = 3;
         key_guest_profile = true;
       }
     } else {
       cas_key_number = cas_key_number_can;                                                                                          // Key 1 = 0, Key 2 = 0x11, Key 3 = 0x22..., Guest = 0xAA.
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Received remote key profile number: %d.", cas_key_number + 1);
-        serial_log(serial_debug_string, 2);
-      #endif
+      sprintf(serial_debug_string, "Received remote key profile number: %d.", cas_key_number + 1);
+      serial_log(serial_debug_string, 2);
     }
     
     key_guest_profile = false;
@@ -310,7 +308,7 @@ void evaluate_key_number_remote(void) {
       }
     #endif
     update_mdrive_can_message();
-    send_mdrive_message();
+    mdrive_message_timer = 5000;
   }
 }
 
@@ -749,11 +747,9 @@ void evaluate_ahl_flc_status(void) {
       uint8_t ahl_active_ = bitRead(k_msg.buf[5], 3);
       if (ahl_active != ahl_active_) {
         ahl_active = ahl_active_;
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "Received status AHL: %s FLC: %s",
-                  ahl_active ? "ON" : "OFF", flc_active ? "ON" : "OFF");
-          serial_log(serial_debug_string, 2);
-        #endif
+        sprintf(serial_debug_string, "Received status AHL: %s FLC: %s",
+                ahl_active ? "ON" : "OFF", flc_active ? "ON" : "OFF");
+        serial_log(serial_debug_string, 2);
       }
       frm_ahl_flc_status_requested = false;
     } else {
@@ -770,9 +766,6 @@ void evaluate_ambient_temperature(void) {
 
 void evaluate_rls_light_status(void) {
   rls_time_of_day = k_msg.buf[1] & 0xF;
-  if (rls_time_of_day == 8) {                                                                                                       // Either invalid or sensor blinded?
-    rls_time_of_day = 2;
-  }
   rls_brightness = k_msg.buf[0];
 }
 
@@ -884,14 +877,12 @@ void evaluate_drivers_door_lock_status(void) {                                  
       if (!doors_locked || !doors_alarmed) {
         doors_locked_timer = 0;
         serial_log("Doors locked and alarmed.", 2);
-        #if DEBUG_MODE
-          if (serial_commands_unlocked) {
-            serial_commands_unlocked = false;
-            EEPROM.update(43, serial_commands_unlocked);
-            update_eeprom_checksum();
-            serial_log("Locked serial interface.", 0);
-          }
-        #endif
+        if (serial_commands_unlocked) {
+          serial_commands_unlocked = false;
+          EEPROM.update(43, serial_commands_unlocked);
+          update_eeprom_checksum();
+          serial_log("Locked serial interface.", 0);
+        }
         doors_locked = doors_alarmed = true;
       }
     } else if (k_msg.buf[0] == 0x82) {
@@ -1064,5 +1055,17 @@ void indicate_comfort_closure(void) {
       }
     }
     windows_closed = windows_closed_;
+  }
+}
+
+
+void control_headlight_washers(void) {
+  if (ignition) {                                                                                                                   // SRA request to JBE only works if ignition is ON.
+    if (wash_wipe_cycles >= HEADLIGHT_WASHING_FREQUENCY) {
+      kcan_write_msg(jbe_headlight_washer_buf);
+      sprintf(serial_debug_string, "Sent headlight washer request after %d wash-wipe cycles.", wash_wipe_cycles);
+      serial_log(serial_debug_string, 2);
+      wash_wipe_cycles = 0;
+    }
   }
 }

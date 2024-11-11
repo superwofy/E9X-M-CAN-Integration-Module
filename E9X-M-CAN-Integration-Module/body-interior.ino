@@ -5,7 +5,7 @@ void check_vehicle_awake(void) {
   vehicle_awake_timer = 0;
   if (!vehicle_awake) {
     vehicle_awake = true;
-    serial_log("Vehicle Awake.", 0);
+    serial_log("Vehicle Awake.", 2);
     vehicle_awakened_timer = 0;
     kl30g_cutoff_imminent = false;
     requested_hu_off_t2 = false;
@@ -290,13 +290,11 @@ void send_seat_heating_request_driver(bool medium) {
     m = {seat_heating_button_released_dr_buf, time_now + 1200};
     seat_heating_dr_txq.push(&m);
   }
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent [%s] driver's seat heating request at %s temp: %.1fC.",
-            medium ? "medium" : "high",
-            interior_temperature > ambient_temperature_real ? "interior" : "ambient",
-            interior_temperature);
-    serial_log(serial_debug_string, 2);
-  #endif
+  sprintf(serial_debug_string, "Sent [%s] driver's seat heating request at %s temp: %.1fC.",
+          medium ? "medium" : "high",
+          interior_temperature > ambient_temperature_real ? "interior" : "ambient",
+          interior_temperature);
+  serial_log(serial_debug_string, 2);
 }
 
 
@@ -361,13 +359,11 @@ void send_seat_heating_request_pas(bool medium) {
     m = {seat_heating_button_released_pas_buf, time_now + 1200};
     seat_heating_pas_txq.push(&m);
   }
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "Sent [%s] passenger's seat heating request at %s temp: %.1fC.",
-            medium ? "medium" : "high",
-            interior_temperature > ambient_temperature_real ? "interior" : "ambient",
-            interior_temperature);
-    serial_log(serial_debug_string, 2);
-  #endif
+  sprintf(serial_debug_string, "Sent [%s] passenger's seat heating request at %s temp: %.1fC.",
+          medium ? "medium" : "high",
+          interior_temperature > ambient_temperature_real ? "interior" : "ambient",
+          interior_temperature);
+  serial_log(serial_debug_string, 2);
 }
 
 
@@ -451,10 +447,8 @@ void check_console_buttons(void) {
             immobilizer_persist = !immobilizer_persist;
             EEPROM.update(31, immobilizer_persist);
             update_eeprom_checksum();
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Immobilizer now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
-              serial_log(serial_debug_string, 0);
-            #endif
+            sprintf(serial_debug_string, "Immobilizer now persistently: %s.", immobilizer_persist ? "ON" : "OFF");
+            serial_log(serial_debug_string, 2);
             #if F_NBTE
               if (!immobilizer_persist) {
                 send_cc_message("Immobilizer deactivated persistently.", true, 5000);
@@ -508,7 +502,7 @@ void check_console_buttons(void) {
           if (dsc_program_status != 1 && !dsc_mode_change_disable) {                                                                // If the button is held after DSC OFF, no more messages are sent until release.
             serial_log("Console: DSC OFF requested.", 2);
             if (!send_dsc_mode(1)) {
-              serial_log("Console: Failed to change DSC mode during stabilisation.", 2);
+              serial_log("Console: Failed to change DSC mode during stabilisation.", 1);
             }
           }
           dsc_off_button_debounce_timer = 0;
@@ -518,7 +512,7 @@ void check_console_buttons(void) {
       if (dsc_off_button_hold_timer >= 15000) {                                                                                     // Emulate BMW's safety feature when a purse/other object rests on the DSC OFF button.
         if (!dsc_mode_change_disable) {
           send_dsc_mode(0);
-          serial_log("Console: DSC OFF button obstruction detected! Cycle ignition to reset.", 2);
+          serial_log("Console: DSC OFF button obstruction detected! Cycle ignition to reset.", 1);
           #if F_NBTE
             kcan2_write_msg(cc_single_gong_buf);
             send_cc_message("DSC OFF button obstruction detected!", true, 5000);
@@ -596,7 +590,7 @@ void store_rvc_settings_idrive(void) {
 
     if (!rvc_tow_view_by_driver && !rvc_tow_view_by_module && bitRead(k_msg.buf[0], 3) && pdc_bus_status == 0xA5) {                 // If the driver changed this setting, do not interfere during this cycle.
       rvc_tow_view_by_driver = true;
-      serial_log("Driver changed RVC tow view manually.", 3);
+      serial_log("Driver changed RVC tow view manually.", 2);
     }
   }
 }
@@ -625,7 +619,7 @@ void evaluate_indicator_stalk(void) {
       } else if (k_msg.buf[0] == 2 || k_msg.buf[0] == 8) {
         if (!szl_full_indicator) {
           szl_full_indicator = true;
-          serial_log("Indicator stalk pushed fully.", 3);
+          serial_log("Indicator stalk pushed fully.", 2);
           undim_mirrors_with_indicators();
         }
       }
@@ -682,6 +676,9 @@ void evaluate_power_down_response(void) {
 void evaluate_wiper_stalk_status(void) {
   if (terminal_r) {
     if (k_msg.buf[0] == 0x10) {
+      #if HEADLIGHT_WASHING
+        track_wash_wipe_cycle = true;
+      #endif
       #if WIPE_AFTER_WASH
         if (wash_message_counter >= 2 || wipe_scheduled) {
           serial_log("Washing cycle started.", 2);
@@ -700,7 +697,15 @@ void evaluate_wiper_stalk_status(void) {
       #endif
     } 
 
-    else if (k_msg.buf[0] == 0) {                                                                                                   // Wiping completely OFF.
+    else if (k_msg.buf[0] == 0) {                                                                                                   // Wiping completely OFF (stak released).
+      #if HEADLIGHT_WASHING
+        if (track_wash_wipe_cycle) {
+          // NOTE: counter will increase if spraying with ignition OFF.
+          track_wash_wipe_cycle = false;
+          wash_wipe_cycles = (wash_wipe_cycles + 1) % 0x100;                                                                        // With the stalk released, count this as a cycle.
+          control_headlight_washers();
+        }
+      #endif
       #if WIPE_AFTER_WASH
         wash_message_counter = 0;
       #endif
@@ -763,11 +768,11 @@ void evaluate_wiper_stalk_status(void) {
     }
 
     #if INTERMITTENT_WIPERS || WIPE_AFTER_WASH
-      if (pt_msg.buf[1] != intermittent_setting_can) {                                                                              // Position of the speed wheel changed.
+      if (pt_msg.buf[1] != intermittent_setting_can) {                                                                              // Position of the wiper speed thumbwheel changed.
         intermittent_setting_can = pt_msg.buf[1];
         uint8_t new_intermittent_setting = 0;
         new_intermittent_setting = intermittent_setting_can - 0xF8;
-        #if DEBUG_MODE && INTERMITTENT_WIPERS
+        #if INTERMITTENT_WIPERS
           if (intermittent_wipe_active) {
             sprintf(serial_debug_string, "New wiper speed setting %d%s.", new_intermittent_setting + 1,
                     !vehicle_moving ? " [not moving]" : "");
@@ -804,13 +809,13 @@ void evaluate_ihka_auto_ckm(void) {
     if (ignition) {
       if (new_speed == 6) {
         send_cc_message("Fan speed: AUTO Low intensity.", true, 4000);
-        serial_log("Fan speed CKM AUTO Medium.", 3);
+        serial_log("Fan speed CKM AUTO Medium.", 2);
       } else if (new_speed == 5) {
         send_cc_message("Fan speed: AUTO Medium intensity.", true, 4000);
-        serial_log("Fan speed CKM AUTO Medium.", 3);
+        serial_log("Fan speed CKM AUTO Medium.", 2);
       } else if (new_speed == 9) {
         send_cc_message("Fan speed: AUTO High intensity.", true, 4000);
-        serial_log("Fan speed CKM AUTO High.", 3);
+        serial_log("Fan speed CKM AUTO High.", 2);
       }
     }
     ihka_auto_fan_speed = new_speed;
@@ -860,13 +865,13 @@ void evaluate_ihka_recirculation(void) {
     bitWrite(new_state, 1, bitRead(k_msg.buf[0], 5));
     if (ihka_recirc_state != new_state) {
       if (new_state == 0) {
-        serial_log("IHKA recirculation OFF.", 3);
+        serial_log("IHKA recirculation OFF.", 2);
         send_cc_message("Air recirculation: OFF.", true, 4000);
       } else if (new_state == 1) {
-        serial_log("IHKA recirculation AUTO.", 3);
+        serial_log("IHKA recirculation AUTO.", 2);
         send_cc_message("Air recirculation: AUTO.", true, 4000);
       } else if (new_state == 2) {
-        serial_log("IHKA recirculation ON.", 3);
+        serial_log("IHKA recirculation ON.", 2);
         send_cc_message("Air recirculation: ON.", true, 4000);
       }
       ihka_recirc_state = new_state;
@@ -890,14 +895,12 @@ void evaluate_terminal_followup(void) {
         kl30g_cutoff_imminent = false;
       }
 
-      #if DEBUG_MODE
-        if (kl30g_cutoff_imminent) {
-          serial_log("30G relay will be cut very shortly!.", 2);
-        } else {
-          sprintf(serial_debug_string, "30G relay will be cut off in %d seconds.", terminal30g_followup_time * 10 + 10);
-          serial_log(serial_debug_string, 2);
-        }
-      #endif
+      if (kl30g_cutoff_imminent) {
+        serial_log("30G relay will be cut very shortly!.", 2);
+      } else {
+        sprintf(serial_debug_string, "30G relay will be cut off in %d seconds.", terminal30g_followup_time * 10 + 10);
+        serial_log(serial_debug_string, 2);
+      }
 
       if (terminal30g_followup_time <= 0x37 && terminal30g_followup_time > 0x1E) {                                                  // 9.5 minutes.
         // With CIC, the CID is switched off occasionally at 600s and 280s remaining.
@@ -927,7 +930,7 @@ void evaluate_terminal_followup(void) {
         #endif
       } else if (terminal30g_followup_time == 0) {
         if (!kl30g_cutoff_imminent) {
-          serial_log("Received critical 30G timer message. Deep sleep in less than 20s.", 2);
+          serial_log("Received critical 30G timer message. Deep sleep in less than 20s.", 1);
           update_data_in_eeprom();
           kl30g_cutoff_imminent = true;
         }

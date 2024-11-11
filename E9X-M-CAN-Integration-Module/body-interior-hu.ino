@@ -38,10 +38,8 @@ void evaluate_audio_volume_nbt(void) {
       if (!volume_reduced) {
         if (peristent_volume != k_msg.buf[6]) {
           peristent_volume = k_msg.buf[6];
-          #if DEBUG_MODE
-            sprintf(serial_debug_string, "Received new audio volume: 0x%X.", k_msg.buf[6]);
-            serial_log(serial_debug_string, 3);
-          #endif
+          sprintf(serial_debug_string, "Received new audio volume: 0x%X.", k_msg.buf[6]);
+          serial_log(serial_debug_string, 3);
         }
         if (pdc_tone_on || gong_active) {                                                                                           // If PDC beeps are active, volume change has no effect.
           return;
@@ -65,10 +63,8 @@ void evaluate_audio_volume_nbt(void) {
             idrive_txq.push(&m);
             volume_reduced = true;
             volume_changed_to = volume_change[6];                                                                                   // Save this value to compare when door is closed back.
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X.", volume_changed_to);
-              serial_log(serial_debug_string, 3);
-            #endif
+            sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X.", volume_changed_to);
+            serial_log(serial_debug_string, 3);
           }
         }
       } else {
@@ -88,16 +84,12 @@ void evaluate_audio_volume_nbt(void) {
             }
             m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 600};                                                            // Make sure the restore is received.
             idrive_txq.push(&m);
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X.", volume_change[6]);
-              serial_log(serial_debug_string, 3);
-            #endif
+            sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X.", volume_change[6]);
+            serial_log(serial_debug_string, 3);
           } else {
             peristent_volume = k_msg.buf[6];                                                                                        // User changed volume while door was opened.
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Volume changed by user while door was open to: 0x%X.", k_msg.buf[6]);
-              serial_log(serial_debug_string, 3);
-            #endif
+            sprintf(serial_debug_string, "Volume changed by user while door was open to: 0x%X.", k_msg.buf[6]);
+            serial_log(serial_debug_string, 3);
           }
           volume_reduced = false;
         }
@@ -134,14 +126,14 @@ void check_idrive_queue(void) {
 }
 
 
-void check_idrive_alive_monitor(void) {
+void check_hu_application_alive_monitor(void) {
   #if F_NBTE
     if (kcan2_mode == MCP_NORMAL) {                                                                                                 // No reason to check the alive timer if KCAN2 is in standby.
   #endif
-      if (idrive_watchdog_timer >= 3000) {                                                                                          // This message should be received every 1-2s.
-        if (!idrive_died) {
-          idrive_died = true;
-          serial_log("iDrive alive monitor timed out.", 2);
+      if (hu_application_watchdog >= 3000) {                                                                                        // This message should be received every 1-2s.
+        if (!hu_application_died) {
+          hu_application_died = true;
+          serial_log("iDrive application watchdog timed out.", 2);
           initial_volume_set = false;
           asd_initialized = false;
           asd_rad_on_initialized = false;
@@ -151,10 +143,11 @@ void check_idrive_alive_monitor(void) {
           idrive_run_timer = 0;                                                                                                     // Keep track of the iDrive's boot time.
         }
       } else {
-        if (idrive_died) {                                                                                                          // It's back.
-          idrive_died = false;
-          serial_log("iDrive alive again.", 2);
+        if (hu_application_died) {                                                                                                  // It's back.
+          hu_application_died = false;
+          serial_log("iDrive application running again.", 2);
           kcan2_write_msg(f_lights_ckm_delayed_msg);
+          mdrive_message_timer = 5000;
         }
       }
   #if F_NBTE
@@ -205,10 +198,8 @@ void vsw_switch_input(uint8_t input) {
   if (vsw_current_input != input) {
     kcan_write_msg(make_msg_buf(0x2FB, 8, vsw_switch_position));
     vsw_switch_counter == 0xFE ? vsw_switch_counter = 0xF1 : vsw_switch_counter++;
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Sent VSW/%d (%s) request.", input, vsw_positions[input]);
-      serial_log(serial_debug_string, 3);
-    #endif
+    sprintf(serial_debug_string, "Sent VSW/%d (%s) request.", input, vsw_positions[input]);
+    serial_log(serial_debug_string, 3);
   }
 }
 
@@ -247,11 +238,9 @@ void evaluate_nbt_vin_response(void) {
       receiving_donor_vin = false;
       requested_donor_vin = false;
       donor_vin_initialized = true;
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Received NBT donor VIN: %c%c%c%c%c%c%c.", DONOR_VIN[0], DONOR_VIN[1], DONOR_VIN[2],
-                                      DONOR_VIN[3], DONOR_VIN[4], DONOR_VIN[5], DONOR_VIN[6]);
-        serial_log(serial_debug_string, 2);
-      #endif
+      sprintf(serial_debug_string, "Received NBT donor VIN: %c%c%c%c%c%c%c.", DONOR_VIN[0], DONOR_VIN[1], DONOR_VIN[2],
+                                    DONOR_VIN[3], DONOR_VIN[4], DONOR_VIN[5], DONOR_VIN[6]);
+      serial_log(serial_debug_string, 3);
     }
   }
 }
@@ -275,7 +264,7 @@ void evaluate_faceplate_buttons(void) {
         time_now += 200;
         m = {faceplate_a1_released_buf, time_now};
         faceplate_buttons_txq.push(&m);
-        serial_log("Faceplate eject button pressed.", 0);
+        serial_log("Faceplate eject button pressed.", 2);
         faceplate_eject_debounce_timer = 0;
       }
       faceplate_eject_pressed = false;
@@ -293,7 +282,7 @@ void evaluate_faceplate_buttons(void) {
         if (faceplate_power_mute_pressed_timer >= 8000) {
           if (!faceplate_hu_reboot) {
             if (diag_transmit) {
-              serial_log("Faceplate power/mute button held. Rebooting HU and faceplate.", 0);
+              serial_log("Faceplate power/mute button held. Rebooting HU and faceplate.", 2);
               send_cc_message("iDrive will reboot. Release button.", true, 3000);
               unsigned long time_now = millis() + 2000;
               m = {f_hu_nbt_reboot_buf, time_now};
@@ -317,7 +306,7 @@ void evaluate_faceplate_buttons(void) {
             time_now += 100;
             m = {faceplate_a1_released_buf, time_now};
             faceplate_buttons_txq.push(&m);
-            serial_log("Faceplate power/mute button pressed.", 0);
+            serial_log("Faceplate power/mute button pressed.", 2);
           }
         } else {
           faceplate_hu_reboot = false;
@@ -468,7 +457,7 @@ void check_faceplate_watchdog(void) {
     if (!kl30g_cutoff_imminent && kcan2_mode == MCP_NORMAL && vehicle_awakened_timer >= 5000) {
       if (faceplate_uart_watchdog_timer >= 30000) {
         if (faceplate_reset_counter < 5) {
-          serial_log("Faceplate stopped responding. Attempting reset.", 0);
+          serial_log("Faceplate stopped responding. Attempting reset.", 2);
           faceplate_reset();
           faceplate_uart_watchdog_timer = 0;
           faceplate_reset_counter++;
@@ -546,9 +535,7 @@ void evaluate_idrive_units(void) {
           new_distance_unit = k_msg.buf[2] >> 4, new_consumption_unit = k_msg.buf[2] & 0xF,
           new_pressure_unit = 0, new_date_format = 0,
           new_torque_unit = k_msg.buf[4] >> 4, new_power_unit = k_msg.buf[4] & 0xF;
-  #if DEBUG_MODE
-    char language_str[4];
-  #endif
+  char language_str[4];
 
   bitWrite(new_temperature_unit, 0, bitRead(k_msg.buf[1], 4));
   bitWrite(new_temperature_unit, 1, bitRead(k_msg.buf[1], 5));
@@ -564,9 +551,7 @@ void evaluate_idrive_units(void) {
   bitWrite(new_date_format, 2, bitRead(k_msg.buf[3], 5));
 
   if (new_language > 0) {
-    #if DEBUG_MODE
-      snprintf(language_str, sizeof(language_str), "%u", new_language);
-    #endif
+    snprintf(language_str, sizeof(language_str), "%u", new_language);
     uint8_t idrive_bn2000_language[] = {0x1E, 0x66, 0, 1, new_language, 0, 0, 0};
     kcan_write_msg(make_msg_buf(0x5E2, 8, idrive_bn2000_language));                                                                 // KOMBI does not support/store all EVO languages. Check "coding parameters.txt" for some examples.
   }
@@ -631,26 +616,24 @@ void evaluate_idrive_units(void) {
     power_unit[cas_key_number] = new_power_unit;
   }
 
-  #if DEBUG_MODE
-    sprintf(serial_debug_string,
-            "Received iDrive settings: Language:%s Temperature:%s Time:%s Distance:%s Consumption:%s Pressure:%s Date:%s Torque:%s Power:%s.",
-            new_language > 0 ? language_str : "-",
-            new_temperature_unit == 1 ? "C" : (new_temperature_unit == 2 ? "F" : "-"),
-            new_time_format == 1 ? "12h" : (new_time_format == 2 ? "24h" : "-"),
-            new_distance_unit == 4 ? "km" : (new_distance_unit == 8 ? "mi" : "-"),
-            new_consumption_unit == 1 ? "l/100km" : (new_consumption_unit == 2 ? "mpg" : (new_consumption_unit == 4 ? "km/l" : "-")),
-            new_pressure_unit == 1 ? "bar" 
-                                   : (new_pressure_unit == 2 ? "kPa" 
-                                   : (new_pressure_unit == 3 ? "psi" : "-")),
-            new_date_format == 1 ? "dd.mm.yyyy" 
-                                 : (new_date_format == 2 ? "mm/dd/yyyy" 
-                                 : new_date_format == 6 ? "yyyy/mm/dd" 
-                                 : new_date_format == 5 ? "yyyy.mm.dd" 
-                                 : "-"),
-            new_torque_unit == 1 ? "Nm" : (new_torque_unit == 2 ? "lb-ft" : (new_torque_unit == 3 ? "Kg-m" : "-")), 
-            new_power_unit == 1 ? "kW" : (new_power_unit == 2 ? "hp" : "-"));
-    serial_log(serial_debug_string, 3);
-  #endif
+  sprintf(serial_debug_string,
+          "Received iDrive settings: Language:%s Temperature:%s Time:%s Distance:%s Consumption:%s Pressure:%s Date:%s Torque:%s Power:%s.",
+          new_language > 0 ? language_str : "-",
+          new_temperature_unit == 1 ? "C" : (new_temperature_unit == 2 ? "F" : "-"),
+          new_time_format == 1 ? "12h" : (new_time_format == 2 ? "24h" : "-"),
+          new_distance_unit == 4 ? "km" : (new_distance_unit == 8 ? "mi" : "-"),
+          new_consumption_unit == 1 ? "l/100km" : (new_consumption_unit == 2 ? "mpg" : (new_consumption_unit == 4 ? "km/l" : "-")),
+          new_pressure_unit == 1 ? "bar" 
+                                  : (new_pressure_unit == 2 ? "kPa" 
+                                  : (new_pressure_unit == 3 ? "psi" : "-")),
+          new_date_format == 1 ? "dd.mm.yyyy" 
+                                : (new_date_format == 2 ? "mm/dd/yyyy" 
+                                : new_date_format == 6 ? "yyyy/mm/dd" 
+                                : new_date_format == 5 ? "yyyy.mm.dd" 
+                                : "-"),
+          new_torque_unit == 1 ? "Nm" : (new_torque_unit == 2 ? "lb-ft" : (new_torque_unit == 3 ? "Kg-m" : "-")), 
+          new_power_unit == 1 ? "kW" : (new_power_unit == 2 ? "hp" : "-"));
+  serial_log(serial_debug_string, 3);
   convert_f_units(true);
   send_nbt_sport_displays_data(false);                                                                                              // Update the scale for the new units.
 }
@@ -673,7 +656,7 @@ void send_cc_message(const char input[], bool dialog, unsigned long new_timeout)
   nbt_cc_txq.flush();                                                                                                               // Clear any pending dismiss messages.
   uint8_t input_length = strlen(input);                                                                                             // Length excluding NUL terminator!
   if (input_length > 45) {
-    serial_log("String length exceeded for send_cc_message.", 0);
+    serial_log("String length exceeded for send_cc_message.", 1);
     return;
   }
   uint8_t padding = (input_length % 3 == 0) ? 0 : 3 - (input_length % 3);
@@ -685,7 +668,7 @@ void send_cc_message(const char input[], bool dialog, unsigned long new_timeout)
   uint8_t cc_message_chunk_counter = (((padded_length / 3) - 2) << 4) | 0xF;
 
   for (uint8_t i = 0; i < (padded_length / 3); i++) {
-    cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 256;
+    cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 0x100;
     uint8_t cc_message_text[] = {0x46, 3, 0x50, 0xF0, cc_message_chunk_counter,
                                 padded_input[3 * i], padded_input[(3 * i) + 1], padded_input[(3 * i) + 2]};
     
@@ -696,7 +679,7 @@ void send_cc_message(const char input[], bool dialog, unsigned long new_timeout)
     kcan2_write_msg(make_msg_buf(0x338, 8, cc_message_text));
   }
   
-  cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 256;
+  cc_message_chunk_counter = (cc_message_chunk_counter + 1) % 0x100;
   uint8_t cc_message_text_end[] = {0x46, 3, 0x50, 0xF0, cc_message_chunk_counter, 0x20, 0x20, 0x20};
   
   if (dialog) {
@@ -750,10 +733,12 @@ void evaluate_idrive_lights_settings(void) {                                    
 
 
 void evaluate_consumer_control(void) {
+  special_consumers_power = constrain(k_msg.buf[1] * 0.5, 0, 100.0);                                                                // CTR_PWR_SPCOS
+  #if F_NBTE
   // NOTE: if 0x3B3 is not sent to the HU it cannot be woken with the faceplate power button after Terminal R OFF!
 
   // BN2000 0x3B3 is missing ST_ENERG_PWMG and CTR_PWRU_COS is always 0xF.
-  uint8_t f_consumer_control[] = {k_msg.buf[0], k_msg.buf[1], k_msg.buf[2], 
+  uint8_t f_consumer_control[] = {k_msg.buf[0], k_msg.buf[1], k_msg.buf[2],                                                         // 6MC2DL0B pg. 1391.
                                   k_msg.buf[3], k_msg.buf[4], k_msg.buf[5],
                                   0xF8};
   if (!requested_hu_off_t2 && !hu_bn2000_bus_sleep_active) {
@@ -767,6 +752,7 @@ void evaluate_consumer_control(void) {
     f_consumer_control[6] = 0xF2;                                                                                                   // ST_ENERG_PWMG - 2 - No_stationary_consumers_permitted.
     kcan2_write_msg(make_msg_buf(0x3B3, 7, f_consumer_control));
   }
+  #endif
 }
 
 
@@ -800,10 +786,11 @@ void send_f_lcd_brightness(void) {
   if (rls_time_of_day == 2) {
     f_lcd_brightness[3] = 0xFE;                                                                                                     // This makes the NBT switch to night mode.
   } else if (rls_time_of_day == 1) {
-    f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x10, 0, 0xFE);                                                           // Increased slightly to bias CID brightness during dusk/twilight.
-  } else {
-    f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x1F, 0, 0xFE);                                                           // Increased more to bias CID brightness during the day.
+    f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x19, 0, 0xFE);                                                           // Increased slightly (10%) to bias CID brightness during dusk/twilight.
+  } else if (rls_time_of_day == 0) {
+    f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x32, 0, 0xFE);                                                           // Increased more (20%) to bias CID brightness during the day.
   }
+  
   kcan2_write_msg(make_msg_buf(0x393, 4, f_lcd_brightness));
 }
 

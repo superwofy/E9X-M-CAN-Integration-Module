@@ -27,6 +27,13 @@ void cache_can_message_buffers(void) {                                          
   idrive_mdrive_settings_menu_nbt_b_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_nbt_b);
   idrive_mdrive_settings_menu_nbt_c_buf = make_msg_buf(0x6F1, 8, idrive_mdrive_settings_menu_nbt_c);
 
+  uint8_t idrive_xview_menu_nbt_a[] = {0x63, 0x10, 0xC, 0x31, 1, 0xA0, 0x24, 7},
+          idrive_xview_menu_nbt_b[] = {0x63, 0x21, 0x29, 0, 0, 0, 0, 0},
+          idrive_xview_menu_nbt_c[] = {0x63, 0x22, 0, 0, 0, 0, 0, 0};
+  idrive_xview_menu_nbt_a_buf = make_msg_buf(0x6F1, 8, idrive_xview_menu_nbt_a);
+  idrive_xview_menu_nbt_b_buf = make_msg_buf(0x6F1, 8, idrive_xview_menu_nbt_b);
+  idrive_xview_menu_nbt_c_buf = make_msg_buf(0x6F1, 8, idrive_xview_menu_nbt_c);
+
   uint8_t idrive_bn2000_time_12h[] = {0x1E, 0x66, 0, 1, 0, 4, 0, 0},
           idrive_bn2000_time_24h[] = {0x1E, 0x66, 0, 1, 0, 8, 0, 0},
           idrive_bn2000_date_ddmmyyyy[] = {0x1E, 0x66, 0, 1, 0, 1, 0, 0},
@@ -455,6 +462,9 @@ void cache_can_message_buffers(void) {                                          
           svt70_pwm_release_control[] = {0xE, 6, 0x2E, 0xF0, 0, 0, 0, 0};
   svt70_zero_pwm_buf = make_msg_buf(0x6F1, 8, svt70_zero_pwm);
   svt70_pwm_release_control_buf = make_msg_buf(0x6F1, 8, svt70_pwm_release_control);
+
+  uint8_t jbe_headlight_washer[] = {0, 5, 0x30, 2, 7, 0x28, 1, 0};
+  jbe_headlight_washer_buf = make_msg_buf(0x6F1, 8, jbe_headlight_washer);
 }
 
 
@@ -493,7 +503,6 @@ void initialize_can_handlers(void) {
     kcan_handlers[0x1AA] = send_dme_power_ckm;                                                                                      // Time POWER CKM message with iDrive ErgoCommander (0x1AA). Sent at boot and Terminal R cycling.
   #endif
   kcan_handlers[0x1B4] = evaluate_kombi_status_message;                                                                             // 0x1B4: KOMBI status (indicated speed, handbrake). Cycle time 100ms (terminal R ON).
-  kcan_handlers[0x1B6] = evaluate_alternator_status;
   #if F_NBTE_CCC_ZBE
     kcan_handlers[0x1B8] = convert_zbe1_message;                                                                                    // Convert old CCC controller data (0x1B8) for NBT.
   #endif
@@ -526,7 +535,7 @@ void initialize_can_handlers(void) {
   #if MIRROR_UNDIM
     kcan_handlers[0x286] = evaluate_electrochromic_dimming;                                                                         // 0x286: Dim signal from FZD. Cycle time 500ms (idle). Sent when changed.
   #endif
-  #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS
+  #if WIPE_AFTER_WASH || INTERMITTENT_WIPERS || HEADLIGHT_WASHING
     kcan_handlers[0x2A6] = evaluate_wiper_stalk_status;                                                                             // 0x2A6: Wiper stalk status from SZL. Cycle time 1s (idle).
   #endif
   #if F_NBTE
@@ -555,7 +564,7 @@ void initialize_can_handlers(void) {
   #if CONTROL_SHIFTLIGHTS
     kcan_handlers[0x332] = evaluate_update_shiftlight_sync;                                                                         // 0x332: Variable redline broadcast from DME. Cycle time 1s.
   #endif
-  kcan_handlers[0x336] = process_bn2000_cc_display;
+  kcan_handlers[0x336] = process_bn2000_cc_display_list;
   kcan_handlers[0x338] = process_bn2000_cc_dialog;
   #if !F_NBTE
     kcan_handlers[0x34A] = process_kcan_34A;
@@ -580,7 +589,7 @@ void initialize_can_handlers(void) {
     kcan_handlers[0x3AF] = process_kcan_3AF;                                                                                        // 0x3AF: PDC bus status. Cycle time 2s (idle). Sent when changed.
   #endif
   kcan_handlers[0x3B0] = process_kcan_3B0;                                                                                          // 0x3B0: Reverse gear status. Cycle time 1s (idle).
-  #if F_NBTE
+  #if F_NBTE || PTC_HEATER
     kcan_handlers[0x3B3] = evaluate_consumer_control;
   #endif
   kcan_handlers[0x3B4] = evaluate_battery_voltage;                                                                                  // 0x3B4: Battery voltage from DME. Cycle time 5s (idle), sent when ignition ON/OFF.
@@ -608,9 +617,7 @@ void initialize_can_handlers(void) {
     kcan_handlers[0x650] = evaluate_vehicle_pitch_roll_angles;                                                                      // 0x650: SINE diagnostic responses. SINE is at address 0x50.
   #endif
   kcan_handlers[0x592] = process_dme_cc;
-  #if DEBUG_MODE
-    kcan_handlers[0x640] = evaluate_power_down_response;                                                                            // 0x640: CAS diagnostic responses. Sent when requested.
-  #endif
+  kcan_handlers[0x640] = evaluate_power_down_response;                                                                              // 0x640: CAS diagnostic responses. Sent when requested.
   #if F_VSW01
     kcan_handlers[0x648] = process_kcan_648;                                                                                        // 0x648: VSW diagnostic responses. Sent when requested.
   #endif
@@ -690,7 +697,7 @@ void initialize_can_handlers(void) {
     kcan2_handlers[0x291] = evaluate_idrive_units;
     kcan2_handlers[0x2B8] = evaluate_speed_warning_setting;
     kcan2_handlers[0x31A] = evaluate_f_pdc_function_request;
-    kcan2_handlers[0x34A] = process_kcan2_34A;                                                                                      // 0x34A: GPS position, appears consistently regardless of Terminal status. Cycle time 1s.
+    kcan2_handlers[0x34A] = process_kcan2_34A;                                                                                      // 0x34A: HU-OMAP: GPS position, sent regardless of Terminal status. Cycle time 1s.
     #if AUTO_TOW_VIEW_RVC
       kcan2_handlers[0x38F] = store_rvc_settings_idrive;
     #endif
@@ -722,10 +729,8 @@ void kcan_write_msg(const CAN_message_t &msg) {
     if (msg.buf[0] == 0x41 && (msg.buf[2] == 0x30 || msg.buf[2] == 0x31)) {                                                         // Exception for alarm jobs.
     } else if (msg.buf[0] == 0x48) {                                                                                                // Exception for VSW01 diagnosis.
     } else {
-      #if DEBUG_MODE
-        serial_log("6F1 message not sent to KCAN due to OBD tool presence.", 2);
-        can_debug_print_buffer(msg);
-      #endif
+      serial_log("6F1 message not sent to KCAN due to OBD tool presence.", 1);
+      can_debug_print_buffer(msg);
       return;
     }
   }
@@ -735,11 +740,9 @@ void kcan_write_msg(const CAN_message_t &msg) {
       m = {msg, millis() + 100};
       kcan_resend_txq.push(&m);
       kcan_retry_counter++;
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "KCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
-        serial_log(serial_debug_string, 1);
-        can_debug_print_buffer(msg);
-      #endif
+      sprintf(serial_debug_string, "KCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
+      serial_log(serial_debug_string, 1);
+      can_debug_print_buffer(msg);
     } else {
       serial_log("KCAN resend max counter exceeded.", 1);
     }
@@ -789,11 +792,9 @@ void kcan2_write_msg(const CAN_message_t &msg) {
 
       if (CAN_OK != KCAN2.sendMsgBuf(msg.id, 0, msg.len, send_buf)) {
         if (vehicle_awakened_timer >= 500) {                                                                                        // There are some errors writing just after boot. Ignore.
-          #if DEBUG_MODE
-            sprintf(serial_debug_string, "KCAN2 write failed for ID: %lX.", msg.id);
-            serial_log(serial_debug_string, 1);
-            can_debug_print_buffer(msg);
-          #endif
+          sprintf(serial_debug_string, "KCAN2 write failed for ID: %lX.", msg.id);
+          serial_log(serial_debug_string, 1);
+          can_debug_print_buffer(msg);
           kcan2_error_counter++;
         }
       }
@@ -816,10 +817,8 @@ void ptcan_write_msg(const CAN_message_t &msg) {
       if (msg.buf[0] == 0x17 && msg.buf[2] == 0x30 && (msg.buf[1] == 4 || msg.buf[1] == 2)) {                                       // Exception for EKP disable.
       } else if (msg.buf[0] == 0xE || msg.buf[0] == 0x57) {                                                                         // Exception for SVT70 and NiVi diag.
       } else {
-        #if DEBUG_MODE
-          serial_log("6F1 message not sent to PTCAN due to OBD tool presence.", 2);
-          can_debug_print_buffer(msg);
-        #endif
+        serial_log("6F1 message not sent to PTCAN due to OBD tool presence.", 2);
+        can_debug_print_buffer(msg);
         return;
       }
     }
@@ -830,11 +829,9 @@ void ptcan_write_msg(const CAN_message_t &msg) {
         m = {msg, millis() + 50};
         ptcan_resend_txq.push(&m);
         ptcan_retry_counter++;
-        #if DEBUG_MODE
-          sprintf(serial_debug_string, "PTCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
-          serial_log(serial_debug_string, 1);
-          can_debug_print_buffer(msg);
-        #endif
+        sprintf(serial_debug_string, "PTCAN write failed for ID: %lX with error %d. Re-sending.", msg.id, result);
+        serial_log(serial_debug_string, 1);
+        can_debug_print_buffer(msg);
       } else {
         serial_log("PTCAN resend max counter exceeded.", 1);
       }
@@ -844,11 +841,9 @@ void ptcan_write_msg(const CAN_message_t &msg) {
       ptcan_resend_txq.flush();
     }
   } else {
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "PTCAN transmission for ID: %lX aborted while transceiver is in standby.", msg.id);
-      serial_log(serial_debug_string, 1);
-      can_debug_print_buffer(msg);
-    #endif
+    sprintf(serial_debug_string, "PTCAN transmission for ID: %lX aborted while transceiver is in standby.", msg.id);
+    serial_log(serial_debug_string, 1);
+    can_debug_print_buffer(msg);
   }
 }
 
@@ -862,11 +857,9 @@ void dcan_write_msg(const CAN_message_t &msg) {
           m = {msg, millis() + 50};
           dcan_resend_txq.push(&m);
           dcan_retry_counter++;
-          #if DEBUG_MODE
-            sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
-            serial_log(serial_debug_string, 1);
-            can_debug_print_buffer(msg);
-          #endif
+          sprintf(serial_debug_string, "DCAN write failed for ID: %lX with error %d.", msg.id, result);
+          serial_log(serial_debug_string, 1);
+          can_debug_print_buffer(msg);
         } else {
           serial_log("DCAN resend max counter exceeded.", 1);
         }
@@ -875,19 +868,14 @@ void dcan_write_msg(const CAN_message_t &msg) {
         dcan_retry_counter = 0;
         dcan_resend_txq.flush();
       }
-    }
-    #if DEBUG_MODE
-    else {
+    } else {
       sprintf(serial_debug_string, "DCAN write failed for ID: %lX because vehicle is asleep.", msg.id);
       serial_log(serial_debug_string, 1);
     }
-    #endif
   } else {
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "DCAN transmission for ID: %lX aborted while transceiver is in standby.", msg.id);
-      serial_log(serial_debug_string, 1);
-      can_debug_print_buffer(msg);
-    #endif
+    sprintf(serial_debug_string, "DCAN transmission for ID: %lX aborted while transceiver is in standby.", msg.id);
+    serial_log(serial_debug_string, 1);
+    can_debug_print_buffer(msg);
   }
 }
 
@@ -917,9 +905,8 @@ void check_can_resend_queues(void) {
 }
 
 
-#if DEBUG_MODE
 void can_debug_print_buffer(const CAN_message_t &msg) {
-  if (LOGLEVEL >= 1) {
+  if (LOGLEVEL >= 3) {
     Serial.print(" Buffer: ");
     for ( uint8_t i = 0; i < msg.len; i++ ) {
       Serial.print(msg.buf[i], HEX); Serial.print(" ");
@@ -927,7 +914,6 @@ void can_debug_print_buffer(const CAN_message_t &msg) {
     Serial.println();
   }
 }
-#endif
 
 
 void convert_f_nbt_network_management(void) {

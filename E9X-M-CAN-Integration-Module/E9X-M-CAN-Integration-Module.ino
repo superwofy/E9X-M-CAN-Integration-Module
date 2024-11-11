@@ -3,7 +3,7 @@
 
 void setup() {
   if (F_CPU_ACTUAL != MEDIUM_UNDERCLOCK) {                                                                                          // Prevent accidental overclocks/underclocks. Remove if needed.
-    serial_log("CPU clock is not set to startup value, correcting.", 2);
+    serial_log("CPU clock is not set to startup value, correcting.", 1);
     set_arm_clock(MEDIUM_UNDERCLOCK);
   }
   initialize_watchdog();                                                                                                            // systick: 880 +/- 20 μs is when this function completes. If clock speed is wrong, this takes longer.
@@ -15,10 +15,8 @@ void setup() {
   update_mdrive_can_message();
   cache_can_message_buffers();
   initialize_can_handlers();
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "Setup complete at systick: %.2f ms.", micros() / 1000.0);
-    serial_log(serial_debug_string, 2);                                                                                             // systick: 4 ms, setup() is complete.
-  #endif
+  sprintf(serial_debug_string, "Setup complete at systick: %.2f ms.", micros() / 1000.0);
+  serial_log(serial_debug_string, 2);                                                                                               // systick: 4 ms, setup() is complete.
 }
 
 
@@ -71,7 +69,7 @@ void loop() {
     #if FRONT_FOG_CORNER
       check_fog_corner_queue();
     #endif
-    check_idrive_alive_monitor();
+    check_hu_application_alive_monitor();
     #if F_VSW01 || F_NIVI || F_NBTE
       send_f_energy_condition();
     #endif
@@ -93,6 +91,10 @@ void loop() {
       check_radon_queue();
     #endif
     check_hazards_queue();
+    send_mdrive_status_message();                                                                                                   // Send this message with to populate the fields in iDrive.
+    if (eeprom_update_timer >= 30000) {                                                                                             // Periodically update EEPROM.
+      update_data_in_eeprom();
+    }
 
     if (terminal_r) {
       check_teensy_cpu_clock();                                                                                                     // Dynamically scale clock with temperature to extend lifetime.
@@ -105,11 +107,6 @@ void loop() {
       #if F_NBTE
         send_f_throttle_pedal();
       #endif
-      if (eeprom_update_timer >= 60000) {                                                                                           // Periodically update EEPROM.
-        update_data_in_eeprom();
-        eeprom_update_timer = 0;
-      }
-      send_mdrive_alive_message();                                                                                                  // Send this message with Terminal R to populate the fields in iDrive.
     }
 
     if (ignition) {
@@ -162,7 +159,7 @@ void loop() {
     } else {
       if (vehicle_awake_timer >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring.
-        serial_log("Vehicle Sleeping.", 0);
+        serial_log("Vehicle Sleeping.", 2);
         deactivate_optional_transceivers();
         scale_cpu_speed();
         reset_sleep_variables();
@@ -241,7 +238,7 @@ void loop() {
       #if SERVOTRONIC_SVT70
       else if (d_msg.buf[0] == 0xEF && d_msg.buf[1] == 2 && d_msg.buf[2] == 0x1A                                                   // UIF read or ISTA/D module identification.
                 && (d_msg.buf[3] == 0x80 || d_msg.buf[3] == 0x86)) {
-        serial_log("UIF being read. Skipping SVT.", 0);
+        serial_log("UIF being read. Skipping SVT.", 2);
         uif_read = true;
       }
 
@@ -288,34 +285,32 @@ void loop() {
   
 /**********************************************************************************************************************************************************************************************************************************************/
 
-  #if DEBUG_MODE
-    #if defined(USB_DUAL_SERIAL) || defined(USB_TRIPLE_SERIAL)                                                                      // Check if debug printout interface is enabled.
-      if (millis() >= 2000) {
-        if (SerialUSB1.dtr()) {
-          if (!debug_print_connected) {
-            debug_print_connected = true;
-            debug_print_timer = 500;
-            serial_log("Debug printout interface connected.", 0);
-          }
-          if (debug_print_timer >= 500) {
-            print_current_state(SerialUSB1);                                                                                        // Print program status to the second Serial port if open.
-            debug_print_timer = 0;
-          }
-        } else {
-          if (debug_print_connected) {
-            debug_print_connected = false;
-            serial_log("Debug printout interface disconnected.", 0);
-          }
+  #if defined(USB_DUAL_SERIAL) || defined(USB_TRIPLE_SERIAL)                                                                        // Check if debug printout interface is enabled.
+    if (millis() >= 2000) {
+      if (SerialUSB1.dtr()) {
+        if (!debug_print_connected) {
+          debug_print_connected = true;
+          debug_print_timer = 500;
+          serial_log("Debug printout interface connected.", 0);
+        }
+        if (debug_print_timer >= 500) {
+          print_current_state(SerialUSB1);                                                                                          // Print program status to the second Serial port if open.
+          debug_print_timer = 0;
+        }
+      } else {
+        if (debug_print_connected) {
+          debug_print_connected = false;
+          serial_log("Debug printout interface disconnected.", 0);
         }
       }
-    #endif
-
-    loop_timer = micros();
-    while (Serial.available()) {
-      serial_debug_interpreter();
     }
-    check_serial_diag_actions();
   #endif
+
+  loop_timer = micros();
+  while (Serial.available()) {
+    serial_command_interpreter();
+  }
+  check_serial_diag_actions();
   
   wdt.feed();                                                                                                                       // Reset the watchdog timer.
 }
@@ -463,7 +458,7 @@ void process_kcan_2F7(void) {
 
 
 void process_kcan_34A(void) {
-  idrive_watchdog_timer = 0;
+  hu_application_watchdog = 0;
   #if DOOR_VOLUME 
     send_initial_volume_cic();
   #endif
@@ -526,12 +521,12 @@ void process_kcan2_message() {
       if (k_msg.buf[0] == 0x26 && k_msg.buf[1] == 0x88) {
         if (k_msg.buf[3] == 1) {                                                                                                    // The HU was activated using the faceplate power button.
           if (!hu_ent_mode) {
-            serial_log("HU now running in ENT_MODE.", 3);
+            serial_log("HU now running in ENT_MODE.", 2);
             hu_ent_mode = true;
           }
         } else if (k_msg.buf[3] == 0) {
           if (hu_ent_mode) {
-            serial_log("HU no longer in ENT_MODE.", 3);
+            serial_log("HU no longer in ENT_MODE.", 2);
             hu_bn2000_bus_sleep_ready_timer = 0;                                                                                    // Exiting ENT_MODE should reset this timer.
             hu_ent_mode = false;
           }
@@ -543,7 +538,7 @@ void process_kcan2_message() {
 
 
 void process_kcan2_34A(void) {
-  idrive_watchdog_timer = 0;
+  hu_application_watchdog = 0;                                                                                                      // Since this message is created by HU-OMAP, it means the HU HMI application layer is alive.
   #if ASD89_MDRIVE
     initialize_asd_mdrive();
   #endif
@@ -565,5 +560,8 @@ void process_kcan2_663(void) {
   #if DOOR_VOLUME
     evaluate_audio_volume_nbt();
   #endif
-  show_mdrive_settings_screen_evo();    
+  show_mdrive_settings_screen_evo();
+  #if X_VIEW
+    show_xview_screen_b_c();
+  #endif
 }

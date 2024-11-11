@@ -1,0 +1,278 @@
+These values are extracted/adapted from cafd_00000b82.caf.002_000_008. They do not map perfectly to BN2000.
+
+
+BETRIEBSWERTE - Operation Value
+
+    E70+ADAPTIVE_DRIVE
+    A0,50,05,05,05,05,0A,0A,14,05,0A,05,0A,03,06,03,06,03,06,00,00,00,00,00,00,32,32,0A,01,03,14,0C
+
+    !(E70+ADAPTIVE_DRIVE)
+    A0,50,05,05,05,05,0A,0A,14,05,0A,05,0A,03,06,03,06,00,00,00,00,00,00,00,00,32,32,0A,01,03,14,0C
+    
+    
+    Bytes:
+    0 - Overvoltage limit. Limit from which overvoltage is detected, in 0.1V. Normal voltage below value 3000'00 - value 3000'02.
+        0xA0 = 16V
+    1 - Undervoltage limit. Limit from which undervoltage is detected, in 0.1V. Normal voltage above value 3000'01 + value 3000'02.
+        0x50 = 8V
+    2 - Hysteresis. Hysteresis value for 3000'00 (positive) and 3000'01 (negative) in 0.1V.
+        0x05 = 500mV
+    
+    [These messages will not correspond exactly to BN2000!].
+    3 - Timeout message terminals (0x12F). Multiplier for typical cycle time in normal operation.
+        0x05 = 5x
+    4 - Extended timeout message terminals (0x12F). Multiplier for typical cycle time after power-up.
+        0x05 = 5x
+    5 - Timeout message Soll_Strom_SVT_ECO (target current SVT_ECO). Multiplier for typical cycle time in normal operation.
+        0x05 = 5x
+    6 - Extended timeout Soll_Strom_SVT_ECO (target current SVT_ECO). Multiplier for typical cycle time after power-up.
+        0x0A = 10x
+    7 - Timeout message vehicle status (0x3A0). Multiplier for typical cycle time in normal operation.
+        0x0A = 10x
+    8 - Extended timeout vehicle status. Multiplier for typical cycle time after power-up.
+        0x14 = 20x
+    9 - Timeout message data drive train 2 (0x3F9). Multiplier for typical cycle time in normal operation.
+        0x05 = 5x
+    10 - Extended timeout message data drivetrain 2 (0x3F9). Multiplier for typical cycle time after power-up.
+        0x0A = 10x
+    11 - Timeout message mileage (0x330). Multiplier for typical cycle time in normal operation.
+        0x05 = 5x
+    12 - Extended timeout message mileage (0x330). Multiplier for typical cycle time after power-up.
+        0x0A = 10x
+    13 - Timeout message relative time (0x310). Multiplier for typical cycle time in normal operation.
+        0x03 = 3x
+    14 - Extended timeout message relative time (0x310). Multiplier for typical cycle time after power-up.
+        0x06 = 6x
+    15 - Timeout message speed (0x1A1). Multiplier for typical cycle time in normal operation.
+        0x03 = 3x
+    16 - Extended timeout message speed (0x1A1). Multiplier for typical cycle time after power-up.
+        0x06 = 6x
+
+    17, 18 - Timeout 0x326 EDC/VDM Damper program. Only enabled with Adaptive Drive.
+    
+    17, 18, 19, 20, 21, 22, 23, 24, 25 - unused according to cafd_00000b82.caf.002_000_008
+    
+    26 - Time to lock error entry after voltage fault. Time period in 0.1s that the error memory remains locked after "voltage fault". Default value: 20dec = 2s.
+        0x32 = 5s
+    27 - Time to lock error detection after engine start. Comment = Time period in 0.1s that the valve error detection remains locked during operation after engine start. The error memory is also locked for this time period after engine start. Default value: 20dec = 2s.
+        0x0A = 1s
+    28 - 
+    
+    
+
+REGLERPARAMETER Servo
+
+    19,0F,00,00,39,32,04,00,C8,00,96,00,19,00,02,00,32,14,32,13,24,00,27,10,2E,E0,36,B0,64,32,00,00
+    
+    Bytes:
+    0 - Servo current controller Kp. P-component of the servo PID controller in 1/100. P=I=0 is not possible.
+    
+    1 - Servo current controller Ki. I-component of the servo PID controller in 1/100. P=I=0 is not possible.
+    
+    2 - Servo current controller Kd. D-component of the servo PID controller in 1/100.
+    
+    3 - Unused
+    
+    4 - Servo maximum shunt voltage. Maximum voltage on the measuring shunt in digits (*5V/1023)
+        0x39 = 278.6mV
+
+    5 - Servo maximum current deviation. Current deviation in mA during operation.
+        0x32 = 57mA
+
+    6 - Servo number of current deviations until error. Number of current deviations (see 3000'05) until error detected (10ms cycle).
+        0x04 = 4x
+
+    7,8 - Servo voltage on the converter for short circuit to Ubat. (coding value/54)
+        0x00,0xC8 = 3.70V
+
+    9,10 - Servo voltage on the converter for short circuit to ground. (coding value/54)
+        0x00,0x96 = 2.77V
+
+    11,12 - Servo voltage at the shunt with short circuit valve plus/minus. (coding value * 5/1023)
+        0x00,0x19 = 0.122V
+
+    13,14 - Servo voltage at the shunt with open load valve plus/minus. (coding value * 5/1023)
+        0x00,0x02 = 0.010V
+        
+    
+    
+    
+    
+WANDLERKENNLINIE - PWM to current breakpoints
+
+    [00,0D,22,52,D1,ED,F9,FF], 00,00,00,00,00,00,00,00,00, [00,00,C8,01,2C,01,A4,02,26,02,58,02,8A,03,5C]
+
+
+    PWM values to current breakpoints:
+
+    0x00 = 0x0000 - 0 mA
+    0x0D = 0x00C8 - 200 mA
+    0x22 = 0x012C - 300 mA
+    0x52 = 0x01A4 - 420 mA
+    0xD1 = 0x0226 - 550 mA
+    0xED = 0x0258 - 600 mA
+    0xF9 = 0x028A - 650 mA
+    0xFF = 0x035C - 860 mA
+    
+
+
+STUETZSTELLEN_V_LW - Speed and steering angle breakpoints
+
+    [FD,30,00,00,00,64,00,B4,01,22,01,F4,03,20,04,A6,06,0E,07,BC], [00,00,00,1E,00,78,02,58,04,B0,07,08]
+    
+    Speed = signed value / 10. Negative values = reverse.
+
+    00,00   0 km/h
+    00,64   10 km/h
+    00,B4   18 km/h
+    01,22   29 km/h
+    01,F4   50 km/h
+    03,20   80 km/h
+    04,A6   119 km/h
+    06,0E   155 km/h
+    07,BC   198 km/h
+    
+    00,00   0 deg
+    00,1E   30 deg
+    00,78   120 deg
+    02,58   600 deg
+    04,B0   1200 deg
+    07,08   1800 deg
+    
+    
+KENNLINIEN1_3* PWM applied to the first 3 steering angle breakpoints (i.e 0, 30 and 120 deg)
+
+    [00,FF,D5,BE,B6,98,73,43,13,00], [00,FF,E2,CD,C1,A1,7F,43,13,00], [00,FF,EA,D4,C7,B2,90,43,13,00], 00,00
+    
+    0x00 at -72 km/h
+    0xFF at 0 km/h
+    0xD5 at 10 km/h
+    0xBE at 18 km/h
+    0xB6 at 29 km/h
+    0x98 at 50 km/h
+    0x73 at 80 km/h
+    0x43 at 119 km/h
+    0x13 at 155 km/h
+    0x00 at 198 km/h
+    
+    0x00 at -72 km/h
+    0xFF at 0 km/h
+    0xE2 at 10 km/h
+    0xCD at 18 km/h
+    0xC1 at 29 km/h
+    0xA1 at 50 km/h
+    0x7F at 80 km/h
+    0x43 at 119 km/h
+    0x13 at 155 km/h
+    0x00 at 198 km/h
+
+    0x00 at -72 km/h
+    0xFF at 0 km/h
+    0xEA at 10 km/h
+    0xD4 at 18 km/h
+    0xC7 at 29 km/h
+    0xB2 at 50 km/h
+    0x90 at 80 km/h
+    0x43 at 119 km/h
+    0x13 at 155 km/h
+    0x00 at 198 km/h
+
+KENNLINIEN4_6* PWM applied to the last 3 steering angle breakpoints (i.e 600, 1200 and 1800 deg)
+
+    [1E,FF,EA,E7,D6,C2,9B,43,13,00], [50,FF,F4,F2,E9,D5,9B,43,13,00], [96,FF,F4,F4,EC,DC,9B,43,13,00], 00,00
+    
+    0x1E at -72 km/h
+    0xFF at 0 km/h
+    0xEA at 10 km/h
+    0xE7 at 18 km/h
+    0xD6 at 29 km/h
+    0xC2 at 50 km/h
+    0x9B at 80 km/h
+    0x43 at 119 km/h
+    0x13 at 155 km/h
+    0x00 at 198 km/h
+    
+    0x50 at -72 km/h
+    0xFF at 0 km/h
+    0xF4 at 10 km/h
+    0xF2 at 18 km/h
+    0xE9 at 29 km/h
+    0xD5 at 50 km/h
+    0x9B at 80 km/h
+    0x43 at 119 km/h
+    0x13 at 155 km/h
+    0x00 at 198 km/h
+
+    0x96 at -72 km/h
+    0xFF at 0 km/h
+    0xF4 at 10 km/h
+    0xF4 at 18 km/h
+    0xEC at 29 km/h
+    0xDC at 50 km/h
+    0x9B at 80 km/h
+    0x43 at 119 km/h
+    0x13 at 155 km/h
+    0x00 at 198 km/h
+    
+    
+    
+    
+    
+E92 M3 values:
+
+    WANDLERKENNLINIE - PWM to current breakpoints
+
+        [00,3C,59,7C,A3,B2,C1,FF], 00,00,00,00,00,00,00,00,00, [00,00,C8,01,2C,01,A4,02,26,02,58,02,8A,03,5C]
+
+        0x00 = 0x0000 - 0 mA
+        0x3C = 0x00C8 - 200 mA
+        0x59 = 0x012C - 300 mA
+        0x7C = 0x01A4 - 420 mA
+        0xA3 = 0x0226 - 550 mA
+        0xB2 = 0x0258 - 600 mA
+        0xC1 = 0x028A - 650 mA
+        0xFF = 0x035C - 860 mA
+
+        Scaled breakpoints linearly so that curves make more sense.
+
+
+    STUETZSTELLEN_V_LW - Speed and steering angle breakpoints
+
+        00,00,00,32,00,96,01,2C,01,C2,02,58,03,20,03,E8,04,B0,07,D0,00,00,00,1E,00,78,02,58,04,B0,07,08
+
+        00,00   0 km/h
+        00,32   5 km/h
+        00,96   15 km/h
+        01,2C   30 km/h
+        01,C2   45 km/h
+        02,58   60 km/h
+        03,20   80 km/h
+        03,E8   100 km/h
+        04,B0   120 km/h
+        07,D0   200 km/h
+
+        Steering angle breakpoints remain unchanged.
+
+
+    KENNLINIEN1_3_NORM
+
+        to scale: round((M3 value / 860) * 255)
+
+        ED,E9,AD,8D,83,7D,72,5E,14,00,ED,E9,AD,8D,83,7D,72,5E,14,00,ED,E9,AD,8D,83,7D,72,5E,14,00,00,00
+
+
+    KENNLINIEN4_6_NORM
+
+        increase the 0 km/h current value to 860 mA (100% - 0xFF):
+
+        FF,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,00,00
+
+
+    KENNLINIEN1_3_SPORT
+        
+        ED,E9,9C,80,72,6B,54,30,01,00,ED,E9,9C,80,72,6B,54,30,01,00,ED,E9,9C,80,72,6B,54,30,01,00,00,00
+
+
+    KENNLINIEN4_6_SPORT
+
+        FF,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,00,00

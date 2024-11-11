@@ -3,7 +3,7 @@
 
 void evaluate_engine_status(void) {
   RPM = ((uint16_t)k_msg.buf[5] << 8) | (uint16_t)k_msg.buf[4];
-  e_throttle_position = k_msg.buf[3] * 0.39063;
+  e_throttle_pedal_position = k_msg.buf[3] * 0.39063;
   uint8_t idle_status = (k_msg.buf[6] & 0xF) >> 2;                                                                                  // Get the first two bits of the second half of this byte.
   if (idle_status == 0) {
     engine_idling = true;
@@ -73,11 +73,19 @@ void toggle_mdrive_dsc_mode(void) {
   if (mdrive_status) {
     if (mdrive_dsc[cas_key_number] == 7) {                                                                                          // DSC OFF requested.
       if (!send_dsc_mode(1)) {
-        serial_log("MDrive: Failed to change DSC mode during stabilisation.", 2);
+        serial_log("MDrive: Failed to change DSC mode during stabilisation.", 1);
       }
+      #if CONTROL_SHIFTLIGHTS
+      else {
+        if (!shiftlights_segments_active && dsc_program_status != 1) {                                                              // Don't interfere with existing shiftlights and don't flash if changing other settings.
+          activate_shiftlight_segments(shiftlights_max_flash_buf);
+          ignore_shiftlights_off_counter = 2;
+        }
+      }
+      #endif
     } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M) requested.
       if (!send_dsc_mode(4)) {
-        serial_log("MDrive: Failed to change DSC mode during stabilisation.", 2);
+        serial_log("MDrive: Failed to change DSC mode during stabilisation.", 1);
       }
     } else if (mdrive_dsc[cas_key_number] == 0xB) {                                                                                 // DSC ON requested.
       send_dsc_mode(0);
@@ -115,7 +123,7 @@ void evaluate_mfl_button_press(void) {
       if (immobilizer_released && ignition) {                                                                                       // Disable normal M button function when used for immobilizer.
       #endif
         toggle_mdrive_message_active();
-        send_mdrive_message();
+        mdrive_message_timer = 5000;
         toggle_mdrive_dsc_mode();
       #if IMMOBILIZER_SEQ
       }
@@ -233,7 +241,7 @@ void show_mdrive_settings_screen(void) {
       #else
         kcan_write_msg(idrive_mdrive_settings_menu_cic_a_buf);                                                                      // Send steuern_menu job to iDrive.
         kcan_write_msg(idrive_mdrive_settings_menu_cic_b_buf);
-        if (!idrive_died && diag_transmit) {
+        if (!hu_application_died && diag_transmit) {
           unsigned long time_now = millis();
           m = {idrive_button_sound_buf, time_now + 500};
           idrive_txq.push(&m);
@@ -253,7 +261,7 @@ void show_mdrive_settings_screen_evo(void) {
       kcan2_write_msg(idrive_mdrive_settings_menu_nbt_b_buf);
       kcan2_write_msg(idrive_mdrive_settings_menu_nbt_c_buf);
       mdrive_settings_requested = false;
-      if (!idrive_died) {
+      if (!hu_application_died) {
         unsigned long time_now = millis();
         m = {idrive_horn_sound_buf, time_now + 500};
         idrive_txq.push(&m);
@@ -265,28 +273,23 @@ void show_mdrive_settings_screen_evo(void) {
 }
 
 
-void send_mdrive_message(void) {
-  if (ptcan_mode == 1) {
-    mdrive_message_bn2000[0] += 10;
-    if (mdrive_message_bn2000[0] > 0xEF) {                                                                                          // Alive(first half of byte) must be between 0..E.
-      mdrive_message_bn2000[0] = 0;
+void send_mdrive_status_message(void) {
+  if (mdrive_message_timer >= 5000) {                                                                                               // Original cycle time is 10s (idle).
+    if (ptcan_mode == 1) {
+      mdrive_message_bn2000[0] += 10;
+      if (mdrive_message_bn2000[0] > 0xEF) {                                                                                        // Alive(first half of byte) must be between 0..E.
+        mdrive_message_bn2000[0] = 0;
+      }
+      can_checksum_update(0x399, 6, mdrive_message_bn2000);                                                                         // Recalculate checksum. No module seems to check this - MDSC?
+      ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message_bn2000));                                                               // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
+      #if F_NBTE
+        mdrive_message_bn2010[0] = f_mdrive_alive_counter;                                                                          // If this counter sequence is broken (e.g sketch upload), settings are reset to default.
+        kcan2_write_msg(make_msg_buf(0x42E, 8, mdrive_message_bn2010));
+        f_mdrive_alive_counter == 0xE ? f_mdrive_alive_counter = 0 
+                                      : f_mdrive_alive_counter++;
+      #endif
+      mdrive_message_timer = 0;
     }
-    can_checksum_update(0x399, 6, mdrive_message_bn2000);                                                                           // Recalculate checksum. No module seems to check this - MDSC?
-    ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message_bn2000));                                                                 // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
-    mdrive_message_timer = 0;
-    #if F_NBTE
-      mdrive_message_bn2010[0] = f_mdrive_alive_counter;
-      kcan2_write_msg(make_msg_buf(0x42E, 8, mdrive_message_bn2010));
-      f_mdrive_alive_counter == 0xE ? f_mdrive_alive_counter = 0 
-                                    : f_mdrive_alive_counter++;
-    #endif
-  }
-}
-
-
-void send_mdrive_alive_message(void) {
-  if (mdrive_message_timer >= 5000) {                                                                                               // Time MDrive alive message outside of CAN loops. Original cycle time is 10s (idle).                                                                     
-    send_mdrive_message();
   }
 }
 
@@ -311,7 +314,7 @@ void execute_mdrive_settings_changed_actions() {
       #if ASD89_MDRIVE
         if (diag_transmit) {
           kcan_write_msg(mute_asd_buf);
-          serial_log("Muted ASD output.", 3);
+          serial_log("Muted ASD output.", 2);
         }
       #endif
       exhaust_flap_sport = false;
@@ -321,12 +324,12 @@ void execute_mdrive_settings_changed_actions() {
     if (mdrive_svt[cas_key_number] == 0xE9) {
       #if FRM_AHL_MODE
         kcan_write_msg(frm_ckm_ahl_komfort_buf);
-        serial_log("Set AHL to comfort mode with SVT setting of Normal.", 3);
+        serial_log("Set AHL to comfort mode with SVT setting of Normal.", 2);
       #endif
     } else if (mdrive_svt[cas_key_number] >= 0xF1) {
       #if FRM_AHL_MODE
         kcan_write_msg(frm_ckm_ahl_sport_buf);
-        serial_log("Set AHL to sport mode with SVT setting of Sport.", 3);
+        serial_log("Set AHL to sport mode with SVT setting of Sport/Sport+.", 2);
       #endif
     }
   }
@@ -374,16 +377,14 @@ void update_mdrive_message_settings_nbt(void) {
         }
       }
 
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
-            mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
-        serial_log(serial_debug_string, 3);
-      #endif
+      sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
+          mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
+      serial_log(serial_debug_string, 3);
 
       update_mdrive_can_message();
       execute_mdrive_settings_changed_actions();
     }
-    send_mdrive_message();
+    mdrive_message_timer = 5000;
   }
 }
 
@@ -467,7 +468,7 @@ void check_immobilizer_status(void) {
           if (terminal_r) {
             if (engine_running == 2 && engine_run_timer >= 2000) {                                                                  // This ensures LPFP can still prime when unlocking, opening door, Terminal R, Ignition ON etc.
               ptcan_write_msg(ekp_pwm_off_buf);
-              serial_log("EKP is disabled.", 0);
+              serial_log("EKP is disabled.", 2);
             }
 
             // Visual indicators with Terminal R, 15.
@@ -540,7 +541,7 @@ void release_immobilizer(void) {
   ekp_txq.push(&m);
   m = {ekp_return_to_normal_buf, time_now + 300};
   ekp_txq.push(&m);
-  serial_log("Immobilizer released. EKP control restored to DME.", 0);
+  serial_log("Immobilizer released. EKP control restored to DME.", 2);
   if (alarm_active) {
     kcan_write_msg(alarm_siren_return_control_buf);
     alarm_siren_txq.flush();                                                                                                        // Clear pending siren requests.
@@ -549,7 +550,7 @@ void release_immobilizer(void) {
     m = {alarm_siren_return_control_buf, time_now + 300};
     alarm_siren_txq.push(&m);
     alarm_after_engine_stall = alarm_active = false;
-    serial_log("Alarm OFF.", 0);
+    serial_log("Alarm OFF.", 2);
   }
   kcan_write_msg(alarm_led_return_control_buf);
   alarm_led_txq.flush();
@@ -599,7 +600,7 @@ void execute_alarm_after_stall(void) {
       m = {alarm_siren_on_buf, time_now + 31000 * i};                                                                               // Siren job must not be active for another to be ran.
       alarm_siren_txq.push(&m);
     }
-    serial_log("Alarm siren and hazards ON.", 0);
+    serial_log("Alarm siren and hazards ON.", 2);
     #if F_NBTE
       send_cc_message("Immobilizer alarm tripped!", true, 10000);
     #endif
@@ -705,7 +706,7 @@ void send_f_throttle_pedal(void) {                                              
                                   : f_throttle_pedal_alive_counter++;
     
 
-    uint16_t scaled_value = (e_throttle_position / 99.22) * 100;                                                                    // Max value reported by DME is 99.22%.
+    uint16_t scaled_value = (e_throttle_pedal_position / 99.22) * 100;                                                              // Max value reported by DME is 99.22%.
     scaled_value = constrain(round(scaled_value / 0.025), 0, 0xFFE);                                                                // 12-bit boundary check. 0xFFF - signal invalid.
 
     f_throttle_pedal[2] = scaled_value & 0xFF;                                                                                      // AVL_ANG_ACPD LSB
@@ -907,12 +908,5 @@ void evaluate_dme_boost_response(void) {
     } else {
       dme_boost_requested = false;
     }
-  }
-}
-
-
-void evaluate_alternator_status(void) {
-  if (ignition) {
-    uint8_t alternator_load = 0;
   }
 }

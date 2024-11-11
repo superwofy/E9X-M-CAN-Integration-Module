@@ -5,8 +5,8 @@
   Program configuration section.
 ***********************************************************************************************************************************************************************************************************************************************/
 
-#define DEBUG_MODE 1                                                                                                                // Toggle serial debug messages. Disable in production.
-uint8_t LOGLEVEL = 4;                                                                                                               // 0 - critical, 1 - errors, 2 - info, 3 - extra_info, 4 = debug.
+// Adjust serial debug verbosity.
+uint8_t LOGLEVEL = 3;                                                                                                               // 0 - serial only, 1 - errors, 2 - info, 3 - extra_info, 4 = debug.
 
 #define PDC_AUTO_OFF 1                                                                                                              // Deactivates PDC when handbrake is pulled.
 #define AUTO_TOW_VIEW_RVC 1                                                                                                         // Turn on top down (tow view) rear view camera option when close to an obstacle.
@@ -16,6 +16,7 @@ uint8_t LOGLEVEL = 4;                                                           
 #define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood. NBT: also shows CC dialog.
 #define FRM_AHL_MODE 1                                                                                                              // Switches FRM AHL mode from Komfort and Sport.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
+#define HEADLIGHT_WASHING 1                                                                                                         // Take control of headlight washing from the JBE. Code SCHEINWERFERREININUNG first.
 #define INTERMITTENT_WIPERS 1                                                                                                       // Inermittent wiping alongside auto wipers when holding the stalk down for 1.3s.
 #define AUTO_MIRROR_FOLD 1                                                                                                          // Fold/Unfold exterior mirrors when locking. Un-fold with door open event instead of remote unlock button.
 #define MIRROR_UNDIM 1                                                                                                              // Undim electrochromic exterior mirrors when indicating at night.
@@ -32,10 +33,11 @@ uint8_t LOGLEVEL = 4;                                                           
 #define NEEDLE_SWEEP 1                                                                                                              // Needle sweep animation with engine ON. Calibrated for M3 speedo with 335i tacho.
 #define AUTO_SEAT_HEATING 1                                                                                                         // Enable automatic heated seat for driver at low temperatures.
 #define AUTO_SEAT_HEATING_PASS 1                                                                                                    // Enable automatic heated seat for passenger at low temperatures.
-#define PTC_HEATER 1                                                                                                                // Convert alternator status from DME into the missing PWM "E_ZH" signal needed for the PTC auxiliary heater.
+#define PTC_HEATER 1                                                                                                                // Convert consumer status from the DME into the missing PWM "E_ZH" signal needed for the PTC auxiliary heater.
 #define MDSC_ZB 0                                                                                                                   // If the MK60E5 is flashed with a 1M or M3 file, MDM is toggled through MDrive status (0x399) only.
                                                                                                                                     // For DSC OFF, the switch must be wired to pin 41. Non-M DSC modules flashed to M3 ZB need a 12V pull-up.
 
+const uint8_t HEADLIGHT_WASHING_FREQUENCY = 5;                                                                                      // Number of Wash-wipe cycles until headlight washers are triggered.
 const float FOG_CORNER_STEERTING_ANGLE = 87.0;                                                                                      // Steering angle at which to activate fog corner function.
 const float STEERTING_ANGLE_HYSTERESIS = 48.0;
 const float FOG_CORNER_STEERTING_ANGLE_INDICATORS = 45.0;
@@ -198,6 +200,7 @@ bool key_valid = false, terminal_r = false, ignition = false, vehicle_awake = fa
      terminal_50 = false, clutch_pressed = false, frm_consumer_shutdown = false, gong_active = false,
      clearing_dtcs = false, donor_vin_initialized = false, receiving_donor_vin = false, requested_donor_vin = false,
      low_battery_cc_active = false;
+float special_consumers_power = 0;
 uint8_t engine_running = 0;                                                                                                         // 3 - signal invalid, 2 - engine running, 1 - engine starting, 0 - engine stopped.
 uint16_t terminal30g_followup_time = 0;
 bool kl30g_cutoff_imminent = false;
@@ -223,7 +226,7 @@ cppQueue faceplate_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),
 CAN_message_t dsc_on_buf, dsc_mdm_dtc_buf, dsc_off_buf;
 cppQueue dsc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint16_t RPM = 0;
-float e_throttle_position = 0;
+float e_throttle_pedal_position = 0;
 float engine_torque = 0, engine_torque_nm = 0;
 bool engine_idling = false;                                                                                                         // Not idling.
 bool handbrake_status = true;
@@ -239,11 +242,12 @@ uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                          
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DSC OFF, 4 = DTC/MDM. 
 uint8_t dsc_intervention = 0;
 bool holding_dsc_off_console = false, dsc_mode_change_disable = false;
-elapsedMillis mdrive_message_timer = 0, veh_mode_timer = 0;
+elapsedMillis mdrive_message_timer = 5000, veh_mode_timer = 500;
 uint8_t m_mfl_held_count = 0;
 CAN_message_t idrive_mdrive_settings_menu_cic_a_buf, idrive_mdrive_settings_menu_cic_b_buf,
               idrive_mdrive_settings_menu_nbt_a_buf, idrive_mdrive_settings_menu_nbt_b_buf,
               idrive_mdrive_settings_menu_nbt_c_buf, gws_sport_on_buf, gws_sport_off_buf,
+              idrive_xview_menu_nbt_a_buf, idrive_xview_menu_nbt_b_buf, idrive_xview_menu_nbt_c_buf,
               idrive_bn2000_time_12h_buf, idrive_bn2000_time_24h_buf, 
               idrive_bn2000_date_ddmmyyyy_buf, idrive_bn2000_date_mmddyyyy_buf,
               idrive_bn2000_consumption_l100km_buf, idrive_bn2000_consumption_kml_buf,
@@ -254,7 +258,7 @@ CAN_message_t idrive_mdrive_settings_menu_cic_a_buf, idrive_mdrive_settings_menu
               idrive_bn2000_indicator_triple_buf, idrive_bn2000_drl_on_buf, idrive_bn2000_drl_off_buf,
               set_warning_15kph_on_buf, set_warning_15kph_off_buf;
 uint8_t hba_status = 0;
-bool mdrive_settings_requested = false;
+bool mdrive_settings_requested = false, xview_menu_requested = false;
 bool requested_hu_off_t1 = false, requested_hu_off_t2 = false, hu_ent_mode = false,
      hu_bn2000_nm_initialized = false, hu_bn2000_bus_sleep_active = false;
 
@@ -334,11 +338,12 @@ CAN_message_t ftm_indicator_flash_buf, ftm_indicator_off_buf,
 elapsedMillis hood_status_debounce = 500;
 uint8_t last_hood_status = 0, last_trunk_status = 0;
 CAN_message_t frm_ckm_ahl_komfort_buf, frm_ckm_ahl_sport_buf;
-bool wipe_scheduled = false;
+bool wipe_scheduled = false, track_wash_wipe_cycle = false;
+uint8_t wash_wipe_cycles = 0;
 uint16_t wash_message_counter = 0, wiper_stalk_down_message_counter = 0;
 uint16_t indicator_stalk_pushed_message_counter = 0;
 unsigned long wiper_stalk_down_last_press_time = 0;
-CAN_message_t wipe_single_buf;
+CAN_message_t wipe_single_buf, jbe_headlight_washer_buf;
 uint8_t intermittent_setting = 0, intermittent_setting_can = 0;
 uint16_t intermittent_intervals[] = {13100, 9100, 5100, 0, 2100},                                                                   // Settings: 1 (12s), 2 (8s), 3 (4s), n/a and 5 (max, 1s). 1100ms is needed for a cycle.
          intermittent_intervals_offset_stopped[] = {3000, 2000, 1000, 0, 0, 1500};
@@ -462,8 +467,8 @@ cppQueue idrive_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 bool left_door_open = false, right_door_open = false, doors_locked = false, doors_alarmed = false, windows_closed = false;
 elapsedMillis doors_locked_timer = 0;
 uint8_t front_left_window_status = 0xFC, front_right_window_status = 0xFC, last_door_status = 0, sunroof_status = 0;
-elapsedMillis idrive_watchdog_timer = 3000, idrive_run_timer = 0;
-bool idrive_died = false;
+elapsedMillis hu_application_watchdog = 3000, idrive_run_timer = 0;
+bool hu_application_died = false;
 uint8_t zbe_buttons[] = {0xE1, 0xFD, 0, 0, 0, 1}, zbe_rotation[] = {0xE1, 0xFD, 0, 0, 0x80, 0x1E}, zbe_action_counter = 0;
 float indicated_speed = 0;
 bool speed_mph = false;

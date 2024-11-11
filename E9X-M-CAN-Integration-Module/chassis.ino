@@ -576,6 +576,9 @@ void evaluate_hdc_button(void) {
               kcan_write_msg(hdc_cc_activated_on_buf);
               serial_log("HDC activated with cruise control already ON.", 2);
             }
+            #if X_VIEW
+              show_xview_screen_a();
+            #endif
           }
         } else {
           serial_log("Car must be moving for HDC.", 2);
@@ -597,6 +600,36 @@ void evaluate_hdc_button(void) {
   } else {                                                                                                                          // Now receiving released (0xFC or 0xF4) messages from IHKA.
     hdc_button_pressed = false;
   }
+}
+
+
+void show_xview_screen_a(void) {
+  #if X_VIEW
+  if (diag_transmit) {
+    kcan2_write_msg(idrive_xview_menu_nbt_a_buf);
+    xview_menu_requested = true; 
+  }
+  #endif
+}
+
+
+void show_xview_screen_b_c(void) {
+  #if X_VIEW
+  if (xview_menu_requested) {
+    if (k_msg.buf[0] == 0xF1 && k_msg.buf[1] == 0x30) {
+      kcan2_write_msg(idrive_xview_menu_nbt_b_buf);
+      kcan2_write_msg(idrive_xview_menu_nbt_c_buf);
+      xview_menu_requested = false;
+      if (!hu_application_died) {
+        unsigned long time_now = millis();
+        m = {idrive_horn_sound_buf, time_now + 500};
+        idrive_txq.push(&m);
+      }
+    } else {
+      xview_menu_requested = false;
+    }
+  }
+  #endif
 }
 
 
@@ -686,21 +719,18 @@ void send_servotronic_message(void) {
 
 void send_servotronic_sport_plus(void) {
   if (engine_running == 2 && diag_transmit) {
-    // Safety checks
-    if (steering_angle >= -45.0 && steering_angle <= 45.0) {                                                                          // Should not engage/disengage when the steering is loaded up.
-      if (mdrive_status && mdrive_svt[cas_key_number] == 0xF2                                                                         // MDrive + SVT Sport+
-          && !reverse_gear_status && real_speed > 6.0) {                                                                              // Should not engage at low speeds or when parking.
-        if (svt70_pwm_control_timer >= 3000) {
-          ptcan_write_msg(svt70_zero_pwm_buf);                                                                                        // This message expires automatically after 15s.
-          svt70_sport_plus = true;
-          svt70_pwm_control_timer = 0;
-        }
-      } else if (svt70_sport_plus) {
-        if (svt70_pwm_control_timer >= 200) {
-          ptcan_write_msg(svt70_pwm_release_control_buf);
-          svt70_sport_plus = false;
-          svt70_pwm_control_timer = 0;
-        }
+    if (mdrive_status && mdrive_svt[cas_key_number] == 0xF2                                                                         // MDrive + SVT Sport+
+        && !reverse_gear_status && real_speed > 6.0) {                                                                              // Should not engage at low speeds or when parking.
+      if (svt70_pwm_control_timer >= 3000) {
+        ptcan_write_msg(svt70_zero_pwm_buf);                                                                                        // This message expires automatically after 15s.
+        svt70_sport_plus = true;
+        svt70_pwm_control_timer = 0;
+      }
+    } else if (svt70_sport_plus) {
+      if (svt70_pwm_control_timer >= 200) {
+        ptcan_write_msg(svt70_pwm_release_control_buf);
+        svt70_sport_plus = false;
+        svt70_pwm_control_timer = 0;
       }
     }
   }

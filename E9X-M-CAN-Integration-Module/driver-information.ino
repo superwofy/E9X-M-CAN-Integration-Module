@@ -4,7 +4,7 @@
 void shiftlight_startup_animation(void) {
   activate_shiftlight_segments(shiftlights_startup_buildup_buf);
   startup_animation_active = true;
-  serial_log("Showing shift light on engine startup.", 3);
+  serial_log("Showing shift light on engine startup.", 2);
   #if NEEDLE_SWEEP
     ignore_shiftlights_off_counter = 7;
   #else
@@ -14,31 +14,30 @@ void shiftlight_startup_animation(void) {
 
 
 void evaluate_shiftlight_display(void) {
-  if (START_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MID_UPSHIFT_WARN_RPM_) {                                                             // First yellow segment.                                                              
+  if ((START_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MID_UPSHIFT_WARN_RPM_)                                                              // First yellow segment.  
+       && e_throttle_pedal_position >= 20.0) {                                                                                      // Check pedal position in case it was released.                                         
     activate_shiftlight_segments(shiftlights_start_buf);
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Displaying first shiftlight warning at RPM: %d", RPM / 4);
-      serial_log(serial_debug_string, 3);
-    #endif                     
-  } else if (MID_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MAX_UPSHIFT_WARN_RPM_) {                                                        // Buildup from second yellow segment to reds.
+    sprintf(serial_debug_string, "Displaying first shiftlight warning at RPM: %d", RPM / 4);
+    serial_log(serial_debug_string, 2);
+  } else if ((MID_UPSHIFT_WARN_RPM_ <= RPM && RPM <= MAX_UPSHIFT_WARN_RPM_)                                                         // Buildup from second yellow segment to reds.
+              && e_throttle_pedal_position >= 20.0) {
     activate_shiftlight_segments(shiftlights_mid_buildup_buf);
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Displaying increasing shiftlight warning at RPM: %d", RPM / 4);
-      serial_log(serial_debug_string, 3);
-    #endif
-  } else if (MAX_UPSHIFT_WARN_RPM_ <= RPM) {                                                                                        // Flash all segments.
+    sprintf(serial_debug_string, "Displaying increasing shiftlight warning at RPM: %d", RPM / 4);
+    serial_log(serial_debug_string, 2);
+  } else if (MAX_UPSHIFT_WARN_RPM_ <= RPM && e_throttle_pedal_position >= 20.0) {                                                   // Flash all segments.
     activate_shiftlight_segments(shiftlights_max_flash_buf);
     if (GONG_UPSHIFT_WARN_RPM_ <= RPM) {
       play_cc_gong(1);                                                                                                              // Send an audible warning.
+      #if F_NBTE
+        send_cc_message("Shift UP now!", true, 2000);
+      #endif
     }
-    #if DEBUG_MODE
-      sprintf(serial_debug_string, "Flash max shiftlight warning at RPM: %d", RPM / 4);
-      serial_log(serial_debug_string, 2);
-    #endif
+    sprintf(serial_debug_string, "Flash max shiftlight warning at RPM: %d", RPM / 4);
+    serial_log(serial_debug_string, 2);
   } else {                                                                                                                          // RPM dropped. Disable lights.
     if (shiftlights_segments_active) {
       if (ignore_shiftlights_off_counter == 0) {
-        if (startup_animation_active) {
+        if (startup_animation_active) {                                                                                             // Will send the second part of the startup animation.
           activate_shiftlight_segments(shiftlights_max_flash_buf);
           #if NEEDLE_SWEEP
             ignore_shiftlights_off_counter = 10;
@@ -60,7 +59,7 @@ void evaluate_shiftlight_display(void) {
 void deactivate_shiftlights(void) {
   kcan_write_msg(shiftlights_off_buf);                                                                            
   shiftlights_segments_active = false;
-  serial_log("Deactivated shiftlight segments", 3);
+  serial_log("Deactivated shiftlight segments", 2);
 }
 
 
@@ -81,12 +80,10 @@ void evaluate_update_shiftlight_sync(void) {
       if (k_msg.buf[0] == 0x88) {                                                                                                   // DME is sending 6800 RPM.
         engine_coolant_warmed_up = true;
       }
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Set shiftlight RPMs to %d %d %d %d. Variable redline is at %d.", 
-                (START_UPSHIFT_WARN_RPM_ / 4), (MID_UPSHIFT_WARN_RPM_ / 4), 
-                (MAX_UPSHIFT_WARN_RPM_ / 4), (GONG_UPSHIFT_WARN_RPM_ / 4), (var_redline_position / 4));
-        serial_log(serial_debug_string, 3);
-      #endif
+      sprintf(serial_debug_string, "Set shiftlight RPMs to %d %d %d %d. Variable redline is at %d.", 
+              (START_UPSHIFT_WARN_RPM_ / 4), (MID_UPSHIFT_WARN_RPM_ / 4), 
+              (MAX_UPSHIFT_WARN_RPM_ / 4), (GONG_UPSHIFT_WARN_RPM_ / 4), (var_redline_position / 4));
+      serial_log(serial_debug_string, 3);
       last_var_rpm_can = k_msg.buf[0];
     }
   } else {
@@ -153,7 +150,7 @@ void needle_sweep_animation(void) {
     kombi_needle_txq.push(&m);
     m = {fuel_needle_release_buf, time_now + 3000};
     kombi_needle_txq.push(&m);
-    serial_log("Sending needle sweep animation.", 3);
+    serial_log("Sending needle sweep animation.", 2);
 
     #if F_NBTE
       send_nbt_sport_displays_data(true);
@@ -245,7 +242,7 @@ void evaluate_reverse_beep(void) {
       if (!reverse_beep_sent) {
         if (!pdc_too_close) {
           serial_log("Sending reverse beep.", 2);
-          if (!idrive_died) {
+          if (!hu_application_died) {
             #if F_NBTE
               kcan2_write_msg(idrive_beep_sound_buf);
             #else
@@ -352,9 +349,9 @@ void evaluate_pdc_bus_status(void) {
   if (pdc_bus_status != k_msg.buf[2]) {
     pdc_bus_status = k_msg.buf[2];
     if (pdc_bus_status > 0x80) {
-      serial_log("PDC ON.", 3);
+      serial_log("PDC ON.", 2);
     } else {
-      serial_log("PDC OFF.", 3);
+      serial_log("PDC OFF.", 2);
       #if F_VSW01 && F_VSW01_MANUAL
         vsw_switch_input(4);
       #endif
@@ -445,7 +442,7 @@ void evaluate_pdc_distance(void) {
     } else if (rvc_tow_view_by_module && pdc_bus_status == 0xA5) {
       if (rvc_action_timer >= 2000) {
         bitWrite(rvc_settings[0], 3, 0);                                                                                            // Set tow hitch view to OFF.
-        serial_log("Disabled camera tow view after inner sensors no longer RED.", 2);
+        serial_log("Disabled camera tow view after inner sensors no longer RED.", 3);
         CAN_message_t new_rvc_settings = make_msg_buf(0x38F, 4, rvc_settings);
         kcan_write_msg(new_rvc_settings);
         #if F_NBTE
@@ -541,7 +538,7 @@ void send_f_pdc_function_status(bool disable) {
 
 void send_nbt_sport_displays_data(bool startup_animation) {
   if (terminal_r) {
-    uint8_t nbt_sport_data[] = {0, 0, 0, 0xFF};
+    uint8_t nbt_sport_data[] = {0, 0, 0, 0xFF};                                                                                     // DISP_SW_DRDY_S - 6MC2DL0B pg. 1450.
     float max_power = 0, max_torque = 0, power_factor = 1, torque_factor = 1;                                                       // kW and Nm
     if (power_unit[cas_key_number] == 1) {
       nbt_sport_data[1] = MAX_POWER_SCALE_KW << 4;
@@ -600,7 +597,7 @@ void send_nbt_sport_displays_data(bool startup_animation) {
 }
 
 
-void process_bn2000_cc_display(void) {
+void process_bn2000_cc_display_list(void) {
   #if CUSTOM_MONITORING_CC
     if (k_msg.buf[0] == 0 && k_msg.buf[1] == 0 && k_msg.buf[2] == 0) {                                                              // Prevents clearing the list when turning ignition OFF and no CCs present.
       k_msg.buf[1] = 0x46;
@@ -629,13 +626,13 @@ void process_bn2000_cc_display(void) {
     } else if (k_msg.buf[i] == 0xA0 && k_msg.buf[i + 1] == 2) {
         k_msg.buf[i] = 0xFE;
         k_msg.buf[i + 1] = 0xFF;
-    } else if (k_msg.buf[i] == 0xA1 && k_msg.buf[i + 1] == 2) {                                                                     // DSC OFF ?
-        k_msg.buf[i] = 0xFE;
-        k_msg.buf[i + 1] = 0xFF;
+    } else if (k_msg.buf[i] == 0xA1 && k_msg.buf[i + 1] == 2) {                                                                     // DSC OFF warning converted to CC-901.
+        k_msg.buf[i] = 0x85;
+        k_msg.buf[i + 1] = 3;
     } else if (k_msg.buf[i] == 0xA2 && k_msg.buf[i + 1] == 2) {
         k_msg.buf[i] = 0xFE;
         k_msg.buf[i + 1] = 0xFF;
-    } else if (k_msg.buf[i] == 0x7E && k_msg.buf[i + 1] == 1) {                                                                     // CC 382 has no text description in NBTE, convert to 236.
+    } else if (k_msg.buf[i] == 0x7E && k_msg.buf[i + 1] == 1) {                                                                     // CC-382 has no text description in NBTE, convert to CC-236.
         k_msg.buf[i] = 0xEC;
         k_msg.buf[i + 1] = 0;
     }

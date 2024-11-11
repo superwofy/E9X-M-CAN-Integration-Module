@@ -96,6 +96,7 @@ Included are also tools to allow full manipulation of the program section in the
 * Have intermittent wipers work alongside rain sensing.
 	* Push the stalk down and hold for 1.3s to turn on intermittent mode.
 	* AUTO, stalk pushed up 1 and stalk pushed up 2 disable intermittent mode.
+* Control headlight washing after a number of windscreen wash/wipe cycles instead of the default JBE logic.
 * Enable use of FXX VSW01 (VideoSWitch) module.
 * Enable use of FXX NIVI2/3 module.
 * Enable diagnosis encoding and flashing through Tool32 and E-Sys for F series modules via J2534 passthru over D-CAN.
@@ -154,7 +155,7 @@ A serial interface with a set of commands is implemented to allow manipulation d
 Board: Teensy 4.0  
 Optimize: Faster with LTO  
 CPU Speed: 396 MHz  
-USB Type: Triple Serial for debugging, Single for normal operation.  
+USB Type: Single for normal operation, Dual for serial status and Triple Serial for CAN USB interface,   
 
 
 To make some startup time critical functions work, the following changes should be made to startup.c:  

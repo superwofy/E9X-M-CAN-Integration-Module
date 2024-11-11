@@ -13,16 +13,14 @@ void update_mdrive_message_settings_cic(void) {
       mdrive_edc[cas_key_number] = k_msg.buf[2];                                                                                    // 0x20(Unchanged), 0x21(Comfort) 0x22(Normal) 0x2A(Sport).
       mdrive_svt[cas_key_number] = k_msg.buf[4];                                                                                    // 0xE9 Normal, 0xF1 Sport, 0xEC/0xF4/0xE4 Reset. E0/E1-invalid?
 
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
-            mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
-        serial_log(serial_debug_string, 3);
-      #endif
+      sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
+          mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
+      serial_log(serial_debug_string, 3);
       
       update_mdrive_can_message();
       execute_mdrive_settings_changed_actions();
     }
-    send_mdrive_message();
+    mdrive_message_timer = 5000;
   }
 }
 
@@ -34,10 +32,8 @@ void evaluate_audio_volume_cic(void) {
       if (!volume_reduced) {
         if (peristent_volume != k_msg.buf[4]) {
           peristent_volume = k_msg.buf[4];
-          #if DEBUG_MODE
-            sprintf(serial_debug_string, "Received new audio volume: 0x%X.", k_msg.buf[4]);
-            serial_log(serial_debug_string, 3);
-          #endif
+          sprintf(serial_debug_string, "Received new audio volume: 0x%X.", k_msg.buf[4]);
+          serial_log(serial_debug_string, 3);
         }
         if (pdc_tone_on || gong_active) {                                                                                           // If PDC beeps are active, volume change has no effect.
           return;
@@ -63,10 +59,8 @@ void evaluate_audio_volume_cic(void) {
             idrive_txq.push(&m);
             volume_reduced = true;
             volume_changed_to = volume_change[4];                                                                                   // Save this value to compare when door is closed back.
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X.", volume_changed_to);
-              serial_log(serial_debug_string, 3);
-            #endif
+            sprintf(serial_debug_string, "Reducing audio volume with door open to: 0x%X.", volume_changed_to);
+            serial_log(serial_debug_string, 3);
           }
         }
       } else {
@@ -88,16 +82,12 @@ void evaluate_audio_volume_cic(void) {
             idrive_txq.push(&m);
             m = {make_msg_buf(0x6F1, 8, volume_change), time_now + 900};                                                            // Make sure the restore is received.
             idrive_txq.push(&m);
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X.", volume_change[4]);
-              serial_log(serial_debug_string, 3);
-            #endif
+            sprintf(serial_debug_string, "Restoring audio volume with door closed. to: 0x%X.", volume_change[4]);
+            serial_log(serial_debug_string, 3);
           } else {
             peristent_volume = k_msg.buf[4];                                                                                        // User changed volume while door was opened.
-            #if DEBUG_MODE
-              sprintf(serial_debug_string, "Volume changed by user while door was open to: 0x%X.", k_msg.buf[4]);
-              serial_log(serial_debug_string, 3);
-            #endif
+            sprintf(serial_debug_string, "Volume changed by user while door was open to: 0x%X.", k_msg.buf[4]);
+            serial_log(serial_debug_string, 3);
           }
           volume_reduced = false;
         }
@@ -106,10 +96,8 @@ void evaluate_audio_volume_cic(void) {
       uint8_t restore_last_volume[] = {0x63, 4, 0x31, 0x23, peristent_volume, 0, 0, 0};
       kcan_write_msg(make_msg_buf(0x6F1, 8, restore_last_volume));
       initial_volume_set = true;
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Sent saved initial volume (0x%X) to iDrive after receiving volume 0.", peristent_volume);     // 0 means that the vol knob wasn't used / initial job was not sent since iDrive boot.
-        serial_log(serial_debug_string, 2);
-      #endif
+      sprintf(serial_debug_string, "Sent saved initial volume (0x%X) to iDrive after receiving volume 0.", peristent_volume);       // 0 means that the vol knob wasn't used / initial job was not sent since iDrive boot.
+      serial_log(serial_debug_string, 2);
     }
   }
 }
@@ -120,10 +108,8 @@ void send_initial_volume_cic(void) {
     if (!initial_volume_set && diag_transmit) {
       uint8_t restore_last_volume[] = {0x63, 4, 0x31, 0x23, peristent_volume, 0, 0, 0};
       kcan_write_msg(make_msg_buf(0x6F1, 8, restore_last_volume));                                                                  // Set iDrive volume to last volume before sleep. This must run before any set volumes.
-      #if DEBUG_MODE
-        sprintf(serial_debug_string, "Sent saved sleep volume (0x%X) to iDrive after boot/reboot.", peristent_volume);
-        serial_log(serial_debug_string, 2);
-      #endif
+      sprintf(serial_debug_string, "Sent saved sleep volume (0x%X) to iDrive after boot/reboot.", peristent_volume);
+      serial_log(serial_debug_string, 2);
       initial_volume_set = true;
     }
   }
@@ -140,11 +126,9 @@ void send_dme_power_ckm(void) {
 
 void update_dme_power_ckm(void) {
   dme_ckm[cas_key_number][0] = k_msg.buf[0];
-  #if DEBUG_MODE
-    sprintf(serial_debug_string, "Received new POWER CKM setting: %s for key number %d", 
-            k_msg.buf[0] == 0xF1 ? "Normal" : "Sport", cas_key_number);
-    serial_log(serial_debug_string, 3);
-  #endif
+  sprintf(serial_debug_string, "Received new POWER CKM setting: %s for key number %d", 
+          k_msg.buf[0] == 0xF1 ? "Normal" : "Sport", cas_key_number);
+  serial_log(serial_debug_string, 3);
   send_dme_power_ckm();                                                                                                             // Acknowledge settings received from iDrive;
 }
 

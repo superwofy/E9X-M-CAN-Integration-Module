@@ -69,17 +69,13 @@ void scale_cpu_speed(void) {
       set_arm_clock(STANDARD_CLOCK);
     }
     clock_mode = 0;
-    #if DEBUG_MODE
-      max_loop_timer = 0;
-    #endif
+    max_loop_timer = 0;
   } else {
     if (F_CPU_ACTUAL != MAX_UNDERCLOCK) {
       set_arm_clock(MAX_UNDERCLOCK);                                                                                                // Reduce core clock.
     }
     clock_mode = 4;
-    #if DEBUG_MODE
-      max_loop_timer = 0;
-    #endif
+    max_loop_timer = 0;
   }
 }
 
@@ -137,10 +133,11 @@ void configure_flexcan(void) {
   if (filter_position_counter != filter_set_ok_counter) {
     sprintf(serial_debug_string, "PTCAN filter initialization failure %d != %d.",
             filter_set_ok_counter, filter_position_counter);
+    serial_log(serial_debug_string, 1);
   } else {
     sprintf(serial_debug_string, "PTCAN initialized with %d filter(s).", filter_position_counter);
+    serial_log(serial_debug_string, 2);
   }
-  serial_log(serial_debug_string, 2);
 
 
   // DCAN
@@ -150,7 +147,7 @@ void configure_flexcan(void) {
   DCAN.FLEXCAN_EnterFreezeMode();
   
   if (!DCAN.setFIFOFilter(0, 0x6F1, STD)) {                                                                                         // Diagnostic queries from OBD tool to forward.
-    serial_log("DCAN filter initialization failure.", 2);
+    serial_log("DCAN filter initialization failure.", 1);
   } else {
     serial_log("DCAN filter initialized.", 2);
   }
@@ -167,7 +164,7 @@ void configure_flexcan(void) {
 void configure_mcp2515(void) {
   #if F_NBTE
     if (CAN_OK != KCAN2.begin(MCP_STDEXT, CAN_500KBPS, MCP_16MHZ)) {
-      serial_log("Error initializing MCP2515 for KCAN2.", 2);
+      serial_log("Error initializing MCP2515 for KCAN2.", 1);
       return;
     } else {
       serial_log("MCP2515 initialized for KCAN2.", 2);
@@ -182,12 +179,12 @@ void deactivate_optional_transceivers(void) {
   if (ptcan_mode == 1) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
     ptcan_mode = 0;
-    serial_log("Deactivated PT-CAN transceiver.", 0);
+    serial_log("Deactivated PT-CAN transceiver.", 2);
   }
   if (dcan_mode == 1) {
     digitalWrite(DCAN_STBY_PIN, HIGH);
     dcan_mode = 0;
-    serial_log("Deactivated D-CAN transceiver.", 0);
+    serial_log("Deactivated D-CAN transceiver.", 2);
   }
   #if F_NBTE
     if (kcan2_mode == MCP_NORMAL) {
@@ -195,7 +192,7 @@ void deactivate_optional_transceivers(void) {
       kcan2_write_msg(dme_request_consumers_off_buf);
       kcan2_mode = MCP_SLEEP;
       KCAN2.setMode(kcan2_mode);
-      serial_log("Deactivated K-CAN2 transceiver.", 0);
+      serial_log("Deactivated K-CAN2 transceiver.", 2);
     }
   #endif
 }
@@ -205,20 +202,20 @@ void activate_optional_transceivers(void) {
   if (ptcan_mode == 0) {
     digitalWrite(PTCAN_STBY_PIN, LOW);
     ptcan_mode = 1;
-    serial_log("Activated PT-CAN transceiver.", 0);
+    serial_log("Activated PT-CAN transceiver.", 2);
   }
 
   if (dcan_mode == 0) {
     digitalWrite(DCAN_STBY_PIN, LOW);
     dcan_mode = 1;
-    serial_log("Activated D-CAN transceiver.", 0);
+    serial_log("Activated D-CAN transceiver.", 2);
   }
 
   #if F_NBTE
     if (kcan2_mode == MCP_SLEEP) {
       kcan2_mode = MCP_NORMAL;
       KCAN2.setMode(kcan2_mode);
-      serial_log("Activated K-CAN2 transceiver.", 0);
+      serial_log("Activated K-CAN2 transceiver.", 2);
     }
   #endif
 }
@@ -238,38 +235,30 @@ void check_teensy_cpu_clock(void) {                                             
     if (cpu_temp >= MILD_THRESHOLD) {
       if (clock_mode != 1) {
         set_arm_clock(MILD_UNDERCLOCK);
-        serial_log("Processor temperature above mild overheat threshold. Underclocking.", 0);
+        serial_log("Processor temperature above mild overheat threshold. Underclocking.", 1);
         clock_mode = 1;
-        #if DEBUG_MODE
-          max_loop_timer = 0;
-        #endif
+        max_loop_timer = 0;
       }
     } else if (cpu_temp >= MEDIUM_THRESHOLD) {
       if (clock_mode != 2) {
         set_arm_clock(MEDIUM_UNDERCLOCK);
-        serial_log("Processor temperature above medium overheat threshold. Underclocking.", 0);
+        serial_log("Processor temperature above medium overheat threshold. Underclocking.", 1);
         clock_mode = 2;
-        #if DEBUG_MODE
-          max_loop_timer = 0;
-        #endif
+        max_loop_timer = 0;
       }
     } else if (cpu_temp >= HIGH_THRESHOLD) {
       if (clock_mode != 3) {
         set_arm_clock(HIGH_UNDERCLOCK);
-        serial_log("Processor temperature above high overheat threshold. Underclocking.", 0);
+        serial_log("Processor temperature above high overheat threshold. Underclocking.", 1);
         clock_mode = 3;
-        #if DEBUG_MODE
-          max_loop_timer = 0;
-        #endif
+        max_loop_timer = 0;
       }
     } else if (cpu_temp >= MAX_THRESHOLD) {
       if (clock_mode != 4) {
         set_arm_clock(MAX_UNDERCLOCK);
-        serial_log("Processor temperature above max overheat threshold. Underclocking.", 0);
+        serial_log("Processor temperature above max overheat threshold. Underclocking.", 1);
         clock_mode = 4;
-        #if DEBUG_MODE
-          max_loop_timer = 0;
-        #endif
+        max_loop_timer = 0;
         #if F_NBTE
           send_cc_message("Teensy CPU above crtitical temperature!", true, 20000);
         #endif
@@ -277,11 +266,9 @@ void check_teensy_cpu_clock(void) {                                             
     } else {
       if (clock_mode != 0) {
         set_arm_clock(STANDARD_CLOCK);
-        serial_log("Restored standard clock speed.", 0);
+        serial_log("Restored standard clock speed.", 2);
         clock_mode = 0;
-        #if DEBUG_MODE
-          max_loop_timer = 0;
-        #endif
+        max_loop_timer = 0;
       }
     }
   }
@@ -291,7 +278,7 @@ void check_teensy_cpu_clock(void) {                                             
 
 void disable_diag_transmit_jobs(void) {                                                                                             // Without this, other KWP jobs sent by Ediabas will receive strange reponse codes.
   if (diag_transmit && diag_timeout_active) {
-    serial_log("Detected OBD port diagnosis request. Pausing module initiated KWP/UDS jobs.", 0);
+    serial_log("Detected OBD port diagnosis request. Pausing module initiated KWP/UDS jobs.", 2);
     diag_transmit = false;
     #if F_NBTE
       char diag_cc_string[46] = {' '};
@@ -311,7 +298,7 @@ void check_diag_transmit_status(void) {
   if (!diag_transmit) {
     if (diag_deactivate_timer >= OBD_DETECT_TIMEOUT) {                                                                              // Re-activate after period of no DCAN requests.
       diag_transmit = true;
-      serial_log("Resuming diagnostic jobs after timeout.", 0);
+      serial_log("Resuming diagnostic jobs after timeout.", 2);
     }
   }
 }

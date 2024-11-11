@@ -40,6 +40,7 @@ void read_initialize_eeprom(void) {
     EEPROM.update(29, 0);                                                                                                           // Un-fold exterior mirrors when unlocking
     EEPROM.update(30, 1);                                                                                                           // Immobilizer
     EEPROM.update(31, 1);
+    EEPROM.update(32, 5);                                                                                                           // Wash-wipe cycles for headlight washing
     EEPROM.update(33, 0x10);                                                                                                        // CIC persistent volume
     EEPROM.update(34, 0);                                                                                                           // Visual acknowledge CKM
     EEPROM.update(35, 0);
@@ -56,7 +57,7 @@ void read_initialize_eeprom(void) {
     EEPROM.update(46, 9);                                                                                                           // Pressure units and date format.
     EEPROM.update(47, 9);
     EEPROM.update(48, 9);
-    EEPROM.update(49, 4);                                                                                                           // Loglevel
+    EEPROM.update(49, LOGLEVEL);                                                                                                    // Loglevel
     EEPROM.update(50, 5);                                                                                                           // IHKA auto states
     EEPROM.update(51, 3);
     EEPROM.update(52, 0);
@@ -76,12 +77,12 @@ void read_initialize_eeprom(void) {
     mdrive_power[2] = EEPROM.read(15);
     mdrive_edc[2] = EEPROM.read(16);
     mdrive_svt[2] = EEPROM.read(17);
-    #if !F_NBTE                                                                                                                      // NBT does not have M-Key settings.
+    #if !F_NBTE                                                                                                                     // NBT does not have M-Key settings.
       dme_ckm[0][0] = EEPROM.read(20);
       dme_ckm[1][0] = EEPROM.read(21);
       dme_ckm[2][0] = EEPROM.read(22);
     #else
-      torque_unit[0] = EEPROM.read(23);
+      torque_unit[0] = EEPROM.read(23);                                                                                             // Normally these values come from the DME. See 6MC2DL0B pg. 1353.
       power_unit[0] = EEPROM.read(24);
       torque_unit[1] = EEPROM.read(25);
       power_unit[1] = EEPROM.read(26);
@@ -94,6 +95,7 @@ void read_initialize_eeprom(void) {
     unfold_with_door_open = EEPROM.read(29) == 1 ? true : false;
     immobilizer_released = EEPROM.read(30) == 1 ? true : false;
     immobilizer_persist = EEPROM.read(31) == 1 ? true : false;
+    wash_wipe_cycles = EEPROM.read(32);
     if (!immobilizer_persist) {
       immobilizer_released = true;                                                                                                  // Deactivate immobilizer at boot if this value is set.
     }
@@ -167,6 +169,7 @@ void update_data_in_eeprom(void) {                                              
     EEPROM.update(48, pressure_unit_date_format[2]);
   #endif
   EEPROM.update(29, unfold_with_door_open);
+  EEPROM.update(32, wash_wipe_cycles);
   #if DOOR_VOLUME && !F_NBTE
     EEPROM.update(33, peristent_volume);
   #endif
@@ -187,6 +190,8 @@ void update_data_in_eeprom(void) {                                              
   EEPROM.update(52, ihka_recirc_state);
   EEPROM.update(53, ihka_auto_distr_state);
   update_eeprom_checksum();
+  serial_log("Saved settings persistently to EEPROM.", 4);
+  eeprom_update_timer = 0;
 }
 
 
@@ -291,8 +296,8 @@ void print_current_state(Stream &status_serial) {
     status_serial.println(serial_debug_string);
   #endif
   #if F_NBTE || F_NIVI || MIRROR_UNDIM
-    sprintf(serial_debug_string, " Outside brightness: 0x%X, %s.", rls_brightness, 
-            rls_time_of_day == 0 ? "Daytime" : rls_time_of_day == 1 ? "Twilight" : "Darkness");
+    sprintf(serial_debug_string, " Outside brightness: 0x%X, time of day: %d %s.", rls_brightness, rls_time_of_day,
+            rls_time_of_day == 0 ? "Daytime" : rls_time_of_day == 2 ? "Darkness" : "Other");
     status_serial.println(serial_debug_string);
   #endif
   #if IMMOBILIZER_SEQ
@@ -382,6 +387,10 @@ void print_current_state(Stream &status_serial) {
     sprintf(serial_debug_string, " Passenger's seat heating: %s, occupied: %s, seatbelt fastened: %s", 
             passenger_seat_heating_status ? "ON" : "OFF", bitRead(passenger_seat_status, 0) ? "YES" : "NO",
             bitRead(passenger_seat_status, 3) ? "YES" : "NO");
+    status_serial.println(serial_debug_string);
+  #endif
+  #if HEADLIGHT_WASHING
+    sprintf(serial_debug_string, " Wash-wipe cycle counter: %d", wash_wipe_cycles);
     status_serial.println(serial_debug_string);
   #endif
   #if HOOD_OPEN_GONG
@@ -474,28 +483,26 @@ void print_current_state(Stream &status_serial) {
 
 
 void serial_log(const char message[], uint8_t level) {
-  #if DEBUG_MODE
-    if (millis() <= 10000 && !Serial.dtr()) {                                                                                       // Store early messages that won't be on the Serial monitor.
-      char buffer[256];
-      if (micros() < 1000) {
-        snprintf(buffer, sizeof(buffer), " %ld μs: %s\r\n", micros(), message);
-      } else if (millis() < 100) {
-        snprintf(buffer, sizeof(buffer), " %.2f ms: %s\r\n", micros() / 1000.0, message);
-      } else {
-        snprintf(buffer, sizeof(buffer), " %ld ms: %s\r\n", millis(), message);
-      }
-      if (strlen(boot_debug_string) + strlen(buffer) < sizeof(boot_debug_string)) {
-        strcat(boot_debug_string, buffer);
+  if (millis() <= 10000 && !Serial.dtr()) {                                                                                         // Store early messages that won't be on the Serial monitor.
+    char buffer[256];
+    if (micros() < 1000) {
+      snprintf(buffer, sizeof(buffer), " %ld μs: %s\r\n", micros(), message);
+    } else if (millis() < 100) {
+      snprintf(buffer, sizeof(buffer), " %.2f ms: %s\r\n", micros() / 1000.0, message);
+    } else {
+      snprintf(buffer, sizeof(buffer), " %ld ms: %s\r\n", millis(), message);
+    }
+    if (strlen(boot_debug_string) + strlen(buffer) < sizeof(boot_debug_string)) {
+      strcat(boot_debug_string, buffer);
+    }
+  }
+  if (!clearing_dtcs) {
+    if (level <= LOGLEVEL) {
+      if (Serial.dtr()) {
+        Serial.println(message);
       }
     }
-    if (!clearing_dtcs) {
-      if (level <= LOGLEVEL) {
-        if (Serial.dtr()) {
-          Serial.println(message);
-        }
-      }
-    }
-  #endif
+  }
 }
 
 
@@ -509,6 +516,7 @@ void reset_ignition_variables(void) {                                           
   ignore_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
   mdrive_settings_requested = false;
+  xview_menu_requested = false;
   m_mfl_held_count = 0;
   uif_read = false;
   console_power_mode = dme_ckm[cas_key_number][0] == 0xF1 ? false : true;                                                           // When cycling ignition, restore this to its CKM value.
@@ -612,6 +620,7 @@ void reset_sleep_variables(void) {
   wiper_txq.flush();
   wash_message_counter = wiper_stalk_down_message_counter = wiper_stalk_down_last_press_time = 0;
   indicator_stalk_pushed_message_counter = 0;
+  track_wash_wipe_cycle = false;
   wipe_scheduled = intermittent_wipe_active = false, auto_wipe_active = false;
   frm_mirror_status_requested = false;
   frm_ahl_flc_status_requested = false;

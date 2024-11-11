@@ -82,11 +82,11 @@ BO_ 2147484003 TLT_RW: 8 ICMQL
    SG_ QU_AVL_LOGR_RW : 28|4@1+ (1,0) [0|1] "" Vector__XXX
    SG_ QU_AVL_TRGR_RW : 44|4@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484243 SPT_ANZ: 8 DME_DDE
-   SG_ Torque : 0|8@1+ (1,0) [0|100] "%" Vector__XXX
-   SG_ Power : 16|8@1+ (1,0) [0|100] "%" Vector__XXX
-   SG_ Torque_Scale : 8|4@1+ (80,80) [0|1] "kgf/nm/lbft" Vector__XXX
-   SG_ Power_Scale : 12|4@1+ (80,80) [0|1] "kW/bhp" Vector__XXX
+BO_ 2147484243 DISP_SW_DRDY_S: 8 DME_DDE
+   SG_ DISP_S_ENG_TORQ : 0|8@1+ (1,0) [0|100] "%" Vector__XXX
+   SG_ DISP_S_ENG_PWR : 16|8@1+ (1,0) [0|100] "%" Vector__XXX
+   SG_ DISP_S_ENG_TORQ_BS_SCAL_VL : 8|4@1+ (80,80) [0|1] "kgf/nm/lbft" Vector__XXX
+   SG_ DISP_S_ENG_PWR_BS_SCAL_VL : 12|4@1+ (80,80) [0|1] "kW/bhp" Vector__XXX
 
 BO_ 2147484725 MEASMT_EOI: 4 DME_DDE
    SG_ FLLV_EOI_REL : 12|4@1+ (1,0) [0|1] "" Vector__XXX
@@ -110,9 +110,9 @@ BO_ 2147484576 FZZSTD: 8 JBBF_FEM_BDC
    SG_ ST_ILK_ERRM_FZM : 56|2@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484563 LCD_BRIG_CLCTR: 4 KOMBI
-   SG_ DSTN_LCD_LUM : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DSTN_LCD_LUM : 0|8@1+ (0.3937,0) [0|100] "%" Vector__XXX
    SG_ DAY_NIGHT : 24|2@1+ (1,0) [0|1] "" Vector__XXX
-   SG_ DMPNG_LCD_LUM : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DMPNG_LCD_LUM : 8|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147483865 ANG_ACPD: 8 DME_DDE
    SG_ ST_ECU_ANG_ACPD : 12|4@1+ (1,0) [0|1] "" Vector__XXX
@@ -223,15 +223,19 @@ BO_ 2147484411 RQ_VSW: 8 HU
 BO_ 2147484413 ST_VSW: 8 VSW
    SG_ ST_VSWSig39 : 0|4@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484719 SET_MDRIVE: 5 HU
-   SG_ DSC : 0|4@1+ (1,0) [0|1] "" Vector__XXX
-   SG_ Engine : 12|4@1+ (1,0) [0|1] "" Vector__XXX
-   SG_ Suspension : 16|4@1+ (1,0) [0|1] "" Vector__XXX
-   SG_ Steering : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+BO_ 2147484719 CONFIG_MDRV_2: 8 HU
+   SG_ CONF_MDRV_2_DSC : 0|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_ENG : 12|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_EDC : 16|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_EPAS : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_SRST : 32|8@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484718 ST_MDRV: 8 DME_DDE
-   SG_ DSC : 8|4@1+ (1,0) [0|1] "" Vector__XXX
-   SG_ Engine : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+BO_ 2147484718 ST_MDRV_2: 8 DME_DDE
+   SG_ ST_MDRV_2_DSC : 8|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_MDRV_2_ENG : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_MDRV_2_EDC : 24|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_MDRV_2_EPAS : 28|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_MDRV_2_ALIV : 0|4@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484397 ST_VHSS: 3 DSC_SAS
    SG_ ST_VEHSS : 16|8@1+ (1,0) [0|1] "" Vector__XXX
@@ -246,6 +250,10 @@ BO_ 2147484380 ST_VEHSS_PBRK: 3 EMF
    SG_ ST_VEHSS_PBRK_2 : 17|1@1+ (1,0) [0|1] "" Vector__XXX
    SG_ ST_VEHSS_PBRK_3 : 18|1@1+ (1,0) [0|1] "" Vector__XXX
    SG_ ST_VEHSS_PBRK_4 : 20|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484407 Status_Units: 6 KOMBI
+
+BO_ 2147484305 Config_Units: 8 HU
 
 CM_ BO_ 2147484063 "Vehicle_Yaw_Rate";
 CM_ SG_ 2147484063 VYAW_VEH "Vehicle_Yaw_Rate";
@@ -284,11 +292,11 @@ CM_ SG_ 2147484003 AVL_LOGR_RW "Roadway_longitudinal_inclination";
 CM_ SG_ 2147484003 AVL_TRGR_RW "Roadway_lateral_inclination";
 CM_ SG_ 2147484003 QU_AVL_LOGR_RW "Qualifier_Roadway_longitudinal_inclination";
 CM_ SG_ 2147484003 QU_AVL_TRGR_RW "Qualifier_Roadway_lateral_inclination";
-CM_ BO_ 2147484243 "Sports_Displays";
-CM_ SG_ 2147484243 Torque "Engine_torque_percentage";
-CM_ SG_ 2147484243 Power "Engine_power_percentage";
-CM_ SG_ 2147484243 Torque_Scale "Max_Torque";
-CM_ SG_ 2147484243 Power_Scale "Max_Power";
+CM_ BO_ 2147484243 "Display Driving Dynamics Sport";
+CM_ SG_ 2147484243 DISP_S_ENG_TORQ "Engine_torque_percentage";
+CM_ SG_ 2147484243 DISP_S_ENG_PWR "Engine_power_percentage";
+CM_ SG_ 2147484243 DISP_S_ENG_TORQ_BS_SCAL_VL "Max_Torque";
+CM_ SG_ 2147484243 DISP_S_ENG_PWR_BS_SCAL_VL "Max_Power";
 CM_ BO_ 2147484725 "Engine_oil_measurement";
 CM_ SG_ 2147484725 FLLV_EOI_REL "Relative_engine_oil_level";
 CM_ BO_ 2147484665 "Drivetrain_data_2";
@@ -307,8 +315,8 @@ CM_ SG_ 2147484665 RPM_ENG_MAX_ALW "Maximum_Engine_Speed_Allowed";
 CM_ BO_ 2147484576 "Status_Vehicle_Energy_Condition";
 CM_ SG_ 2147484576 ST_ILK_ERRM_FZM "Status_Lock_Error_Memory_FZM";
 CM_ BO_ 2147484563 "LCD_brightness_control";
-CM_ SG_ 2147484563 DSTN_LCD_LUM "Target_LCD_luminance";
-CM_ SG_ 2147484563 DMPNG_LCD_LUM "attenuation_LCD_luminance";
+CM_ SG_ 2147484563 DSTN_LCD_LUM "Target_LCD_luminance_0xFF_-_invalid";
+CM_ SG_ 2147484563 DMPNG_LCD_LUM "Attenuation_LCD_luminance:_0..240_=_fast..slow";
 CM_ BO_ 2147483865 "Accelerator_pedal_angle";
 CM_ SG_ 2147483865 ST_ECU_ANG_ACPD "Status_control_unit_of_Accelerator_Pedal_Angle";
 CM_ SG_ 2147483865 AVL_ANG_ACPD "Actual_angle_accelerator_pedal";
@@ -378,8 +386,13 @@ CM_ SG_ 2147484595 ST_ENERG_PWMG "Status_Energy_Powermanagement";
 CM_ BO_ 2147484298 "Status Night-Vision Button";
 CM_ BO_ 2147484411 "VSW switch request";
 CM_ BO_ 2147484413 "Status VSW position";
-CM_ BO_ 2147484719 "MDrive settings";
-CM_ BO_ 2147484718 "Status MDrive";
+CM_ BO_ 2147484719 "Configuration MDrive 2";
+CM_ SG_ 2147484719 CONF_MDRV_2_SRST "Set,_Reset_to_default_M_Drive_2_configuration";
+CM_ BO_ 2147484718 "Status MDrive 2";
+CM_ SG_ 2147484718 ST_MDRV_2_DSC "Stability_Control";
+CM_ SG_ 2147484718 ST_MDRV_2_ENG "Throttle_map_and_exhaust_valve";
+CM_ SG_ 2147484718 ST_MDRV_2_EDC "Electronic_Damper_Control";
+CM_ SG_ 2147484718 ST_MDRV_2_EPAS "Servotronic";
 CM_ BO_ 2147484397 "Vehicle standstill status";
 CM_ SG_ 2147484397 ST_VEHSS "Status_Vehicle_Standstill";
 CM_ BO_ 2147484380 "Vehicle standstill status parking brake";
@@ -422,8 +435,8 @@ VAL_ 2147484665 RLS_ENGSTA 0 "no_engine_start" 1 "delay_engine_start" 2 "allow_e
 VAL_ 2147484665 RDUC_DOCTR_RPM_DRV_2 0 "OK" 1 "small_reduction_in_the_cut-off_speed" 2 "large_reduction_in_the_cut-off_speed" 3 "signal_invalid";
 VAL_ 2147484576 ST_ENERG_FZM 0 "ENSTATE_GOOD" 1 "ENSTATE_OK" 2 "ENSTATE_SHORTAGE" 3 "ENSTATE_SEVERE_SHORTAGE" 15 "Signal_invalid";
 VAL_ 2147484576 ST_ILK_ERRM_FZM 0 "Error_memory_unlocked_-_entry_of_errors_without_restrictions" 1 "Error_memory_lock_-_network_error_area_is_to_be_locked" 2 "Reserved" 3 "Signal_invalid";
-VAL_ 2147484563 DSTN_LCD_LUM 255 "Signal_invalid";
 VAL_ 2147484563 DAY_NIGHT 1 "Daytime" 2 "Night";
+VAL_ 2147484563 DMPNG_LCD_LUM 241 "Erratic" 242 "Erratic" 243 "Erratic" 244 "Erratic" 245 "Erratic" 246 "Erratic" 247 "Erratic" 248 "Erratic" 249 "Erratic" 250 "Erratic" 251 "Erratic" 252 "Erratic" 253 "Erratic" 254 "Erratic" 255 "Invalid";
 VAL_ 2147483865 ST_ECU_ANG_ACPD 0 "Initialization_state" 1 "Normal_operation_state" 15 "Signal_invalid";
 VAL_ 2147483865 QU_AVL_ANG_ACPD 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Substitute_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Substitute_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
 VAL_ 2147483865 ST_INTF_DRASY 0 "No_accelerator_pedal_(driver)_request,_no_FAS_request" 1 "Accelerator_pedal_(driver)_request,_no_FAS_request" 2 "No_accelerator_pedal_(driver)_request,_FAS_request" 3 "Accelerator_pedal_(driver)_request_greater_than_FAS_request" 7 "Accelerator_pedal_(driver)_request_less_than_FAS_request" 8 "Initialization" 15 "Signal_invalid";
@@ -488,12 +501,16 @@ VAL_ 2147484595 ST_ENERG_PWMG 1 "Switching_off_terminal_30_F." 2 "No_stationary_
 VAL_ 2147484595 CTR_PWRU_COS 15 "Signal_invalid";
 VAL_ 2147484298 OP_PUBU_NIVI 0 "Button_released" 1 "Button_pressed";
 VAL_ 2147484411 RQ_VSW 0 "Off" 1 "Input_3" 3 "Input_1" 4 "Input_4";
-VAL_ 2147484719 DSC 1 "OFF" 2 "ON" 3 "MDM" 0 "Unset";
-VAL_ 2147484719 Engine 1 "Efficient" 2 "Sport" 3 "Sport+" 0 "Unset";
-VAL_ 2147484719 Suspension 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset";
-VAL_ 2147484719 Steering 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset";
-VAL_ 2147484718 DSC 1 "OFF" 2 "ON" 3 "MDM";
-VAL_ 2147484718 Engine 1 "Efficient" 2 "Sport" 3 "Sport+";
+VAL_ 2147484719 CONF_MDRV_2_DSC 1 "OFF" 2 "ON" 3 "MDM" 0 "Unset";
+VAL_ 2147484719 CONF_MDRV_2_ENG 1 "Efficient" 2 "Sport" 3 "Sport+" 0 "Unset";
+VAL_ 2147484719 CONF_MDRV_2_EDC 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset";
+VAL_ 2147484719 CONF_MDRV_2_EPAS 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset";
+VAL_ 2147484719 CONF_MDRV_2_SRST 202 "Set" 224 "Reset" 200 "Set" 240 "Ping";
+VAL_ 2147484718 ST_MDRV_2_DSC 1 "OFF" 2 "ON" 3 "MDM";
+VAL_ 2147484718 ST_MDRV_2_ENG 1 "Efficient" 2 "Sport" 3 "Sport+";
+VAL_ 2147484718 ST_MDRV_2_EDC 1 "Comfort" 2 "Sport" 3 "Sport+";
+VAL_ 2147484718 ST_MDRV_2_EPAS 1 "Comfort" 2 "Sport" 3 "Sport+";
+VAL_ 2147484718 ST_MDRV_2_ALIV 15 "Invalid";
 VAL_ 2147484397 ST_VEHSS 128 "Initialization" 255 "Signal_invalid";
 VAL_ 2147484397 ST_VEHSS_1 1 "Vehicle_mechanically_secured";
 VAL_ 2147484397 ST_VEHSS_2 1 "Vehicle_secured_by_drivetrain";

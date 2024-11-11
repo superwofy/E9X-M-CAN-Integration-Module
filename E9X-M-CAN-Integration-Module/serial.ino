@@ -1,7 +1,7 @@
 // Functions that allow the user to send commands to the program go here.
 
 
-void serial_debug_interpreter(void) {
+void serial_command_interpreter(void) {
   String cmd = Serial.readStringUntil('\n', 64);                                                                                    // Limit command the size to prevent overflow. NULL terminator not included.
   if (serial_commands_unlocked) {                                                                                                   // In the unlikely event someone picks up the USB cable and starts sending things.
     if (cmd == "lock_serial") {
@@ -16,7 +16,7 @@ void serial_debug_interpreter(void) {
       diag_transmit = true;
       serial_log("  Serial: OBD tool detection timeout disabled for the current session! Sleep/Reboot to reset.", 0);
     }
-    else if (cmd == "loglevel_0") {
+    else if (cmd == "loglevel_serial") {
       LOGLEVEL = 0;
       serial_log("  Serial: LOGLEVEL set to 0.", 0);
     }
@@ -220,7 +220,7 @@ void serial_debug_interpreter(void) {
     #endif
     else if (cmd == "toggle_mdrive") {
       toggle_mdrive_message_active();
-      send_mdrive_message();
+      mdrive_message_timer = 5000;
       toggle_mdrive_dsc_mode(); 
     }
     else if (cmd == "reset_eeprom") {
@@ -232,7 +232,7 @@ void serial_debug_interpreter(void) {
       wdt.reset();
     } 
     else if (cmd == "reset_mdrive") {
-      if (LOGLEVEL >= 2) {
+      if (LOGLEVEL >= 3) {
         Serial.print("  Serial: ");
       } else {
         serial_log("  Serial: Reset MDrive settings.", 0);
@@ -295,7 +295,7 @@ void serial_debug_interpreter(void) {
     else if (cmd == "startup_animation") {
       if (ignition) {
         #if CONTROL_SHIFTLIGHTS
-          if (LOGLEVEL >= 3) {
+          if (LOGLEVEL >= 2) {
             Serial.print("  Serial: ");
           } else {
             serial_log("  Serial: Showing shift light on engine startup.", 0);
@@ -304,7 +304,7 @@ void serial_debug_interpreter(void) {
         #endif
         #if NEEDLE_SWEEP
           if (diag_transmit) {
-            if (LOGLEVEL >= 3) {
+            if (LOGLEVEL >= 2) {
               Serial.print("  Serial: ");
             } else {
               serial_log("  Serial: Sending needle sweep animation.", 0);
@@ -352,6 +352,20 @@ void serial_debug_interpreter(void) {
         serial_log("  Serial: Sent undim request.", 0);
       } else {
         obd_timeout_warning();
+      }
+    }
+    #endif
+    #if HEADLIGHT_WASHING
+    else if (cmd == "wash_headlights") {
+      if (ignition) {
+        if (diag_transmit) {
+          kcan_write_msg(jbe_headlight_washer_buf);
+          serial_log("  Serial: Sent headlight washer request.", 0);
+        } else {
+          obd_timeout_warning();
+        }
+      } else {
+        serial_log("  Serial: Activate ignition first.", 0);
       }
     }
     #endif
@@ -404,7 +418,7 @@ void serial_debug_interpreter(void) {
                 alarm_warnings_txq.drop();
               }
             }
-            idrive_watchdog_timer = 0;
+            hu_application_watchdog = 0;
             execute_alarm_after_stall();
             serial_log("  Serial: Stall alarm tripped. Deactivate with IMMOBILIZER_SEQ process.", 0);
           } else {
@@ -588,7 +602,7 @@ void print_help(void) {
   "  Commands:\r\n"
   "  lock_serial - Restores the password prompt before accepting serial commands.\r\n"
   "  bypass_diag - Bypass the OBD tool detection timeout for currrent session. Use with care!\r\n"
-  "  loglevel_0 - Sets LOGLEVEL to 0 - critical.\r\n"
+  "  loglevel_serial - Sets LOGLEVEL to 0 - serial only.\r\n"
   "  loglevel_1 - Sets LOGLEVEL to 1 - error.\r\n"
   "  loglevel_2 - Sets LOGLEVEL to 2 - info.\r\n"
   "  loglevel_3 - Sets LOGLEVEL to 3 - extra_info.\r\n"
@@ -633,6 +647,9 @@ void print_help(void) {
   #endif
   #if MIRROR_UNDIM
     serial_log("  undim_mirrors - Undim electrochromic exterior mirrors.", 0);
+  #endif
+  #if HEADLIGHT_WASHING
+    serial_log("  wash_headlights - Activates the headlight washer relay.", 0);
   #endif
   #if IMMOBILIZER_SEQ
     serial_log("  release_immobilizer - Deactivates the EKP immobilizer.\r\n"

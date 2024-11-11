@@ -123,28 +123,25 @@ MSA                                                                     // Activ
 
 
 
-# SVT 70: E70 X5M params
+# SVT 70: Scaled E92 M3 parameters. Steering angle current change disabled.
+# see "SVT70 parameter value explanations.txt"
 
-KENNLINIEN1_3_NORM
-    wert_07
-KENNLINIEN1_3_SPORT
-    wert_02
-    wert_03
-    wert_04
-KENNLINIEN4_6_NORM
-    wert_07
-KENNLINIEN4_6_SPORT
-    wert_02
-    wert_03
-    wert_04
-REGLERPARAMETER
-    wert_01
-STUETZSTELLEN_V_LW
-    wert_01
-WANDLERKENNLINIE
-    wert_01
 BETRIEBSWERTE
     wert_01
+REGLERPARAMETER
+    wert_01
+WANDLERKENNLINIE
+    00,3C,59,7C,A3,B2,C1,FF,00,00,00,00,00,00,00,00,00,00,00,C8,01,2C,01,A4,02,26,02,58,02,8A,03,5C
+STUETZSTELLEN_V_LW
+    00,00,00,32,00,96,01,2C,01,C2,02,58,03,20,03,E8,04,B0,07,D0,00,00,00,1E,00,78,02,58,04,B0,07,08
+KENNLINIEN1_3_NORM
+    ED,E9,AD,8D,83,7D,72,5E,14,00,ED,E9,AD,8D,83,7D,72,5E,14,00,ED,E9,AD,8D,83,7D,72,5E,14,00,00,00
+KENNLINIEN4_6_NORM
+    FF,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,00,00
+KENNLINIEN1_3_SPORT
+    ED,E9,9C,80,72,6B,54,30,01,00,ED,E9,9C,80,72,6B,54,30,01,00,ED,E9,9C,80,72,6B,54,30,01,00,00,00
+KENNLINIEN4_6_SPORT
+    FF,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,00,00
 
 
 
@@ -158,7 +155,8 @@ DSC_SWITCH                                                              // Disab
     nicht_aktiv
 RPA_SWITCH                                                              // Enables the Flat tyre monitor reset button.
     aktiv
-
+SCHEINWERFERREININUNG                                                   // Disables the built in logic for headlight cleaning.
+    nicht_aktiv
 
 
 # FRM
