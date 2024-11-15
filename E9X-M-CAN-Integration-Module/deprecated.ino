@@ -17,10 +17,10 @@ void update_mdrive_message_settings_cic(void) {
           mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
       serial_log(serial_debug_string, 3);
       
-      update_mdrive_can_message();
+      update_mdrive_settings_can_message();
       execute_mdrive_settings_changed_actions();
     }
-    mdrive_message_timer = 5000;
+    mdrive_message_bn2000_timer = 10000;
   }
 }
 

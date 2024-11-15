@@ -147,7 +147,7 @@ void check_hu_application_alive_monitor(void) {
           hu_application_died = false;
           serial_log("iDrive application running again.", 2);
           kcan2_write_msg(f_lights_ckm_delayed_msg);
-          mdrive_message_timer = 5000;
+          mdrive_message_bn2000_timer = mdrive_message_bn2010_timer = 10000;
         }
       }
   #if F_NBTE
@@ -238,7 +238,7 @@ void evaluate_nbt_vin_response(void) {
       receiving_donor_vin = false;
       requested_donor_vin = false;
       donor_vin_initialized = true;
-      sprintf(serial_debug_string, "Received NBT donor VIN: %c%c%c%c%c%c%c.", DONOR_VIN[0], DONOR_VIN[1], DONOR_VIN[2],
+      sprintf(serial_debug_string, "Received HU donor VIN: %c%c%c%c%c%c%c.", DONOR_VIN[0], DONOR_VIN[1], DONOR_VIN[2],
                                     DONOR_VIN[3], DONOR_VIN[4], DONOR_VIN[5], DONOR_VIN[6]);
       serial_log(serial_debug_string, 3);
     }
@@ -530,11 +530,9 @@ void evaluate_cc_gong_status(void) {
 
 
 void evaluate_idrive_units(void) {
-  uint8_t new_language = k_msg.buf[0],
-          new_temperature_unit = 0, new_time_format = 0,
-          new_distance_unit = k_msg.buf[2] >> 4, new_consumption_unit = k_msg.buf[2] & 0xF,
-          new_pressure_unit = 0, new_date_format = 0,
-          new_torque_unit = k_msg.buf[4] >> 4, new_power_unit = k_msg.buf[4] & 0xF;
+  uint8_t new_language = k_msg.buf[0], new_temperature_unit = 0, new_time_format = 0,
+          new_distance_unit = 0, new_consumption_unit = 0, new_date_format = 0,
+          new_pressure_unit = 0, new_torque_unit = k_msg.buf[4] >> 4, new_power_unit = k_msg.buf[4] & 0xF;
   char language_str[4];
 
   bitWrite(new_temperature_unit, 0, bitRead(k_msg.buf[1], 4));
@@ -543,17 +541,24 @@ void evaluate_idrive_units(void) {
   bitWrite(new_time_format, 0, bitRead(k_msg.buf[1], 2));
   bitWrite(new_time_format, 1, bitRead(k_msg.buf[1], 3));
 
-  bitWrite(new_pressure_unit, 0, bitRead(k_msg.buf[3], 0));
-  bitWrite(new_pressure_unit, 1, bitRead(k_msg.buf[3], 1));
+  bitWrite(new_distance_unit, 0, bitRead(k_msg.buf[2], 6));
+  bitWrite(new_distance_unit, 1, bitRead(k_msg.buf[2], 7));
+
+  bitWrite(new_consumption_unit, 0, bitRead(k_msg.buf[2], 0));
+  bitWrite(new_consumption_unit, 1, bitRead(k_msg.buf[2], 1));
+  bitWrite(new_consumption_unit, 2, bitRead(k_msg.buf[2], 2));
 
   bitWrite(new_date_format, 0, bitRead(k_msg.buf[3], 3));
   bitWrite(new_date_format, 1, bitRead(k_msg.buf[3], 4));
   bitWrite(new_date_format, 2, bitRead(k_msg.buf[3], 5));
 
+  bitWrite(new_pressure_unit, 0, bitRead(k_msg.buf[3], 0));
+  bitWrite(new_pressure_unit, 1, bitRead(k_msg.buf[3], 1));
+
   if (new_language > 0) {
     snprintf(language_str, sizeof(language_str), "%u", new_language);
     uint8_t idrive_bn2000_language[] = {0x1E, 0x66, 0, 1, new_language, 0, 0, 0};
-    kcan_write_msg(make_msg_buf(0x5E2, 8, idrive_bn2000_language));                                                                 // KOMBI does not support/store all EVO languages. Check "coding parameters.txt" for some examples.
+    kcan_write_msg(make_msg_buf(0x5E2, 8, idrive_bn2000_language));                                                                 // KOMBI87 does not support/store all EVO languages. Check "coding parameters.txt" for fix.
   }
 
   if (new_temperature_unit == 1) {
@@ -568,16 +573,18 @@ void evaluate_idrive_units(void) {
     kcan_write_msg(idrive_bn2000_time_24h_buf);
   }
 
-  if (new_distance_unit == 4) {
+  if (new_distance_unit == 1) {
     kcan_write_msg(idrive_bn2000_distance_km_buf);
-  } else if (new_distance_unit == 8) {
+  } else if (new_distance_unit == 2) {
     kcan_write_msg(idrive_bn2000_distance_mi_buf);
   }
 
   if (new_consumption_unit == 1) {
     kcan_write_msg(idrive_bn2000_consumption_l100km_buf);
   } else if (new_consumption_unit == 2) {
-    kcan_write_msg(idrive_bn2000_consumption_mpg_buf);
+    kcan_write_msg(idrive_bn2000_consumption_mpguk_buf);
+  } else if (new_consumption_unit == 3) {
+    kcan_write_msg(idrive_bn2000_consumption_mpgus_buf);
   } else if (new_consumption_unit == 4) {
     kcan_write_msg(idrive_bn2000_consumption_kml_buf);
   }
@@ -601,7 +608,8 @@ void evaluate_idrive_units(void) {
     } else if (new_date_format == 2) {
       kcan_write_msg(idrive_bn2000_date_mmddyyyy_buf);
     } 
-    // Modes 3 and 4 are not supported by the KOMBI. They are stored in the EEPROM instead.
+    // Extended date formats (yyyy/mm/dd and yyyy.mm.dd) not supported by the KOMBI. 
+    // They are stored in the EEPROM instead for use by the HU only.
 
     bitWrite(pressure_unit_date_format[cas_key_number], 3, bitRead(new_date_format, 0));
     bitWrite(pressure_unit_date_format[cas_key_number], 4, bitRead(new_date_format, 1));
@@ -621,17 +629,21 @@ void evaluate_idrive_units(void) {
           new_language > 0 ? language_str : "-",
           new_temperature_unit == 1 ? "C" : (new_temperature_unit == 2 ? "F" : "-"),
           new_time_format == 1 ? "12h" : (new_time_format == 2 ? "24h" : "-"),
-          new_distance_unit == 4 ? "km" : (new_distance_unit == 8 ? "mi" : "-"),
-          new_consumption_unit == 1 ? "l/100km" : (new_consumption_unit == 2 ? "mpg" : (new_consumption_unit == 4 ? "km/l" : "-")),
-          new_pressure_unit == 1 ? "bar" 
-                                  : (new_pressure_unit == 2 ? "kPa" 
-                                  : (new_pressure_unit == 3 ? "psi" : "-")),
+          new_distance_unit == 1 ? "km" : (new_distance_unit == 2 ? "mi" : "-"),
+          new_consumption_unit == 1 ? "l/100km" 
+                                    : (new_consumption_unit == 2 ? "mpg-uk"
+                                    : (new_consumption_unit == 3 ? "mpg-us"
+                                    : (new_consumption_unit == 4 ? "km/l"
+                                    : "-"))),
+          new_pressure_unit == 1 ? "bar"
+                                 : (new_pressure_unit == 2 ? "kPa"
+                                 : (new_pressure_unit == 3 ? "psi" : "-")),
           new_date_format == 1 ? "dd.mm.yyyy" 
-                                : (new_date_format == 2 ? "mm/dd/yyyy" 
-                                : new_date_format == 6 ? "yyyy/mm/dd" 
-                                : new_date_format == 5 ? "yyyy.mm.dd" 
-                                : "-"),
-          new_torque_unit == 1 ? "Nm" : (new_torque_unit == 2 ? "lb-ft" : (new_torque_unit == 3 ? "Kg-m" : "-")), 
+                               : (new_date_format == 2 ? "mm/dd/yyyy"
+                               : (new_date_format == 6 ? "yyyy/mm/dd"
+                               : (new_date_format == 5 ? "yyyy.mm.dd"
+                               : "-"))),
+          new_torque_unit == 1 ? "Nm" : (new_torque_unit == 2 ? "lb-ft" : (new_torque_unit == 3 ? "Kg-m" : "-")),
           new_power_unit == 1 ? "kW" : (new_power_unit == 2 ? "hp" : "-"));
   serial_log(serial_debug_string, 3);
   convert_f_units(true);
@@ -757,12 +769,16 @@ void evaluate_consumer_control(void) {
 
 
 void evaluate_speed_warning_status(void) {
-  if (((k_msg.buf[1] >> 4) < 0xF) && ((k_msg.buf[2] & 0xF) == 0)) {                                                                 // If less than 15kph, force to 15.
+  uint16_t speed_warning_status = (k_msg.buf[2] << 4) | (k_msg.buf[1] >> 4);
+
+  if (speed_warning_status < 0xF) {                                                                                                 // If less than 15kph, force to 15.
     if ((k_msg.buf[1] && 0xF) == 1) {
       kcan_write_msg(set_warning_15kph_on_buf);                                                                                     // The status response should then fix the HU setting.
     } else {
       kcan_write_msg(set_warning_15kph_off_buf);
     }
+  } else if (speed_warning_status == 0xFFF) {                                                                                       // Invalid state.
+    kcan_write_msg(set_warning_15kph_off_buf);
   } else {
     kcan2_write_msg(k_msg);
   }
@@ -780,11 +796,14 @@ void evaluate_speed_warning_setting(void) {
 
 
 void send_f_lcd_brightness(void) {
-  uint8_t f_lcd_brightness[] = {(uint8_t)constrain(k_msg.buf[0], 0, 0xFE),                                                          // Byte0 used for brightness (0 to 0xFE). Byte1 is fixed at 0x32.
-                                 0x32, k_msg.buf[2], 0xFD};                                                                         // Byte1 damping and delay. Set to 0xF2 for fast change.
+  uint8_t DSTN_LCD_LUM = constrain(k_msg.buf[2], 0x3F, 0xFE);
+  uint8_t f_lcd_brightness[] = {DSTN_LCD_LUM,
+                                (uint8_t)constrain(k_msg.buf[1], 0, 0xF0),                                                          // DMPNG_LCD_LUM
+                                0,
+                                0xFD};                                                                                              // DAY/NIGHT mode.
 
-  if (rls_time_of_day == 2) {
-    f_lcd_brightness[3] = 0xFE;                                                                                                     // This makes the NBT switch to night mode.
+  if (rls_time_of_day >= 2 && DSTN_LCD_LUM <= 0xB2) {                                                                               // If LCD brightness goes over 70%, switch off night mode.
+    f_lcd_brightness[3] = 0xFE;                                                                                                     // This makes the HU switch to night mode.
   } else if (rls_time_of_day == 1) {
     f_lcd_brightness[0] = constrain(f_lcd_brightness[0] + 0x19, 0, 0xFE);                                                           // Increased slightly (10%) to bias CID brightness during dusk/twilight.
   } else if (rls_time_of_day == 0) {
@@ -796,7 +815,7 @@ void send_f_lcd_brightness(void) {
 
 
 void send_f_interior_ambient_light_brightness(void) {
-  uint8_t f_interior_ambient_light_brightness[] = {0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0xFF};
+  uint8_t f_interior_ambient_light_brightness[] = {0xFF, 0xFF, 0xFF, 0, 0x1F, 0xFF, 0xFF, 0xFF};
   switch (k_msg.buf[0]) {
     case 0:
       f_interior_ambient_light_brightness[3] = 0x1F;
@@ -830,4 +849,13 @@ void send_f_interior_ambient_light_brightness(void) {
       break;
   }
   kcan2_write_msg(make_msg_buf(0x45C, 8, f_interior_ambient_light_brightness));
+}
+
+
+void process_hu_kombi_settings(void) {
+  if (terminal_r) {
+    if (k_msg.buf[0] == 0x1E || k_msg.buf[0] == 0x11) {                                                                             // Only forward this message if it is actually relevant for the BN2000 KOMBI.
+      kcan_write_msg(k_msg);
+    }
+  }
 }

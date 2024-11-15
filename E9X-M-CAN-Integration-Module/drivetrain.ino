@@ -64,7 +64,6 @@ void toggle_mdrive_message_active(void) {
     mdrive_status = true;
   }
 
-  svt70_pwm_control_timer = 3001;
   veh_mode_timer = 500;
 }
 
@@ -74,6 +73,9 @@ void toggle_mdrive_dsc_mode(void) {
     if (mdrive_dsc[cas_key_number] == 7) {                                                                                          // DSC OFF requested.
       if (!send_dsc_mode(1)) {
         serial_log("MDrive: Failed to change DSC mode during stabilisation.", 1);
+        #if F_NBTE
+          send_cc_message("DSC mode change refused while stabilising.", true, 3000);
+        #endif
       }
       #if CONTROL_SHIFTLIGHTS
       else {
@@ -86,6 +88,9 @@ void toggle_mdrive_dsc_mode(void) {
     } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M) requested.
       if (!send_dsc_mode(4)) {
         serial_log("MDrive: Failed to change DSC mode during stabilisation.", 1);
+        #if F_NBTE
+          send_cc_message("DSC mode change refused while stabilising.", true, 3000);
+        #endif
       }
     } else if (mdrive_dsc[cas_key_number] == 0xB) {                                                                                 // DSC ON requested.
       send_dsc_mode(0);
@@ -112,72 +117,67 @@ void evaluate_mfl_button_press(void) {
     kcan2_write_msg(k_msg);                                                                                                         // Processing complete, forward message to HU.
   #endif
 
-  #if !IMMOBILIZER_SEQ
-  if (ignition) {
-  #endif
-
   if (k_msg.buf[1] == 0x4C) {                                                                                                       // M button is pressed.
-    if (!ignore_m_press) {
-      ignore_m_press = true;                                                                                                        // Ignore further pressed messages until the button is released.
-      #if IMMOBILIZER_SEQ
-      if (immobilizer_released && ignition) {                                                                                       // Disable normal M button function when used for immobilizer.
-      #endif
-        toggle_mdrive_message_active();
-        mdrive_message_timer = 5000;
-        toggle_mdrive_dsc_mode();
-      #if IMMOBILIZER_SEQ
-      }
-      #endif
+
+    if (!ignore_m_hold) {
+      received_m_press = true;                                                                                                      // Ignore further pressed messages until the button is released.
     }
-    if (m_mfl_held_count > 10 && !ignore_m_hold) {                                                                                // Each count is about 100ms
-      #if IMMOBILIZER_SEQ
-      if (immobilizer_released) {
-      #endif
-      if (ignition) {
+
+    if (m_mfl_held_count > 10 && !ignore_m_hold) {                                                                                  // Each count is about 100ms
+      if (ignition
+          #if IMMOBILIZER_SEQ
+          && immobilizer_released
+          #endif
+         ) {
         show_mdrive_settings_screen();
+        received_m_press = false;                                                                                                   // This show the settings screen without changing the state of MDrive.
       }
-      #if IMMOBILIZER_SEQ
-      }
-      #endif
     } else {
       m_mfl_held_count++;
     }
-  } else if (k_msg.buf[1] == 0xC && k_msg.buf[0] == 0xC0 && ignore_m_press) {                                                       // Button is released.
-    ignore_m_press = ignore_m_hold = false;
-    m_mfl_held_count = 0;
-
-    #if IMMOBILIZER_SEQ
-    uint8_t activate_release_counter = IMMOBILIZER_SEQ_NUMBER - 1;
-    if (!immobilizer_released) {
-      activate_release_counter = alarm_active ? IMMOBILIZER_SEQ_ALARM_NUMBER - 1 : IMMOBILIZER_SEQ_NUMBER - 1;
-
-      if (immobilizer_pressed_release_count < activate_release_counter) {
-        immobilizer_pressed_release_count++;
-      } else {
-        release_immobilizer();
+  } else if (k_msg.buf[1] == 0xC && k_msg.buf[0] == 0xC0) {                                                                         // Button is released.
+    if (received_m_press) {
+      if (ignition
+          #if IMMOBILIZER_SEQ
+          && immobilizer_released                                                                                                   // Disable normal M button function when used for immobilizer.
+          #endif
+          ) {
+        toggle_mdrive_message_active();
+        toggle_mdrive_dsc_mode();
+        mdrive_message_bn2000_timer = mdrive_message_bn2010_timer = 10000;
       }
-    } else {                                                                                                                        // Allow re-activation before sleep mode.
-      if (immobilizer_activate_release_timer >= 3000) {
-        if (!terminal_r && immobilizer_persist) {
-          if (immobilizer_pressed_activate_count < activate_release_counter) {
-            immobilizer_pressed_activate_count++;
+
+      #if IMMOBILIZER_SEQ
+        uint8_t activate_release_counter = IMMOBILIZER_SEQ_NUMBER - 1;
+        if (!immobilizer_released) {
+          activate_release_counter = alarm_active ? IMMOBILIZER_SEQ_ALARM_NUMBER - 1 : IMMOBILIZER_SEQ_NUMBER - 1;
+
+          if (immobilizer_pressed_release_count < activate_release_counter) {
+            immobilizer_pressed_release_count++;
           } else {
-            activate_immobilizer();
-            play_cc_gong(1);
+            release_immobilizer();
+          }
+        } else {                                                                                                                    // Allow re-activation before sleep mode.
+          if (immobilizer_activate_release_timer >= 3000) {
+            if (!terminal_r && immobilizer_persist) {
+              if (immobilizer_pressed_activate_count < activate_release_counter) {
+                immobilizer_pressed_activate_count++;
+              } else {
+                activate_immobilizer();
+                play_cc_gong(1);
+              }
+            }
           }
         }
-      }
+      #endif
     }
-    #endif
+    m_mfl_held_count = 0;
+    received_m_press = ignore_m_hold = false;
   }
-  
-  #if !IMMOBILIZER_SEQ
-  }
-  #endif
 }
 
 
-void update_mdrive_can_message(void) {
+void update_mdrive_settings_can_message(void) {
   mdrive_message_bn2000[1] = mdrive_dsc[cas_key_number] - 2;                                                                        // Difference between iDrive settting and BN2000 CAN message is always 2
                                                                                                                                     // DSC: 1 unchanged, 5 OFF, 0x11 MDM, 9 On
   mdrive_message_bn2000[2] = mdrive_power[cas_key_number];                                                                          // Copy POWER as is.
@@ -185,10 +185,11 @@ void update_mdrive_can_message(void) {
   if (mdrive_svt[cas_key_number] == 0xE9) {
     mdrive_message_bn2000[4] = 0x41;                                                                                                // SVT normal, MDrive OFF.
   } else if (mdrive_svt[cas_key_number] == 0xF1 || mdrive_svt[cas_key_number] == 0xF2) {
-    mdrive_message_bn2000[4] = 0x81;                                                                                                // SVT sport (or Sport+ from NBT), MDrive OFF.
+    mdrive_message_bn2000[4] = 0x81;                                                                                                // SVT sport (or Sport+ from NBTE), MDrive OFF.
   }
 
   #if F_NBTE
+    // DSC
     if (mdrive_dsc[cas_key_number] == 7) {                                                                                          // DSC OFF.
       mdrive_message_bn2010[1] = 1;
     } else if (mdrive_dsc[cas_key_number] == 0x13) {                                                                                // DSC MDM (DTC in non-M).
@@ -197,6 +198,7 @@ void update_mdrive_can_message(void) {
       mdrive_message_bn2010[1] = 2;
     }
 
+    // Engine and Drivelogic
     if (mdrive_power[cas_key_number] == 0 || mdrive_power[cas_key_number] == 0x10) {
       mdrive_message_bn2010[2] = 1 << 4;                                                                                            // Efficient
     } else if (mdrive_power[cas_key_number] == 0x20) {
@@ -204,7 +206,9 @@ void update_mdrive_can_message(void) {
     } else if (mdrive_power[cas_key_number] == 0x30) {
       mdrive_message_bn2010[2] = 3 << 4;                                                                                            // Sport+
     }
+    mdrive_message_bn2010[2] |= 1;                                                                                                  // Drivelogic level 1
 
+    // EPAS / SVT
     if (mdrive_svt[cas_key_number] == 0xE9) {
       mdrive_message_bn2010[3] = 1 << 4;                                                                                            // Comfort
     } else if (mdrive_svt[cas_key_number] == 0xF1) {
@@ -213,6 +217,7 @@ void update_mdrive_can_message(void) {
       mdrive_message_bn2010[3] = 3 << 4;                                                                                            // Sport+
     }
 
+    // EDC
     if (mdrive_edc[cas_key_number] == 0x20 || mdrive_edc[cas_key_number] == 0x21) {
       mdrive_message_bn2010[3] |= 1;                                                                                                // Comfort                         
     } else if (mdrive_edc[cas_key_number] == 0x22) {
@@ -274,23 +279,29 @@ void show_mdrive_settings_screen_evo(void) {
 
 
 void send_mdrive_status_message(void) {
-  if (mdrive_message_timer >= 5000) {                                                                                               // Original cycle time is 10s (idle).
+  if (mdrive_message_bn2000_timer >= 10000) {                                                                                       // Original cycle time is 10s (idle) for BN2000.
     if (ptcan_mode == 1) {
       mdrive_message_bn2000[0] += 10;
       if (mdrive_message_bn2000[0] > 0xEF) {                                                                                        // Alive(first half of byte) must be between 0..E.
         mdrive_message_bn2000[0] = 0;
       }
       can_checksum_update(0x399, 6, mdrive_message_bn2000);                                                                         // Recalculate checksum. No module seems to check this - MDSC?
-      ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message_bn2000));                                                               // Send to PT-CAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
-      #if F_NBTE
-        mdrive_message_bn2010[0] = f_mdrive_alive_counter;                                                                          // If this counter sequence is broken (e.g sketch upload), settings are reset to default.
+      ptcan_write_msg(make_msg_buf(0x399, 6, mdrive_message_bn2000));                                                               // Send to PTCAN like the DME would. EDC will receive. KOMBI will receive on KCAN through JBE.
+      mdrive_message_bn2000_timer = 0;
+    }
+  }
+  #if F_NBTE
+    if (mdrive_message_bn2010_timer >= 1000) {                                                                                      // If this message times out (e.g during sketch upload) settings are reset to default.
+      if (kcan2_mode == MCP_NORMAL) {
+        mdrive_message_bn2010[0] = f_mdrive_alive_counter;
         kcan2_write_msg(make_msg_buf(0x42E, 8, mdrive_message_bn2010));
         f_mdrive_alive_counter == 0xE ? f_mdrive_alive_counter = 0 
                                       : f_mdrive_alive_counter++;
-      #endif
-      mdrive_message_timer = 0;
+        mdrive_message_bn2010[7] = 0xE8;                                                                                            // Reset the acknowledge beep.
+        mdrive_message_bn2010_timer = 0;
+      }
     }
-  }
+  #endif
 }
 
 
@@ -333,64 +344,69 @@ void execute_mdrive_settings_changed_actions() {
       #endif
     }
   }
-  svt70_pwm_control_timer = 3001;
 }
 
 
 void update_mdrive_message_settings_nbt(void) {
   if (ignition) {
-    if (k_msg.buf[0] == 0 && k_msg.buf[4] == 0xE0) {                                                                                // Reset requested.
-      reset_mdrive_settings();
-    } else if (k_msg.buf[0] == 0xF0) {                                                                                              // Ignore this ping and send the status message.
-    } else {
-      if (k_msg.buf[0] != 0) {                                                                                                      // DSC settings were updated.
-        if (k_msg.buf[0] == 1) {                                                                                                    // DSC OFF.
-          mdrive_dsc[cas_key_number] = 7;
-        } else if (k_msg.buf[0] == 2) {                                                                                             // DSC ON.
-          mdrive_dsc[cas_key_number] = 0xB;
-        } else if (k_msg.buf[0] == 3) {                                                                                             // DSC MDM.
-          mdrive_dsc[cas_key_number] = 0x13;
+    if (k_msg.buf[0] >> 4 == 0) {                                                                                                   // Mdrive 1 settings sent by HU.
+      if ((k_msg.buf[4] >> 4) == 0xE) {                                                                                             // Reset requested.
+        reset_mdrive_settings();
+        mdrive_message_bn2010[7] = 0xE9;                                                                                            // Sound to acknowledge reset.
+      } else if ((k_msg.buf[4] >> 4) == 0xC){
+        if (k_msg.buf[0] != 0) {                                                                                                    // DSC settings were updated.
+          if (k_msg.buf[0] == 1) {                                                                                                  // DSC OFF.
+            mdrive_dsc[cas_key_number] = 7;
+          } else if (k_msg.buf[0] == 2) {                                                                                           // DSC ON.
+            mdrive_dsc[cas_key_number] = 0xB;
+          } else if (k_msg.buf[0] == 3) {                                                                                           // DSC MDM.
+            mdrive_dsc[cas_key_number] = 0x13;
+          }
         }
-      }
 
-      else if(k_msg.buf[1] != 0) {                                                                                                  // Engine settings were updated.
-        mdrive_power[cas_key_number] = (k_msg.buf[1] >> 4) * 0x10;
-      }
-
-      else if ((k_msg.buf[2] & 0xF) != 0) {                                                                                         // Chassis settings were updated.
-        if ((k_msg.buf[2] & 0xF) == 1) {                                                                                            // Comfort.
-          mdrive_edc[cas_key_number] = 0x21;
-        } else if ((k_msg.buf[2] & 0xF) == 2) {                                                                                     // Sport.
-          mdrive_edc[cas_key_number] = 0x22;
-        } else if ((k_msg.buf[2] & 0xF) == 3) {                                                                                     // Sport+.
-          mdrive_edc[cas_key_number] = 0x2A;
+        else if(k_msg.buf[1] != 0) {                                                                                                // Engine settings were updated.
+          mdrive_power[cas_key_number] = (k_msg.buf[1] >> 4) * 0x10;
         }
-      }
 
-      else if (((k_msg.buf[2] >> 4) & 0x0F) != 0) {                                                                                 // Steering settings were updated.
-        if (((k_msg.buf[2] >> 4) & 0x0F) == 1) {                                                                                    // Comfort.
-          mdrive_svt[cas_key_number] = 0xE9;
-        } else if ((k_msg.buf[2] >> 4) == 2) {                                                                                      // Sport.
-          mdrive_svt[cas_key_number] = 0xF1;
-        } else if ((k_msg.buf[2] >> 4) == 3) {                                                                                      // Sport+.
-          mdrive_svt[cas_key_number] = 0xF2;
+        else if ((k_msg.buf[2] & 0xF) != 0) {                                                                                       // Chassis settings were updated.
+          if ((k_msg.buf[2] & 0xF) == 1) {                                                                                          // Comfort.
+            mdrive_edc[cas_key_number] = 0x21;
+          } else if ((k_msg.buf[2] & 0xF) == 2) {                                                                                   // Sport.
+            mdrive_edc[cas_key_number] = 0x22;
+          } else if ((k_msg.buf[2] & 0xF) == 3) {                                                                                   // Sport+.
+            mdrive_edc[cas_key_number] = 0x2A;
+          }
         }
+
+        else if (((k_msg.buf[2] >> 4) & 0x0F) != 0) {                                                                               // Steering settings were updated.
+          if (((k_msg.buf[2] >> 4) & 0x0F) == 1) {                                                                                  // Comfort.
+            mdrive_svt[cas_key_number] = 0xE9;
+          } else if ((k_msg.buf[2] >> 4) == 2) {                                                                                    // Sport.
+            mdrive_svt[cas_key_number] = 0xF1;
+          } else if ((k_msg.buf[2] >> 4) == 3) {                                                                                    // Sport+.
+            mdrive_svt[cas_key_number] = 0xF2;
+          }
+        }
+
+        sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
+            mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
+        serial_log(serial_debug_string, 3);
+
+        update_mdrive_settings_can_message();
+        execute_mdrive_settings_changed_actions();
       }
-
-      sprintf(serial_debug_string, "Received iDrive settings: DSC 0x%X POWER 0x%X EDC 0x%X SVT 0x%X.", 
-          mdrive_dsc[cas_key_number], mdrive_power[cas_key_number], mdrive_edc[cas_key_number], mdrive_svt[cas_key_number]);
-      serial_log(serial_debug_string, 3);
-
-      update_mdrive_can_message();
-      execute_mdrive_settings_changed_actions();
     }
-    mdrive_message_timer = 5000;
+    else if (k_msg.buf[0] >> 4 == 0xF) {}                                                                                           // Current settings requested from DME. Send message.
+    else {
+      return;                                                                                                                       // Ignore settings for MDrive 2.
+    }
   }
+  mdrive_message_bn2000_timer = mdrive_message_bn2010_timer = 10000;
 }
 
 
 void reset_mdrive_settings(void) {
-  #if F_NBTE                                                                                                                        // NBT does not have "Unchanged" settings.
+  #if F_NBTE                                                                                                                        // NBTE does not have "Unchanged" settings.
     mdrive_dsc[cas_key_number] = 0xB;                                                                                               // DSC ON
     mdrive_power[cas_key_number] = 0x10;                                                                                            // Normal
     mdrive_edc[cas_key_number] = 0x21;                                                                                              // Comfort
@@ -403,7 +419,7 @@ void reset_mdrive_settings(void) {
     dme_ckm[cas_key_number][0] = 0xF1;                                                                                              // Normal
   #endif
   serial_log("Reset MDrive settings to defaults.", 3);
-  update_mdrive_can_message();
+  update_mdrive_settings_can_message();
   execute_mdrive_settings_changed_actions();
 }
 
@@ -648,10 +664,7 @@ void send_f_powertrain_2_status(void) {
     f_data_powertrain_2[0] = f_data_powertrain_2_crc.calc();
 
     CAN_message_t f_data_powertrain_2_buf = make_msg_buf(0x3F9, 8, f_data_powertrain_2);
-    #if F_NIVI
-      ptcan_write_msg(f_data_powertrain_2_buf);
-    #endif
-    #if F_NBTE
+    #if F_NBTE || F_NIVI
       kcan2_write_msg(f_data_powertrain_2_buf);
     #endif
     f_data_powertrain_2_timer = 0;
@@ -670,7 +683,7 @@ void send_f_torque_1(void) {                                                    
     f_torque_1_alive_counter == 0xE ? f_torque_1_alive_counter = 0 
                                   : f_torque_1_alive_counter++;
    
-    int16_t raw_torque = 0x800 + round(engine_torque_nm) * 2;
+    int16_t raw_torque = 0x800 + (int)round(engine_torque_nm) * 2;
  
     // Engine torque
     f_torque_1[2] = raw_torque & 0xFF;                                                                                              // LE encoded.
@@ -707,7 +720,7 @@ void send_f_throttle_pedal(void) {                                              
     
 
     uint16_t scaled_value = (e_throttle_pedal_position / 99.22) * 100;                                                              // Max value reported by DME is 99.22%.
-    scaled_value = constrain(round(scaled_value / 0.025), 0, 0xFFE);                                                                // 12-bit boundary check. 0xFFF - signal invalid.
+    scaled_value = constrain((int)round(scaled_value / 0.025), 0, 0xFFE);                                                           // 12-bit boundary check. 0xFFF - signal invalid.
 
     f_throttle_pedal[2] = scaled_value & 0xFF;                                                                                      // AVL_ANG_ACPD LSB
     f_throttle_pedal[3] = f_throttle_pedal[3] | (scaled_value >> 8);                                                                // QU_AVL_ANG_ACPD | AVL_ANG_ACPD MSB
@@ -899,14 +912,37 @@ void send_dme_boost_request(void) {
 void evaluate_dme_boost_response(void) {
   if (dme_boost_requested) {
     if (pt_msg.buf[0] == 0xF1 && pt_msg.buf[1] == 0x10 && pt_msg.buf[4] == 0x19) {
-      engine_cp_sensor = round((pt_msg.buf[6] << 8 | pt_msg.buf[7]) * 0.0390625);
+      engine_cp_sensor = (int)round((pt_msg.buf[6] << 8 | pt_msg.buf[7]) * 0.0390625);
       ptcan_write_msg(dme_boost_request_b_buf);
     } else if (pt_msg.buf[0] == 0xF1 && pt_msg.buf[1] == 0x21) {
-      engine_manifold_sensor = round((pt_msg.buf[2] << 8 | pt_msg.buf[3]) * 0.0390625);
-      intake_air_temperature = round((pt_msg.buf[4] << 8 | pt_msg.buf[5]) * 0.1);
+      engine_manifold_sensor = (int)round((pt_msg.buf[2] << 8 | pt_msg.buf[3]) * 0.0390625);
+      intake_air_temperature = (int)round((pt_msg.buf[4] << 8 | pt_msg.buf[5]) * 0.1);
       dme_boost_requested = false;
     } else {
       dme_boost_requested = false;
     }
   }
+}
+
+
+void modify_vehicle_type(void) {                                                                                                    // 0x388 6MC2DL0B pg. 1323.
+  if (k_msg.buf[0] == 0xE) {
+    k_msg.buf[0] = 0x22;                                                                                                            // F32
+  } else if (k_msg.buf[0] == 8) {
+    k_msg.buf[0] = 0x25;                                                                                                            // F30
+  } else if (k_msg.buf[0] == 0xD) {
+    k_msg.buf[0] = 0x21;                                                                                                            // F31
+  } else if (k_msg.buf[0] == 0xF) {
+    k_msg.buf[0] = 0x23;                                                                                                            // F33
+  }
+
+  k_msg.buf[3] = (7 << 4) | (k_msg.buf[3] & 0xF);                                                                                   // TL power class (F8X).
+
+  if (k_msg.buf[6] == 0x23) {
+    k_msg.buf[6] = 0x1E;                                                                                                            // Change 3500cc to 3000cc.
+  }
+
+  #if F_NBTE
+    kcan2_write_msg(k_msg);
+  #endif
 }

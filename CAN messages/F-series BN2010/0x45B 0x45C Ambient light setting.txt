@@ -2,7 +2,6 @@
 
 FF FF FF 00 FF FF FF FF                     // Box 1
 
-
 FF FF FF 13 FF FF FF FF
 FF FF FF 1F FF FF FF FF                     // Increase/decrease in 0xC increments  20 boxes in total.
 FF FF FF 2B FF FF FF FF 
@@ -23,9 +22,23 @@ FF FF FF D3 FF FF FF FF
 FF FF FF DF FF FF FF FF 
 FF FF FF EB FF FF FF FF 
 
-
 FF FF FF FE FF FF FF FF                     // Max
 
 
 
+Classic:
+FF FF FF FF 1F FF FF FF 
+
+
+Sport/modern/luxury etc.:
+FF FF FF FF 2F FF FF FF 
+
+
+
+
+
 0x45C confirmation sent by FRM? Identical format.
+
+
+
+

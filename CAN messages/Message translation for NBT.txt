@@ -22,7 +22,8 @@ To NBT:
 0x336, 0x338: CC list and CC dialog.                                            Modified to hide messages that NBT does not support.
 0x35C: Speed warning status/BC                                                  Modified to ensure 15kph minimum is set.
 0x369: Flat Tyre Monitor status                                                 Translated from BN2000 0x31D.
-0x380: Patched VIN to activate built-in FSCs.                                   Obtained from NBT with 0x6F1.
+0x380: Patched VIN to activate built-in FSCs.                                   Obtained from NBT with 0x6F1 OR hard-coded.
+0x388: Vehicle Type.															Modified to report F-series body.
 0x393: Kombi LCD brightness. Used by NBT for CID brightness.                    Translated from BN2000 0x2C0.
 0x3A0: Vehicle energy condition.                                                Translated from BN2000 0x3B4.
 0x3A5: Sleep readiness global.													Translated from BN2000 0x3BD.
@@ -49,4 +50,5 @@ From NBT:
 
 Added:
 
+0x4E2: Radio network management. Used to keep the car awake if the radio is activated after Terminal R OFF.
 0x5E2: Settings (language, units, lighting) from HU to BN2000 KOMBI.

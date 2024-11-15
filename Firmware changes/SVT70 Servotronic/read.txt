@@ -8,7 +8,12 @@ The module must be powered by car or 12v pins. Programmers are too weak.
 To decouple SVT from 0x326 (when fitted with EDC), SVT must be made to ignore 0x326 and instead listen to an arbitrary CANID that we control.
 To find the CANID in the SVT module binary shift CANID to the left 5 times. 
 I.e 0x326 << 5 = 64 C0. 64 C0 is stored at 0xD8C2D.
-To change to 0x327 set 0xD8C2D/E to 64 E0.
+To change to 0x327 set 0xD8C2D to 64 and 0xD8C2E to E0.
 
-Remove error 6571:
-Set D88AF/B0 to 00.
+The only effective way to control PWM output to the valve at runtime (i.e no coding or 6F1 jobs) is by manipulating the speed message.
+0x1A0 << 5 = 34 00. 
+To change to 0x1A4 set 0xD8C33 to 34 and 0xD8C34 to 80.
+
+
+Remove error 0x6571 (Memory error RAM/ROM):
+Set D88AF and D88B0 to 00.

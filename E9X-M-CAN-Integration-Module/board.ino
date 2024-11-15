@@ -121,10 +121,6 @@ void configure_flexcan(void) {
     filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x612, STD);                                              // Diagnostic responses from DME.
     filter_position_counter++;
   #endif
-  #if F_NIVI
-    filter_set_ok_counter += PTCAN.setFIFOFilter(filter_position_counter, 0x657, STD);                                              // Diagnostic responses from NVE module to forward.
-    filter_position_counter++;
-  #endif
   PTCAN.setFIFOFilter(REJECT_ALL, filter_position_counter);
   PTCAN.FLEXCAN_ExitFreezeMode();
   ptcan_mode = 1;
@@ -179,12 +175,12 @@ void deactivate_optional_transceivers(void) {
   if (ptcan_mode == 1) {
     digitalWrite(PTCAN_STBY_PIN, HIGH);
     ptcan_mode = 0;
-    serial_log("Deactivated PT-CAN transceiver.", 2);
+    serial_log("Deactivated PTCAN transceiver.", 2);
   }
   if (dcan_mode == 1) {
     digitalWrite(DCAN_STBY_PIN, HIGH);
     dcan_mode = 0;
-    serial_log("Deactivated D-CAN transceiver.", 2);
+    serial_log("Deactivated DCAN transceiver.", 2);
   }
   #if F_NBTE
     if (kcan2_mode == MCP_NORMAL) {
@@ -192,7 +188,7 @@ void deactivate_optional_transceivers(void) {
       kcan2_write_msg(dme_request_consumers_off_buf);
       kcan2_mode = MCP_SLEEP;
       KCAN2.setMode(kcan2_mode);
-      serial_log("Deactivated K-CAN2 transceiver.", 2);
+      serial_log("Deactivated KCAN2 transceiver.", 2);
     }
   #endif
 }
@@ -202,20 +198,20 @@ void activate_optional_transceivers(void) {
   if (ptcan_mode == 0) {
     digitalWrite(PTCAN_STBY_PIN, LOW);
     ptcan_mode = 1;
-    serial_log("Activated PT-CAN transceiver.", 2);
+    serial_log("Activated PTCAN transceiver.", 2);
   }
 
   if (dcan_mode == 0) {
     digitalWrite(DCAN_STBY_PIN, LOW);
     dcan_mode = 1;
-    serial_log("Activated D-CAN transceiver.", 2);
+    serial_log("Activated DCAN transceiver.", 2);
   }
 
   #if F_NBTE
     if (kcan2_mode == MCP_SLEEP) {
       kcan2_mode = MCP_NORMAL;
       KCAN2.setMode(kcan2_mode);
-      serial_log("Activated K-CAN2 transceiver.", 2);
+      serial_log("Activated KCAN2 transceiver.", 2);
     }
   #endif
 }

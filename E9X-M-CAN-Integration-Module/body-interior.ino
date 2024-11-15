@@ -128,6 +128,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     hu_bn2000_nm_next_neighbour = 0x64;                                                                                             // PDC controller.
     hu_bn2000_nm_timer = 3000;
     custom_info_cc_timer = 3000;
+    trsvc_watchdog_timer = 0;
   } else if (!ignition && ignition_) {
     reset_ignition_variables();
     scale_cpu_speed();                                                                                                              // Now that the ignition is OFF, underclock the MCU
@@ -156,7 +157,7 @@ void evaluate_terminal_clutch_keyno_status(void) {
     #if F_VSW01
       kcan_write_msg(f_terminal_status_buf);
     #endif
-    #if F_NBTE
+    #if F_NBTE || F_NIVI
       kcan2_write_msg(f_terminal_status_buf);
       
       uint8_t f_vehicle_status[] = {0, 0, 0, 0, 0, 0, 0xE3, 0xFF};
@@ -176,9 +177,6 @@ void evaluate_terminal_clutch_keyno_status(void) {
       }
       f_vehicle_status[0] = f_vehicle_status_crc.calc();
       kcan2_write_msg(make_msg_buf(0x3C, 8, f_vehicle_status));
-    #endif
-    #if F_NIVI
-      ptcan_write_msg(f_terminal_status_buf);
     #endif
   #endif
 }
@@ -411,13 +409,8 @@ void send_f_energy_condition(void) {                                            
 
     CAN_message_t f_energy_condition_buf = make_msg_buf(0x3A0, 8, f_energy_condition);
     kcan_write_msg(f_energy_condition_buf);
-    #if F_NBTE
+    #if F_NBTE || F_NIVI
       kcan2_write_msg(f_energy_condition_buf);
-    #endif
-    #if F_NIVI
-      if (ignition) {                                                                                                               // NiVi is powered by Terminal 15.
-        ptcan_write_msg(f_energy_condition_buf);
-      }
     #endif
 
     f_energy_condition_timer = 0;
@@ -503,6 +496,9 @@ void check_console_buttons(void) {
             serial_log("Console: DSC OFF requested.", 2);
             if (!send_dsc_mode(1)) {
               serial_log("Console: Failed to change DSC mode during stabilisation.", 1);
+              #if F_NBTE
+                send_cc_message("DSC mode change refused while stabilising.", true, 3000);
+              #endif
             }
           }
           dsc_off_button_debounce_timer = 0;
@@ -537,10 +533,10 @@ void check_console_buttons(void) {
 
 
 void send_nivi_button_press(void) {
-  ptcan_write_msg(nivi_button_pressed_buf);
-  ptcan_write_msg(nivi_button_pressed_buf);
-  ptcan_write_msg(nivi_button_released_buf);
-  ptcan_write_msg(nivi_button_released_buf);
+  kcan2_write_msg(nivi_button_pressed_buf);
+  kcan2_write_msg(nivi_button_pressed_buf);
+  kcan2_write_msg(nivi_button_released_buf);
+  kcan2_write_msg(nivi_button_released_buf);
   serial_log("Sent NiVi button press.", 2);
 }
 
@@ -906,7 +902,7 @@ void evaluate_terminal_followup(void) {
         // With CIC, the CID is switched off occasionally at 600s and 280s remaining.
         // If the power button is pressed, operation continues until 30G is OFF and the CIC is *forcefully* killed.
 
-        // NBT will display a warning about sleep depending on the setting of SLEEPDELAY_CLAMP30B_MIN.
+        // NBTE will display a warning about sleep depending on the setting of SLEEPDELAY_CLAMP30B_MIN.
         // I.e it will appear at max_terminal30g_followup_time - SLEEPDELAY_CLAMP30B_MIN. E.g 0x5A (900s) - 0x1E (300s) = 600s
         #if F_NBTE
           if (kcan2_mode == MCP_NORMAL && !requested_hu_off_t1 && hu_ent_mode) {
@@ -946,7 +942,7 @@ void evaluate_interior_temperature(void) {
 
 
 void evaluate_date_time(void) {
-  if (k_msg.buf[0] != 0xFD && k_msg.buf[7] != 0xFC) {                                                                              // Invalid time / not set.
+  if (k_msg.buf[0] != 0xFD && k_msg.buf[7] != 0xFC) {                                                                               // Invalid time / not set.
     date_time_valid = true;
   } else {
     date_time_valid = false;
@@ -957,4 +953,27 @@ void evaluate_date_time(void) {
   d_day = k_msg.buf[3];
   d_month = k_msg.buf[4] >> 4;
   d_year = (k_msg.buf[6] << 8) | k_msg.buf[5];
+}
+
+
+void modify_vehicle_vin(void) {
+  #if F_NBTE_CPS_VIN
+    if (k_msg.id == 0x380) {                                                                                                        // Set VIN to match HU donor.
+      if (donor_vin_initialized) {
+        for (uint8_t i = 0; i < k_msg.len; i++) {
+          k_msg.buf[i] = DONOR_VIN[i];
+        }
+      } else {
+        return;
+      }
+    }
+  #elif F_KCAN2_VIN
+    if (k_msg.id == 0x380) {                                                                                                        // Set KCAN2 VIN to hard-coded value.
+      for (uint8_t i = 0; i < k_msg.len; i++) {
+        k_msg.buf[i] = KCAN2_VIN[i];
+      }
+    }
+  #endif
+
+  kcan2_write_msg(k_msg);
 }

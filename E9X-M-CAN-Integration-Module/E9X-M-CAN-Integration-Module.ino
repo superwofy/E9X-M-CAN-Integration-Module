@@ -12,7 +12,7 @@ void setup() {
   configure_IO();
   activate_usb();                                                                                                                   // This code ensures compatibility with unmodified Teensy cores since USB init will work anyway.
   read_initialize_eeprom();                                                                                                         // EEPROM read takes about 0.5 ms. If EEPROM is corrupt, this takes longer.
-  update_mdrive_can_message();
+  update_mdrive_settings_can_message();
   cache_can_message_buffers();
   initialize_can_handlers();
   sprintf(serial_debug_string, "Setup complete at systick: %.2f ms.", micros() / 1000.0);
@@ -82,7 +82,7 @@ void loop() {
         send_custom_info_cc();
       #endif
       check_nbt_cc_queue();
-      #if F_NBTE_VIN_PATCH
+      #if F_NBTE_CPS_VIN
         send_nbt_vin_request();
       #endif
       // send_f_standstill_status();                                                                                                  // Used by EGS?
@@ -103,6 +103,7 @@ void loop() {
       #endif
       #if F_NIVI || F_NBTE
         send_f_brightness_status();
+        send_f_object_warning_coord();
       #endif
       #if F_NBTE
         send_f_throttle_pedal();
@@ -119,9 +120,6 @@ void loop() {
         #endif
         veh_mode_timer = 0;
       }
-      #if SERVOTRONIC_SVT70 && F_NBTE
-        send_servotronic_sport_plus();
-      #endif
       #if AUTO_SEAT_HEATING
         check_seatheating_queue();
       #endif
@@ -156,6 +154,9 @@ void loop() {
           send_f_driving_dynamics_switch_evo();
         #endif
       #endif
+      #if TRSVC70
+        evaluate_trsvc_watchdog();
+      #endif
     } else {
       if (vehicle_awake_timer >= 2000) {
         vehicle_awake = false;                                                                                                      // Vehicle must now be asleep. Stop monitoring.
@@ -169,7 +170,7 @@ void loop() {
 
 
 /***********************************************************************************************************************************************************************************************************************************************
-  K-CAN2 reception
+  KCAN2 reception
 ***********************************************************************************************************************************************************************************************************************************************/
 
   #if F_NBTE
@@ -189,7 +190,7 @@ void loop() {
 
 
 /***********************************************************************************************************************************************************************************************************************************************
-  K-CAN reception
+  KCAN reception
 ***********************************************************************************************************************************************************************************************************************************************/
 
   if (KCAN.read(k_msg)) {
@@ -206,7 +207,7 @@ void loop() {
 
 
 /***********************************************************************************************************************************************************************************************************************************************
-  PT-CAN reception
+  PTCAN reception
 ***********************************************************************************************************************************************************************************************************************************************/
   
   if (vehicle_awake) {
@@ -218,7 +219,7 @@ void loop() {
 
 
 /***********************************************************************************************************************************************************************************************************************************************
-  D-CAN reception and processing
+  DCAN reception and processing
 ***********************************************************************************************************************************************************************************************************************************************/
     
     if (DCAN.read(d_msg)) {
@@ -271,7 +272,7 @@ void loop() {
 
       #if F_NIVI
       else if (d_msg.buf[0] == 0x57) {                                                                                              // NIVI address is 0x57.
-        ptcan_write_msg(d_msg);
+        kcan2_write_msg(d_msg);
         disable_diag_transmit_jobs();
       }
       #endif
@@ -317,7 +318,7 @@ void loop() {
 
 
 /***********************************************************************************************************************************************************************************************************************************************
-  PT-CAN processing
+  PTCAN processing
 ***********************************************************************************************************************************************************************************************************************************************/
 
 void process_ptcan_1A0(void) {
@@ -330,6 +331,9 @@ void process_ptcan_1A0(void) {
     send_f_longitudinal_acceleration();
     send_f_speed_status();
     send_f_yaw_rate_chassis();                                                                                                      // Equivalent to the old internal Gyro.
+  #endif
+  #if F_NBTE && SERVOTRONIC_SVT70
+    send_servotronic_vehicle_speed();
   #endif
 }
 
@@ -352,21 +356,20 @@ void process_ptcan_60E(void) {
 }
 
 
-void process_ptcan_657(void) {
-  if (ignition) {  
-    dcan_write_msg(pt_msg);
-  }
-}
-
-
 /***********************************************************************************************************************************************************************************************************************************************
-  K-CAN processing
+  KCAN processing
 ***********************************************************************************************************************************************************************************************************************************************/
 
 void process_kcan_message(void) {
   #if F_NBTE
     if (kcan_to_kcan2_forward_filter_list[k_msg.id]){
-      kcan2_write_msg(k_msg);                                                                                                       // Write filtered messages from the car to the NBT.
+      kcan2_write_msg(k_msg);                                                                                                       // Write filtered messages from the car to the KCAN2 network.
+    }
+  #endif
+
+  #if TRSVC70
+    if (k_msg.id == 0x486) {
+      reset_trsvc_watchdog();
     }
   #endif
 
@@ -504,7 +507,7 @@ void process_kcan_672(void) {
 
 
 /***********************************************************************************************************************************************************************************************************************************************
-  K-CAN2 processing - Relevant messages sent by NBT to be used by this module follow
+  KCAN2 processing - Relevant messages sent by modules on KCAN2 to be used by this module follow
 ***********************************************************************************************************************************************************************************************************************************************/
 
 void process_kcan2_message() {
@@ -553,8 +556,13 @@ void process_kcan2_635(void) {
 }
 
 
+void process_kcan2_657(void) {
+  ptcan_write_msg(k_msg);
+}
+
+
 void process_kcan2_663(void) {
-  #if F_NBTE_VIN_PATCH
+  #if F_NBTE_CPS_VIN
     evaluate_nbt_vin_response();
   #endif
   #if DOOR_VOLUME

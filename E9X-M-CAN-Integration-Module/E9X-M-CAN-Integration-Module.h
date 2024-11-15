@@ -13,7 +13,7 @@ uint8_t LOGLEVEL = 3;                                                           
 #define DOOR_VOLUME 1                                                                                                               // Reduce audio volume on door open. Must code KOMBI to disable door open with ignition CC.
 #define RHD 1                                                                                                                       // Where does the driver sit?
 #define FTM_INDICATOR 1                                                                                                             // Indicate FTM (Flat Tyre Monitor) status when using M3 RPA hazards button cluster. Do not use with RDC.
-#define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood. NBT: also shows CC dialog.
+#define HOOD_OPEN_GONG 1                                                                                                            // Plays CC gong warning when opening hood. NBTE: also shows CC dialog.
 #define FRM_AHL_MODE 1                                                                                                              // Switches FRM AHL mode from Komfort and Sport.
 #define WIPE_AFTER_WASH 1                                                                                                           // One more wipe cycle after washing the windscreen.
 #define HEADLIGHT_WASHING 1                                                                                                         // Take control of headlight washing from the JBE. Code SCHEINWERFERREININUNG first.
@@ -26,6 +26,7 @@ uint8_t LOGLEVEL = 3;                                                           
 #define FRONT_FOG_CORNER 1                                                                                                          // Turn ON/OFF corresponding fog light when turning with Adaptive Headlights.
 #define DIM_DRL 1                                                                                                                   // Dims DLR ON the side that the indicator is ON.
 #define SERVOTRONIC_SVT70 1                                                                                                         // Control steering assist with modified SVT70 module.
+#define TRSVC70 1                                                                                                                   // Additional functions to integrate the TRSVC module with E9X modules.
 #define EXHAUST_FLAP_CONTROL 1                                                                                                      // Take control of the exhaust flap solenoid.
 #define QUIET_START 0                                                                                                               // Close the exhaust valve as soon as Terminal R is turned ON.
 #define LAUNCH_CONTROL_INDICATOR 1                                                                                                  // Show launch control indicator (use with MHD lauch control, 6MT).
@@ -42,10 +43,11 @@ const float FOG_CORNER_STEERTING_ANGLE = 87.0;                                  
 const float STEERTING_ANGLE_HYSTERESIS = 48.0;
 const float FOG_CORNER_STEERTING_ANGLE_INDICATORS = 45.0;
 const float STEERTING_ANGLE_HYSTERESIS_INDICATORS = 15.0;
+const uint16_t SVT_FAKE_V_SPEED_CANID = 0x1A4;                                                                                      // New CAN-ID replacing 0x1A0 in SVT70 firmware bin. This alows Sport+ to work by faking the vehicle speed.
 const uint16_t SVT_FAKE_EDC_MODE_CANID = 0x327;                                                                                     // New CAN-ID replacing 0x326 in SVT70 firmware bin. This stops it from changing modes together with EDC.
-const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] section of the firmware.
-const double AUTO_SEAT_HEATING_THRESHOLD_HIGH = 12.0;                                                                               // Degrees Celsius temperature, heater fully on.
-const double AUTO_SEAT_HEATING_THRESHOLD_MEDIUM = 15.0;                                                                             // Degrees Celsius temperature, heater on middle position.
+const uint16_t DME_FAKE_VEH_MODE_CANID = 0x31F;                                                                                     // New CAN-ID replacing 0x315 in DME [Program] firmware - to allow throttle mapping manipulation with modes.
+const float AUTO_SEAT_HEATING_THRESHOLD_HIGH = 12.0;                                                                                // Degrees Celsius temperature, heater fully on.
+const float AUTO_SEAT_HEATING_THRESHOLD_MEDIUM = 15.0;                                                                              // Degrees Celsius temperature, heater on middle position.
 const uint16_t AUTO_HEATING_START_DELAY = 2 * 1000;                                                                                 // Time to wait for battery voltage to catch up after starting (time in seconds * 1000)
 const uint16_t START_UPSHIFT_WARN_RPM = 5500 * 4;                                                                                   // RPM setpoints when warmed up (warning = desired RPM * 4).
 const uint16_t MID_UPSHIFT_WARN_RPM = 6000 * 4;
@@ -80,23 +82,33 @@ const unsigned long OBD_DETECT_TIMEOUT = 120000;                                
 #endif
 
 /***********************************************************************************************************************************************************************************************************************************************
-  F-series retrofits:
+  F-series (BN2010-BN2020) modules:
 ***********************************************************************************************************************************************************************************************************************************************/
 
 #ifndef F_NBTE
-  #define F_NBTE 0                                                                                                                  // Emulate KCAN2 to integrate HU_NBT2 ID5/ID6 into Exx cars.
+  #define F_NBTE 0                                                                                                                  // Emulate KCAN2 to integrate HU_NBT2 (NBTE) ID5/ID6 into Exx cars.
   #if F_NBTE
-    #define F_NBTE_VIN_PATCH 1                                                                                                      // Requests CPS VIN from NBT before sending 0x380. Disable if using patched NBT binary.
-    #define F_NBTE_CCC_ZBE 0                                                                                                        // Converts CCC ZBE1 messages for use with NBT.
+    #define F_NBTE_CPS_VIN 1                                                                                                        // Requests CPS VIN from NBTE before sending 0x380. Disable if using patched NBTE binary.
+    #define F_NBTE_CCC_ZBE 0                                                                                                        // Converts CCC ZBE1 messages for use with NBTE.
     #define X_VIEW 0                                                                                                                // Convert the angles required to make the xDrive status 3D graphic work.
     #define ASD89_RAD_ON 0                                                                                                          // Use RAD_ON from the ASD module to power Diversity. Pin 7 of ASD must be wired to pin 3 of Diversity.
     #define CUSTOM_MONITORING_CC 1                                                                                                  // Print additional information (Water temp, voltage, IAT and boost) in the iDrive CC list.
-  #endif
+    #define F_NIVI 0                                                                                                                // Enable/disable FXX NVE diagnosis, wakeup and BN2000->BN2010 message translation on KCAN2.
+    if !F_NBTE_CPS_VIN
+      #define F_KCAN2_VIN 0                                                                                                         // Broadcast a hard-coded VIN on KCAN2. For NVE FSCs, NBTE etc.
+    #endif
+    #if F_KCAN2_VIN
+      const uint8_t KCAN2_VIN[] = {0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50};
+    #endif
 #endif
+#ifndef CUSTOM_MONITORING_CC
+  #define CUSTOM_MONITORING_CC 0
+#endif
+
 
 const int HU_ENT_MODE_TIMEOUT = 60000;                                                                                              // Amount of time within which the HU can be re-activated after Terminal R OFF.
 
-uint8_t MAX_TORQUE_SCALE_NM = 6;                                                                                                    // Used to scale the NBT sport displays. Torque = (x + 1) * 80. I.e. (6 + 1) * 80 = 560.
+uint8_t MAX_TORQUE_SCALE_NM = 6;                                                                                                    // Used to scale the NBTE sport displays. Torque = (x + 1) * 80. I.e. (6 + 1) * 80 = 560.
 uint8_t MAX_TORQUE_SCALE_LBFT = 5;                                                                                                  // 480
 uint8_t MAX_TORQUE_SCALE_KGM = 0;                                                                                                   // 80
 uint8_t MAX_POWER_SCALE_KW = 3;                                                                                                     // Power = (x + 1) * 80. I.e. (3 + 1) * 80 = 320. 
@@ -107,10 +119,8 @@ float MAX_TURBO_BOOST = 950.0;                                                  
   #define F_VSW01 0                                                                                                                 // Enable/disable F01 Video Switch diagnosis and wakeup. Tested with p/n 9201542.
   #define F_VSW01_MANUAL 0                                                                                                          // Manual control of the VSW if used without HU support. CIC, NBTEVO GW7 etc.
 #endif
-#ifndef F_NIVI
-  #define F_NIVI 0                                                                                                                  // Enable/disable FXX NVE diagnosis, wakeup and BN2000->BN2010 message translation.
-#endif
-const char *vsw_positions[] = {"Disabled", "Rear view camera: TRSVC", "Night Vision: NiVi", "DVD changer: MMC",
+
+const char *vsw_positions[] = {"Disabled", "Rear view camera: TRSVC", "Night Vision: NVE", "DVD changer: MMC",
                                "Digital TV: VM", "N/A", "N/A", "N/A", "N/A", "N/A"};
 
 /***********************************************************************************************************************************************************************************************************************************************
@@ -237,21 +247,22 @@ uint8_t edc_mode = 8,                                                           
 bool key_guest_profile = false;
 uint8_t mdrive_dsc[4] = {0x13, 0x13, 0x13, 0xB}, mdrive_power[4] = {0x30, 0x30, 0x30, 0x10},                                        // Defaults for when EEPROM is not initialized.
         mdrive_edc[4] = {0x2A, 0x2A, 0x2A, 0x21}, mdrive_svt[4] = {0xF1, 0xF1, 0xF1, 0xE9};
-bool mdrive_status = false, mdrive_power_active = false, console_power_mode, restore_console_power_mode = false;
+bool mdrive_status = false, mdrive_power_active = false, console_power_mode, restore_console_power_mode = false,
+     svt_speed_msg_change = false;
 uint8_t power_mode_only_dme_veh_mode[] = {0xE8, 0xF1};                                                                              // E8 is the last checksum. Start will be from 0A.
 uint8_t dsc_program_status = 0;                                                                                                     // 0 = ON, 1 = DSC OFF, 4 = DTC/MDM. 
 uint8_t dsc_intervention = 0;
 bool holding_dsc_off_console = false, dsc_mode_change_disable = false;
-elapsedMillis mdrive_message_timer = 5000, veh_mode_timer = 500;
+elapsedMillis mdrive_message_bn2000_timer = 10000, mdrive_message_bn2010_timer = 1000, veh_mode_timer = 500;
 uint8_t m_mfl_held_count = 0;
 CAN_message_t idrive_mdrive_settings_menu_cic_a_buf, idrive_mdrive_settings_menu_cic_b_buf,
               idrive_mdrive_settings_menu_nbt_a_buf, idrive_mdrive_settings_menu_nbt_b_buf,
               idrive_mdrive_settings_menu_nbt_c_buf, gws_sport_on_buf, gws_sport_off_buf,
               idrive_xview_menu_nbt_a_buf, idrive_xview_menu_nbt_b_buf, idrive_xview_menu_nbt_c_buf,
-              idrive_bn2000_time_12h_buf, idrive_bn2000_time_24h_buf, 
+              idrive_bn2000_time_12h_buf, idrive_bn2000_time_24h_buf,
               idrive_bn2000_date_ddmmyyyy_buf, idrive_bn2000_date_mmddyyyy_buf,
-              idrive_bn2000_consumption_l100km_buf, idrive_bn2000_consumption_kml_buf,
-              idrive_bn2000_consumption_mpg_buf, idrive_bn2000_distance_km_buf, idrive_bn2000_distance_mi_buf,
+              idrive_bn2000_consumption_l100km_buf, idrive_bn2000_consumption_kml_buf, idrive_bn2000_consumption_mpguk_buf,
+              idrive_bn2000_consumption_mpgus_buf, idrive_bn2000_distance_km_buf, idrive_bn2000_distance_mi_buf,
               idrive_bn2000_pressure_bar_buf, idrive_bn2000_pressure_kpa_buf, idrive_bn2000_pressure_psi_buf,
               idrive_bn2000_temperature_c_buf, idrive_bn2000_temperature_f_buf,
               idrive_bn2000_hba_on_buf, idrive_bn2000_hba_off_buf, idrive_bn2000_indicator_single_buf,
@@ -276,18 +287,16 @@ elapsedMillis hu_bn2000_bus_sleep_ready_timer = 0, hu_bn2000_nm_timer = 1000;   
 const uint16_t power_debounce_time_ms = 300, dsc_debounce_time_ms = 500, dsc_hold_time_ms = 300;
 elapsedMillis power_button_debounce_timer = power_debounce_time_ms,
               dsc_off_button_debounce_timer = dsc_debounce_time_ms, dsc_off_button_hold_timer = 0;
-bool ignore_m_press = false, ignore_m_hold = false, holding_both_console = false;
+bool received_m_press = false, ignore_m_hold = false, holding_both_console = false;
 int8_t clock_mode = -1;
 float cpu_temp = 0, last_cpu_temp = 0, max_cpu_temp = 0;
 CAN_message_t cc_single_gong_buf, cc_double_gong_buf, cc_triple_gong_buf, idrive_button_sound_buf,
               idrive_beep_sound_buf, idrive_horn_sound_buf;
 bool uif_read = false;
 uint8_t servotronic_message[] = {0, 0xFF};
-CAN_message_t svt70_zero_pwm_buf, svt70_pwm_release_control_buf, shiftlights_start_buf,
-              shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf,
+CAN_message_t shiftlights_start_buf, shiftlights_mid_buildup_buf, shiftlights_startup_buildup_buf,
               shiftlights_max_flash_buf, shiftlights_off_buf;
-elapsedMillis svt70_pwm_control_timer = 3000;
-bool svt70_sport_plus = false, shiftlights_segments_active = false, startup_animation_active = false;
+bool shiftlights_segments_active = false, startup_animation_active = false;
 uint8_t ignore_shiftlights_off_counter = 0, ignore_sports_data_counter = 0;
 uint16_t START_UPSHIFT_WARN_RPM_ = START_UPSHIFT_WARN_RPM,
          MID_UPSHIFT_WARN_RPM_ = MID_UPSHIFT_WARN_RPM,
@@ -301,7 +310,7 @@ uint8_t last_var_rpm_can = 0;
 #else
   uint8_t mdrive_message_bn2000[] = {0, 0, 0, 0, 0, 0x87};                                                                          // Byte5: shiftlights always off
 #endif
-uint8_t mdrive_message_bn2010[] = {0, 0, 0, 0, 0, 0x8A, 0x90, 0xE8};
+uint8_t mdrive_message_bn2010[] = {0, 0, 0, 0, 3, 0x89, 0x90, 0xE8};
 CAN_message_t speedo_needle_max_buf, speedo_needle_min_buf, speedo_needle_release_buf,
               tacho_needle_max_buf, tacho_needle_min_buf, tacho_needle_release_buf,
               fuel_needle_max_buf, fuel_needle_min_buf, fuel_needle_release_buf,
@@ -412,20 +421,19 @@ uint8_t e_vehicle_direction = 0, f_speed_alive_counter = 0, rls_brightness = 0xF
         f_driving_dynamics_alive_counter = 0, f_steering_angle_alive_counter = 0, f_pdc_function_status_alive_counter = 0,
         f_ftm_status_alive_counter = 0, f_standstill_status_alive_counter = 0, f_mdrive_alive_counter = 0,
         f_xview_pitch_alive_counter = 0, f_road_incline_alive_counter = 0, f_steering_angle_effective_alive_counter = 0,
-        f_throttle_pedal_alive_counter = 0;
+        f_throttle_pedal_alive_counter = 0, object_warning_coord_alive_counter = 0, f_distance_traveled_alive_counter = 0;
 uint8_t f_mdrive_settings[] = {0, 0, 0, 0, 0}, f_driving_dynamics_ignore = 3;
-uint32_t f_distance_alive_counter = 0x2000;
+uint32_t f_distance_alive_counter = 0x2000;                                                                                         // 2: signal valid.
 uint8_t f_lights_ckm_request = 0;
 CAN_message_t f_lights_ckm_delayed_msg;
 uint16_t f_converted_steering_angle = 0, f_front_axle_wheel_angle = 0;
 elapsedMillis sine_pitch_angle_request_timer = 500, sine_roll_angle_request_timer = 500,
               f_outside_brightness_timer = 500, f_data_powertrain_2_timer = 1000,
               f_xview_pitch_timer = 1000, f_driving_dynamics_timer = 1000, f_standstill_status_timer = 1000,
-              f_road_incline_timer_ptcan = 100, f_road_incline_timer_kcan2 = 200, f_torque_1_timer = 20,
-              f_chassis_lateral_timer_ptcan = 20, f_chassis_lateral_timer_kcan2 = 200,
-              f_chassis_longitudinal_timer_kcan2 = 200, f_chassis_longitudinal_timer_ptcan = 20,
-              f_chassis_yaw_timer = 20, f_chassis_speed_timer = 20,
-              f_chassis_steering_timer = 200, f_chassis_steering_effective_timer = 20, f_throttle_pedal_timer = 20;
+              f_road_incline_timer = 200, f_torque_1_timer = 20, f_chassis_lateral_timer = 20,
+              f_chassis_longitudinal_timer = 20, f_chassis_yaw_timer = 20, f_chassis_speed_timer = 20,
+              f_chassis_steering_timer = 200, f_chassis_steering_effective_timer = 20, f_throttle_pedal_timer = 20,
+              object_warning_coord_timer = 1000;
 CAN_message_t sine_pitch_angle_request_a_buf, sine_pitch_angle_request_b_buf,
               sine_roll_angle_request_a_buf, sine_roll_angle_request_b_buf, nivi_button_pressed_buf,
               nivi_button_released_buf, f_hu_nbt_reboot_buf;
@@ -438,6 +446,7 @@ CRC8 f_vehicle_status_crc(0x1D, 0, 0x64, false, false),                         
      f_lateral_acceleration_crc(0x1D, 0, 0xE5, false, false),                                                                       // SAE J1850 POLY, 0 init and XOR-OUT 0xE5 for ARB-ID 0x19A.
      f_yaw_rate_msg_crc(0x1D, 0, 1, false, false),                                                                                  // SAE J1850 POLY, 0 init and XOR-OUT 1 for ARB-ID 0x19F.
      f_speed_crc(0x1D, 0, 0xF, false, false),                                                                                       // SAE J1850 POLY, 0 init and XOR-OUT 0xF for ARB-ID 0x1A1.
+     f_distance_traveled_crc(0x1D, 0, 0x78, false, false),                                                                          // SAE J1850 POLY, 0 init and XOR-OUT 0x78 for ARB-ID 0x2BB.
      f_standstill_status_crc(0x1D, 0, 0x8F, false, false),                                                                          // SAE J1850 POLY, 0 init and XOR-OUT 0x8F for ARB-ID 0x2DC.
      f_steering_angle_crc(0x1D, 0, 0xD1, false, false),                                                                             // SAE J1850 POLY, 0 init and XOR-OUT 0xD1 for ARB-ID 0x301.
      f_steering_angle_effective_crc(0x1D, 0, 0x3A, false, false),                                                                   // SAE J1850 POLY, 0 init and XOR-OUT 0x3A for ARB-ID 0x302.
@@ -481,8 +490,8 @@ CAN_message_t set_hdc_cruise_control_buf, cancel_hdc_cruise_control_buf,
 cppQueue hdc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 CAN_message_t msa_deactivated_cc_on_buf, msa_deactivated_cc_off_buf;
 uint8_t pdc_bus_status = 0x80;
-CAN_message_t camera_off_buf, camera_on_buf, camera_inactive_buf, pdc_off_camera_on_buf, pdc_on_camera_on_buf,
-              pdc_off_camera_off_buf, pdc_button_presssed_buf, pdc_button_released_buf;
+CAN_message_t camera_off_buf, camera_on_buf, camera_inactive_buf,
+              pdc_button_presssed_buf, pdc_button_released_buf;
 cppQueue pdc_buttons_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO);
 uint8_t f_pdc_request = 1, rvc_settings[] = {0xE5, 0x4B, 0x2D, 0xE1};                                                               // Camera OFF, Brightness 50%, Contrast 50%, Parking lines OFF, Obstacle marking ON, Tow view OFF.
 bool rvc_tow_view_by_module = false, rvc_tow_view_by_driver = false, msa_button_pressed = false;
@@ -501,12 +510,14 @@ bool serial_commands_unlocked = false;
 uint8_t torque_unit[] = {1, 1, 1, 1}, power_unit[] = {1, 1, 1, 1}, pressure_unit_date_format[] = {9, 9, 9, 9},
         driving_mode = 0, f_units[] = {0, 0, 0, 0, 0, 0xF1}, temperature_unit = 1;
 uint8_t engine_coolant_temperature = 48, engine_oil_temperature = 48;                                                               // Celsius temperature is: value - 48.
-CAN_message_t custom_cc_dismiss_buf, custom_cc_clear_buf, cc_list_clear_buf,
+CAN_message_t custom_cc_dismiss_buf, custom_cc_clear_buf,
               dme_boost_request_a_buf, dme_boost_request_b_buf;
 elapsedMillis custom_info_cc_timer = 100, boost_request_timer = 100;
 uint16_t engine_manifold_sensor = 0, engine_cp_sensor = 0, ambient_pressure = 1000;
 int16_t boost = 0, intake_air_temperature = 0;
-bool dme_boost_requested = false, trsvc_cc_gong = false;
+bool dme_boost_requested = false, trsvc_cc_gong = false, trsvc_died = false;
+uint16_t trsvc_cc_id_1 = 0, trsvc_cc_id_2 = 0;
+elapsedMillis trsvc_watchdog_timer = 0;
 unsigned long cc_message_expires = millis();
 uint8_t ihka_auto_fan_speed = 5, ihka_auto_fan_state = 3, ihka_recirc_state = 0, ihka_auto_distr_state = 0;
 cppQueue nbt_cc_txq(sizeof(delayed_can_tx_msg), 16, queue_FIFO),

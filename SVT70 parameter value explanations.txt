@@ -122,6 +122,7 @@ STUETZSTELLEN_V_LW - Speed and steering angle breakpoints
     
     Speed = signed value / 10. Negative values = reverse.
 
+    FD,30   -72km/h
     00,00   0 km/h
     00,64   10 km/h
     00,B4   18 km/h
@@ -222,10 +223,10 @@ E92 M3 values:
 
     WANDLERKENNLINIE - PWM to current breakpoints
 
-        [00,3C,59,7C,A3,B2,C1,FF], 00,00,00,00,00,00,00,00,00, [00,00,C8,01,2C,01,A4,02,26,02,58,02,8A,03,5C]
+        [00,3B,59,7C,A3,B2,C1,FF], 00,00,00,00,00,00,00,00,00, [00,00,C8,01,2C,01,A4,02,26,02,58,02,8A,03,5C]
 
         0x00 = 0x0000 - 0 mA
-        0x3C = 0x00C8 - 200 mA
+        0x3B = 0x00C8 - 200 mA
         0x59 = 0x012C - 300 mA
         0x7C = 0x01A4 - 420 mA
         0xA3 = 0x0226 - 550 mA

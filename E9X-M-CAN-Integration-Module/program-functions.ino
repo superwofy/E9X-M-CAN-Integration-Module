@@ -77,7 +77,7 @@ void read_initialize_eeprom(void) {
     mdrive_power[2] = EEPROM.read(15);
     mdrive_edc[2] = EEPROM.read(16);
     mdrive_svt[2] = EEPROM.read(17);
-    #if !F_NBTE                                                                                                                     // NBT does not have M-Key settings.
+    #if !F_NBTE                                                                                                                     // NBTE does not have M-Key settings.
       dme_ckm[0][0] = EEPROM.read(20);
       dme_ckm[1][0] = EEPROM.read(21);
       dme_ckm[2][0] = EEPROM.read(22);
@@ -213,7 +213,7 @@ void initialize_watchdog(void) {
 
 
 void wdt_callback(void) {
-  serial_log("Watchdog not fed. Program will reset in 3s!", 0);
+  serial_log("Watchdog not fed. Program will reset in 3s!", 1);
   update_data_in_eeprom();
 }
 
@@ -297,7 +297,7 @@ void print_current_state(Stream &status_serial) {
   #endif
   #if F_NBTE || F_NIVI || MIRROR_UNDIM
     sprintf(serial_debug_string, " Outside brightness: 0x%X, time of day: %d %s.", rls_brightness, rls_time_of_day,
-            rls_time_of_day == 0 ? "Daytime" : rls_time_of_day == 2 ? "Darkness" : "Other");
+            rls_time_of_day == 0 ? "Daytime" : rls_time_of_day >= 2 ? "Darkness" : "Other");
     status_serial.println(serial_debug_string);
   #endif
   #if IMMOBILIZER_SEQ
@@ -498,6 +498,28 @@ void serial_log(const char message[], uint8_t level) {
   }
   if (!clearing_dtcs) {
     if (level <= LOGLEVEL) {
+      switch (level) {
+        case 0: {
+          Serial.print("[SER]: ");
+          break;
+        }
+        case 1: {
+          Serial.print("[ERR]: ");
+          break;
+        }
+        case 2: {
+          Serial.print("[INF]: ");
+          break;
+        }
+        case 3: {
+          Serial.print("[IN2]: ");
+          break;
+        }
+        case 4: {
+          Serial.print("[DBG]: ");
+          break;
+        }
+      }
       if (Serial.dtr()) {
         Serial.println(message);
       }
@@ -513,7 +535,7 @@ void reset_ignition_variables(void) {                                           
   }
   RPM = 0;
   eml_light = 0;
-  ignore_m_press = ignore_m_hold = false;
+  received_m_press = ignore_m_hold = false;
   mdrive_power_active = restore_console_power_mode = false;
   mdrive_settings_requested = false;
   xview_menu_requested = false;
@@ -592,8 +614,10 @@ void reset_ignition_variables(void) {                                           
   reverse_gear_status = false;
   sine_pitch_angle_requested = sine_roll_angle_requested = false;
   trsvc_cc_gong = false;
+  trsvc_died = false;
+  svt_speed_msg_change = false;
   #if F_NBTE
-    send_f_pdc_function_status(true);                                                                                               // If PDC was active, update NBT with the OFF status.
+    send_f_pdc_function_status(true);                                                                                               // If PDC was active, update NBTE with the OFF status.
     #if F_VSW01 && F_VSW01_MANUAL
       vsw_switch_input(4);
     #endif
@@ -636,7 +660,6 @@ void reset_sleep_variables(void) {
   asd_initialized = asd_rad_on_initialized = false;
   szl_full_indicator = false;
   f_pdc_request = 1;
-  svt70_sport_plus = false;
   #if IMMOBILIZER_SEQ
     if (immobilizer_persist) {
       if (immobilizer_released) {

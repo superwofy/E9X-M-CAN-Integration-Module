@@ -39,8 +39,9 @@ void cache_can_message_buffers(void) {                                          
           idrive_bn2000_date_ddmmyyyy[] = {0x1E, 0x66, 0, 1, 0, 1, 0, 0},
           idrive_bn2000_date_mmddyyyy[] = {0x1E, 0x66, 0, 1, 0, 2, 0, 0},
           idrive_bn2000_consumption_l100km[] = {0x1E, 0x66, 0, 1, 0, 0, 1, 0},
+          idrive_bn2000_consumption_mpguk[] = {0x1E, 0x66, 0, 1, 0, 0, 2, 0},
+          idrive_bn2000_consumption_mpgus[] = {0x1E, 0x66, 0, 1, 0, 0, 3, 0},
           idrive_bn2000_consumption_kml[] = {0x1E, 0x66, 0, 1, 0, 0, 4, 0},
-          idrive_bn2000_consumption_mpg[] = {0x1E, 0x66, 0, 1, 0, 0, 2, 0},
           idrive_bn2000_distance_km[] = {0x1E, 0x66, 0, 1, 0, 0, 0x40, 0},
           idrive_bn2000_distance_mi[] = {0x1E, 0x66, 0, 1, 0, 0, 0x80, 0},
           idrive_bn2000_pressure_bar[] = {0x1E, 0x66, 0, 1, 0, 0, 0, 1},
@@ -59,8 +60,9 @@ void cache_can_message_buffers(void) {                                          
   idrive_bn2000_date_ddmmyyyy_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_date_ddmmyyyy);
   idrive_bn2000_date_mmddyyyy_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_date_mmddyyyy);
   idrive_bn2000_consumption_l100km_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_consumption_l100km);
+  idrive_bn2000_consumption_mpgus_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_consumption_mpgus);
+  idrive_bn2000_consumption_mpguk_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_consumption_mpguk);
   idrive_bn2000_consumption_kml_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_consumption_kml);
-  idrive_bn2000_consumption_mpg_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_consumption_mpg);
   idrive_bn2000_distance_km_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_distance_km);
   idrive_bn2000_distance_mi_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_distance_mi);
   idrive_bn2000_pressure_bar_buf = make_msg_buf(0x5E2, 8, idrive_bn2000_pressure_bar);
@@ -382,20 +384,17 @@ void cache_can_message_buffers(void) {                                          
     uint8_t vol_request[] = {0x63, 5, 0x31, 1, 0xA0, 0x39, 0};
     vol_request_buf = make_msg_buf(0x6F1, 7, vol_request);
     uint8_t custom_cc_dismiss[] = {0x46, 3, 0x50, 0xF0, 0, 0, 0, 0},
-            custom_cc_clear[] = {0x46, 3, 0x70, 0xF0, 0, 0, 0, 0},
-            cc_list_clear[] = {0, 0, 0, 0xFE, 0xFF, 0xFE, 0xFF};
+            custom_cc_clear[] = {0x46, 3, 0x70, 0xF0, 0, 0, 0, 0};
     custom_cc_dismiss_buf = make_msg_buf(0x338, 8, custom_cc_dismiss);
     custom_cc_clear_buf = make_msg_buf(0x338, 8, custom_cc_clear);
-    cc_list_clear_buf = make_msg_buf(0x336, 7, cc_list_clear);
+    uint8_t hood_open_hot_cc_dialog[] = {0xE1, 2, 0x32, 0xF0, 0, 0xFE, 0xFE, 0xFE},
+          hood_open_hot_cc_dialog_clear[] = {0xE1, 2, 0x70, 0xF0, 0, 0xFE, 0xFE, 0xFE};
+    hood_open_hot_cc_dialog_buf = make_msg_buf(0x338, 8, hood_open_hot_cc_dialog);
+    hood_open_hot_cc_dialog_clear_buf = make_msg_buf(0x338, 8, hood_open_hot_cc_dialog_clear);
   #else
     uint8_t vol_request[] = {0x63, 3, 0x31, 0x24, 0, 0, 0, 0};
     vol_request_buf = make_msg_buf(0x6F1, 8, vol_request);
   #endif
-
-  uint8_t hood_open_hot_cc_dialog[] = {0xE1, 2, 0x32, 0xF0, 0, 0xFE, 0xFE, 0xFE},
-          hood_open_hot_cc_dialog_clear[] = {0xE1, 2, 0x70, 0xF0, 0, 0xFE, 0xFE, 0xFE};
-  hood_open_hot_cc_dialog_buf = make_msg_buf(0x338, 8, hood_open_hot_cc_dialog);
-  hood_open_hot_cc_dialog_clear_buf = make_msg_buf(0x338, 8, hood_open_hot_cc_dialog_clear);
 
   uint8_t hdc_cc_activated_on[] = {0x40, 0x4B, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF},
           hdc_cc_unavailable_on[] = {0x40, 0x4D, 1, 0x1D, 0xFF, 0xFF, 0xFF, 0xFF},
@@ -416,16 +415,10 @@ void cache_can_message_buffers(void) {                                          
   msa_deactivated_cc_off_buf = make_msg_buf(0x592, 8, msa_deactivated_cc_off);
 
   uint8_t camera_off[] = {0xA1, 0xFF}, camera_on[] = {0xA5, 0xFF}, 
-          camera_inactive[] = {0x81, 0xFF},
-          pdc_off_camera_on[] = {0x64, 4, 0x30, 9, 7, 4, 0, 0},
-          pdc_on_camera_on[] = {0x64, 4, 0x30, 9, 7, 5, 0, 0},
-          pdc_off_camera_off[] = {0x64, 4, 0x30, 9, 7, 0, 0, 0};
+          camera_inactive[] = {0x81, 0xFF};
   camera_off_buf = make_msg_buf(0x3AE, 2, camera_off);
   camera_on_buf = make_msg_buf(0x3AE, 2, camera_on);
   camera_inactive_buf = make_msg_buf(0x3AE, 2, camera_inactive);
-  pdc_off_camera_on_buf = make_msg_buf(0x6F1, 8, pdc_off_camera_on);
-  pdc_on_camera_on_buf = make_msg_buf(0x6F1, 8, pdc_on_camera_on);
-  pdc_off_camera_off_buf = make_msg_buf(0x6F1, 8, pdc_off_camera_off);
   pdc_button_presssed_buf = make_msg_buf(0x317, 2, generic_button_pressed);
   pdc_button_released_buf = make_msg_buf(0x317, 2, generic_button_released);
 
@@ -457,11 +450,6 @@ void cache_can_message_buffers(void) {                                          
   jbe_reboot_buf = make_msg_buf(0x6F1, 8, jbe_reboot);
   ihka_5v_on_buf = make_msg_buf(0x6F1, 6, ihka_5v_on);
   ihka_5v_off_buf = make_msg_buf(0x6F1, 6, ihka_5v_off);
-
-  uint8_t svt70_zero_pwm[] = {0xE, 6, 0x2E, 0xF0, 0, 0, 0x64, 0x55},
-          svt70_pwm_release_control[] = {0xE, 6, 0x2E, 0xF0, 0, 0, 0, 0};
-  svt70_zero_pwm_buf = make_msg_buf(0x6F1, 8, svt70_zero_pwm);
-  svt70_pwm_release_control_buf = make_msg_buf(0x6F1, 8, svt70_pwm_release_control);
 
   uint8_t jbe_headlight_washer[] = {0, 5, 0x30, 2, 7, 0x28, 1, 0};
   jbe_headlight_washer_buf = make_msg_buf(0x6F1, 8, jbe_headlight_washer);
@@ -498,13 +486,13 @@ void initialize_can_handlers(void) {
   #endif
   kcan_handlers[0x19E] = evaluate_dsc_status;                                                                                       // 0x19E: DSC status (KCAN only). Cycle time 200ms.
   #if F_NBTE
-    kcan_handlers[0x1A6] = send_f_distance_messages;                                                                                // 0x1A6: Distance message from DSC. Cycle time 100ms.
+    kcan_handlers[0x1A6] = send_f_distance_traveled;                                                                                // 0x1A6: Distance message from DSC. Cycle time 100ms.
   #else
     kcan_handlers[0x1AA] = send_dme_power_ckm;                                                                                      // Time POWER CKM message with iDrive ErgoCommander (0x1AA). Sent at boot and Terminal R cycling.
   #endif
   kcan_handlers[0x1B4] = evaluate_kombi_status_message;                                                                             // 0x1B4: KOMBI status (indicated speed, handbrake). Cycle time 100ms (terminal R ON).
   #if F_NBTE_CCC_ZBE
-    kcan_handlers[0x1B8] = convert_zbe1_message;                                                                                    // Convert old CCC controller data (0x1B8) for NBT.
+    kcan_handlers[0x1B8] = convert_zbe1_message;                                                                                    // Convert old CCC controller data (0x1B8) for NBTE.
   #endif
   #if REVERSE_BEEP || DOOR_VOLUME
     kcan_handlers[0x1C6] = evaluate_pdc_warning;                                                                                    // 0x1C6: PDC acoustic warning.
@@ -564,8 +552,10 @@ void initialize_can_handlers(void) {
   #if CONTROL_SHIFTLIGHTS
     kcan_handlers[0x332] = evaluate_update_shiftlight_sync;                                                                         // 0x332: Variable redline broadcast from DME. Cycle time 1s.
   #endif
-  kcan_handlers[0x336] = process_bn2000_cc_display_list;
-  kcan_handlers[0x338] = process_bn2000_cc_dialog;
+  #if F_NBTE
+    kcan_handlers[0x336] = process_bn2000_cc_display_list;
+    kcan_handlers[0x338] = process_bn2000_cc_dialog;
+  #endif
   #if !F_NBTE
     kcan_handlers[0x34A] = process_kcan_34A;
   #endif
@@ -574,6 +564,10 @@ void initialize_can_handlers(void) {
   #endif
   #if F_NBTE
     kcan_handlers[0x35C] = evaluate_speed_warning_status;                                                                           // Fix: EVO does not support settings less than 15kph.
+    kcan_handlers[0x388] = modify_vehicle_type;                                                                                     // Convert vehicle type information fed to KCAN2.
+  #endif
+  #if F_NBTE_CPS_VIN || F_KCAN2_VIN
+    kcan_handlers[0x380] = modify_vehicle_vin;
   #endif
   #if AUTO_TOW_VIEW_RVC
     kcan_handlers[0x36D] = evaluate_pdc_distance;                                                                                   // 0x36D: Distance status sent by PDC. Sent when active.
@@ -612,8 +606,10 @@ void initialize_can_handlers(void) {
     kcan_handlers[0x3DF] = evaluate_ihka_auto_ckm;                                                                                  // 0x3DF: CKM setting for AUTO blower speed.
   #endif
   kcan_handlers[0x3F1] = evaluate_hba_ckm;                                                                                          // 0x3F1: CKM setting for High beam assistant.
-  #if F_NIVI || F_NBTE
+  #if TRSVC70
     kcan_handlers[0x586] = evaluate_trsvc_cc;
+  #endif
+  #if F_NIVI || F_NBTE
     kcan_handlers[0x650] = evaluate_vehicle_pitch_roll_angles;                                                                      // 0x650: SINE diagnostic responses. SINE is at address 0x50.
   #endif
   kcan_handlers[0x592] = process_dme_cc;
@@ -629,8 +625,8 @@ void initialize_can_handlers(void) {
   #endif
 
   #if F_NBTE
-    memset(kcan_to_kcan2_forward_filter_list,
-           1, sizeof(kcan_to_kcan2_forward_filter_list));
+    memset(kcan_to_kcan2_forward_filter_list, 1, sizeof(kcan_to_kcan2_forward_filter_list));                                        // Unconditionally forward all messages except the ones below.
+
     kcan_to_kcan2_forward_filter_list[0xA9] = 0;                                                                                    // BN2000 only, TORQUE_2.
     kcan_to_kcan2_forward_filter_list[0xAA] = 0;                                                                                    // BN2000 only, engine status and torques.
     kcan_to_kcan2_forward_filter_list[0xA8] = 0;                                                                                    // BN2000 only, TORQUE_1 KCAN.
@@ -642,9 +638,9 @@ void initialize_can_handlers(void) {
     kcan_to_kcan2_forward_filter_list[0x19E] = 0;                                                                                   // BN2000 Status DSC / BN2010 control subnetworks.
     kcan_to_kcan2_forward_filter_list[0x1A0] = 0;                                                                                   // BN2000 Speed / BN2010 Gearbox check-control.
     kcan_to_kcan2_forward_filter_list[0x1B4] = 0;                                                                                   // BN2000 only, KOMBI status.
-    kcan_to_kcan2_forward_filter_list[0x1B6] = 0;                                                                                   // BN2000 Engine electrical current flow. Unknown in BN2010. It causes NBT EVO to block phone calls.
+    kcan_to_kcan2_forward_filter_list[0x1B6] = 0;                                                                                   // BN2000 Engine electrical current flow. Unknown in BN2010. It causes NBTE to block phone calls.
     kcan_to_kcan2_forward_filter_list[0x1D0] = 0;                                                                                   // BN2000 only, engine data.
-    kcan_to_kcan2_forward_filter_list[0x1D6] = 0;                                                                                   // MFL buttons for next/previous are swappend for NBT EVO.
+    kcan_to_kcan2_forward_filter_list[0x1D6] = 0;                                                                                   // MFL buttons for next/previous are swappend for NBTE.
     kcan_to_kcan2_forward_filter_list[0x2B2] = 0;                                                                                   // BN2000 only, wheel brake pressures.
     kcan_to_kcan2_forward_filter_list[0x2C0] = 0;                                                                                   // BN2000 only, LCD brightness.
     kcan_to_kcan2_forward_filter_list[0x2F3] = 0;                                                                                   // BN2000 gear shift instruction / BN2010 gyro.
@@ -654,22 +650,20 @@ void initialize_can_handlers(void) {
     kcan_to_kcan2_forward_filter_list[0x31D] = 0;                                                                                   // BN2000 only, FTM status.
     kcan_to_kcan2_forward_filter_list[0x326] = 0;                                                                                   // BN2000 only, EDC status.
     kcan_to_kcan2_forward_filter_list[0x332] = 0;                                                                                   // BN2000 only, variable redline.
-    kcan_to_kcan2_forward_filter_list[0x35C] = 0;                                                                                   // Speed warning setting. Requires further processing.
-    kcan_to_kcan2_forward_filter_list[0x3B3] = 0;                                                                                   // Power management consumer control. Requires further processing.
-    kcan_to_kcan2_forward_filter_list[0x3DD] = 0;                                                                                   // Lights CKM. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x336] = 0;                                                                                   // CC list display. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x338] = 0;                                                                                   // CC dialog display. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x35C] = 0;                                                                                   // Speed warning setting. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x380] = 0;                                                                                   // VIN number. May require further processing.
+    kcan_to_kcan2_forward_filter_list[0x388] = 0;                                                                                   // Vehicle Type. Requires further processing.
     kcan_to_kcan2_forward_filter_list[0x399] = 0;                                                                                   // BN2000 MDrive / BN2010 Status energy voltage.
     kcan_to_kcan2_forward_filter_list[0x3B3] = 0;                                                                                   // DME consumer control. Requires further processing.
-    for (int i = 0x480; i < 0x580; i++) {                                                                                           // BN2000 OSEK NM (incompatible).
-      kcan_to_kcan2_forward_filter_list[i] = 0;
-    }
-    for (int j = 0x580; j < 0x5E0; j++) {                                                                                           // BN2000 CCs except KOMBI response.
-      kcan_to_kcan2_forward_filter_list[j] = 0;
-    }
-    for (int k = 0x5E1; k < 0x6F0; k++) {                                                                                           // More BN2000 CCs and KWP/UDS diagnosis responses from various modules.
+    kcan_to_kcan2_forward_filter_list[0x3CC] = 0;
+    kcan_to_kcan2_forward_filter_list[0x3DD] = 0;                                                                                   // Lights CKM. Requires further processing.
+    kcan_to_kcan2_forward_filter_list[0x3F7] = 0;
+    for (int k = 0x3FF; k < 0x6F1; k++) {                                                                                           // BN2000 CCs, diagnosis responses and NM from various modules.
       kcan_to_kcan2_forward_filter_list[k] = 0;
     }
+    kcan_to_kcan2_forward_filter_list[0x5E0] = 1;                                                                                   // Kombi response to 0x5E3?
   #endif
 
   #if FRONT_FOG_CORNER || F_NIVI || F_NBTE
@@ -686,13 +680,10 @@ void initialize_can_handlers(void) {
   #if CUSTOM_MONITORING_CC
     ptcan_handlers[0x612] = evaluate_dme_boost_response;
   #endif
-  #if F_NIVI
-    ptcan_handlers[0x657] = process_ptcan_657;                                                                                      // Forward Diagnostic responses from NVE module (0x657) to DCAN
-  #endif
-
+  
   #if F_NBTE
     #if F_NBTE_CCC_ZBE
-      kcan2_handlers[0x273] = send_zbe_acknowledge;                                                                                 // NBT tried to initialize a controller.
+      kcan2_handlers[0x273] = send_zbe_acknowledge;                                                                                 // HU tried to initialize a controller.
     #endif
     kcan2_handlers[0x291] = evaluate_idrive_units;
     kcan2_handlers[0x2B8] = evaluate_speed_warning_setting;
@@ -701,11 +692,15 @@ void initialize_can_handlers(void) {
     #if AUTO_TOW_VIEW_RVC
       kcan2_handlers[0x38F] = store_rvc_settings_idrive;
     #endif
-    kcan2_handlers[0x39E] = evaluate_idrive_zero_time;                                                                              // 0x39E: New date/time from NBT.
+    kcan2_handlers[0x39E] = evaluate_idrive_zero_time;                                                                              // 0x39E: New date/time from HU.
     kcan2_handlers[0x3DC] = evaluate_idrive_lights_settings;
-    kcan2_handlers[0x42F] = update_mdrive_message_settings_nbt;                                                                     // 0x42F: MDrive settings from iDrive (BN2010).
+    kcan2_handlers[0x42F] = update_mdrive_message_settings_nbt;                                                                     // 0x42F: MDrive settings from HU (BN2010).
+    kcan2_handlers[0x5E3] = process_hu_kombi_settings;                                                                              // 0x5E3: Used by the HU to set KOMBI settings such as Independent Ventilation. Similar to 5E2.
     kcan2_handlers[0x635] = process_kcan2_635;                                                                                      // 0x635: TBX diagnostic response.
-    kcan2_handlers[0x663] = process_kcan2_663;                                                                                      // 0x663: iDrive diagnostic response.
+    kcan2_handlers[0x663] = process_kcan2_663;                                                                                      // 0x663: HU diagnostic response.
+    #if F_NIVI
+      kcan2_handlers[0x657] = process_kcan2_657;                                                                                    // 0x657: NVE diagnostic response.
+    #endif
 
     memset(kcan2_to_kcan_forward_filter_list,
            1, sizeof(kcan2_to_kcan_forward_filter_list));
@@ -716,8 +711,11 @@ void initialize_can_handlers(void) {
     kcan2_to_kcan_forward_filter_list[0x39E] = 0;                                                                                   // Time/date, checked for zero before forwarding.
     kcan2_to_kcan_forward_filter_list[0x3DC] = 0;                                                                                   // Light CKM setting. Converted to use 0x5E2. Stored last byte to correct 0x3DD.
     kcan2_to_kcan_forward_filter_list[0x42F] = 0;                                                                                   // BN2010 MDrive settings.
-    kcan2_to_kcan_forward_filter_list[0x635] = 0;                                                                                   // BN2010 TBX network management.
-    for (int i = 0x6F1; i < 0x800; i++) {                                                                                           // Irrelevant data. Also stop HU from injecting diagnostic messages to other networks.
+    for (int i = 0x500; i < 0x600; i++) {                                                                                           // BN2010 NM messages.
+      kcan2_to_kcan_forward_filter_list[i] = 0;
+    }
+    kcan2_to_kcan_forward_filter_list[0x657] = 0;
+    for (int i = 0x6F1; i < 0x800; i++) {                                                                                           // Irrelevant data.
       kcan2_to_kcan_forward_filter_list[i] = 0;
     }
   #endif
@@ -773,19 +771,7 @@ void kcan2_write_msg(const CAN_message_t &msg) {
   #if F_NBTE
     if (kcan2_mode == MCP_NORMAL) {
       byte send_buf[msg.len];
-   
-      #if F_NBTE_VIN_PATCH
-        if (msg.id == 0x380) {                                                                                                      // Patch NBT VIN to donor.
-          if (donor_vin_initialized) {
-            for (uint8_t i = 0; i < msg.len; i++) {
-              send_buf[i] = DONOR_VIN[i];
-            }
-          } else {
-            return;
-          }
-        }
-      #endif 
-      
+
       for (uint8_t i = 0; i < msg.len; i++) {
         send_buf[i] = msg.buf[i];
       }
@@ -923,8 +909,8 @@ void convert_f_nbt_network_management(void) {
     hu_nm[1] = 1;
   } else {
     hu_nm[0] = hu_bn2000_nm_next_neighbour;
-    if (!terminal_r && !hu_ent_mode) {
-      if (hu_bn2000_bus_sleep_ready_timer >= HU_ENT_MODE_TIMEOUT) {                                                                 // Give the driver time to reactivate the HU otherwise the car would kill KCAN activity immediately.
+    if ((!terminal_r && !hu_ent_mode) || kl30g_cutoff_imminent) {
+      if ((hu_bn2000_bus_sleep_ready_timer >= HU_ENT_MODE_TIMEOUT) || kl30g_cutoff_imminent) {                                      // Give the driver time to reactivate the HU otherwise the car would kill KCAN immediately.
         hu_nm[1] = 0x52;                                                                                                            // This timeout is also triggered when the FRM wakes the KCAN before deep sleep!
         if (!hu_bn2000_bus_sleep_active) {
           hu_bn2000_bus_sleep_active = true;
@@ -957,12 +943,7 @@ void send_f_kombi_network_management(void) {
       kcan_write_msg(f_kombi_network_management_buf);
     }
   #endif
-  #if F_NBTE
+  #if F_NBTE || F_NIVI
     kcan2_write_msg(f_kombi_network_management_buf);
-  #endif
-  #if F_NIVI
-    if (ignition) {
-      ptcan_write_msg(f_kombi_network_management_buf);
-    }
   #endif
 }

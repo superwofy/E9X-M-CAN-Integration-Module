@@ -82,7 +82,7 @@ void serial_command_interpreter(void) {
       serial_log("========================== KCAN ==========================", 0);
       KCAN.mailboxStatus();
       serial_log("", 0);
-      serial_log("========================= PT-CAN =========================", 0);
+      serial_log("========================== PTCAN =========================", 0);
       PTCAN.mailboxStatus();
       serial_log("", 0);
       serial_log("========================== DCAN ==========================", 0);
@@ -220,7 +220,7 @@ void serial_command_interpreter(void) {
     #endif
     else if (cmd == "toggle_mdrive") {
       toggle_mdrive_message_active();
-      mdrive_message_timer = 5000;
+      mdrive_message_bn2000_timer = mdrive_message_bn2010_timer = 10000;
       toggle_mdrive_dsc_mode(); 
     }
     else if (cmd == "reset_eeprom") {

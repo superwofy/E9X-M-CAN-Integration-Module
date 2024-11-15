@@ -154,7 +154,7 @@ void evaluate_indicator_status_dim(void) {
 void undim_mirrors_with_indicators(void) {
   // Makes it easier to see cyclists at night in the city when turning...
   if (szl_full_indicator) {
-    if (rls_time_of_day == 2 && frm_undim_timer >= 10000) {
+    if (rls_time_of_day >= 2 && frm_undim_timer >= 10000) {
       if (engine_running == 2 && indicated_speed <= 30.0 && fzd_ec_dimming >= 0x32) {
         kcan_write_msg(frm_mirror_undim_buf);
         frm_undim_timer = 0;
@@ -307,8 +307,8 @@ void evaluate_key_number_remote(void) {
         send_dme_power_ckm();                                                                                                       // Update iDrive in case key remote changed
       }
     #endif
-    update_mdrive_can_message();
-    mdrive_message_timer = 5000;
+    update_mdrive_settings_can_message();
+    mdrive_message_bn2000_timer = mdrive_message_bn2010_timer = 10000;
   }
 }
 
@@ -563,7 +563,7 @@ void evaluate_dipped_beam_status(void) {
 
 void evaluate_corner_fog_activation(void) {
   if (front_fog_corner_timer >= 1500 && ignition) {
-    if (!front_fog_status && dipped_beam_status && rls_time_of_day == 2 && ahl_active && diag_transmit) {     
+    if (!front_fog_status && dipped_beam_status && rls_time_of_day >= 2 && ahl_active && diag_transmit) {     
       float ANGLE, HYSTERESIS;
       if (indicators_on) {
         ANGLE = FOG_CORNER_STEERTING_ANGLE_INDICATORS;
@@ -765,17 +765,22 @@ void evaluate_ambient_temperature(void) {
 
 
 void evaluate_rls_light_status(void) {
-  rls_time_of_day = k_msg.buf[1] & 0xF;
+  uint8_t rls_time_of_day_ = k_msg.buf[1] & 0xF;
+  if (rls_time_of_day != rls_time_of_day_) {
+    rls_time_of_day = rls_time_of_day_;
+    sprintf(serial_debug_string, "RLS time of day changed to: %d.", rls_time_of_day);
+    serial_log(serial_debug_string, 2);
+  }
   rls_brightness = k_msg.buf[0];
 }
 
 
 void request_vehicle_pitch_roll_angle(void) {
-  #if IMMOBILIZER_SEQ
-  if (sine_pitch_angle_request_timer >= 500 && immobilizer_released) {
-  #else
-  if (sine_pitch_angle_request_timer >= 500) {
-  #endif
+  if (sine_pitch_angle_request_timer >= 500
+      #if IMMOBILIZER_SEQ
+      && immobilizer_released
+      #endif
+     ) {
     if (diag_transmit) {
       kcan_write_msg(sine_pitch_angle_request_a_buf);
       sine_pitch_angle_request_timer = 0;
@@ -783,11 +788,11 @@ void request_vehicle_pitch_roll_angle(void) {
     }
   }
 
-  #if IMMOBILIZER_SEQ
-  if (sine_roll_angle_request_timer >= 800 && immobilizer_released) {
-  #else
-  if (sine_roll_angle_request_timer >= 800) {
-  #endif
+  if (sine_roll_angle_request_timer >= 800
+      #if IMMOBILIZER_SEQ
+      && immobilizer_released
+      #endif
+     ) {
     if (diag_transmit) {
       kcan_write_msg(sine_roll_angle_request_a_buf);
       sine_roll_angle_request_timer = 0;
@@ -804,15 +809,15 @@ void evaluate_vehicle_pitch_roll_angles(void) {
       sine_pitch_angle = constrain(sine_pitch_angle, -64.0, 64.0);                                                                  // Boundary check since F message has resolution -64..64.
 
       #if X_VIEW
-        xview_grade_percentage = 0x64 + round(100 * tan(0.0174532925 * abs(sine_pitch_angle)));                                     // Max is 0xFE - 154%.
-        xview_pitch_angle = (0x500 + (int)round( -sine_pitch_angle ) * 0x14) << 4;
+        xview_grade_percentage = 0x64 + (int)round(100 * tan(0.0174532925 * abs(sine_pitch_angle)));                                // Max is 0xFE - 154%.
+        xview_pitch_angle = ((int)round((sine_pitch_angle + 64.0) / 0.05)) << 4;
       #endif
 
       f_vehicle_pitch_angle = 0x2000;                                                                                               // Make leading 4 bits signal valid (QU_AVL_LOGR_RW).
       if (vehicle_awakened_timer <= 5000) {                                                                                         // Force the status to initialization after the car just woke.
         f_vehicle_pitch_angle = 0x8000;
       }
-      f_vehicle_pitch_angle = 0x2000 + round((sine_pitch_angle + 64) / 0.05);
+      f_vehicle_pitch_angle = 0x2000 + (int)round((sine_pitch_angle + 64.0) / 0.05);
       if (diag_transmit) {
         kcan_write_msg(sine_pitch_angle_request_b_buf);                                                                             // Send this to complete the transaction.
       }
@@ -828,7 +833,7 @@ void evaluate_vehicle_pitch_roll_angles(void) {
       if (vehicle_awakened_timer <= 5000) {                                                                                         // Force the status to initialization after the car just woke.
         f_vehicle_roll_angle = 0x8000;
       }
-      f_vehicle_roll_angle = 0x2000 + round((sine_roll_angle + 64) / 0.05);
+      f_vehicle_roll_angle = 0x2000 + (int)round((sine_roll_angle + 64.0) / 0.05);
       if (diag_transmit) {
         kcan_write_msg(sine_roll_angle_request_b_buf);                                                                              // Send this to complete the transaction.
       }
@@ -843,12 +848,7 @@ void send_f_brightness_status(void) {
     uint8_t f_outside_brightness[] = {0xFE, 0xFE};                                                                                  // Daytime?. The two bytes may represent the two photosensors (driver's/passenger's side in FXX).
     f_outside_brightness[0] = f_outside_brightness[1] = rls_brightness;
     CAN_message_t f_outside_brightness_buf = make_msg_buf(0x2A5, 2, f_outside_brightness);
-    #if F_NIVI
-      if (ignition) {
-        ptcan_write_msg(f_outside_brightness_buf);
-      }
-    #endif
-    #if F_NBTE
+    #if F_NBTE || F_NIVI
       kcan2_write_msg(f_outside_brightness_buf);
     #endif
     f_outside_brightness_timer = 0;

@@ -15,3 +15,8 @@
 
 
 Cycle time 10s (idle).
+
+
+
+
+CID_90 reacts to byte2. 0..0xFE, 0xFF Invalid.

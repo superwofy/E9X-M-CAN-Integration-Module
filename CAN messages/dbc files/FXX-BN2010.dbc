@@ -32,14 +32,16 @@ NS_ :
     SG_MUL_VAL_
 
 BS_: 
-BU_: ICMQL DSC_SAS CAS_FEM_BDC DME_DDE KOMBI FRM_BDC JBBF_FEM_BDC BDC ZGW HU VSW EMF 
+BU_: ICMQL DSC_SAS CAS_FEM_BDC DME_DDE KOMBI FRM_BDC JBBF_FEM_BDC ZGW HU VSW EMF NVE DSC_ICM DSC ZBE IHKA PDC_REM SZL ACSM EGS_DKG_EME VTG GWS 
 BO_ 2147484063 VYAW_VEH: 6 ICMQL
    SG_ VYAW_VEH : 16|16@1+ (0.005,-163.84) [-163.84|163.84] "deg/s" Vector__XXX
    SG_ QU_VYAW_VEH : 44|4@1+ (1,0) [0|16] "" Vector__XXX
+   SG_ VYAW_VEH_ERR_AMP : 32|12@1+ (0.002,0) [0|1] "deg/s" Vector__XXX
 
-BO_ 2147484057 Vehicle_Longitudinal_Acceleration: 6 ICMQL
+BO_ 2147484057 Vehicle_Longitudinal_Acceleration: 6 DSC_ICM
    SG_ ACLNX_COG : 16|16@1+ (0.002,-65) [-65|65] "m/s^2" Vector__XXX
    SG_ QU_ACLNX_COG : 44|4@1+ (1,0) [0|16] "" Vector__XXX
+   SG_ ACLNX_COG_ERR_AMP : 32|12@1+ (0.005,0) [0|20] "m/s^2" Vector__XXX
 
 BO_ 2147484403 Display_Forecast_2: 8 DSC_SAS
    SG_ ACLNX_COG : 32|16@1+ (0.002,-65) [-65|65] "m/s^2" Vector__XXX
@@ -47,9 +49,10 @@ BO_ 2147484403 Display_Forecast_2: 8 DSC_SAS
    SG_ ACLNY_COG : 48|16@1+ (0.002,-65) [-65|65] "m/s^2" Vector__XXX
    SG_ AVL_STEA_FTAX_WHL : 0|16@1+ (0.00274658,-90) [-90|90] "deg" Vector__XXX
 
-BO_ 2147484058 Vehicle_Lateral_Acceleration: 6 ICMQL
+BO_ 2147484058 Vehicle_Lateral_Acceleration: 6 DSC_ICM
    SG_ ACLNY_COG : 16|16@1+ (0.002,-65) [-65|65] "m/s^2" Vector__XXX
    SG_ QU_ACLNY_COG : 44|4@1+ (1,0) [0|16] "" Vector__XXX
+   SG_ ACLNY_COG_ERR_AMP : 32|12@1+ (0.005,0) [0|20] "m/s^2" Vector__XXX
 
 BO_ 2147484417 STEA_FTAX_WHL: 8 DSC_SAS
    SG_ AVL_STEAV_FTAX_PNI : 16|16@1+ (0.04395,-1440.11) [-1440.11|1440.11] "deg" Vector__XXX
@@ -76,7 +79,7 @@ BO_ 2147483951 KLEMMEN: 8 CAS_FEM_BDC
    SG_ ST_SSP : 46|2@1+ (1,0) [0|1] "" Vector__XXX
    SG_ RQ_DRVG_RDI : 54|2@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484003 TLT_RW: 8 ICMQL
+BO_ 2147484003 TLT_RW: 8 DSC
    SG_ AVL_LOGR_RW : 16|12@1+ (0.05,-64) [-64|64] "deg" Vector__XXX
    SG_ AVL_TRGR_RW : 32|12@1+ (0.05,-64) [-64|64] "deg" Vector__XXX
    SG_ QU_AVL_LOGR_RW : 28|4@1+ (1,0) [0|1] "" Vector__XXX
@@ -214,21 +217,25 @@ BO_ 2147484595 POWERMGMT_CTR_COS: 7 DME_DDE
    SG_ ST_ENERG_PWMG : 48|4@1+ (1,0) [0|1] "" Vector__XXX
    SG_ CTR_PWRU_COS : 44|4@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484298 OP_PUBU_NIVI: 2 BDC
-   SG_ OP_PUBU_NIVI : 0|2@1+ (1,0) [0|1] "" Vector__XXX
+BO_ 2147484298 OP_PUBU_NIVI: 2 FRM_BDC
+   SG_ OP_PUBU_NIVI : 0|2@1+ (1,0) [0|1] "" NVE
 
 BO_ 2147484411 RQ_VSW: 8 HU
-   SG_ RQ_VSW : 0|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RQ_VSW : 0|4@1+ (1,0) [0|1] "" VSW
 
 BO_ 2147484413 ST_VSW: 8 VSW
-   SG_ ST_VSWSig39 : 0|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_VSW : 0|4@1+ (1,0) [0|1] "" HU
 
-BO_ 2147484719 CONFIG_MDRV_2: 8 HU
+BO_ 2147484719 CONF_MDRV_2: 8 HU
    SG_ CONF_MDRV_2_DSC : 0|4@1+ (1,0) [0|1] "" Vector__XXX
    SG_ CONF_MDRV_2_ENG : 12|4@1+ (1,0) [0|1] "" Vector__XXX
    SG_ CONF_MDRV_2_EDC : 16|4@1+ (1,0) [0|1] "" Vector__XXX
    SG_ CONF_MDRV_2_EPAS : 20|4@1+ (1,0) [0|1] "" Vector__XXX
-   SG_ CONF_MDRV_2_SRST : 32|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_SRST : 36|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_HUD : 24|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_STG_GRB : 8|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_MOD_GRB : 32|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_MDRV_2_IDX : 4|4@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484718 ST_MDRV_2: 8 DME_DDE
    SG_ ST_MDRV_2_DSC : 8|4@1+ (1,0) [0|1] "" Vector__XXX
@@ -236,8 +243,12 @@ BO_ 2147484718 ST_MDRV_2: 8 DME_DDE
    SG_ ST_MDRV_2_EDC : 24|4@1+ (1,0) [0|1] "" Vector__XXX
    SG_ ST_MDRV_2_EPAS : 28|4@1+ (1,0) [0|1] "" Vector__XXX
    SG_ ST_MDRV_2_ALIV : 0|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_MDRV_2_MOD_GRB : 40|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_MDRV_2_HUD : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_MDRV_2_STG_GRB : 16|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_MDRV_2_IDX : 12|4@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484397 ST_VHSS: 3 DSC_SAS
+BO_ 2147484397 ST_VHSS: 3 DSC
    SG_ ST_VEHSS : 16|8@1+ (1,0) [0|1] "" Vector__XXX
    SG_ ST_VEHSS_1 : 16|1@1+ (1,0) [0|1] "" Vector__XXX
    SG_ ST_VEHSS_2 : 17|1@1+ (1,0) [0|1] "" Vector__XXX
@@ -251,21 +262,169 @@ BO_ 2147484380 ST_VEHSS_PBRK: 3 EMF
    SG_ ST_VEHSS_PBRK_3 : 18|1@1+ (1,0) [0|1] "" Vector__XXX
    SG_ ST_VEHSS_PBRK_4 : 20|1@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484407 Status_Units: 6 KOMBI
+BO_ 2147484407 UNITS_BN2010: 6 KOMBI
+   SG_ UN_PWR_S_MOD : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ UN_TORQ_S_MOD : 36|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ UN_TEMP : 12|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ UN_PRESS : 24|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DATE : 27|3@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TIME : 10|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ LANG : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ UN_CONS : 16|3@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ UN_DIST : 22|2@1+ (1,0) [0|1] "" Vector__XXX
 
-BO_ 2147484305 Config_Units: 8 HU
+BO_ 2147484305 CONF_UNITS: 6 HU
+   SG_ CONF_TIME : 10|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_TEMP : 12|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_DIST : 22|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_CONS : 16|3@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_TORQ : 36|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_PWR : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_LANG : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_PRESS : 24|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_DATE : 27|3@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484472 CC_DISP: 8 KOMBI
+   SG_ CC_ID : 0|16@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484190 STAT_NIVI: 8 NVE
+   SG_ ST_IM_NIVI : 0|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_ZOOM_NIVI : 2|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_PNGMOD_NIVI : 6|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_CONTR_NIVI : 8|8@1+ (0.3937,0) [0|1] "%" Vector__XXX
+   SG_ ST_PNGMOD_VE_NIVI : 16|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_RLS_NIVI : 24|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_CAM_NIVI : 26|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_HT_CAM_NIVI : 28|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_OBJ_ER_NIVI : 30|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_ERR_CAM_NIVI : 32|3@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_OPTN_ACTVN_GZA : 35|3@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_OBJ_DETE_NIVI : 38|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_BRIG_OFFS_NIVI : 40|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ RQ_DISP_NIVI : 48|2@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_AVAI_OBJ_RCOG_NIVI : 50|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484191 STAT_OBJ_COOR: 8 DSC_ICM
+   SG_ ST_AVAI_CHAIN_WARN : 40|8@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147483839 Touchpad: 8 ZBE
+
+BO_ 2147483708 ST_VEH_COND: 8 ZGW
+
+BO_ 2147483809 RAD_MUTE_EJECT: 2 IHKA
+   SG_ MUTE_EJECT : 0|4@1+ (1,0) [0|1] "" HU
+
+BO_ 2147483810 RAD_BTN: 2 IHKA
+   SG_ MEM : 0|16@1+ (1,0) [0|1] "" HU
+
+BO_ 2147483811 RAD_SEEK: 2 IHKA
+   SG_ SEEK : 0|2@1+ (1,0) [0|1] "" HU
+
+BO_ 2147483889 RAD_VOL: 2 IHKA
+   SG_ KNOB : 0|2@1+ (1,0) [0|1] "" HU
+   SG_ DIRECTION : 8|2@1+ (1,0) [0|1] "" HU
+
+BO_ 2147484032 XVIEW: 8 DSC_SAS
+   SG_ PITCH : 36|12@1+ (0.05,-64) [-140|140] "deg" Vector__XXX
+   SG_ GRADE : 48|8@1+ (1,0) [0|154] "%" Vector__XXX
+
+BO_ 2147484100 DISTANCE_1: 7 DSC_ICM
+   SG_ DISTANCE_4_5 : 0|16@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DISTANCE_2_3 : 16|16@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ QU_DIST_1 : 48|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484101 DISTANCE_2: 7 DSC_ICM
+   SG_ DISTANCE_1_0 : 0|16@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ QU_DIST_2 : 48|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484347 DIST_VEH: 5 DSC_ICM
+   SG_ DIST_VEH : 16|16@1+ (0.01,0) [0|1] "m" Vector__XXX
+
+BO_ 2147484244 AVL_RPM_WHL: 8 DSC
+   SG_ AVL_RPM_WHL_RLH : 0|16@1+ (0.015625,-511.984) [-400|400] "rad/s" Vector__XXX
+   SG_ AVL_RPM_WHL_RRH : 16|16@1+ (0.015625,-511.984) [-400|400] "rad/s" Vector__XXX
+   SG_ AVL_RPM_WHL_FLH : 32|16@1+ (0.015625,-511.984) [-400|400] "rad/s" Vector__XXX
+   SG_ AVL_RPM_WHL_FRH : 48|16@1+ (0.015625,-511.984) [-400|400] "rad/s" Vector__XXX
+
+BO_ 2147484552 FAHRZEUGTYP: 7 CAS_FEM_BDC
+   SG_ TYP_VEH : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TYP_BODY : 8|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ QUAN_CYL : 16|4@1+ (1,0) [0|1] "cylinders" Vector__XXX
+   SG_ QUAN_GR : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TYP_ENG : 24|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TYP_STE : 28|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TYP_GRB : 32|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CLAS_PWR : 36|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TYP_CNT : 40|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ TYP_CAPA : 48|8@1+ (100,0) [0|1] "cc" Vector__XXX
+
+BO_ 2147484325 BRIG_SURR: 2 JBBF_FEM_BDC
+
+BO_ 2147484353 ST_PDC_ACT: 8 PDC_REM
+   SG_ ST_PDC_ACT : 4|8@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484763 CONF_INT_AMB_LIGHT: 8 HU
+   SG_ CONF_INT_BRIG : 24|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CONF_INT_STYLE : 36|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484764 ST_INT_AMB_LIGTH: 8 FRM_BDC
+   SG_ ST_INT_BRIG : 24|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_INT_STYLE : 36|4@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484521 ST_TYR: 5 DSC
+
+BO_ 2147484522 ST_FLA: 2 FRM_BDC
+   SG_ ST_FLA : 0|2@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484590 RQ_ACTVN_FN_PKG: 2 HU
+   SG_ RQ_ACTVN_FN_PKGS : 0|8@1+ (1,0) [0|1] "" ZGW
+
+BO_ 2147484494 NAV_SYS_INF: 8 HU
+
+BO_ 2147483870 DISP_M_SYS: 8 DME_DDE
+
+BO_ 2147484142 SW_LST: 2 SZL
+   SG_ LST : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484929 NM_ACSM: 8 ACSM
+
+BO_ 2147484946 NM_DME: 8 DME_DDE
+
+BO_ 2147484952 NM_EGS: 8 EGS_DKG_EME
+
+BO_ 2147484953 NM_VTG: 8 VTG
+
+BO_ 2147484970 NM_EMF: 8 EMF
+
+BO_ 2147485022 NM_GWS: 8 GWS
+
+BO_ 2147485024 NM_KOMBI: 8 KOMBI
+
+BO_ 2147484944 NM_ZGW: 8 ZGW
+
+BO_ 2147484055 ST_GWS: 4 GWS
+   SG_ ST_GWS : 20|4@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ST_GWS_PARK : 24|8@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 2147484669 DT_DISP_GRDT: 5 EGS_DKG_EME
+   SG_ DISP_PRG_GRB : 16|3@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DISP_PO_GRB : 21|3@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ DISP_DRVLG_GRB : 32|4@1+ (1,0) [0|1] "" Vector__XXX
 
 CM_ BO_ 2147484063 "Vehicle_Yaw_Rate";
 CM_ SG_ 2147484063 VYAW_VEH "Vehicle_Yaw_Rate";
 CM_ SG_ 2147484063 QU_VYAW_VEH "Qualifier_Vehicle_Yaw_Rate";
+CM_ SG_ 2147484063 VYAW_VEH_ERR_AMP "Vehicle_Yaw_Rate_error_amplitude";
 CM_ SG_ 2147484057 ACLNX_COG "Longitudinal_acceleration_center_of_gravity";
 CM_ SG_ 2147484057 QU_ACLNX_COG "Qualifier_Longitudinal_acceleration_center_of_gravity";
+CM_ SG_ 2147484057 ACLNX_COG_ERR_AMP "Longitudinal_acceleration_center_of_gravity_error_amplitude";
 CM_ SG_ 2147484403 ACLNX_COG "Longitudinal_acceleration_center_of_gravity";
 CM_ SG_ 2147484403 VYAW_VEH "Vehicle_Yaw_Rate";
 CM_ SG_ 2147484403 ACLNY_COG "Lateral_acceleration_center_of_gravity";
 CM_ SG_ 2147484403 AVL_STEA_FTAX_WHL "Actual_steering_angle_front_axle_wheel";
 CM_ SG_ 2147484058 ACLNY_COG "Lateral_acceleration_center_of_gravity";
 CM_ SG_ 2147484058 QU_ACLNY_COG "Qualifier_Lateral_acceleration_center_of_gravity";
+CM_ SG_ 2147484058 ACLNY_COG_ERR_AMP "Lateral_acceleration_center_of_gravity_error_amplitude";
 CM_ BO_ 2147484417 "Actual_Steering_Angle_Driver";
 CM_ SG_ 2147484417 AVL_STEAV_FTAX_PNI "Actual_steering_angle_front_axle_pinion";
 CM_ SG_ 2147484417 Steering_angle_speed "Steering_angle_change_speed";
@@ -331,7 +490,7 @@ CM_ SG_ 2147483813 AVL_TORQ_CRSH_DMEE "Actual_torque_crankshaft_DME_EGS";
 CM_ SG_ 2147483813 AVL_RPM_ENG_CRSH "Actual_crankshaft_speed";
 CM_ SG_ 2147483813 QU_AVL_RPM_ENG_CRSH "Qualifier_Actual_Speed_Engine_Crankshaft";
 CM_ BO_ 2147484545 "Electronic engine oil dipstick";
-CM_ SG_ 2147484545 FLLV_EOI "engine_oil_level";
+CM_ SG_ 2147484545 FLLV_EOI "fluid_level_engine_oil";
 CM_ SG_ 2147484545 RECM_RFLV_EOI "Required_refill_amount_of_engine_oil";
 CM_ BO_ 2147483891 "Drivetrain speed display";
 CM_ SG_ 2147483891 DISP_RPM_ENG_CRSH "Engine_Crankshaft_Speed_Display";
@@ -344,7 +503,7 @@ CM_ SG_ 2147484667 TAR_RPM_IDLG_DRV "Target_idle_speed";
 CM_ SG_ 2147484667 ST_SW_WAUP_DRV "Status_warmup_switch";
 CM_ SG_ 2147484667 RDUC_DOCTR_RPM_DRV "Reduction_of_speed_regulation_drive";
 CM_ SG_ 2147484667 RQ_SHPA_GRB_REGE_PAFI "Requirement_Shift_Points_Adjust_Gearbox_for_Regeneration_Particle_Filter";
-CM_ SG_ 2147484667 SLCTN_BUS_COMM_ENG_GRB "Selection_Bus_Communication_Engine_Transmission";
+CM_ SG_ 2147484667 SLCTN_BUS_COMM_ENG_GRB "Selection_Bus_Communication_Engine_Gearbox";
 CM_ SG_ 2147484667 RQ_STASS_ENGMG "Request_start_assistance_engine_control";
 CM_ SG_ 2147484667 CTR_SLCK_DRV "Control_Shiftlock";
 CM_ SG_ 2147484667 ST_RTIR_DRV "Status_rotational_irregularity";
@@ -387,16 +546,91 @@ CM_ BO_ 2147484298 "Status Night-Vision Button";
 CM_ BO_ 2147484411 "VSW switch request";
 CM_ BO_ 2147484413 "Status VSW position";
 CM_ BO_ 2147484719 "Configuration MDrive 2";
+CM_ SG_ 2147484719 CONF_MDRV_2_DSC "Dynamic_Stability_Control";
+CM_ SG_ 2147484719 CONF_MDRV_2_ENG "Engine";
+CM_ SG_ 2147484719 CONF_MDRV_2_EDC "Electronic_Damper_Control";
+CM_ SG_ 2147484719 CONF_MDRV_2_EPAS "Steering";
 CM_ SG_ 2147484719 CONF_MDRV_2_SRST "Set,_Reset_to_default_M_Drive_2_configuration";
+CM_ SG_ 2147484719 CONF_MDRV_2_HUD "Head_Up_Display";
+CM_ SG_ 2147484719 CONF_MDRV_2_STG_GRB "Drivelogic_Level";
+CM_ SG_ 2147484719 CONF_MDRV_2_MOD_GRB "Gearbox_Mode";
+CM_ SG_ 2147484719 CONF_MDRV_2_IDX "Configuration_Index";
 CM_ BO_ 2147484718 "Status MDrive 2";
-CM_ SG_ 2147484718 ST_MDRV_2_DSC "Stability_Control";
-CM_ SG_ 2147484718 ST_MDRV_2_ENG "Throttle_map_and_exhaust_valve";
+CM_ SG_ 2147484718 ST_MDRV_2_DSC "Dynamic_Stability_Control";
+CM_ SG_ 2147484718 ST_MDRV_2_ENG "Engine";
 CM_ SG_ 2147484718 ST_MDRV_2_EDC "Electronic_Damper_Control";
-CM_ SG_ 2147484718 ST_MDRV_2_EPAS "Servotronic";
+CM_ SG_ 2147484718 ST_MDRV_2_EPAS "Steering";
+CM_ SG_ 2147484718 ST_MDRV_2_ALIV "Alive_counter";
+CM_ SG_ 2147484718 ST_MDRV_2_MOD_GRB "Gearbox_Mode";
+CM_ SG_ 2147484718 ST_MDRV_2_HUD "Head_Up_Display";
+CM_ SG_ 2147484718 ST_MDRV_2_STG_GRB "Drivelogic_Level";
+CM_ SG_ 2147484718 ST_MDRV_2_IDX "Status_Index";
 CM_ BO_ 2147484397 "Vehicle standstill status";
 CM_ SG_ 2147484397 ST_VEHSS "Status_Vehicle_Standstill";
 CM_ BO_ 2147484380 "Vehicle standstill status parking brake";
 CM_ SG_ 2147484380 ST_VEHSS_PBRK "Status_Vehicle_Standstill_parking_brake";
+CM_ SG_ 2147484407 UN_PWR_S_MOD "Power_Units";
+CM_ SG_ 2147484407 UN_TORQ_S_MOD "Torque_Units";
+CM_ SG_ 2147484407 UN_TEMP "Temperature_Units";
+CM_ SG_ 2147484407 UN_PRESS "Pressure_Units";
+CM_ SG_ 2147484407 DATE "Date_format";
+CM_ SG_ 2147484407 TIME "Time_format";
+CM_ SG_ 2147484407 LANG "Language";
+CM_ SG_ 2147484407 UN_CONS "Fuel_Consumption_Units";
+CM_ SG_ 2147484407 UN_DIST "Distance_Units";
+CM_ BO_ 2147484472 "KOMBI_LOW Check Control Display";
+CM_ SG_ 2147484190 ST_CONTR_NIVI "Status_Contrast_Night_Vision_0xFF_Invalid";
+CM_ SG_ 2147484190 ST_RLS_NIVI "Status_release_Night_Vision";
+CM_ SG_ 2147484190 ST_CAM_NIVI "Status_camera_Night_Vision";
+CM_ SG_ 2147484190 ST_BRIG_OFFS_NIVI "Status_brightness_offset";
+CM_ BO_ 2147483708 "Vehicle condition";
+CM_ BO_ 2147483809 "Faceplate power and mute";
+CM_ SG_ 2147483809 MUTE_EJECT "Mute_and_Eject_button_status";
+CM_ BO_ 2147483810 "Faceplate memory buttons";
+CM_ SG_ 2147483810 MEM "Memory_buttons_status";
+CM_ BO_ 2147483811 "Faceplate seek buttons";
+CM_ SG_ 2147483811 SEEK "Left-Right_seek_button_status";
+CM_ BO_ 2147483889 "Faceplate volume button";
+CM_ SG_ 2147484100 QU_DIST_1 "Qualifier_distance_1";
+CM_ SG_ 2147484101 QU_DIST_2 "Qualifier_distance_2";
+CM_ BO_ 2147484347 "Vehicle Distance Traveled";
+CM_ BO_ 2147484552 "Vehicle Type";
+CM_ SG_ 2147484552 TYP_VEH "Vehicle_Type";
+CM_ SG_ 2147484552 TYP_BODY "Body_Type";
+CM_ SG_ 2147484552 QUAN_CYL "Number_of_Cylinders";
+CM_ SG_ 2147484552 QUAN_GR "Number_of_Gears";
+CM_ SG_ 2147484552 TYP_ENG "Engine_Fuel_Type";
+CM_ SG_ 2147484552 TYP_STE "Steering_Type";
+CM_ SG_ 2147484552 TYP_GRB "Gearbox_Type";
+CM_ SG_ 2147484552 CLAS_PWR "Power_Class";
+CM_ SG_ 2147484552 TYP_CNT "Country_Type";
+CM_ SG_ 2147484552 TYP_CAPA "Engine_Size";
+CM_ BO_ 2147484325 "Status Outside Brightness";
+CM_ SG_ 2147484353 ST_PDC_ACT "Parking_function_activation_status";
+CM_ BO_ 2147484763 "Interior Ambient light setting";
+CM_ BO_ 2147484764 "Interior ambient light status";
+CM_ BO_ 2147484521 "Status Tyres";
+CM_ BO_ 2147484522 "Status High Beam Assistant";
+CM_ SG_ 2147484522 ST_FLA "High_Beam_Assistant_status";
+CM_ BO_ 2147484590 "request activation parking system";
+CM_ BO_ 2147484494 "Navigation System Information";
+CM_ BO_ 2147483870 "Control Display M-Systems";
+CM_ BO_ 2147484142 "Steering column button operation";
+CM_ BO_ 2147484929 "Network Management Advanced Crash Safety Module";
+CM_ BO_ 2147484946 "Network Management Digital Motor Electronics";
+CM_ BO_ 2147484952 "Network Management Electronic Gearbox Controller";
+CM_ BO_ 2147484953 "Network Management Transfer Case Controller";
+CM_ BO_ 2147484970 "Network Management Electric Parking Brake Controller";
+CM_ BO_ 2147485022 "Network Management Gear Selector Switch";
+CM_ BO_ 2147485024 "Network Management Instrument Panel";
+CM_ BO_ 2147484944 "Network Management Central Gateway Module";
+CM_ BO_ 2147484055 "Status gear selector switch";
+CM_ SG_ 2147484055 ST_GWS "Lever_position";
+CM_ SG_ 2147484055 ST_GWS_PARK "Park_button";
+CM_ BO_ 2147484669 "Data Display Gearbox";
+CM_ SG_ 2147484669 DISP_PRG_GRB "Display_program_gearbox";
+CM_ SG_ 2147484669 DISP_PO_GRB "Gearbox_Position_Display";
+CM_ SG_ 2147484669 DISP_DRVLG_GRB "Display_Drive_Logic_gearbox";
 BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
 BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
 BA_DEF_ BO_ "matchingcriteria" INT 0 0;
@@ -412,7 +646,7 @@ VAL_ 2147484417 QU_AVL_STEA_FTAX_PNI 8 "Initialization" 1 "Signal_value_is_valid
 VAL_ 2147484417 QU_Steering_angle_speed 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Replacement_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
 VAL_ 2147484418 QU_AVL_STEA_FTAX_WHL 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility,_state/status_permanent" 9 "Signal_value_is_valid_and_secured,_state/status_temporary" 2 "Signal_value_is_valid,_state/status_permanent" 10 "Signal_value_is_valid,_state/status_temporary" 3 "Signal_value_is_not_trustworthy,_state/status_permanent" 11 "Signal_value_is_not_trustworthy,_state/status_temporary" 4 "Replacement_value_is_set_in_the_useful_signal,_state/status_permanent" 12 "Adjustment_value_is_set_in_the_useful_signal,_state/status_temporary" 6 "Signal_value_is_invalid,_state/status_permanent" 14 "Signal_value_is_invalid,_state/status_temporary" 7 "Sensor_not_present" 15 "Signal_invalid";
 VAL_ 2147484065 QU_V_VEH_COG 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_plausible" 10 "Signal_value_is_valid,_condition/status_temporary" 11 "Signal_value_is_not_trustworthy,_condition/status_temporary" 14 "Signal_value_is_invalid,_condition/status_temporary" 15 "Signal_invalid";
-VAL_ 2147484065 DVCO_VEH 0 "Vehicle_is_stationary" 1 "Vehicle_is_moving_forward" 2 "Vehicle_is_moving_backwards" 3 "Vehicle_is_moving_-_no_direction" 4 "Vehicle_is_stationary,_vehicle_detected_on_single-axle_roller_test_stand" 5 "Vehicle_is_stationary,_two-axle_roller_operation_set" 15 "signal_invalid";
+VAL_ 2147484065 DVCO_VEH 0 "Vehicle_is_stationary" 1 "Vehicle_is_moving_forward" 2 "Vehicle_is_moving_backwards" 3 "Vehicle_is_moving_-_no_direction" 4 "Vehicle_is_stationary,_vehicle_detected_on_single-axle_roller_test_stand" 5 "Vehicle_is_stationary,_two-axle_roller_operation_set" 7 "signal_invalid";
 VAL_ 2147483951 ST_VEH_CON 0 "VSM_STM_STATE_INIT" 1 "VSM_STM_STATE_STANDBY" 2 "VSM_STM_STATE_BASICOP" 3 "VSM_STM_STATE_BASICOP_ROLL" 4 "VSM_STM_STATE_15OFF_DRIVE" 5 "VSM_STM_STATE_IGNITION" 6 "VSM_STM_STATE_IGNITION_ROLL" 7 "VSM_STM_STATE_ENG_IDLE" 8 "VSM_STM_STATE_DRIVE" 9 "VSM_STM_STATE_ENG_START_PRE" 10 "VSM_STM_STATE_ENG_START_PRE_ROLL" 11 "VSM_STM_STATE_ENG_START" 12 "VSM_STM_STATE_ENG_START_ROLL" 13 "VSM_STM_STATE_WASH" 14 "VSM_STM_STATE_ERROR" 15 "Signal_Invalid";
 VAL_ 2147483951 ST_KL 0 "Init" 1 "Reserve" 2 "KL30" 3 "KL30F_change" 4 "KL30F_on" 5 "KL30B_change" 6 "KL30B_on" 7 "KLR_change" 8 "KLR_on" 9 "KL15_change" 10 "KL15_on" 11 "KL50_delay" 12 "KL50_change" 13 "KL50_on" 14 "Error" 15 "Signal_Invalid";
 VAL_ 2147483951 ST_KL_KEY_VLD 0 "Init_value" 1 "Key_invalid" 2 "Key_search_active" 3 "Key_valid_recognized_in_AR" 4 "Key_valid_recognized_in_IR" 5 "Key_in_10_s_-_run-on" 6 "Key_valid_for_MFS" 14 "Error" 15 "Signal_Invalid";
@@ -499,18 +733,26 @@ VAL_ 2147484595 RQ_PCOS 0 "No_action" 1 "Stationary_consumers_must_identify_them
 VAL_ 2147484595 CTR_PCOS 0 "No_action" 1 "Special_stationary_consumers_may_switch_on" 2 "stationary_consumers_must_switch_off" 3 "Signal_invalid";
 VAL_ 2147484595 ST_ENERG_PWMG 1 "Switching_off_terminal_30_F." 2 "No_stationary_consumers_permitted." 4 "unused" 8 "Battery_charge_level_100%" 15 "Signal_invalid";
 VAL_ 2147484595 CTR_PWRU_COS 15 "Signal_invalid";
-VAL_ 2147484298 OP_PUBU_NIVI 0 "Button_released" 1 "Button_pressed";
+VAL_ 2147484298 OP_PUBU_NIVI 0 "Button_released" 1 "Button_pressed" 3 "Signal_Invalid";
 VAL_ 2147484411 RQ_VSW 0 "Off" 1 "Input_3" 3 "Input_1" 4 "Input_4";
-VAL_ 2147484719 CONF_MDRV_2_DSC 1 "OFF" 2 "ON" 3 "MDM" 0 "Unset";
-VAL_ 2147484719 CONF_MDRV_2_ENG 1 "Efficient" 2 "Sport" 3 "Sport+" 0 "Unset";
-VAL_ 2147484719 CONF_MDRV_2_EDC 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset";
-VAL_ 2147484719 CONF_MDRV_2_EPAS 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset";
-VAL_ 2147484719 CONF_MDRV_2_SRST 202 "Set" 224 "Reset" 200 "Set" 240 "Ping";
+VAL_ 2147484719 CONF_MDRV_2_DSC 1 "OFF" 2 "ON" 3 "MDM" 0 "Unset" 15 "Invalid";
+VAL_ 2147484719 CONF_MDRV_2_ENG 1 "Efficient" 2 "Sport" 3 "Sport+" 0 "Unset" 15 "Invalid";
+VAL_ 2147484719 CONF_MDRV_2_EDC 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset" 15 "Invalid";
+VAL_ 2147484719 CONF_MDRV_2_EPAS 1 "Comfort" 2 "Sport" 3 "Sport+" 0 "Unset" 15 "Invalid";
+VAL_ 2147484719 CONF_MDRV_2_SRST 12 "Set" 14 "Reset" 15 "Ping";
+VAL_ 2147484719 CONF_MDRV_2_HUD 1 "M_view" 2 "Standard_view" 0 "Unset" 15 "Invalid";
+VAL_ 2147484719 CONF_MDRV_2_STG_GRB 1 "Level_1" 2 "Level_2" 3 "Level_3" 0 "Unset" 15 "Invalid";
+VAL_ 2147484719 CONF_MDRV_2_MOD_GRB 1 "D" 2 "S" 0 "Unset" 3 "Invalid";
+VAL_ 2147484719 CONF_MDRV_2_IDX 15 "None" 0 "MDrive_1" 1 "MDrive_2";
 VAL_ 2147484718 ST_MDRV_2_DSC 1 "OFF" 2 "ON" 3 "MDM";
 VAL_ 2147484718 ST_MDRV_2_ENG 1 "Efficient" 2 "Sport" 3 "Sport+";
 VAL_ 2147484718 ST_MDRV_2_EDC 1 "Comfort" 2 "Sport" 3 "Sport+";
 VAL_ 2147484718 ST_MDRV_2_EPAS 1 "Comfort" 2 "Sport" 3 "Sport+";
 VAL_ 2147484718 ST_MDRV_2_ALIV 15 "Invalid";
+VAL_ 2147484718 ST_MDRV_2_MOD_GRB 1 "D" 2 "S" 0 "Unset";
+VAL_ 2147484718 ST_MDRV_2_HUD 1 "M_view" 2 "Standard_view" 3 "Unchanged" 0 "";
+VAL_ 2147484718 ST_MDRV_2_STG_GRB 1 "Level_1" 2 "Level_2" 3 "Level_3";
+VAL_ 2147484718 ST_MDRV_2_IDX 0 "MDrive_1" 1 "MDrive_2";
 VAL_ 2147484397 ST_VEHSS 128 "Initialization" 255 "Signal_invalid";
 VAL_ 2147484397 ST_VEHSS_1 1 "Vehicle_mechanically_secured";
 VAL_ 2147484397 ST_VEHSS_2 1 "Vehicle_secured_by_drivetrain";
@@ -521,3 +763,50 @@ VAL_ 2147484380 ST_VEHSS_PBRK_1 1 "Vehicle_mechanically_secured";
 VAL_ 2147484380 ST_VEHSS_PBRK_2 1 "Vehicle_secured_by_drivetrain";
 VAL_ 2147484380 ST_VEHSS_PBRK_3 1 "Vehicle_held_hydraulically";
 VAL_ 2147484380 ST_VEHSS_PBRK_4 0 "Auto-H_function_not_active" 1 "Auto-H_function_active";
+VAL_ 2147484407 UN_PWR_S_MOD 0 "Default" 1 "kW" 2 "hp-PS" 15 "Signal_Invalid";
+VAL_ 2147484407 UN_TORQ_S_MOD 0 "Default" 1 "N-m" 2 "lb-ft" 3 "kg-m" 15 "Signal_Invalid";
+VAL_ 2147484407 UN_TEMP 1 "Celsius" 2 "Farenheit";
+VAL_ 2147484407 UN_PRESS 0 "Default" 1 "bar" 2 "kPa" 3 "psi";
+VAL_ 2147484407 DATE 1 "Default_dd.mm.yyyy" 2 "mm/dd/yyyy" 5 "yyyy.mm.dd" 6 "yyyy/mm/dd";
+VAL_ 2147484407 TIME 1 "12H" 2 "24H";
+VAL_ 2147484407 LANG 1 "German" 2 "English_UK" 3 "English_US";
+VAL_ 2147484407 UN_CONS 1 "l/100km" 2 "mpg_UK" 4 "km/l" 3 "mpg_US";
+VAL_ 2147484407 UN_DIST 1 "km" 2 "mi";
+VAL_ 2147484305 CONF_TIME 1 "12H" 2 "24H" 0 "No_change";
+VAL_ 2147484305 CONF_TEMP 1 "Celsius" 2 "Farenheit" 0 "No_change";
+VAL_ 2147484305 CONF_DIST 1 "km" 2 "mi" 0 "No_change";
+VAL_ 2147484305 CONF_CONS 1 "l/100km" 2 "mpg_UK" 4 "km/l" 0 "No_change" 3 "mpg_US";
+VAL_ 2147484305 CONF_TORQ 1 "Nm" 2 "lb-ft" 3 "Kg-m" 0 "No_change";
+VAL_ 2147484305 CONF_PWR 1 "kW" 2 "hp" 0 "No_change";
+VAL_ 2147484305 CONF_LANG 0 "No_change" 1 "German" 2 "English_UK" 3 "English_US";
+VAL_ 2147484305 CONF_PRESS 1 "bar" 2 "kPa" 3 "psi" 0 "No_change";
+VAL_ 2147484305 CONF_DATE 1 "dd.mm.yyyy" 2 "mm/dd/yyyy" 5 "yyyy.mm.dd" 6 "yyyy/mm/dd" 0 "No_change";
+VAL_ 2147484190 ST_RLS_NIVI 0 "Night_vision_must_not_be_switched_on" 2 "Night_vision_can_be_switched_on" 3 "Signal_Invalid";
+VAL_ 2147483809 MUTE_EJECT 0 "Released" 1 "Eject" 4 "Mute";
+VAL_ 2147483810 MEM 0 "Released" 1 "Button1_hover" 2 "Button1_press" 4 "Button2_hover" 8 "Button2_press" 16 "Button3_hover" 32 "Button3_press" 64 "Button4_hover" 128 "Button4_press" 256 "Button5_hover" 512 "Button5_press" 1024 "Button6_hover" 2048 "Button6_press" 4096 "Button7_hover" 8192 "Button7_press" 16384 "Button8_hover" 32768 "Button8_press";
+VAL_ 2147483811 SEEK 0 "Released" 1 "Left-Previous" 2 "Right-Next";
+VAL_ 2147483889 KNOB 0 "Released" 1 "Turning";
+VAL_ 2147483889 DIRECTION 0 "None" 1 "Anti-clockwise" 2 "Clockwise";
+VAL_ 2147484100 QU_DIST_1 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility" 9 "Signal_value_is_valid_and_secured,_condition/status_temporary" 2 "Signal_value_is_valid" 10 "Signal_value_is_valid,_condition/status_temporary" 3 "Signal_quality_or_monitoring_limited" 11 "Signal_quality_or_monitoring_limited,_condition/status_temporary" 4 "Reserved" 12 "Replacement_value:_Adjustment_value_is_set_in_the_useful_signal,_condition/status_temporary" 6 "Signal_value_is_invalid" 14 "Signal_value_is_invalid,_condition/status_temporary" 7 "Reserved" 15 "Signal_invalid";
+VAL_ 2147484101 QU_DIST_2 8 "Initialization" 1 "Signal_value_is_valid_and_secured_and_checked_for_plausibility" 9 "Signal_value_is_valid_and_secured,_condition/status_temporary" 2 "Signal_value_is_valid" 10 "Signal_value_is_valid,_condition/status_temporary" 3 "Signal_quality_or_monitoring_limited" 11 "Signal_quality_or_monitoring_limited,_condition/status_temporary" 4 "Reserved" 12 "Replacement_value:_Adjustment_value_is_set_in_the_useful_signal,_condition/status_temporary" 6 "Signal_value_is_invalid" 14 "Signal_value_is_invalid,_condition/status_temporary" 7 "Reserved" 15 "Signal_invalid";
+VAL_ 2147484552 TYP_VEH 0 "No_information" 1 "E65" 2 "E66" 3 "E67" 4 "E60" 5 "E61" 6 "E63" 7 "E64" 8 "E90" 9 "RR01" 10 "E81" 11 "E82" 12 "E87" 13 "E91" 14 "E92" 15 "E93" 16 "E70" 17 "E71" 18 "E88" 19 "R55" 20 "R56" 21 "R57" 22 "E89" 23 "E72" 24 "F01" 25 "F02" 26 "F03" 27 "F07" 28 "F10" 29 "F11" 30 "F12" 31 "F13" 32 "F04" 33 "F31" 34 "F32" 35 "F33" 36 "F20" 37 "F30" 38 "F22" 39 "F23" 40 "E84" 41 "F25" 42 "R60" 43 "RR4" 44 "F21" 45 "F15" 46 "F16" 47 "F18" 48 "F55" 49 "F56" 50 "F0" 255 "Signal Invalid";
+VAL_ 2147484552 TYP_BODY 1 "Limousine-Saloon" 2 "Coupe" 3 "Touring" 4 "Cabrio" 5 "Roadster" 6 "Compact" 7 "Security_Vehicle" 8 "Light_Protection" 9 "Sport-Coupe_Z3" 10 "4x4_single_piece_tailgate" 11 "4x4_two_piece_tailgate" 12 "MCV_Mega-City-Vehicle" 13 "BEV_Battery-Electric-Vehicle" 255 "Signal_Invalid" 51 "Clubman" 54 "Hatchback" 50 "Hatch_Coupe" 35 "Sports_Activity_Tourer" 38 "Sports_Hatch" 34 "Sports_Activity_Coupe" 33 "Sports_Activity_Vehicle";
+VAL_ 2147484552 QUAN_GR 0 "Continuously_variable" 4 "4_Gears" 5 "5_Gears" 6 "6_Gears" 7 "7_Gears_-_M_vehicles" 8 "8_Gears" 15 "Signal_Invalid";
+VAL_ 2147484552 TYP_ENG 4 "Gasoline_Direct_Injection" 6 "Diesel_Direct_Injection" 8 "Electric" 0 "Unknown" 5 "Gasoline" 7 "Diesel" 9 "Hybrid" 15 "Signal_Invalid";
+VAL_ 2147484552 TYP_STE 1 "LHD" 2 "RHD";
+VAL_ 2147484552 TYP_GRB 0 "Manual" 2 "Steptronic" 4 "Dual_Clutch" 1 "Automatic" 3 "Sequential";
+VAL_ 2147484552 CLAS_PWR 3 "Low_power_class-KL" 7 "Top_power_class-TL" 11 "Super_top_power_class-SL" 12 "Low_power_class-UL" 13 "Medium_power_class-ML" 14 "High_power_class-OL" 15 "Signal_Invalid";
+VAL_ 2147484552 TYP_CNT 9 "Egypt" 6 "Australia" 21 "Belgium" 8 "Brazil" 3 "Germany" 1 "ECE" 4 "UK-Ireland" 10 "Gulf" 14 "India" 17 "Indonesia" 5 "Japan" 12 "Canada" 7 "Korea" 15 "Malaysia" 20 "Mexico" 18 "Philippines" 11 "South_Africa" 13 "Taiwan" 16 "Thailand" 2 "USA" 19 "Vietnam" 22 "China" 23 "Hong_Kong" 24 "Russia";
+VAL_ 2147484353 ST_PDC_ACT 0 "PDC_OFF" 84 "PDC_ON-Display_active" 16 "PDC_ON-Display_inactive";
+VAL_ 2147484763 CONF_INT_BRIG 0 "0" 19 "1" 31 "2" 43 "3" 55 "4" 67 "5" 79 "6" 91 "7" 103 "8" 115 "9" 127 "10" 139 "11" 151 "12" 163 "13" 175 "14" 187 "15" 199 "16" 211 "17" 223 "18" 235 "19" 254 "20";
+VAL_ 2147484763 CONF_INT_STYLE 1 "Classic" 2 "Sport-Modern-Luxury" 15 "Signal Invalid";
+VAL_ 2147484764 ST_INT_BRIG 0 "0" 19 "1" 31 "2" 43 "3" 55 "4" 67 "5" 79 "6" 91 "7" 103 "8" 115 "9" 127 "10" 139 "11" 151 "12" 163 "13" 175 "14" 187 "15" 199 "16" 211 "17" 223 "18" 235 "19" 254 "20";
+VAL_ 2147484764 ST_INT_STYLE 1 "Classic" 2 "Sport-Modern-Luxury" 15 "Signal Invalid";
+VAL_ 2147484522 ST_FLA 0 "OFF" 1 "ON";
+VAL_ 2147484590 RQ_ACTVN_FN_PKGS 161 "Camera_off" 165 "Camera_ON" 129 "Camera_inactive";
+VAL_ 2147484142 LST 0 "Released" 64 "BC_button_pressed";
+VAL_ 2147484055 ST_GWS 0 "Centre_middle" 1 "Pushed_forward" 2 "Pushed_forward_two_notches" 3 "Pushed_backward" 4 "Pushed_backward_two_notches" 5 "Pushed_left_and_forward_(-)" 6 "Pushed_left_and_backward_(+)" 7 "Pushed_left_(S)";
+VAL_ 2147484055 ST_GWS_PARK 192 "Released" 213 "P_button_pressed";
+VAL_ 2147484669 DISP_PRG_GRB 0 "Blank" 1 "S" 2 "M" 3 "L" 4 "C" 7 "Signal_Invalid";
+VAL_ 2147484669 DISP_PO_GRB 0 "Blank" 1 "P" 2 "R" 3 "N" 4 "D" 7 "Signal_Invalid";
+VAL_ 2147484669 DISP_DRVLG_GRB 0 "Blank" 1 "1" 2 "2" 3 "3" 4 "4" 5 "5" 6 "6" 15 "Signal_Invalid";

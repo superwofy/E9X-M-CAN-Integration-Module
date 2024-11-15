@@ -42,7 +42,7 @@ Included are also tools to allow full manipulation of the program section in the
 
 **I use it to:**
 
-* Emulate K-CAN2 for NBT EVO support.
+* Emulate KCAN2 for NBT EVO support.
 	* Interface to the CIC faceplate UART.
 	* Donor VIN is obtained after every boot when Terminal R is ON. Disable if using own FSCs.
 	* Sport displays are populated with PT-CAN torque data from the DME.
@@ -98,7 +98,7 @@ Included are also tools to allow full manipulation of the program section in the
 	* AUTO, stalk pushed up 1 and stalk pushed up 2 disable intermittent mode.
 * Control headlight washing after a number of windscreen wash/wipe cycles instead of the default JBE logic.
 * Enable use of FXX VSW01 (VideoSWitch) module.
-* Enable use of FXX NIVI2/3 module.
+* Enable use of FXX NIVI2/3 module on the emulated KCAN2.
 * Enable diagnosis encoding and flashing through Tool32 and E-Sys for F series modules via J2534 passthru over D-CAN.
 	* For E-sys a custom SVT is used. See my example [SVT](SVT.xml).
 	* Tested with pttbmw_2.1.0.0 (32-bit Java only!) and GM MDI.

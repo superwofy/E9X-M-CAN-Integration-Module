@@ -6,10 +6,6 @@ Bytes 0 and 1 may contain CRC and alive but it appears optional for KCAN.
 
 Bytes 4 and 5 contain the pitch angle. Maximum appears to be 140 degrees:
 
-	byte 4 lower half - angle, LSB.
-	byte 4 upper half not used
-	byte 5 - angle
-
 	0x500..0x509 = 0 degrees
 	0x50A..0x51D = 1 degrees
 	0x51E..0x531 = 2 degrees

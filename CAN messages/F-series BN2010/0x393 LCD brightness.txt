@@ -10,3 +10,8 @@
 23:51:18.532 ->  KCAN2:  ID: 393 Buffer: F1 32 FE FD 
 23:51:22.139 ->  KCAN2:  ID: 393 Buffer: F1 32 5 FD 					// light off
 23:51:27.647 ->  KCAN2:  ID: 393 Buffer: 3F 32 3 FD 					// NBT/CID dims back
+
+
+
+CID brightess is set by byte0 (DSTN_LCD_LUM) and byte1 (DMPNG_LCD_LUM)
+Byte3 change to 0xFE/0xFD is triggered by lamp status (0x21A) AND kombi brightness.

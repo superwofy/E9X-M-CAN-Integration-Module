@@ -1,9 +1,3 @@
-Byte0 - DSC
-Byte1 first half - Engine
-Byte2 second half - Chassis
-Byte2 first half - Steering
-
-
 DSC
 18:19:51.808 ->  KCAN2:  ID: 42F Buffer: 2 0 0 0 C8 			// DSC ON
 18:19:55.954 ->  KCAN2:  ID: 42F Buffer: 3 0 0 0 C8 			// MDM

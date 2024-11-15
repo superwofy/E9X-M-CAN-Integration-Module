@@ -4,7 +4,7 @@
 7E 06 F0 FE FF EE                       // ON, 6kph
 7E 32 F0 FE FF EE                       // ON, 50kph
 7E 64 F0 FE FF EE                       // ON, 100kph
-7E 64 F0 FE FF EE                       // ON, 255kph
+7E FF F0 FE FF EE                       // ON, 255kph
 7E 4A F1 FE FF EE                       // ON, 330kph
 
 7E FD FF FE FF EE                       // Select current speed as limit (when not moving)

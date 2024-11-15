@@ -18,8 +18,9 @@ Language:
 Consumption:
 
 1E 66 00 01 00 00 01 00                             // l/100km
+1E 66 00 01 00 00 02 00                             // mpg (UK)
+1E 66 00 01 00 00 03 00                             // mpg (US)
 1E 66 00 01 00 00 04 00                             // km/l
-1E 66 00 01 00 00 02 00                             // mpg
 
 
 Distance:
@@ -80,6 +81,6 @@ Independent ventilation Timer2:
 
 
 
-0x5E0 - Kombi services is sent to confirm changes
-11 03 00 02 03 14 FD FF                             // Timer 2 set to 03:20
-10 03 00 02 01 FF FF FF                             // ACK, timer 2 ON
+KOMBI services is sent to confirm changes:
+0x5E2 - 11 03 00 02 03 14 FD FF                     // Timer 2 set to 03:20
+0x5E0 - 10 03 00 02 01 FF FF FF                     // ACK, timer 2 ON
