@@ -261,7 +261,7 @@ void send_f_road_incline(void) {
 
 void send_f_longitudinal_acceleration(void) {
   if (f_chassis_longitudinal_timer >= 20 && ignition) {
-    uint8_t f_longitudinal_acceleration_can[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                     // Similar to 55.0.2 6MC2DL0B pg. 1559. Byte5 fixed 0x2F - Signal value is valid QU_ACLNX_COG.
+    uint8_t f_longitudinal_acceleration_can[] = {0xFF, 0xFF, 0, 0, 0, 0x20};                                                        // Similar to 55.0.2 6MC2DL0B pg. 1559. QU_ACLNX_COG: 2 - Signal value is valid .
     if (vehicle_awakened_timer <= 10000) {                                                                                          // Force the status to initialization after the car just woke.
       f_longitudinal_acceleration_can[5] = 0x8F;
     }
@@ -299,7 +299,7 @@ void send_f_longitudinal_acceleration(void) {
 
 void send_f_lateral_acceleration(void) {
   // if (f_chassis_lateral_timer >= 20 && ignition) {
-  //   uint8_t f_lateral_acceleration_can[] = {0xFF, 0xFF, 0, 0, 0xFF, 0x2F};                                                          // Similar to 55.0.2. Byte5 fixed 0x2F - Signal value is valid QU_ACLNY_COG.
+  //   uint8_t f_lateral_acceleration_can[] = {0xFF, 0xFF, 0, 0, 0, 0x20};                                                             // Similar to 55.0.2. QU_ACLNY_COG: 2 - Signal value is valid.
   //   if (vehicle_awakened_timer <= 10000) {                                                                                          // Force the status to initialization after the car just woke.
   //     f_lateral_acceleration_can[5] = 0x8F;
   //   }
@@ -327,7 +327,7 @@ void send_f_lateral_acceleration(void) {
   //   f_lateral_acceleration_can[0] = f_lateral_acceleration_crc.calc();
     
   //   CAN_message_t f_lateral_acceleration_buf = make_msg_buf(0x19A, 6, f_lateral_acceleration_can);
-  //   #if F_NIVI
+  //   #if F_NBTE
   //     kcan2_write_msg(f_lateral_acceleration_buf);
   //   #endif
   //   f_chassis_lateral_timer = 0;
@@ -337,7 +337,6 @@ void send_f_lateral_acceleration(void) {
 
 void send_f_yaw_rate_chassis(void) {
   if (f_chassis_yaw_timer >= 20) {
-    
     if (vehicle_moving) {
       uint16_t raw_value = ((pt_msg.buf[6] & 0xF) << 8 | pt_msg.buf[5]);                                                            // Combine the second half of byte6 with byte5 to form 12-bit signed integer.
       int16_t signed_value = (raw_value & 0x800) ? (raw_value | 0xF000) : raw_value;
@@ -364,7 +363,7 @@ void send_f_yaw_rate_chassis(void) {
     
     #if F_NIVI
       if (ignition) {
-        uint8_t f_yaw_rate_msg[] = {0xFF, 0xFF, 0, 0x80, 0xFF, 0x2F};                                                               // 56.0.2 - VYAW_VEH 6MC2DL0B pg. 1257. Byte5 - Signal value is valid QU_VYAW_VEH.
+        uint8_t f_yaw_rate_msg[] = {0xFF, 0xFF, 0, 0x80, 0, 0x20};                                                                  // 56.0.2 - VYAW_VEH 6MC2DL0B pg. 1257. QU_VYAW_VEH: 2 - Signal value is valid.
         if (vehicle_awakened_timer <= 10000) {                                                                                      // Force the status to initialization after the car just woke.
           f_yaw_rate_msg[5] = 0x8F;
         }
@@ -397,7 +396,10 @@ void evaluate_real_speed(void) {
 
 
 void send_f_speed_status(void) {
-  if (f_chassis_speed_timer >= 20) {                                                                                                // Message is the same format as Flexray 55.3.4 6MC2DL0B pg. 1570.
+  // When the ignition is OFF, this message can be sent with a much lower frequency.
+  uint8_t interval = ignition ? 20 : 100;
+
+  if (f_chassis_speed_timer >= interval) {                                                                                          // Message is the same format as Flexray 55.3.4 6MC2DL0B pg. 1570.
     uint8_t f_speed[] = {0, 0, 0, 0, 1};                                                                                            // Second half of byte4 is QU_V_VEH_COG. 1 = Signal valid, 0xF = invalid.
     if (vehicle_awakened_timer <= 5000) {                                                                                           // Force the status to initialization after the car just woke.
       f_speed[4] = 8;
@@ -408,7 +410,7 @@ void send_f_speed_status(void) {
     bitWrite(f_speed[4], 6, bitRead(e_vehicle_direction, 2));
                                                                                                                              
     f_speed[1] = 0xC << 4 | f_speed_alive_counter;
-    f_speed_alive_counter == 0xE ? f_speed_alive_counter = 0 : f_speed_alive_counter += 2;                                          // This message increments the alive counter by 2.
+    f_speed_alive_counter == 0xE ? f_speed_alive_counter = 0 : f_speed_alive_counter++;
     if (e_vehicle_direction == 1 || e_vehicle_direction == 2) {
       uint16_t f_temp_speed = (int)round(real_speed / 0.015625);
       if (speed_mph) {
@@ -439,7 +441,7 @@ void send_f_standstill_status(void) {
     uint8_t f_standstill_status[] = {0, 0, 0};                                                                                      // 263.1.4 6MC2DL0B pg. 1316.
     f_standstill_status[1] = 0xF << 4 | f_standstill_status_alive_counter;
     f_standstill_status_alive_counter == 0xE ? f_standstill_status_alive_counter = 0 
-                                          : f_standstill_status_alive_counter++;
+                                             : f_standstill_status_alive_counter++;
     if (vehicle_awakened_timer <= 5000) {                                                                                           // Force the status to initialization after the car just woke.
       f_standstill_status[2] = 0x80;
     } else {
@@ -726,22 +728,53 @@ void send_servotronic_message(void) {
 }
 
 
-void send_f_distance_messages(void) {
-  uint8_t distance[] = {0, 0, 0, 0, 0, 0, 0xF2};                                                                                    // Byte7 = signal valid.
-  distance[4] = f_distance_alive_counter & 0xFF;                                                                                    // Alive counter is transmitted in LE.
-  distance[5] = f_distance_alive_counter >> 8;
+void send_f_distance_traveled(void) {
+  uint8_t f_distance[] = {0, 0, 0, 0, 0xF2};
+  if (vehicle_awakened_timer <= 5000) {                                                                                             // Force the status to initialization after the car just woke.
+      f_distance[4] = 0xF8;
+  }
 
-  distance[0] = k_msg.buf[4];                                                                                                       // Distance_4_5.
-  distance[1] = k_msg.buf[5];
-  distance[2] = k_msg.buf[2];                                                                                                       // Distance_2_3.
-  distance[3] = k_msg.buf[3];
-  kcan2_write_msg(make_msg_buf(0x1C4, 7, distance));                                                                                // 1C4 is flexray 271.4.8.
+  f_distance[1] = 0xF << 4 | f_distance_traveled_alive_counter;
+  f_distance_traveled_alive_counter == 0xF ? f_distance_traveled_alive_counter = 0 
+                                           : f_distance_traveled_alive_counter += 2;
 
-  distance[0] = k_msg.buf[0];
-  distance[1] = k_msg.buf[1];
-  distance[2] = k_msg.buf[0];                                                                                                       // Distance_1_0 from 1A6 bytes is repeated.
-  distance[3] = k_msg.buf[1];
-  kcan2_write_msg(make_msg_buf(0x1C5, 7, distance));
+  uint16_t scaled_distance = ((k_msg.buf[1] << 8 | k_msg.buf[0]) * 2) / 0.1;
+  f_distance[2] = scaled_distance & 0xFF;
+  f_distance[3] = scaled_distance >> 8;
+
+  f_distance_traveled_crc.restart();
+  for (uint8_t i = 1; i < 5; i++) {
+    f_distance_traveled_crc.add(f_distance[i]);
+  }
+  f_distance[0] = f_standstill_status_crc.calc();
+  CAN_message_t f_distance_traveled_buf = make_msg_buf(0x2BB, 5, f_distance);
+
+  #if F_NBTE
+    kcan2_write_msg(f_distance_traveled_buf);
+  #endif
+}
+
+
+void send_f_distance_counters(void) {                                                                                               // Used by the HU for "inertial" navigation.
+  uint8_t distance_counter[] = {0, 0, 0, 0, 0, 0, 0xF2};                                                                            // Byte6 = signal valid.
+  if (vehicle_awakened_timer <= 5000) {                                                                                             // Force the status to initialization after the car just woke.
+      distance_counter[6] = 0xF8;
+  }
+
+  distance_counter[4] = f_distance_alive_counter & 0xFF;                                                                            // Alive counter is transmitted in LE.
+  distance_counter[5] = f_distance_alive_counter >> 8;
+
+  distance_counter[0] = k_msg.buf[4];                                                                                               // Distance_4_5.
+  distance_counter[1] = k_msg.buf[5];
+  distance_counter[2] = k_msg.buf[2];                                                                                               // Distance_2_3.
+  distance_counter[3] = k_msg.buf[3];
+  kcan2_write_msg(make_msg_buf(0x1C4, 7, distance_counter));
+
+  distance_counter[0] = k_msg.buf[0];
+  distance_counter[1] = k_msg.buf[1];
+  distance_counter[2] = k_msg.buf[0];                                                                                               // Distance_1_0 from 1A6 bytes is repeated.
+  distance_counter[3] = k_msg.buf[1];
+  kcan2_write_msg(make_msg_buf(0x1C5, 7, distance_counter));
 
   // Counter increases by 2 until it overflows 0x2FFF, then restarts. Counter is 12 bits, QU_DIST hard-coded to valid.
   f_distance_alive_counter == 0x2FFF ? f_distance_alive_counter = 0x2000 : f_distance_alive_counter += 2;  

@@ -486,7 +486,7 @@ void initialize_can_handlers(void) {
   #endif
   kcan_handlers[0x19E] = evaluate_dsc_status;                                                                                       // 0x19E: DSC status (KCAN only). Cycle time 200ms.
   #if F_NBTE
-    kcan_handlers[0x1A6] = send_f_distance_traveled;                                                                                // 0x1A6: Distance message from DSC. Cycle time 100ms.
+    kcan_handlers[0x1A6] = send_f_distance_counters;                                                                                // 0x1A6: Distance message from DSC. Cycle time 100ms.
   #else
     kcan_handlers[0x1AA] = send_dme_power_ckm;                                                                                      // Time POWER CKM message with iDrive ErgoCommander (0x1AA). Sent at boot and Terminal R cycling.
   #endif
@@ -505,7 +505,7 @@ void initialize_can_handlers(void) {
   kcan_handlers[0x1F6] = evaluate_indicator_status_dim;                                                                             // 0x1F6: Indicator status. Cycle time 1s. Sent when changed.
   kcan_handlers[0x202] = send_f_interior_ambient_light_brightness;                                                                  // 0x202: Interior ambient light brightness status sent by KOMBI.
   kcan_handlers[0x205] = evaluate_cc_gong_status;
-  #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL
+  #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER || DIM_DRL || HEADLIGHT_WASHING
     kcan_handlers[0x21A] = process_kcan_21A;                                                                                        // 0x21A: Light status sent by the FRM. Cycle time 5s (idle). Sent when changed.
   #endif
   #if AUTO_SEAT_HEATING_PASS

@@ -540,22 +540,26 @@ void evaluate_dipped_beam_status(void) {
    if (!dipped_beam_status) {
       dipped_beam_status = true;
       serial_log("Dipped beam ON.", 2);
-      frm_ahl_flc_status_requested = true;
-      kcan_write_msg(frm_ahl_flc_status_request_buf);
-      unsigned long time_now = millis();
-      m = {frm_ahl_flc_status_request_buf, time_now + 5000};                                                                        // Send a delayed message as this job can return 0 right after startup.
-      fog_corner_right_txq.push(&m);
+      #if FRONT_FOG_CORNER
+        frm_ahl_flc_status_requested = true;
+        kcan_write_msg(frm_ahl_flc_status_request_buf);
+        unsigned long time_now = millis();
+        m = {frm_ahl_flc_status_request_buf, time_now + 5000};                                                                      // Send a delayed message as this job can return 0 right after startup.
+        fog_corner_right_txq.push(&m);
+      #endif
     }
   } else {
     if (dipped_beam_status) {
       dipped_beam_status = false;
       serial_log("Dipped beam OFF", 2);
-      ahl_active = flc_active = false;
-      if (left_fog_on || right_fog_on) {
-        m = {front_fogs_all_off_buf, millis() + 100};
-        fog_corner_left_txq.push(&m);
-        left_fog_on = right_fog_on = false;
-      }
+      #if FRONT_FOG_CORNER
+        ahl_active = flc_active = false;
+        if (left_fog_on || right_fog_on) {
+          m = {front_fogs_all_off_buf, millis() + 100};
+          fog_corner_left_txq.push(&m);
+          left_fog_on = right_fog_on = false;
+        }
+      #endif
     }
   }
 }
@@ -1061,7 +1065,7 @@ void indicate_comfort_closure(void) {
 
 void control_headlight_washers(void) {
   if (ignition) {                                                                                                                   // SRA request to JBE only works if ignition is ON.
-    if (wash_wipe_cycles >= HEADLIGHT_WASHING_FREQUENCY) {
+    if (wash_wipe_cycles >= HEADLIGHT_WASHING_FREQUENCY && dipped_beam_status) {                                                    // The actual spraying will only happen if the headlights are ON.
       kcan_write_msg(jbe_headlight_washer_buf);
       sprintf(serial_debug_string, "Sent headlight washer request after %d wash-wipe cycles.", wash_wipe_cycles);
       serial_log(serial_debug_string, 2);

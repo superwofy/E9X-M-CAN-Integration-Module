@@ -117,7 +117,7 @@ void evaluate_mfl_button_press(void) {
     kcan2_write_msg(k_msg);                                                                                                         // Processing complete, forward message to HU.
   #endif
 
-  if (k_msg.buf[1] == 0x4C) {                                                                                                       // M button is pressed.
+  if (k_msg.buf[1] == 0x4C) {                                                                                                       // Source / M button is pressed.
 
     if (!ignore_m_hold) {
       received_m_press = true;                                                                                                      // Ignore further pressed messages until the button is released.
@@ -558,16 +558,16 @@ void release_immobilizer(void) {
   m = {ekp_return_to_normal_buf, time_now + 300};
   ekp_txq.push(&m);
   serial_log("Immobilizer released. EKP control restored to DME.", 2);
+  kcan_write_msg(alarm_siren_return_control_buf);                                                                                   // The return control message can be sent without interfering with operation.
+  alarm_siren_txq.flush();                                                                                                          // Clear pending siren requests.
+  m = {alarm_siren_return_control_buf, time_now + 100};
+  alarm_siren_txq.push(&m);
+  m = {alarm_siren_return_control_buf, time_now + 300};
+  alarm_siren_txq.push(&m);
   if (alarm_active) {
-    kcan_write_msg(alarm_siren_return_control_buf);
-    alarm_siren_txq.flush();                                                                                                        // Clear pending siren requests.
-    m = {alarm_siren_return_control_buf, time_now + 100};
-    alarm_siren_txq.push(&m);
-    m = {alarm_siren_return_control_buf, time_now + 300};
-    alarm_siren_txq.push(&m);
-    alarm_after_engine_stall = alarm_active = false;
     serial_log("Alarm OFF.", 2);
   }
+  alarm_after_engine_stall = alarm_active = false;
   kcan_write_msg(alarm_led_return_control_buf);
   alarm_led_txq.flush();
   m = {alarm_led_return_control_buf, time_now + 500};                                                                               // Delay since we already sent a 6F1 to DWA.

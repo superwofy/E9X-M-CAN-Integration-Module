@@ -435,7 +435,7 @@ void process_kcan_21A(void) {
     #if FRONT_FOG_LED_INDICATOR || FRONT_FOG_CORNER
       evaluate_fog_status();
     #endif
-    #if FRONT_FOG_CORNER
+    #if FRONT_FOG_CORNER || HEADLIGHT_WASHING
       evaluate_dipped_beam_status();
     #endif
     #if DIM_DRL

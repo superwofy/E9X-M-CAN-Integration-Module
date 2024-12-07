@@ -641,19 +641,21 @@ void process_bn2000_cc_display_list(void) {
   }
 
   for (int i = 1; i <= 5; i += 2) {
-    if (k_msg.buf[i] == 0xA6 && k_msg.buf[i + 1] == 2) {                                                                            // Yellow, car lift error.
+    uint16_t cc_id = (k_msg.buf[i + 1] << 4) | k_msg.buf[i];
+
+    if (cc_id == 678) {                                                                                                             // Yellow, car lift error.
         k_msg.buf[i] = 0xFE;
         k_msg.buf[i + 1] = 0xFF;
-    } else if (k_msg.buf[i] == 0xA0 && k_msg.buf[i + 1] == 2) {
+    } else if (cc_id == 672) {
         k_msg.buf[i] = 0xFE;
         k_msg.buf[i + 1] = 0xFF;
-    } else if (k_msg.buf[i] == 0xA1 && k_msg.buf[i + 1] == 2) {                                                                     // DSC OFF warning converted to CC-901.
+    } else if (cc_id == 673) {                                                                                                      // DSC OFF warning converted to CC-901.
         k_msg.buf[i] = 0x85;
         k_msg.buf[i + 1] = 3;
-    } else if (k_msg.buf[i] == 0xA2 && k_msg.buf[i + 1] == 2) {
+    } else if (cc_id == 674) {
         k_msg.buf[i] = 0xFE;
         k_msg.buf[i + 1] = 0xFF;
-    } else if (k_msg.buf[i] == 0x7E && k_msg.buf[i + 1] == 1) {                                                                     // CC-382 has no text description in NBTE, convert to CC-236.
+    } else if (cc_id == 446) {                                                                                                      // CC-382 has no text description in NBTE, convert to CC-236.
         k_msg.buf[i] = 0xEC;
         k_msg.buf[i + 1] = 0;
     }
@@ -664,21 +666,23 @@ void process_bn2000_cc_display_list(void) {
 
 
 void process_bn2000_cc_dialog(void) {
-  if (k_msg.buf[0] == 0xA6 && k_msg.buf[1] == 2) {
+  uint16_t cc_id = (k_msg.buf[1] << 4) | k_msg.buf[0];
+
+  if (cc_id == 678) {
     return;
-  } else if (k_msg.buf[0] == 0xA0 && k_msg.buf[1] == 2) {
+  } else if (cc_id == 672) {
     return;
-  } else if (k_msg.buf[0] == 0xA1 && k_msg.buf[1] == 2) {
+  } else if (cc_id == 673) {
     return;
-  } else if (k_msg.buf[0] == 0xA2 && k_msg.buf[1] == 2) {
+  } else if (cc_id == 674) {
     return;
-  } else if (k_msg.buf[0] == 0x7E && k_msg.buf[1] == 1) {
+  } else if (cc_id == 382) {
     k_msg.buf[0] = 0xEC;
     k_msg.buf[1] = 0;
     k_msg.buf[2] = 0x20;                                                                                                            // Show the dialog box.
-  } else if (k_msg.buf[0] == 0xBE && k_msg.buf[1] == 1) {
+  } else if (cc_id == 446) {
     if (k_msg.buf[2] == 2) {
-      k_msg.buf[2] = 0x20;                                                                                                            // Show the dialog box for LC CC.
+      k_msg.buf[2] = 0x20;                                                                                                          // Show the dialog box for LC CC.
     } else if (k_msg.buf[2] == 1) {
       k_msg.buf[2] = 0x50;
     }

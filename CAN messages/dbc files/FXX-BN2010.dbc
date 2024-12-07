@@ -387,20 +387,28 @@ BO_ 2147484142 SW_LST: 2 SZL
    SG_ LST : 0|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484929 NM_ACSM: 8 ACSM
+   SG_ SG_ADR : 56|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484946 NM_DME: 8 DME_DDE
+   SG_ SG_ADR : 56|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484952 NM_EGS: 8 EGS_DKG_EME
+   SG_ SG_ADR : 56|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484953 NM_VTG: 8 VTG
+   SG_ SG_ADR : 56|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484970 NM_EMF: 8 EMF
+   SG_ SG_ADR : 56|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147485022 NM_GWS: 8 GWS
+   SG_ SG_ADR : 56|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147485024 NM_KOMBI: 8 KOMBI
+   SG_ SG_ADR : 56|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484944 NM_ZGW: 8 ZGW
+   SG_ SG_ADR : 56|8@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 2147484055 ST_GWS: 4 GWS
    SG_ ST_GWS : 20|4@1+ (1,0) [0|1] "" Vector__XXX
@@ -411,6 +419,27 @@ BO_ 2147484669 DT_DISP_GRDT: 5 EGS_DKG_EME
    SG_ DISP_PO_GRB : 21|3@1+ (1,0) [0|1] "" Vector__XXX
    SG_ DISP_DRVLG_GRB : 32|4@1+ (1,0) [0|1] "" Vector__XXX
 
+BO_ 2147484223 ST_PRMSN_IBRK: 4 DSC
+
+CM_ BU_ ICMQL "Integrated Chassis Management";
+CM_ BU_ DME_DDE "Digital Motor Electronics - Digital Diesel Electronics";
+CM_ BU_ KOMBI "Instrument Panel";
+CM_ BU_ JBBF_FEM_BDC "Junction Box Electronics - Front Electronic Module - Body Domain Controller";
+CM_ BU_ ZGW "Central Gateway";
+CM_ BU_ HU "Head Unit";
+CM_ BU_ VSW "Video SWitch";
+CM_ BU_ EMF "Electric Parking Brake Controller";
+CM_ BU_ NVE "Night Vision Electronics";
+CM_ BU_ DSC_ICM "Dynamic Stability Control - Integrated Chassis Management";
+CM_ BU_ DSC "Dynamic Stability Control";
+CM_ BU_ ZBE "Central control element";
+CM_ BU_ IHKA "Integrated Automatic Heating and Air Conditioning System";
+CM_ BU_ PDC_REM "Parking Distance Control - Rear Electronic Module";
+CM_ BU_ SZL "Steering Wheel Switch Center";
+CM_ BU_ ACSM "Advanced Crash Safety Module";
+CM_ BU_ EGS_DKG_EME "Electronic Gearbox Controller";
+CM_ BU_ VTG "Transfer Case";
+CM_ BU_ GWS "Gear Selector Switch";
 CM_ BO_ 2147484063 "Vehicle_Yaw_Rate";
 CM_ SG_ 2147484063 VYAW_VEH "Vehicle_Yaw_Rate";
 CM_ SG_ 2147484063 QU_VYAW_VEH "Qualifier_Vehicle_Yaw_Rate";
@@ -617,13 +646,21 @@ CM_ BO_ 2147484494 "Navigation System Information";
 CM_ BO_ 2147483870 "Control Display M-Systems";
 CM_ BO_ 2147484142 "Steering column button operation";
 CM_ BO_ 2147484929 "Network Management Advanced Crash Safety Module";
+CM_ SG_ 2147484929 SG_ADR "Controller_Address";
 CM_ BO_ 2147484946 "Network Management Digital Motor Electronics";
+CM_ SG_ 2147484946 SG_ADR "Controller_Address";
 CM_ BO_ 2147484952 "Network Management Electronic Gearbox Controller";
+CM_ SG_ 2147484952 SG_ADR "Controller_Address";
 CM_ BO_ 2147484953 "Network Management Transfer Case Controller";
+CM_ SG_ 2147484953 SG_ADR "Controller_Address";
 CM_ BO_ 2147484970 "Network Management Electric Parking Brake Controller";
+CM_ SG_ 2147484970 SG_ADR "Controller_Address";
 CM_ BO_ 2147485022 "Network Management Gear Selector Switch";
+CM_ SG_ 2147485022 SG_ADR "Controller_Address";
 CM_ BO_ 2147485024 "Network Management Instrument Panel";
+CM_ SG_ 2147485024 SG_ADR "Controller_Address";
 CM_ BO_ 2147484944 "Network Management Central Gateway Module";
+CM_ SG_ 2147484944 SG_ADR "Controller_Address";
 CM_ BO_ 2147484055 "Status gear selector switch";
 CM_ SG_ 2147484055 ST_GWS "Lever_position";
 CM_ SG_ 2147484055 ST_GWS_PARK "Park_button";
@@ -631,6 +668,7 @@ CM_ BO_ 2147484669 "Data Display Gearbox";
 CM_ SG_ 2147484669 DISP_PRG_GRB "Display_program_gearbox";
 CM_ SG_ 2147484669 DISP_PO_GRB "Gearbox_Position_Display";
 CM_ SG_ 2147484669 DISP_DRVLG_GRB "Display_Drive_Logic_gearbox";
+CM_ BO_ 2147484223 "Status parameterization I-Brake";
 BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
 BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
 BA_DEF_ BO_ "matchingcriteria" INT 0 0;
@@ -769,7 +807,7 @@ VAL_ 2147484407 UN_TEMP 1 "Celsius" 2 "Farenheit";
 VAL_ 2147484407 UN_PRESS 0 "Default" 1 "bar" 2 "kPa" 3 "psi";
 VAL_ 2147484407 DATE 1 "Default_dd.mm.yyyy" 2 "mm/dd/yyyy" 5 "yyyy.mm.dd" 6 "yyyy/mm/dd";
 VAL_ 2147484407 TIME 1 "12H" 2 "24H";
-VAL_ 2147484407 LANG 1 "German" 2 "English_UK" 3 "English_US";
+VAL_ 2147484407 LANG 1 "German" 2 "English_UK" 3 "English_US" 4 "Spanish" 5 "Italian" 6 "French" 7 "Flemish" 8 "Dutch" 9 "Arabic" 10 "Chinese" 11 "Chinese_Simplified" 12 "Korean" 13 "Japanese" 14 "Russian" 15 "French_CA" 16 "Spanish_US" 17 "Portuguese" 18 "Polish" 19 "Greek" 20 "Turkish" 21 "Hungarian" 22 "Romanian" 23 "Swedish" 24 "Portuguese_BR" 27 "Slovakian" 28 "Czech" 29 "Slovenian" 30 "Danish" 31 "Norwegian" 32 "Finnish" 33 "Indonesian" 34 "Thai" 0 "";
 VAL_ 2147484407 UN_CONS 1 "l/100km" 2 "mpg_UK" 4 "km/l" 3 "mpg_US";
 VAL_ 2147484407 UN_DIST 1 "km" 2 "mi";
 VAL_ 2147484305 CONF_TIME 1 "12H" 2 "24H" 0 "No_change";

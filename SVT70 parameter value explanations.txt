@@ -133,12 +133,15 @@ STUETZSTELLEN_V_LW - Speed and steering angle breakpoints
     06,0E   155 km/h
     07,BC   198 km/h
     
+
+    Angle = value / 10.
+
     00,00   0 deg
-    00,1E   30 deg
-    00,78   120 deg
-    02,58   600 deg
-    04,B0   1200 deg
-    07,08   1800 deg
+    00,1E   3 deg
+    00,78   12 deg
+    02,58   60 deg
+    04,B0   120 deg
+    07,08   180 deg
     
     
 KENNLINIEN1_3* PWM applied to the first 3 steering angle breakpoints (i.e 0, 30 and 120 deg)
@@ -264,9 +267,11 @@ E92 M3 values:
 
     KENNLINIEN4_6_NORM
 
-        increase the 0 km/h current value to 860 mA (100% - 0xFF):
+        Increase the 0 km/h current value to 860 mA from 120 deg onwards. 
+        A ramp function is applied before 120 deg.
+            -> it starts at around 65 deg with 0xEF, 88 deg with 0xF5 etc. until 120 deg with 0xFF.
 
-        FF,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,00,00
+        ED,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,FF,E9,AD,8D,83,7D,72,5E,14,00,00,00
 
 
     KENNLINIEN1_3_SPORT
@@ -276,4 +281,4 @@ E92 M3 values:
 
     KENNLINIEN4_6_SPORT
 
-        FF,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,00,00
+        ED,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,FF,E9,9C,80,72,6B,54,30,01,00,00,00
